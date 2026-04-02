@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Music Distribution CRM"
+version = "1.0.0"
+id = "artifacts/crm-panel"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18762
+
+[services.development]
+run = "pnpm --filter @workspace/crm-panel run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/crm-panel", "run", "build" ]
+publicDir = "artifacts/crm-panel/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18762"
+BASE_PATH = "/"

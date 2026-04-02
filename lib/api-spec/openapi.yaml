@@ -1,22 +1,49 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Music Distribution CRM API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: artists
+    description: Artist management
+  - name: labels
+    description: Label management
+  - name: releases
+    description: Release management
+  - name: tracks
+    description: Track management
+  - name: users
+    description: User management
+  - name: crm-contacts
+    description: CRM contacts
+  - name: crm-tasks
+    description: CRM tasks
+  - name: finance
+    description: Financial management
+  - name: splits
+    description: Revenue splits
+  - name: payouts
+    description: Payout management
+  - name: publishing
+    description: Publishing works
+  - name: analytics
+    description: Analytics and reporting
+  - name: delivery
+    description: DDEX delivery
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +51,1414 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ==================== DASHBOARD ====================
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getDashboardRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity feed
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/top-artists:
+    get:
+      operationId: getDashboardTopArtists
+      tags: [dashboard]
+      summary: Get top artists by streams
+      responses:
+        "200":
+          description: Top artists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopArtist"
+
+  /dashboard/revenue-by-month:
+    get:
+      operationId: getDashboardRevenueByMonth
+      tags: [dashboard]
+      summary: Get revenue by month
+      responses:
+        "200":
+          description: Revenue by month
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RevenueByMonth"
+
+  /dashboard/releases-by-status:
+    get:
+      operationId: getDashboardReleasesByStatus
+      tags: [dashboard]
+      summary: Get releases count by status
+      responses:
+        "200":
+          description: Releases by status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusCount"
+
+  # ==================== ARTISTS ====================
+  /artists:
+    get:
+      operationId: listArtists
+      tags: [artists]
+      summary: List all artists
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: genre
+          in: query
+          schema:
+            type: string
+        - name: label_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of artists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedArtists"
+    post:
+      operationId: createArtist
+      tags: [artists]
+      summary: Create a new artist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateArtistBody"
+      responses:
+        "201":
+          description: Artist created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+
+  /artists/{id}:
+    get:
+      operationId: getArtist
+      tags: [artists]
+      summary: Get artist by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Artist details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistDetail"
+    put:
+      operationId: updateArtist
+      tags: [artists]
+      summary: Update artist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateArtistBody"
+      responses:
+        "200":
+          description: Artist updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+    delete:
+      operationId: deleteArtist
+      tags: [artists]
+      summary: Delete artist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Artist deleted
+
+  /artists/{id}/stats:
+    get:
+      operationId: getArtistStats
+      tags: [artists]
+      summary: Get artist analytics stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Artist stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistStats"
+
+  # ==================== LABELS ====================
+  /labels:
+    get:
+      operationId: listLabels
+      tags: [labels]
+      summary: List all labels
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of labels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLabels"
+    post:
+      operationId: createLabel
+      tags: [labels]
+      summary: Create a new label
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLabelBody"
+      responses:
+        "201":
+          description: Label created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+
+  /labels/{id}:
+    get:
+      operationId: getLabel
+      tags: [labels]
+      summary: Get label by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Label details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+    put:
+      operationId: updateLabel
+      tags: [labels]
+      summary: Update label
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLabelBody"
+      responses:
+        "200":
+          description: Label updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+    delete:
+      operationId: deleteLabel
+      tags: [labels]
+      summary: Delete label
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Label deleted
+
+  # ==================== RELEASES ====================
+  /releases:
+    get:
+      operationId: listReleases
+      tags: [releases]
+      summary: List all releases
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: label_id
+          in: query
+          schema:
+            type: integer
+        - name: release_type
+          in: query
+          schema:
+            type: string
+            enum: [single, album, ep, compilation]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of releases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReleases"
+    post:
+      operationId: createRelease
+      tags: [releases]
+      summary: Create a new release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReleaseBody"
+      responses:
+        "201":
+          description: Release created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+
+  /releases/{id}:
+    get:
+      operationId: getRelease
+      tags: [releases]
+      summary: Get release by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Release details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseDetail"
+    put:
+      operationId: updateRelease
+      tags: [releases]
+      summary: Update release
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReleaseBody"
+      responses:
+        "200":
+          description: Release updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+    delete:
+      operationId: deleteRelease
+      tags: [releases]
+      summary: Delete release
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Release deleted
+
+  /releases/{id}/status:
+    patch:
+      operationId: updateReleaseStatus
+      tags: [releases]
+      summary: Update release status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReleaseStatusBody"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+
+  /releases/import-upc:
+    post:
+      operationId: importReleaseByUpc
+      tags: [releases]
+      summary: Import release metadata by UPC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportByUpcBody"
+      responses:
+        "200":
+          description: Release metadata fetched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+
+  # ==================== TRACKS ====================
+  /tracks:
+    get:
+      operationId: listTracks
+      tags: [tracks]
+      summary: List all tracks
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of tracks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTracks"
+    post:
+      operationId: createTrack
+      tags: [tracks]
+      summary: Create a new track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrackBody"
+      responses:
+        "201":
+          description: Track created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+
+  /tracks/{id}:
+    get:
+      operationId: getTrack
+      tags: [tracks]
+      summary: Get track by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Track details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+    put:
+      operationId: updateTrack
+      tags: [tracks]
+      summary: Update track
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTrackBody"
+      responses:
+        "200":
+          description: Track updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+    delete:
+      operationId: deleteTrack
+      tags: [tracks]
+      summary: Delete track
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Track deleted
+
+  # ==================== USERS ====================
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, label, artist, manager]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User deleted
+
+  # ==================== CRM CONTACTS ====================
+  /crm/contacts:
+    get:
+      operationId: listContacts
+      tags: [crm-contacts]
+      summary: List CRM contacts
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [artist, author, label, manager, partner]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedContacts"
+    post:
+      operationId: createContact
+      tags: [crm-contacts]
+      summary: Create CRM contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactBody"
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+
+  /crm/contacts/{id}:
+    get:
+      operationId: getContact
+      tags: [crm-contacts]
+      summary: Get contact by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contact details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+    put:
+      operationId: updateContact
+      tags: [crm-contacts]
+      summary: Update contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactBody"
+      responses:
+        "200":
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+    delete:
+      operationId: deleteContact
+      tags: [crm-contacts]
+      summary: Delete contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Contact deleted
+
+  # ==================== CRM TASKS ====================
+  /crm/tasks:
+    get:
+      operationId: listTasks
+      tags: [crm-tasks]
+      summary: List CRM tasks
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [todo, in_progress, done, cancelled]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - name: assigned_to
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCrmTasks"
+    post:
+      operationId: createCrmTask
+      tags: [crm-tasks]
+      summary: Create CRM task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCrmTaskBody"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmTask"
+
+  /crm/tasks/{id}:
+    get:
+      operationId: getCrmTask
+      tags: [crm-tasks]
+      summary: Get task by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmTask"
+    put:
+      operationId: updateCrmTask
+      tags: [crm-tasks]
+      summary: Update task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCrmTaskBody"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrmTask"
+    delete:
+      operationId: deleteCrmTask
+      tags: [crm-tasks]
+      summary: Delete task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Task deleted
+
+  # ==================== FINANCE / TRANSACTIONS ====================
+  /finance/transactions:
+    get:
+      operationId: listTransactions
+      tags: [finance]
+      summary: List financial transactions
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [dsp_revenue, publishing_revenue, content_id, manual, payout]
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: label_id
+          in: query
+          schema:
+            type: integer
+        - name: currency
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTransactions"
+    post:
+      operationId: createTransaction
+      tags: [finance]
+      summary: Create a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionBody"
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /finance/balances:
+    get:
+      operationId: listBalances
+      tags: [finance]
+      summary: Get balances for all artists/labels
+      responses:
+        "200":
+          description: Balances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Balance"
+
+  # ==================== SPLITS ====================
+  /splits:
+    get:
+      operationId: listSplits
+      tags: [splits]
+      summary: List revenue splits
+      parameters:
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+        - name: track_id
+          in: query
+          schema:
+            type: integer
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of splits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSplits"
+    post:
+      operationId: createSplit
+      tags: [splits]
+      summary: Create revenue split
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSplitBody"
+      responses:
+        "201":
+          description: Split created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Split"
+
+  /splits/{id}:
+    get:
+      operationId: getSplit
+      tags: [splits]
+      summary: Get split by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Split details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Split"
+    put:
+      operationId: updateSplit
+      tags: [splits]
+      summary: Update split
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSplitBody"
+      responses:
+        "200":
+          description: Split updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Split"
+    delete:
+      operationId: deleteSplit
+      tags: [splits]
+      summary: Delete split
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Split deleted
+
+  # ==================== PAYOUTS ====================
+  /payouts:
+    get:
+      operationId: listPayouts
+      tags: [payouts]
+      summary: List payout requests
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, paid, rejected]
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of payout requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPayouts"
+    post:
+      operationId: createPayoutRequest
+      tags: [payouts]
+      summary: Create payout request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutBody"
+      responses:
+        "201":
+          description: Payout request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payout"
+
+  /payouts/{id}/approve:
+    patch:
+      operationId: approvePayout
+      tags: [payouts]
+      summary: Approve payout request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payout approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payout"
+
+  /payouts/{id}/reject:
+    patch:
+      operationId: rejectPayout
+      tags: [payouts]
+      summary: Reject payout request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectPayoutBody"
+      responses:
+        "200":
+          description: Payout rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payout"
+
+  # ==================== PUBLISHING ====================
+  /publishing/works:
+    get:
+      operationId: listPublishingWorks
+      tags: [publishing]
+      summary: List publishing works
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, registered, pending, active, rejected]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of publishing works
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPublishingWorks"
+    post:
+      operationId: createPublishingWork
+      tags: [publishing]
+      summary: Create publishing work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePublishingWorkBody"
+      responses:
+        "201":
+          description: Publishing work created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishingWork"
+
+  /publishing/works/{id}:
+    get:
+      operationId: getPublishingWork
+      tags: [publishing]
+      summary: Get publishing work by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Publishing work details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishingWork"
+    put:
+      operationId: updatePublishingWork
+      tags: [publishing]
+      summary: Update publishing work
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePublishingWorkBody"
+      responses:
+        "200":
+          description: Publishing work updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishingWork"
+
+  # ==================== ANALYTICS ====================
+  /analytics/streams:
+    get:
+      operationId: getStreamAnalytics
+      tags: [analytics]
+      summary: Get streaming analytics
+      parameters:
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 1y]
+            default: 30d
+      responses:
+        "200":
+          description: Stream analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamAnalytics"
+
+  /analytics/platforms:
+    get:
+      operationId: getPlatformAnalytics
+      tags: [analytics]
+      summary: Get analytics by platform
+      responses:
+        "200":
+          description: Platform analytics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformAnalytics"
+
+  /analytics/geography:
+    get:
+      operationId: getGeographyAnalytics
+      tags: [analytics]
+      summary: Get analytics by geography
+      parameters:
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Geography analytics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeographyAnalytics"
+
+  # ==================== DELIVERY ====================
+  /delivery:
+    get:
+      operationId: listDeliveries
+      tags: [delivery]
+      summary: List DDEX deliveries
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, delivered, failed, acknowledged]
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedDeliveries"
+    post:
+      operationId: createDelivery
+      tags: [delivery]
+      summary: Create delivery request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeliveryBody"
+      responses:
+        "201":
+          description: Delivery created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+
+  /delivery/{id}:
+    get:
+      operationId: getDelivery
+      tags: [delivery]
+      summary: Get delivery by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Delivery details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +1466,1273 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ==================== COMMON ====================
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+      required: [page, limit, total, totalPages]
+
+    # ==================== DASHBOARD ====================
+    DashboardSummary:
+      type: object
+      properties:
+        totalArtists:
+          type: integer
+        totalReleases:
+          type: integer
+        totalTracks:
+          type: integer
+        totalRevenue:
+          type: number
+        pendingPayouts:
+          type: integer
+        activeDeliveries:
+          type: integer
+        revenueGrowth:
+          type: number
+        releasesThisMonth:
+          type: integer
+      required: [totalArtists, totalReleases, totalTracks, totalRevenue, pendingPayouts, activeDeliveries, revenueGrowth, releasesThisMonth]
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        timestamp:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: integer
+      required: [id, type, title, description, timestamp, entityType, entityId]
+
+    TopArtist:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        totalStreams:
+          type: integer
+        revenue:
+          type: number
+        trend:
+          type: number
+      required: [id, name, totalStreams, revenue, trend]
+
+    RevenueByMonth:
+      type: object
+      properties:
+        month:
+          type: string
+        revenue:
+          type: number
+        dspRevenue:
+          type: number
+        publishingRevenue:
+          type: number
+      required: [month, revenue, dspRevenue, publishingRevenue]
+
+    StatusCount:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+      required: [status, count]
+
+    # ==================== ARTISTS ====================
+    Artist:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        labelName:
+          type: string
+          nullable: true
+        spotifyId:
+          type: string
+          nullable: true
+        appleId:
+          type: string
+          nullable: true
+        socialLinks:
+          type: object
+          nullable: true
+        status:
+          type: string
+        totalReleases:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, slug, status, totalReleases, createdAt, updatedAt]
+
+    ArtistDetail:
+      allOf:
+        - $ref: "#/components/schemas/Artist"
+        - type: object
+          properties:
+            releases:
+              type: array
+              items:
+                $ref: "#/components/schemas/Release"
+            recentTracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/Track"
+
+    ArtistStats:
+      type: object
+      properties:
+        totalStreams:
+          type: integer
+        totalRevenue:
+          type: number
+        monthlyListeners:
+          type: integer
+        topPlatform:
+          type: string
+        streamsByPlatform:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformAnalytics"
+      required: [totalStreams, totalRevenue, monthlyListeners, topPlatform, streamsByPlatform]
+
+    CreateArtistBody:
+      type: object
+      properties:
+        name:
+          type: string
+        imageUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        spotifyId:
+          type: string
+          nullable: true
+        appleId:
+          type: string
+          nullable: true
+        socialLinks:
+          type: object
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+      required: [name]
+
+    PaginatedArtists:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artist"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== LABELS ====================
+    Label:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        parentLabelId:
+          type: integer
+          nullable: true
+        parentLabelName:
+          type: string
+          nullable: true
+        status:
+          type: string
+        totalArtists:
+          type: integer
+        totalReleases:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, status, totalArtists, totalReleases, createdAt, updatedAt]
+
+    CreateLabelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        parentLabelId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+      required: [name]
+
+    PaginatedLabels:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Label"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== RELEASES ====================
+    Release:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        releaseType:
+          type: string
+          enum: [single, album, ep, compilation]
+        status:
+          type: string
+          enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+        upc:
+          type: string
+          nullable: true
+        artistId:
+          type: integer
+        artistName:
+          type: string
+        labelId:
+          type: integer
+          nullable: true
+        labelName:
+          type: string
+          nullable: true
+        coverUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        releaseDate:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        isExplicit:
+          type: boolean
+        territories:
+          type: array
+          items:
+            type: string
+        totalTracks:
+          type: integer
+        pLine:
+          type: string
+          nullable: true
+        cLine:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, releaseType, status, artistId, artistName, isExplicit, territories, totalTracks, createdAt, updatedAt]
+
+    ReleaseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Release"
+        - type: object
+          properties:
+            tracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/Track"
+
+    CreateReleaseBody:
+      type: object
+      properties:
+        title:
+          type: string
+        releaseType:
+          type: string
+          enum: [single, album, ep, compilation]
+        artistId:
+          type: integer
+        labelId:
+          type: integer
+          nullable: true
+        upc:
+          type: string
+          nullable: true
+        coverUrl:
+          type: string
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        releaseDate:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        isExplicit:
+          type: boolean
+          default: false
+        territories:
+          type: array
+          items:
+            type: string
+          default: ["WW"]
+        pLine:
+          type: string
+          nullable: true
+        cLine:
+          type: string
+          nullable: true
+      required: [title, releaseType, artistId]
+
+    UpdateReleaseStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+        note:
+          type: string
+          nullable: true
+      required: [status]
+
+    ImportByUpcBody:
+      type: object
+      properties:
+        upc:
+          type: string
+        source:
+          type: string
+          enum: [spotify, apple, musicbrainz]
+          default: spotify
+      required: [upc]
+
+    PaginatedReleases:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Release"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== TRACKS ====================
+    Track:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        isrc:
+          type: string
+          nullable: true
+        releaseId:
+          type: integer
+          nullable: true
+        releaseName:
+          type: string
+          nullable: true
+        artistId:
+          type: integer
+        artistName:
+          type: string
+        trackNumber:
+          type: integer
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        isExplicit:
+          type: boolean
+        composerName:
+          type: string
+          nullable: true
+        lyricistName:
+          type: string
+          nullable: true
+        iswc:
+          type: string
+          nullable: true
+        audioUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, artistId, artistName, isExplicit, createdAt, updatedAt]
+
+    CreateTrackBody:
+      type: object
+      properties:
+        title:
+          type: string
+        isrc:
+          type: string
+          nullable: true
+        releaseId:
+          type: integer
+          nullable: true
+        artistId:
+          type: integer
+        trackNumber:
+          type: integer
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        genre:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        isExplicit:
+          type: boolean
+          default: false
+        composerName:
+          type: string
+          nullable: true
+        lyricistName:
+          type: string
+          nullable: true
+        iswc:
+          type: string
+          nullable: true
+        audioUrl:
+          type: string
+          nullable: true
+      required: [title, artistId]
+
+    PaginatedTracks:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Track"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== USERS ====================
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, label, artist, manager]
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        avatarUrl:
+          type: string
+          nullable: true
+        artistId:
+          type: integer
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        lastLoginAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, email, role, status, createdAt, updatedAt]
+
+    CreateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, label, artist, manager]
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          default: active
+        avatarUrl:
+          type: string
+          nullable: true
+        artistId:
+          type: integer
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+      required: [name, email, role]
+
+    PaginatedUsers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== CRM CONTACTS ====================
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [artist, author, label, manager, partner]
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        telegram:
+          type: string
+          nullable: true
+        whatsapp:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, type, createdAt, updatedAt]
+
+    CreateContactBody:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [artist, author, label, manager, partner]
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        telegram:
+          type: string
+          nullable: true
+        whatsapp:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+      required: [name, type]
+
+    PaginatedContacts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== CRM TASKS ====================
+    CrmTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [todo, in_progress, done, cancelled]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        assignedToId:
+          type: integer
+          nullable: true
+        assignedToName:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+        relatedEntityType:
+          type: string
+          nullable: true
+        relatedEntityId:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, status, priority, createdAt, updatedAt]
+
+    CreateCrmTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [todo, in_progress, done, cancelled]
+          default: todo
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          default: medium
+        assignedToId:
+          type: integer
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+        relatedEntityType:
+          type: string
+          nullable: true
+        relatedEntityId:
+          type: integer
+          nullable: true
+      required: [title]
+
+    PaginatedCrmTasks:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrmTask"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== FINANCE ====================
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [dsp_revenue, publishing_revenue, content_id, manual, payout]
+        amount:
+          type: number
+        currency:
+          type: string
+        artistId:
+          type: integer
+          nullable: true
+        artistName:
+          type: string
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        labelName:
+          type: string
+          nullable: true
+        releaseId:
+          type: integer
+          nullable: true
+        releaseName:
+          type: string
+          nullable: true
+        platform:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        period:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required: [id, type, amount, currency, createdAt]
+
+    CreateTransactionBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [dsp_revenue, publishing_revenue, content_id, manual, payout]
+        amount:
+          type: number
+        currency:
+          type: string
+          default: USD
+        artistId:
+          type: integer
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        releaseId:
+          type: integer
+          nullable: true
+        platform:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        period:
+          type: string
+          nullable: true
+      required: [type, amount, currency]
+
+    PaginatedTransactions:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    Balance:
+      type: object
+      properties:
+        entityType:
+          type: string
+          enum: [artist, label]
+        entityId:
+          type: integer
+        entityName:
+          type: string
+        balance:
+          type: number
+        currency:
+          type: string
+        pendingPayout:
+          type: number
+      required: [entityType, entityId, entityName, balance, currency, pendingPayout]
+
+    # ==================== SPLITS ====================
+    SplitParticipant:
+      type: object
+      properties:
+        entityType:
+          type: string
+          enum: [artist, label, distributor, producer, author, custom]
+        entityId:
+          type: integer
+          nullable: true
+        entityName:
+          type: string
+        percentage:
+          type: number
+      required: [entityType, entityName, percentage]
+
+    Split:
+      type: object
+      properties:
+        id:
+          type: integer
+        releaseId:
+          type: integer
+          nullable: true
+        releaseName:
+          type: string
+          nullable: true
+        trackId:
+          type: integer
+          nullable: true
+        trackName:
+          type: string
+          nullable: true
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SplitParticipant"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, participants, createdAt, updatedAt]
+
+    CreateSplitBody:
+      type: object
+      properties:
+        releaseId:
+          type: integer
+          nullable: true
+        trackId:
+          type: integer
+          nullable: true
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SplitParticipant"
+      required: [participants]
+
+    PaginatedSplits:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Split"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== PAYOUTS ====================
+    Payout:
+      type: object
+      properties:
+        id:
+          type: integer
+        artistId:
+          type: integer
+          nullable: true
+        artistName:
+          type: string
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        labelName:
+          type: string
+          nullable: true
+        amount:
+          type: number
+        currency:
+          type: string
+        method:
+          type: string
+          enum: [bank_transfer, paypal, payoneer, crypto, wallet]
+        status:
+          type: string
+          enum: [pending, approved, paid, rejected]
+        paymentDetails:
+          type: string
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
+        processedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, amount, currency, method, status, createdAt, updatedAt]
+
+    CreatePayoutBody:
+      type: object
+      properties:
+        artistId:
+          type: integer
+          nullable: true
+        labelId:
+          type: integer
+          nullable: true
+        amount:
+          type: number
+        currency:
+          type: string
+          default: USD
+        method:
+          type: string
+          enum: [bank_transfer, paypal, payoneer, crypto, wallet]
+        paymentDetails:
+          type: string
+          nullable: true
+      required: [amount, currency, method]
+
+    RejectPayoutBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: [reason]
+
+    PaginatedPayouts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payout"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== PUBLISHING ====================
+    PublishingWork:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        iswc:
+          type: string
+          nullable: true
+        isrc:
+          type: string
+          nullable: true
+        trackId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [draft, registered, pending, active, rejected]
+        writers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              role:
+                type: string
+              share:
+                type: number
+              caeIpi:
+                type: string
+                nullable: true
+            required: [name, role, share]
+        publisher:
+          type: string
+          nullable: true
+        territory:
+          type: array
+          items:
+            type: string
+        registeredWith:
+          type: array
+          items:
+            type: string
+        mlcSongCode:
+          type: string
+          nullable: true
+        songtrust:
+          type: boolean
+        ascap:
+          type: boolean
+        bmi:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, status, writers, territory, songtrust, ascap, bmi, createdAt, updatedAt]
+
+    CreatePublishingWorkBody:
+      type: object
+      properties:
+        title:
+          type: string
+        iswc:
+          type: string
+          nullable: true
+        isrc:
+          type: string
+          nullable: true
+        trackId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [draft, registered, pending, active, rejected]
+          default: draft
+        writers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              role:
+                type: string
+              share:
+                type: number
+              caeIpi:
+                type: string
+                nullable: true
+            required: [name, role, share]
+        publisher:
+          type: string
+          nullable: true
+        territory:
+          type: array
+          items:
+            type: string
+          default: ["WW"]
+        songtrust:
+          type: boolean
+          default: false
+        ascap:
+          type: boolean
+          default: false
+        bmi:
+          type: boolean
+          default: false
+      required: [title, writers]
+
+    PaginatedPublishingWorks:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublishingWork"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    # ==================== ANALYTICS ====================
+    StreamAnalytics:
+      type: object
+      properties:
+        totalStreams:
+          type: integer
+        totalRevenue:
+          type: number
+        byDay:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              streams:
+                type: integer
+              revenue:
+                type: number
+            required: [date, streams, revenue]
+      required: [totalStreams, totalRevenue, byDay]
+
+    PlatformAnalytics:
+      type: object
+      properties:
+        platform:
+          type: string
+        streams:
+          type: integer
+        revenue:
+          type: number
+        percentage:
+          type: number
+      required: [platform, streams, revenue, percentage]
+
+    GeographyAnalytics:
+      type: object
+      properties:
+        country:
+          type: string
+        countryCode:
+          type: string
+        streams:
+          type: integer
+        revenue:
+          type: number
+        percentage:
+          type: number
+      required: [country, countryCode, streams, revenue, percentage]
+
+    # ==================== DELIVERY ====================
+    Delivery:
+      type: object
+      properties:
+        id:
+          type: integer
+        releaseId:
+          type: integer
+        releaseName:
+          type: string
+        target:
+          type: string
+          enum: [spotify, apple, yandex, vk, tidal, vevo, boom, zvooq, amazon]
+        status:
+          type: string
+          enum: [pending, in_progress, delivered, failed, acknowledged]
+        ddexVersion:
+          type: string
+          nullable: true
+        packageUrl:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        acknowledgedAt:
+          type: string
+          nullable: true
+        deliveredAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, releaseId, releaseName, target, status, createdAt, updatedAt]
+
+    CreateDeliveryBody:
+      type: object
+      properties:
+        releaseId:
+          type: integer
+        targets:
+          type: array
+          items:
+            type: string
+            enum: [spotify, apple, yandex, vk, tidal, vevo, boom, zvooq, amazon]
+        ddexVersion:
+          type: string
+          enum: ["3.8", "4.0", "4.1"]
+          default: "4.0"
+      required: [releaseId, targets]
+
+    PaginatedDeliveries:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Delivery"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
