@@ -74,13 +74,13 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 222 30% 7%;
+  --background: 222 35% 5%;
   --foreground: 213 31% 96%;
-  --border: 220 20% 16%;
+  --border: 220 22% 14%;
 
-  --card: 220 25% 10%;
+  --card: 220 28% 9%;
   --card-foreground: 213 31% 96%;
-  --card-border: 220 20% 16%;
+  --card-border: 220 22% 14%;
 
   --sidebar: 222 35% 8%;
   --sidebar-foreground: 213 31% 96%;
@@ -151,43 +151,43 @@
   --elevate-1: rgba(255,255,255, .03);
   --elevate-2: rgba(255,255,255, .07);
 
-  --background: 222 30% 7%;
+  --background: 222 35% 5%;
   --foreground: 213 31% 96%;
-  --border: 220 20% 16%;
+  --border: 220 22% 14%;
 
-  --card: 220 25% 10%;
+  --card: 220 28% 9%;
   --card-foreground: 213 31% 96%;
-  --card-border: 220 20% 16%;
+  --card-border: 220 22% 14%;
 
-  --sidebar: 222 35% 8%;
+  --sidebar: 222 38% 7%;
   --sidebar-foreground: 213 31% 96%;
-  --sidebar-border: 220 20% 14%;
+  --sidebar-border: 220 22% 12%;
   --sidebar-primary: 226 84% 67%;
   --sidebar-primary-foreground: 213 31% 96%;
-  --sidebar-accent: 220 25% 13%;
+  --sidebar-accent: 220 28% 11%;
   --sidebar-accent-foreground: 213 31% 96%;
   --sidebar-ring: 226 84% 67%;
 
-  --popover: 220 25% 10%;
+  --popover: 220 28% 9%;
   --popover-foreground: 213 31% 96%;
-  --popover-border: 220 20% 16%;
+  --popover-border: 220 22% 14%;
 
   --primary: 226 84% 67%;
   --primary-foreground: 213 31% 96%;
 
-  --secondary: 220 20% 16%;
+  --secondary: 220 22% 14%;
   --secondary-foreground: 213 31% 96%;
 
-  --muted: 220 20% 14%;
-  --muted-foreground: 215 16% 56%;
+  --muted: 220 22% 12%;
+  --muted-foreground: 215 16% 54%;
 
-  --accent: 220 25% 13%;
+  --accent: 220 28% 11%;
   --accent-foreground: 213 31% 96%;
 
   --destructive: 0 72% 58%;
   --destructive-foreground: 213 31% 96%;
 
-  --input: 220 20% 14%;
+  --input: 220 22% 12%;
   --ring: 226 84% 67%;
 
   --chart-1: 226 84% 67%;
@@ -328,5 +328,45 @@
 
   .stat-card-glow {
     box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  /* ─── Card surface: gradient overlay + shadow + hover glow ─── */
+  .card-surface {
+    /* Use background-image so Tailwind bg-* classes can still set background-color */
+    background-color: hsl(220 28% 9%);
+    background-image:
+      linear-gradient(
+        160deg,
+        rgba(255,255,255,0.025) 0%,
+        rgba(255,255,255,0.008) 50%,
+        rgba(0,0,0,0.04) 100%
+      );
+    /* Thin top-edge highlight so the card "lifts" off the background */
+    border-color: hsl(220 22% 16%);
+    /* Soft outer shadow — depth without weight */
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.5),
+      0 4px 16px rgba(0,0,0,0.28),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    /* Smooth all transitions */
+    transition: box-shadow 220ms ease, border-color 220ms ease, transform 220ms ease;
+    position: relative;
+  }
+
+  /* Hover: card lifts 1px, border brightens, faint primary bloom */
+  .card-surface:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.55),
+      0 8px 28px rgba(0,0,0,0.32),
+      0 0 0 1px hsl(220 22% 20%),
+      0 0 18px hsl(var(--primary) / 0.06),
+      inset 0 1px 0 rgba(255,255,255,0.055);
+    border-color: hsl(220 24% 20%);
+  }
+
+  /* Don't apply hover lift to cards that contain full-width tables / no-lift */
+  .card-surface.no-lift:hover {
+    transform: none;
   }
 }
