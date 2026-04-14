@@ -56,12 +56,6 @@ const SCHEDULED = [
   { title: "New Single", artist: "Камол Хасанов", releaseDate: "2026-05-15", status: "draft", dsp: "Spotify, Apple" },
 ];
 
-function statusColor(s: string) {
-  if (s === "delivered" || s === "connected") return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
-  if (s === "failed" || s === "error") return "text-rose-400 bg-rose-500/10 border-rose-500/20";
-  if (s === "pending") return "text-amber-400 bg-amber-500/10 border-amber-500/20";
-  return "text-muted-foreground";
-}
 
 export default function Distribution() {
   const [search, setSearch] = useState("");
@@ -160,7 +154,7 @@ export default function Distribution() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Release</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>UPC</TableHead>
@@ -171,7 +165,7 @@ export default function Distribution() {
                   </TableHeader>
                   <TableBody>
                     {PENDING_MODERATION.map((r) => (
-                      <TableRow key={r.id} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={r.id} >
                         <TableCell>
                           <div className="font-medium text-sm">{r.title}</div>
                           <div className="text-xs text-muted-foreground">{r.artist}</div>
@@ -234,7 +228,7 @@ export default function Distribution() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>ID</TableHead>
                       <TableHead>Release</TableHead>
                       <TableHead>DDEX Version</TableHead>
@@ -247,7 +241,7 @@ export default function Distribution() {
                   </TableHeader>
                   <TableBody>
                     {DDEX_LOGS.map((log) => (
-                      <TableRow key={log.id} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={log.id} >
                         <TableCell className="font-mono text-xs text-muted-foreground">{log.id}</TableCell>
                         <TableCell className="font-medium text-sm">{log.release}</TableCell>
                         <TableCell><Badge variant="outline" className="font-mono text-xs">{log.version}</Badge></TableCell>
@@ -255,9 +249,7 @@ export default function Distribution() {
                         <TableCell className="text-xs text-muted-foreground">{log.size}</TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono">{log.timestamp}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-xs ${statusColor(log.status)}`}>
-                            {log.status}
-                          </Badge>
+                          <StatusBadge status={log.status} />
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -282,12 +274,7 @@ export default function Distribution() {
                       <p className="font-medium text-sm">{dsp.name}</p>
                       <p className="text-xs text-muted-foreground">{dsp.releases} releases delivered</p>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={`text-xs capitalize ${statusColor(dsp.status)}`}
-                    >
-                      {dsp.status}
-                    </Badge>
+                    <StatusBadge status={dsp.status} />
                     <Button variant="ghost" size="icon" className="h-7 w-7">
                       <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
@@ -312,7 +299,7 @@ export default function Distribution() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Release</TableHead>
                       <TableHead>Reason</TableHead>
                       <TableHead>Platforms</TableHead>
@@ -322,7 +309,7 @@ export default function Distribution() {
                   </TableHeader>
                   <TableBody>
                     {TAKEDOWNS.map((t, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell>
                           <div className="font-medium text-sm">{t.title}</div>
                           <div className="text-xs text-muted-foreground">{t.artist}</div>
@@ -350,7 +337,7 @@ export default function Distribution() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Release</TableHead>
                       <TableHead>Release Date</TableHead>
                       <TableHead>Platforms</TableHead>
@@ -359,7 +346,7 @@ export default function Distribution() {
                   </TableHeader>
                   <TableBody>
                     {SCHEDULED.map((s, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell>
                           <div className="font-medium text-sm">{s.title}</div>
                           <div className="text-xs text-muted-foreground">{s.artist}</div>

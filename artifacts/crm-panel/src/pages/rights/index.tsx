@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShieldCheck, AlertTriangle, Globe, Search, Plus, ExternalLink, FileText, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { StatusBadge } from "@/components/status-badge";
 
 const DSP_DEALS = [
   { dsp: "Spotify", territory: "Global", type: "Distribution", start: "2022-01-01", end: "2027-01-01", status: "active", rate: "18%" },
@@ -37,18 +38,6 @@ const TERRITORIES = [
   { region: "Afghanistan", dsp: "YouTube, Deezer", restriction: "None", note: "Limited DSP availability" },
 ];
 
-function statusBadge(s: string) {
-  const map: Record<string, string> = {
-    active: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    expiring: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    expired: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-    dispute: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    in_review: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-    resolved: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    open: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  };
-  return map[s] ?? "";
-}
 
 export default function Rights() {
   const [search, setSearch] = useState("");
@@ -123,7 +112,7 @@ export default function Rights() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Platform</TableHead>
                       <TableHead>Territory</TableHead>
                       <TableHead>Deal Type</TableHead>
@@ -135,13 +124,13 @@ export default function Rights() {
                   </TableHeader>
                   <TableBody>
                     {DSP_DEALS.map((d, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell className="font-medium text-sm">{d.dsp}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{d.territory}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs">{d.type}</Badge></TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono">{d.start} → {d.end}</TableCell>
                         <TableCell className="text-sm font-medium">{d.rate}</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-xs capitalize ${statusBadge(d.status)}`}>{d.status}</Badge></TableCell>
+                        <TableCell><StatusBadge status={d.status} /></TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" className="h-7 w-7"><FileText className="h-3.5 w-3.5" /></Button>
                         </TableCell>
@@ -162,7 +151,7 @@ export default function Rights() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Track</TableHead>
                       <TableHead>Content ID</TableHead>
                       <TableHead>Claims</TableHead>
@@ -172,7 +161,7 @@ export default function Rights() {
                   </TableHeader>
                   <TableBody>
                     {CONTENT_ID.map((c, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell>
                           <div className="font-medium text-sm">{c.track}</div>
                           <div className="text-xs text-muted-foreground">{c.artist}</div>
@@ -180,7 +169,7 @@ export default function Rights() {
                         <TableCell className="font-mono text-xs text-muted-foreground">{c.youtube_id}</TableCell>
                         <TableCell className="text-sm font-medium">{c.claims}</TableCell>
                         <TableCell className="text-sm font-medium text-emerald-400">{c.revenue}</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-xs ${statusBadge(c.status)}`}>{c.status}</Badge></TableCell>
+                        <TableCell><StatusBadge status={c.status} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -198,7 +187,7 @@ export default function Rights() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>ID</TableHead>
                       <TableHead>Track</TableHead>
                       <TableHead>Claimant</TableHead>
@@ -210,14 +199,14 @@ export default function Rights() {
                   </TableHeader>
                   <TableBody>
                     {DISPUTES.map((d, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell className="font-mono text-xs text-muted-foreground">{d.id}</TableCell>
                         <TableCell className="font-medium text-sm">{d.track}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{d.claimant}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{d.platform}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs">{d.type}</Badge></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{d.opened}</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-xs capitalize ${statusBadge(d.status)}`}>{d.status.replace("_", " ")}</Badge></TableCell>
+                        <TableCell><StatusBadge status={d.status} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -235,7 +224,7 @@ export default function Rights() {
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
-                    <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent">
                       <TableHead>Region</TableHead>
                       <TableHead>Platforms</TableHead>
                       <TableHead>Restrictions</TableHead>
@@ -244,7 +233,7 @@ export default function Rights() {
                   </TableHeader>
                   <TableBody>
                     {TERRITORIES.map((t, i) => (
-                      <TableRow key={i} className="border-border/50 hover:bg-accent/20">
+                      <TableRow key={i} >
                         <TableCell className="font-medium text-sm">{t.region}</TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[200px]">{t.dsp}</TableCell>
                         <TableCell>

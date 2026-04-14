@@ -20,7 +20,14 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
+  <thead
+    ref={ref}
+    className={cn(
+      "[&_tr]:border-b [&_tr]:border-border/60 bg-[hsl(var(--muted)/0.35)]",
+      className
+    )}
+    {...props}
+  />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -43,7 +50,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+      "border-t border-border/60 bg-muted/30 font-medium [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -58,7 +65,14 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+      // base
+      "border-b border-border/40 transition-colors duration-150",
+      // zebra striping — every even row gets a barely-visible tint
+      "even:bg-white/[0.018]",
+      // hover — the row lifts into a slightly brighter tint
+      "hover:bg-white/[0.045] cursor-default",
+      // selected state
+      "data-[state=selected]:bg-primary/10",
       className
     )}
     {...props}
@@ -73,7 +87,12 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      // layout
+      "h-10 px-4 text-left align-middle",
+      // typography — uppercase, extra-small, wider tracking
+      "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70",
+      // checkbox column adjustment
+      "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -88,7 +107,9 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      // more generous vertical padding for breathing room
+      "py-3 px-4 align-middle text-[13px]",
+      "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

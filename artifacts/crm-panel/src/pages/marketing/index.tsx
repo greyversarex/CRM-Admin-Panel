@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Megaphone, Link2, Music, Image, Plus, ExternalLink, Copy, Eye, MousePointer, TrendingUp, Calendar } from "lucide-react";
+import { StatusBadge } from "@/components/status-badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const PRESAVES = [
   { title: "Наврӯз 2026", artist: "Ансамбл Бахор", releaseDate: "2026-03-21", saves: 1240, clicks: 3800, status: "active" },
@@ -33,16 +35,6 @@ const PROMO_ASSETS = [
   { release: "Summer EP", formats: ["1080x1080"], generated: "2026-04-10" },
 ];
 
-function statusBadge(s: string) {
-  const map: Record<string, string> = {
-    active: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    accepted: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    pending: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    draft: "text-muted-foreground bg-muted/50",
-    declined: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-  };
-  return map[s] ?? "";
-}
 
 export default function Marketing() {
   return (
@@ -126,37 +118,35 @@ export default function Marketing() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border/50 bg-background/30">
-                      <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Release</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Release Date</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Pre-saves</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Link Clicks</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
-                      <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead>Release Date</TableHead>
+                      <TableHead>Pre-saves</TableHead>
+                      <TableHead>Link Clicks</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {PRESAVES.map((p, i) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-accent/20 transition-colors">
-                        <td className="px-6 py-3">
-                          <div className="text-sm font-medium">{p.title}</div>
+                      <TableRow key={i}>
+                        <TableCell>
+                          <div className="font-medium">{p.title}</div>
                           <div className="text-xs text-muted-foreground">{p.artist}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{p.releaseDate}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{p.saves.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{p.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className={`text-xs capitalize ${statusBadge(p.status)}`}>{p.status}</Badge>
-                        </td>
-                        <td className="px-6 py-3 text-right">
+                        </TableCell>
+                        <TableCell className="font-mono text-muted-foreground">{p.releaseDate}</TableCell>
+                        <TableCell className="font-medium">{p.saves.toLocaleString()}</TableCell>
+                        <TableCell className="text-muted-foreground">{p.clicks.toLocaleString()}</TableCell>
+                        <TableCell><StatusBadge status={p.status} /></TableCell>
+                        <TableCell className="text-right">
                           <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
@@ -173,36 +163,38 @@ export default function Marketing() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border/50 bg-background/30">
-                      <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Release</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Slug</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Views</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Clicks</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">CTR</th>
-                      <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Views</TableHead>
+                      <TableHead>Clicks</TableHead>
+                      <TableHead>CTR</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {SMART_LINKS.map((l, i) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-accent/20 transition-colors">
-                        <td className="px-6 py-3">
-                          <div className="text-sm font-medium">{l.title}</div>
+                      <TableRow key={i}>
+                        <TableCell>
+                          <div className="font-medium">{l.title}</div>
                           <div className="text-xs text-muted-foreground">{l.artist}</div>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-primary">{l.slug}</td>
-                        <td className="px-4 py-3 text-sm">{l.views.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-400">{l.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm font-medium">{l.ctr}</td>
-                        <td className="px-6 py-3 text-right flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><Copy className="h-3.5 w-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-primary">{l.slug}</TableCell>
+                        <TableCell>{l.views.toLocaleString()}</TableCell>
+                        <TableCell className="text-emerald-400">{l.clicks.toLocaleString()}</TableCell>
+                        <TableCell className="font-medium">{l.ctr}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><Copy className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
@@ -219,32 +211,30 @@ export default function Marketing() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border/50 bg-background/30">
-                      <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Release</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Playlist</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">DSP</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Genre</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Submitted</th>
-                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead>Playlist</TableHead>
+                      <TableHead>DSP</TableHead>
+                      <TableHead>Genre</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {PITCHES.map((p, i) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-accent/20 transition-colors">
-                        <td className="px-6 py-3 text-sm font-medium">{p.release}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{p.playlist}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{p.dsp}</td>
-                        <td className="px-4 py-3"><Badge variant="outline" className="text-xs">{p.genre}</Badge></td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{p.submitted}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className={`text-xs capitalize ${statusBadge(p.status)}`}>{p.status}</Badge>
-                        </td>
-                      </tr>
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{p.release}</TableCell>
+                        <TableCell className="text-muted-foreground">{p.playlist}</TableCell>
+                        <TableCell className="text-muted-foreground">{p.dsp}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{p.genre}</Badge></TableCell>
+                        <TableCell className="text-muted-foreground">{p.submitted}</TableCell>
+                        <TableCell><StatusBadge status={p.status} /></TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
