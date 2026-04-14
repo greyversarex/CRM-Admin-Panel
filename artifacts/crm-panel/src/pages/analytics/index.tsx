@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useLang } from "@/lib/i18n";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
@@ -71,40 +72,42 @@ const PIE_COLORS = streamsByDSP.map(d => d.color);
 export default function Analytics() {
   const [period, setPeriod] = useState("6m");
   const { data: revenueData, isLoading: revenueLoading } = useGetDashboardRevenueByMonth();
+  const { t } = useLang();
+  const a = t.analytics;
 
   return (
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-            <p className="text-muted-foreground mt-1">Streams, revenue, UGC and audience data across all platforms.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{a.title}</h1>
+            <p className="text-[13px] text-muted-foreground mt-1">{a.subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-32 bg-card border-border">
+              <SelectTrigger className="w-36 bg-card border-border">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1m">Last month</SelectItem>
-                <SelectItem value="3m">Last 3 months</SelectItem>
-                <SelectItem value="6m">Last 6 months</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
+                <SelectItem value="1m">{t.common.period["1m"]}</SelectItem>
+                <SelectItem value="3m">{t.common.period["3m"]}</SelectItem>
+                <SelectItem value="6m">{t.common.period["6m"]}</SelectItem>
+                <SelectItem value="1y">{t.common.period["1y"]}</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" className="bg-card">
               <Download className="mr-2 h-4 w-4" />
-              Export
+              {t.common.export}
             </Button>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Total Streams", value: "3.34M", change: "+15.2%", up: true, icon: Play, color: "text-primary" },
-            { label: "Total Revenue", value: "$24,180", change: "+9.4%", up: true, icon: TrendingUp, color: "text-emerald-500" },
-            { label: "Active Tracks", value: "1,247", change: "+32 this month", up: true, icon: Music, color: "text-violet-500" },
-            { label: "UGC Claims", value: "21,400", change: "+17.6%", up: true, icon: Youtube, color: "text-red-500" },
+            { label: a.total_streams, value: "3.34M", change: "+15.2%", up: true, icon: Play, color: "text-primary" },
+            { label: a.total_revenue, value: "$24,180", change: "+9.4%", up: true, icon: TrendingUp, color: "text-emerald-500" },
+            { label: a.active_tracks, value: "1,247", change: "+32 this month", up: true, icon: Music, color: "text-violet-500" },
+            { label: a.ugc_claims, value: "21,400", change: "+17.6%", up: true, icon: Youtube, color: "text-red-500" },
           ].map((kpi) => (
             <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -121,12 +124,12 @@ export default function Analytics() {
 
         <Tabs defaultValue="streams" className="w-full">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex flex-wrap">
-            <TabsTrigger value="streams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Streams</TabsTrigger>
-            <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Revenue</TabsTrigger>
-            <TabsTrigger value="geo" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Geography</TabsTrigger>
-            <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">YouTube UGC</TabsTrigger>
-            <TabsTrigger value="tiktok" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">TikTok</TabsTrigger>
-            <TabsTrigger value="playlist" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Playlists</TabsTrigger>
+            <TabsTrigger value="streams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.streams}</TabsTrigger>
+            <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.revenue}</TabsTrigger>
+            <TabsTrigger value="geo" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.geo}</TabsTrigger>
+            <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.ugc}</TabsTrigger>
+            <TabsTrigger value="tiktok" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.tiktok}</TabsTrigger>
+            <TabsTrigger value="playlist" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.playlist}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="streams" className="mt-4 space-y-4">

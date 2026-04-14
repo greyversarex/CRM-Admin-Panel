@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 import {
   LayoutDashboard,
   LineChart,
@@ -21,13 +22,10 @@ import {
   Settings,
   LogOut,
   Music2,
-  ChevronDown,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import { useState } from "react";
 
 type NavItem = {
-  name: string;
+  nameKey: string;
   href: string;
   icon: React.ElementType;
   badge?: string;
@@ -35,93 +33,96 @@ type NavItem = {
 };
 
 type NavGroup = {
-  title: string;
+  titleKey: string;
   items: NavItem[];
 };
 
 const navGroups: NavGroup[] = [
   {
-    title: "Overview",
+    titleKey: "overview",
     items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
-      { name: "Analytics", href: "/analytics", icon: LineChart },
+      { nameKey: "dashboard", href: "/", icon: LayoutDashboard },
+      { nameKey: "analytics", href: "/analytics", icon: LineChart },
     ],
   },
   {
-    title: "Distribution",
+    titleKey: "distribution_group",
     items: [
-      { name: "Distribution", href: "/distribution", icon: Send, badge: "3", badgeColor: "bg-amber-500" },
+      { nameKey: "distribution", href: "/distribution", icon: Send, badge: "3", badgeColor: "bg-amber-500" },
     ],
   },
   {
-    title: "Catalog",
+    titleKey: "catalog",
     items: [
-      { name: "Releases", href: "/releases", icon: Disc3 },
-      { name: "Artists", href: "/artists", icon: Users },
-      { name: "Labels", href: "/labels", icon: Building2 },
-      { name: "Videos", href: "/videos", icon: Video },
+      { nameKey: "releases", href: "/releases", icon: Disc3 },
+      { nameKey: "artists", href: "/artists", icon: Users },
+      { nameKey: "labels", href: "/labels", icon: Building2 },
+      { nameKey: "videos", href: "/videos", icon: Video },
     ],
   },
   {
-    title: "Users",
+    titleKey: "users_group",
     items: [
-      { name: "Users", href: "/users", icon: UserCog },
+      { nameKey: "users", href: "/users", icon: UserCog },
     ],
   },
   {
-    title: "Operations",
+    titleKey: "operations",
     items: [
-      { name: "Publishing", href: "/publishing", icon: BookOpen },
-      { name: "Rights Management", href: "/rights", icon: ShieldCheck },
-      { name: "CRM", href: "/crm", icon: Users2 },
-      { name: "Communications", href: "/communications", icon: Mail },
-      { name: "Marketing", href: "/marketing", icon: Megaphone },
+      { nameKey: "publishing", href: "/publishing", icon: BookOpen },
+      { nameKey: "rights", href: "/rights", icon: ShieldCheck },
+      { nameKey: "crm", href: "/crm", icon: Users2 },
+      { nameKey: "communications", href: "/communications", icon: Mail },
+      { nameKey: "marketing", href: "/marketing", icon: Megaphone },
     ],
   },
   {
-    title: "Financials",
+    titleKey: "financials",
     items: [
-      { name: "Finance", href: "/finance", icon: DollarSign },
-      { name: "Splits", href: "/splits", icon: PieChart },
-      { name: "Payouts", href: "/payouts", icon: Wallet },
+      { nameKey: "finance", href: "/finance", icon: DollarSign },
+      { nameKey: "splits", href: "/splits", icon: PieChart },
+      { nameKey: "payouts", href: "/payouts", icon: Wallet },
     ],
   },
   {
-    title: "System",
+    titleKey: "system",
     items: [
-      { name: "Automation", href: "/automation", icon: Zap },
-      { name: "Settings", href: "/settings", icon: Settings },
+      { nameKey: "automation", href: "/automation", icon: Zap },
+      { nameKey: "settings", href: "/settings", icon: Settings },
     ],
   },
 ];
 
 export function SidebarNav() {
   const [location] = useLocation();
+  const { t } = useLang();
+  const nav = t.nav as Record<string, string>;
 
   return (
-    <div className="flex h-full w-60 flex-col bg-card border-r border-border shrink-0">
-      <div className="px-5 py-5 border-b border-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Music2 className="h-4 w-4 text-primary" />
+    <div className="flex h-full w-[230px] flex-col shrink-0 border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))]">
+      <div className="px-5 pt-6 pb-5 border-b border-[hsl(var(--sidebar-border))]">
+        <div className="flex items-center gap-3">
+          <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[hsl(271_80%_68%)] flex items-center justify-center shadow-lg shadow-primary/25 shrink-0">
+            <Music2 className="h-4.5 w-4.5 text-white" />
+            <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-foreground tracking-tight leading-none">
+            <h1 className="text-[13px] font-bold text-foreground tracking-tight leading-none mb-0.5">
               TAJIK MUSIC
             </h1>
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+            <span className="text-[9.5px] font-semibold text-primary/70 uppercase tracking-[0.15em]">
               Distribution
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-4">
+      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
         {navGroups.map((group) => (
-          <div key={group.title}>
-            <h2 className="mb-1 px-2 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-              {group.title}
-            </h2>
+          <div key={group.titleKey}>
+            <p className="mb-1.5 px-2.5 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
+              {nav[group.titleKey] ?? group.titleKey}
+            </p>
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -133,33 +134,30 @@ export function SidebarNav() {
                   <Link key={item.href} href={item.href}>
                     <span
                       className={cn(
-                        "group flex items-center rounded-md px-2.5 py-2 text-sm font-medium cursor-pointer transition-all duration-150",
+                        "group relative flex items-center rounded-lg px-2.5 py-2 text-[13px] font-medium cursor-pointer transition-all duration-150",
                         isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          ? "nav-active-bar bg-gradient-to-r from-primary/15 to-primary/5 text-primary"
+                          : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                       )}
                     >
                       <Icon
                         className={cn(
-                          "mr-2.5 h-4 w-4 flex-shrink-0 transition-colors",
+                          "mr-2.5 h-[15px] w-[15px] flex-shrink-0 transition-colors",
                           isActive
                             ? "text-primary"
-                            : "text-muted-foreground/70 group-hover:text-foreground"
+                            : "text-muted-foreground/60 group-hover:text-foreground/70"
                         )}
                       />
-                      <span className="flex-1 truncate">{item.name}</span>
+                      <span className="flex-1 truncate">{nav[item.nameKey] ?? item.nameKey}</span>
                       {item.badge && (
                         <span
                           className={cn(
-                            "ml-auto flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white",
+                            "ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[9px] font-bold text-white shadow-sm",
                             item.badgeColor ?? "bg-primary"
                           )}
                         >
                           {item.badge}
                         </span>
-                      )}
-                      {isActive && (
-                        <span className="ml-auto w-1 h-4 rounded-full bg-primary opacity-0 group-data-[active=true]:opacity-100" />
                       )}
                     </span>
                   </Link>
@@ -170,16 +168,16 @@ export function SidebarNav() {
         ))}
       </div>
 
-      <div className="p-3 border-t border-border">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors group">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-primary">AU</span>
+      <div className="p-3 border-t border-[hsl(var(--sidebar-border))]">
+        <div className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-white/[0.04] cursor-pointer transition-all duration-150 group">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <span className="text-[11px] font-bold text-primary">AU</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-foreground truncate">Admin User</p>
-            <p className="text-[10px] text-muted-foreground truncate">admin@tajikmusic.com</p>
+            <p className="text-[12px] font-semibold text-foreground truncate leading-tight">Admin User</p>
+            <p className="text-[10px] text-muted-foreground/70 truncate">admin@tajikmusic.com</p>
           </div>
-          <LogOut className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+          <LogOut className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0" />
         </div>
       </div>
     </div>

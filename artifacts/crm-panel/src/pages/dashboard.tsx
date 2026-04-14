@@ -1,17 +1,63 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  useGetDashboardSummary, 
-  useGetDashboardRevenueByMonth, 
-  useGetDashboardRecentActivity, 
-  useGetDashboardTopArtists, 
-  useGetDashboardReleasesByStatus 
+import {
+  useGetDashboardSummary,
+  useGetDashboardRevenueByMonth,
+  useGetDashboardRecentActivity,
+  useGetDashboardTopArtists,
+  useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, Music, DollarSign, Activity } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, ArrowUpRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import { StatusBadge } from "@/components/status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLang } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  color,
+  gradient,
+  loading,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ElementType;
+  color: string;
+  gradient: string;
+  loading?: boolean;
+}) {
+  return (
+    <Card className="bg-card border-border/50 overflow-hidden relative group hover:border-border transition-all duration-200 stat-card-glow">
+      <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300", gradient)} />
+      <CardContent className="pt-5 pb-5 relative">
+        <div className="flex items-start justify-between mb-3">
+          <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", color.replace("text-", "bg-").replace(/\w+$/, match => match + "/10"))}>
+            <Icon className={cn("h-4 w-4", color)} />
+          </div>
+          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+        </div>
+        {loading ? (
+          <>
+            <Skeleton className="h-7 w-20 mb-1.5" />
+            <Skeleton className="h-3 w-16" />
+          </>
+        ) : (
+          <>
+            <p className="text-2xl font-bold tracking-tight">{value}</p>
+            {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+          </>
+        )}
+        <p className="text-[11px] font-medium text-muted-foreground/70 mt-2 uppercase tracking-wide">{label}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Dashboard() {
   const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary();
@@ -19,174 +65,133 @@ export default function Dashboard() {
   const { data: activityData, isLoading: isActivityLoading } = useGetDashboardRecentActivity();
   const { data: topArtistsData, isLoading: isTopArtistsLoading } = useGetDashboardTopArtists();
   const { data: statusData, isLoading: isStatusLoading } = useGetDashboardReleasesByStatus();
+  const { t } = useLang();
+  const d = t.dashboard;
 
   return (
     <Layout>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Real-time overview of your music catalog and operations.</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{d.title}</h1>
+            <p className="text-[13px] text-muted-foreground mt-1">{d.subtitle}</p>
+          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              {isSummaryLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">${summary?.totalRevenue.toLocaleString() ?? "0"}</div>
-                  <p className="text-xs text-emerald-500 mt-1 flex items-center">
-                    +{summary?.revenueGrowth}% from last month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Artists</CardTitle>
-              <Users className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              {isSummaryLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold">{summary?.totalArtists.toLocaleString() ?? "0"}</div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Releases</CardTitle>
-              <Disc3 className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              {isSummaryLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{summary?.totalReleases.toLocaleString() ?? "0"}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {summary?.releasesThisMonth} new this month
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Deliveries</CardTitle>
-              <Activity className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              {isSummaryLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                <div className="text-2xl font-bold">{summary?.activeDeliveries.toLocaleString() ?? "0"}</div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <KpiCard
+            label={d.total_revenue}
+            value={`$${summary?.totalRevenue?.toLocaleString() ?? "—"}`}
+            sub={summary?.revenueGrowth ? `+${summary.revenueGrowth}%` : undefined}
+            icon={DollarSign}
+            color="text-emerald-400"
+            gradient="bg-gradient-to-br from-emerald-500/5 to-transparent"
+            loading={isSummaryLoading}
+          />
+          <KpiCard
+            label={d.total_artists}
+            value={summary?.totalArtists?.toLocaleString() ?? "—"}
+            icon={Users}
+            color="text-primary"
+            gradient="bg-gradient-to-br from-primary/5 to-transparent"
+            loading={isSummaryLoading}
+          />
+          <KpiCard
+            label={d.total_releases}
+            value={summary?.totalReleases?.toLocaleString() ?? "—"}
+            sub={summary?.releasesThisMonth ? `+${summary.releasesThisMonth} this month` : undefined}
+            icon={Disc3}
+            color="text-violet-400"
+            gradient="bg-gradient-to-br from-violet-500/5 to-transparent"
+            loading={isSummaryLoading}
+          />
+          <KpiCard
+            label={d.active_deliveries}
+            value={summary?.activeDeliveries?.toLocaleString() ?? "—"}
+            icon={Activity}
+            color="text-sky-400"
+            gradient="bg-gradient-to-br from-sky-500/5 to-transparent"
+            loading={isSummaryLoading}
+          />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="col-span-4 bg-card/50 backdrop-blur border-border/50">
-            <CardHeader>
-              <CardTitle>Revenue Overview</CardTitle>
-              <CardDescription>DSP vs Publishing revenue by month</CardDescription>
+        <div className="grid gap-4 lg:grid-cols-7">
+          <Card className="col-span-4 bg-card border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">{d.revenue_overview}</CardTitle>
+              <CardDescription className="text-[12px]">{d.revenue_subtitle}</CardDescription>
             </CardHeader>
-            <CardContent className="pl-0">
+            <CardContent className="pl-1">
               {isRevenueLoading ? (
-                <div className="h-[300px] flex items-center justify-center">
-                  <Skeleton className="h-full w-full ml-6 rounded-md" />
-                </div>
+                <Skeleton className="h-[280px] w-full rounded-md" />
               ) : (
-                <div className="h-[300px] w-full">
+                <div className="h-[280px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={revenueData || []}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                    >
+                    <AreaChart data={revenueData || []} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorDsp" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
                           <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                         </linearGradient>
                         <linearGradient id="colorPub" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
+                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.25} />
                           <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="month" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                        dy={10}
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.6)" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} dy={8} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "10px", fontSize: "12px", boxShadow: "0 8px 20px rgba(0,0,0,0.4)" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
                       />
-                      <YAxis 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                        tickFormatter={(value) => `$${value}`}
-                      />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                      />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                      <Area type="monotone" dataKey="dspRevenue" name="DSP Revenue" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorDsp)" />
-                      <Area type="monotone" dataKey="publishingRevenue" name="Publishing Revenue" stroke="hsl(var(--chart-2))" fillOpacity={1} fill="url(#colorPub)" />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }} />
+                      <Area type="monotone" dataKey="dspRevenue" name="DSP Revenue" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorDsp)" />
+                      <Area type="monotone" dataKey="publishingRevenue" name="Publishing Revenue" stroke="hsl(var(--chart-2))" strokeWidth={2} fillOpacity={1} fill="url(#colorPub)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </CardContent>
           </Card>
-          
-          <Card className="col-span-3 bg-card/50 backdrop-blur border-border/50 flex flex-col">
-            <CardHeader>
-              <CardTitle>Top Artists</CardTitle>
-              <CardDescription>By streams this month</CardDescription>
+
+          <Card className="col-span-3 bg-card border-border/50 flex flex-col">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">{d.top_artists}</CardTitle>
+              <CardDescription className="text-[12px]">{d.top_artists_subtitle}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 overflow-auto">
+            <CardContent className="flex-1 overflow-auto px-4">
               {isTopArtistsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map(i => (
-                    <div key={i} className="flex items-center space-x-4">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-3 w-16" />
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-2.5 w-14" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {topArtistsData?.map((artist) => (
-                    <div key={artist.id} className="flex items-center">
-                      <Avatar className="h-10 w-10 border border-border">
+                <div className="space-y-3">
+                  {topArtistsData?.map((artist, i) => (
+                    <div key={artist.id} className="flex items-center gap-3 py-1.5 border-b border-border/30 last:border-0">
+                      <span className="text-[11px] font-bold text-muted-foreground/40 w-4 text-right shrink-0">{i + 1}</span>
+                      <Avatar className="h-8 w-8 border border-border/50 shrink-0">
                         <AvatarImage src={artist.imageUrl || ""} alt={artist.name} />
-                        <AvatarFallback className="bg-primary/20 text-primary">{artist.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-bold">
+                          {artist.name.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
                       </Avatar>
-                      <div className="ml-4 space-y-1 flex-1">
-                        <p className="text-sm font-medium leading-none">{artist.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {artist.totalStreams.toLocaleString()} streams
-                        </p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium truncate">{artist.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{artist.totalStreams.toLocaleString()} streams</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">${artist.revenue.toLocaleString()}</p>
-                        <p className={`text-xs ${artist.trend > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                      <div className="text-right shrink-0">
+                        <p className="text-[12px] font-semibold">${artist.revenue.toLocaleString()}</p>
+                        <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${artist.trend > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                          <TrendingUp className="h-2.5 w-2.5" />
                           {artist.trend > 0 ? "+" : ""}{artist.trend}%
                         </p>
                       </div>
@@ -198,80 +203,74 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="col-span-3 bg-card/50 backdrop-blur border-border/50">
-            <CardHeader>
-              <CardTitle>Releases by Status</CardTitle>
+        <div className="grid gap-4 lg:grid-cols-7">
+          <Card className="col-span-3 bg-card border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">{d.recent_releases}</CardTitle>
+              <CardDescription className="text-[12px]">{d.recent_releases_subtitle}</CardDescription>
             </CardHeader>
             <CardContent>
               {isStatusLoading ? (
-                <div className="h-[250px] flex items-center justify-center">
-                  <Skeleton className="h-full w-full rounded-md" />
-                </div>
+                <Skeleton className="h-[220px] w-full rounded-md" />
               ) : (
-                <div className="h-[250px] w-full">
+                <div className="h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={statusData || []}
-                      layout="vertical"
-                      margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
+                    <BarChart data={statusData || []} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border) / 0.5)" />
                       <XAxis type="number" hide />
-                      <YAxis 
-                        dataKey="status" 
-                        type="category" 
+                      <YAxis
+                        dataKey="status"
+                        type="category"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                        tickFormatter={(value) => value.replace(/_/g, " ")}
+                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                        tickFormatter={(v) => v.replace(/_/g, " ")}
                       />
-                      <Tooltip 
-                        cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                        itemStyle={{ color: 'hsl(var(--foreground))' }}
+                      <Tooltip
+                        cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "10px", fontSize: "12px" }}
                       />
-                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} />
+                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 5, 5, 0]} barSize={16} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </CardContent>
           </Card>
-          
-          <Card className="col-span-4 bg-card/50 backdrop-blur border-border/50">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+
+          <Card className="col-span-4 bg-card border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
             </CardHeader>
             <CardContent>
               {isActivityLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="flex space-x-4">
-                      <Skeleton className="h-2 w-2 mt-2 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-3 w-24" />
+                    <div key={i} className="flex gap-3">
+                      <Skeleton className="h-2 w-2 mt-1.5 rounded-full shrink-0" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-3.5 w-full" />
+                        <Skeleton className="h-2.5 w-20" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="space-y-4 relative before:absolute before:inset-0 before:ml-1 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                <div className="space-y-3">
                   {activityData?.map((item) => (
-                    <div key={item.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      <div className="flex items-center justify-center w-2 h-2 rounded-full bg-primary border-4 border-background shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow z-10"></div>
-                      <div className="w-[calc(100%-1rem)] md:w-[calc(50%-1.5rem)] p-4 rounded border border-border bg-card/50 backdrop-blur shadow-sm">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-semibold text-sm">{item.title}</h4>
-                          <time className="text-xs text-muted-foreground">{new Date(item.timestamp).toLocaleDateString()}</time>
+                    <div key={item.id} className="flex gap-3 items-start pb-3 border-b border-border/30 last:border-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0 shadow-sm shadow-primary/50" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[12px] font-medium leading-snug">{item.title}</p>
+                          <time className="text-[10px] text-muted-foreground shrink-0">{new Date(item.timestamp).toLocaleDateString()}</time>
                         </div>
-                        <div className="text-sm text-muted-foreground">{item.description}</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{item.description}</p>
                       </div>
                     </div>
                   ))}
                   {(!activityData || activityData.length === 0) && (
-                    <div className="text-center text-muted-foreground text-sm py-4">No recent activity found.</div>
+                    <p className="text-[12px] text-muted-foreground text-center py-6">No recent activity.</p>
                   )}
                 </div>
               )}
