@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -95,25 +96,43 @@ export default function Automation() {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: "Active Workflows", value: "4", icon: Zap, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Runs This Month", value: "187", icon: Play, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-            { label: "Fraud Alerts", value: "2", icon: Shield, color: "text-rose-500", bg: "bg-rose-500/10" },
-            { label: "QC Violations", value: "7", icon: AlertTriangle, color: "text-amber-500", bg: "bg-amber-500/10" },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-3 md:grid-cols-4">
+          <KpiCard
+            label="Active Workflows"
+            value="4"
+            icon={Zap}
+            iconColor="text-primary"
+            iconBg="bg-primary/12"
+            iconBorder="border-primary/20"
+            trend={{ value: "+1 this month", up: true }}
+          />
+          <KpiCard
+            label="Runs This Month"
+            value="187"
+            icon={Play}
+            iconColor="text-emerald-400"
+            iconBg="bg-emerald-500/12"
+            iconBorder="border-emerald-500/20"
+            trend={{ value: "+34%", up: true, label: "vs last month" }}
+          />
+          <KpiCard
+            label="Fraud Alerts"
+            value="2"
+            icon={Shield}
+            iconColor="text-rose-400"
+            iconBg="bg-rose-500/12"
+            iconBorder="border-rose-500/20"
+            trend={{ value: "-1", up: true, label: "vs last month" }}
+          />
+          <KpiCard
+            label="QC Violations"
+            value="7"
+            icon={AlertTriangle}
+            iconColor="text-amber-400"
+            iconBg="bg-amber-500/12"
+            iconBorder="border-amber-500/20"
+            trend={{ value: "+2", up: false, label: "needs review" }}
+          />
         </div>
 
         <Tabs defaultValue="workflows">

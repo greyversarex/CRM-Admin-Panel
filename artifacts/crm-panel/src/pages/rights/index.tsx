@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,25 +67,43 @@ export default function Rights() {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: "Active Deals", value: "4", icon: ShieldCheck, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-            { label: "Expiring Soon", value: "1", icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" },
-            { label: "Open Disputes", value: "2", icon: AlertTriangle, color: "text-rose-500", bg: "bg-rose-500/10" },
-            { label: "Content ID Tracks", value: "4", icon: Globe, color: "text-primary", bg: "bg-primary/10" },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-3 md:grid-cols-4">
+          <KpiCard
+            label="Active Deals"
+            value="4"
+            icon={ShieldCheck}
+            iconColor="text-emerald-400"
+            iconBg="bg-emerald-500/12"
+            iconBorder="border-emerald-500/20"
+            trend={{ value: "5 territories", label: "covered" }}
+          />
+          <KpiCard
+            label="Expiring Soon"
+            value="1"
+            icon={Clock}
+            iconColor="text-amber-400"
+            iconBg="bg-amber-500/12"
+            iconBorder="border-amber-500/20"
+            trend={{ value: "Jun 2026", up: false, label: "Yandex Music" }}
+          />
+          <KpiCard
+            label="Open Disputes"
+            value="2"
+            icon={AlertTriangle}
+            iconColor="text-rose-400"
+            iconBg="bg-rose-500/12"
+            iconBorder="border-rose-500/20"
+            trend={{ value: "+1", up: false, label: "vs last month" }}
+          />
+          <KpiCard
+            label="Content ID Tracks"
+            value="4"
+            icon={Globe}
+            iconColor="text-primary"
+            iconBg="bg-primary/12"
+            iconBorder="border-primary/20"
+            trend={{ value: "$1,103", up: true, label: "revenue" }}
+          />
         </div>
 
         <Tabs defaultValue="deals">

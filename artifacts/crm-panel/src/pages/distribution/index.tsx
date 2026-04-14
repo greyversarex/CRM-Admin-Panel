@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,25 +87,43 @@ export default function Distribution() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: "Pending Moderation", value: "3", icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" },
-            { label: "Delivered Today", value: "12", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-            { label: "Failed Deliveries", value: "1", icon: XCircle, color: "text-rose-500", bg: "bg-rose-500/10" },
-            { label: "DSPs Connected", value: "9/10", icon: Shield, color: "text-primary", bg: "bg-primary/10" },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-3 md:grid-cols-4">
+          <KpiCard
+            label="Pending Moderation"
+            value="3"
+            icon={Clock}
+            iconColor="text-amber-400"
+            iconBg="bg-amber-500/12"
+            iconBorder="border-amber-500/20"
+            trend={{ value: "-40%", up: true, label: "vs yesterday" }}
+          />
+          <KpiCard
+            label="Delivered Today"
+            value="12"
+            icon={CheckCircle2}
+            iconColor="text-emerald-400"
+            iconBg="bg-emerald-500/12"
+            iconBorder="border-emerald-500/20"
+            trend={{ value: "+20%", up: true, label: "vs avg" }}
+          />
+          <KpiCard
+            label="Failed Deliveries"
+            value="1"
+            icon={XCircle}
+            iconColor="text-rose-400"
+            iconBg="bg-rose-500/12"
+            iconBorder="border-rose-500/20"
+            trend={{ value: "-50%", up: true, label: "vs yesterday" }}
+          />
+          <KpiCard
+            label="DSPs Connected"
+            value="9/10"
+            icon={Shield}
+            iconColor="text-primary"
+            iconBg="bg-primary/12"
+            iconBorder="border-primary/20"
+            trend={{ value: "1 pending", label: "VEVO" }}
+          />
         </div>
 
         <Tabs defaultValue="moderation">

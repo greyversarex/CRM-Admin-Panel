@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,25 +59,43 @@ export default function Marketing() {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
-          {[
-            { label: "Active Pre-saves", value: "2", icon: Calendar, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Smart Links", value: "3", icon: Link2, color: "text-violet-500", bg: "bg-violet-500/10" },
-            { label: "Pending Pitches", value: "2", icon: Music, color: "text-amber-500", bg: "bg-amber-500/10" },
-            { label: "Total Pre-saves", value: "1,581", icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{kpi.value}</p>
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-3 md:grid-cols-4">
+          <KpiCard
+            label="Active Pre-saves"
+            value="2"
+            icon={Calendar}
+            iconColor="text-primary"
+            iconBg="bg-primary/12"
+            iconBorder="border-primary/20"
+            trend={{ value: "2 upcoming", label: "in 30 days" }}
+          />
+          <KpiCard
+            label="Smart Links"
+            value="3"
+            icon={Link2}
+            iconColor="text-violet-400"
+            iconBg="bg-violet-500/12"
+            iconBorder="border-violet-500/20"
+            trend={{ value: "+1 this week", up: true }}
+          />
+          <KpiCard
+            label="Pending Pitches"
+            value="2"
+            icon={Music}
+            iconColor="text-amber-400"
+            iconBg="bg-amber-500/12"
+            iconBorder="border-amber-500/20"
+            trend={{ value: "1 accepted", up: true, label: "this month" }}
+          />
+          <KpiCard
+            label="Total Pre-saves"
+            value="1,581"
+            icon={TrendingUp}
+            iconColor="text-emerald-400"
+            iconBg="bg-emerald-500/12"
+            iconBorder="border-emerald-500/20"
+            trend={{ value: "+24%", up: true, label: "vs last campaign" }}
+          />
         </div>
 
         <Tabs defaultValue="presave">

@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
-import { Download, TrendingUp, TrendingDown, Play, Globe, Music, Youtube, Radio } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Play, Globe, Music, Youtube, Radio, DollarSign } from "lucide-react";
 import { useGetDashboardRevenueByMonth } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -103,23 +104,42 @@ export default function Analytics() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: a.total_streams, value: "3.34M", change: "+15.2%", up: true, icon: Play, color: "text-primary" },
-            { label: a.total_revenue, value: "$24,180", change: "+9.4%", up: true, icon: TrendingUp, color: "text-emerald-500" },
-            { label: a.active_tracks, value: "1,247", change: "+32 this month", up: true, icon: Music, color: "text-violet-500" },
-            { label: a.ugc_claims, value: "21,400", change: "+17.6%", up: true, icon: Youtube, color: "text-red-500" },
-          ].map((kpi) => (
-            <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.label}</CardTitle>
-                <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{kpi.value}</div>
-                <p className={`text-xs mt-1 ${kpi.up ? "text-emerald-500" : "text-rose-500"}`}>{kpi.change}</p>
-              </CardContent>
-            </Card>
-          ))}
+          <KpiCard
+            label={a.total_streams}
+            value="3.34M"
+            icon={Play}
+            iconColor="text-primary"
+            iconBg="bg-primary/12"
+            iconBorder="border-primary/20"
+            trend={{ value: "+15.2%", up: true, label: "vs last period" }}
+          />
+          <KpiCard
+            label={a.total_revenue}
+            value="$24,180"
+            icon={DollarSign}
+            iconColor="text-emerald-400"
+            iconBg="bg-emerald-500/12"
+            iconBorder="border-emerald-500/20"
+            trend={{ value: "+9.4%", up: true, label: "vs last period" }}
+          />
+          <KpiCard
+            label={a.active_tracks}
+            value="1,247"
+            icon={Music}
+            iconColor="text-violet-400"
+            iconBg="bg-violet-500/12"
+            iconBorder="border-violet-500/20"
+            trend={{ value: "+32 this month", up: true }}
+          />
+          <KpiCard
+            label={a.ugc_claims}
+            value="21,400"
+            icon={Youtube}
+            iconColor="text-red-400"
+            iconBg="bg-red-500/12"
+            iconBorder="border-red-500/20"
+            trend={{ value: "+17.6%", up: true, label: "vs last period" }}
+          />
         </div>
 
         <Tabs defaultValue="streams" className="w-full">
