@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "z9a4zc7aLOMtjMRhcYpyC"
+uri = "file://TECHNICAL_SPECIFICATION.md"
+type = "text"
+title = "Tajik Music — Полное Техническое Задание"
