@@ -134,25 +134,30 @@ export function SidebarNav() {
                   <Link key={item.href} href={item.href}>
                     <span
                       className={cn(
-                        "group relative flex items-center rounded-lg px-2.5 py-2 text-[13px] font-medium cursor-pointer transition-all duration-150",
+                        "nav-item group relative flex items-center rounded-lg px-2.5 py-[7px] text-[13px] font-medium cursor-pointer",
                         isActive
-                          ? "nav-active-bar bg-gradient-to-r from-primary/15 to-primary/5 text-primary"
-                          : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                          ? "nav-active-bar nav-item-active text-primary"
+                          : "text-muted-foreground nav-item-inactive"
                       )}
                     >
-                      <Icon
+                      {/* Icon container — glows on active */}
+                      <span
                         className={cn(
-                          "mr-2.5 h-[15px] w-[15px] flex-shrink-0 transition-colors",
+                          "nav-icon-wrap mr-2.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md",
                           isActive
-                            ? "text-primary"
-                            : "text-muted-foreground/60 group-hover:text-foreground/70"
+                            ? "nav-icon-active"
+                            : "nav-icon-idle"
                         )}
-                      />
+                      >
+                        <Icon className="h-[14px] w-[14px]" />
+                      </span>
+
                       <span className="flex-1 truncate">{nav[item.nameKey] ?? item.nameKey}</span>
+
                       {item.badge && (
                         <span
                           className={cn(
-                            "ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[9px] font-bold text-white shadow-sm",
+                            "ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
                             item.badgeColor ?? "bg-primary"
                           )}
                         >
