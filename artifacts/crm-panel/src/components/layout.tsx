@@ -1,4 +1,5 @@
 import { SidebarNav } from "./sidebar-nav";
+import { WaveBackground } from "./wave-background";
 import { Bell, Search, Globe, ChevronDown } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -75,8 +76,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 md:p-7 mx-auto max-w-[1400px]">
+        <main className="flex-1 overflow-y-auto relative">
+          <WaveBackground />
+          <div className="relative z-10 p-6 md:p-7 mx-auto max-w-[1400px]">
             {children}
           </div>
         </main>
