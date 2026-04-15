@@ -46,9 +46,10 @@ export default function Rights() {
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Rights Management</h1>
-            <p className="text-muted-foreground mt-1">DSP deals, Content ID, disputes and territorial rights.</p>
+          <div className="relative pl-4">
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
+            <h1 className="text-2xl font-bold tracking-tight">Rights Management</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">DSP deals, Content ID, disputes and territorial rights.</p>
           </div>
           <Button>
             <Plus className="mr-2 h-4 w-4" />
@@ -104,7 +105,7 @@ export default function Rights() {
           </TabsList>
 
           <TabsContent value="deals" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>DSP Agreements</CardTitle>
                 <CardDescription>Active distribution and licensing contracts with platforms</CardDescription>
@@ -143,7 +144,7 @@ export default function Rights() {
           </TabsContent>
 
           <TabsContent value="contentid" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>YouTube Content ID</CardTitle>
                 <CardDescription>Tracks registered for Content ID monetization</CardDescription>
@@ -179,7 +180,7 @@ export default function Rights() {
           </TabsContent>
 
           <TabsContent value="disputes" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>Rights Disputes</CardTitle>
                 <CardDescription>Active and resolved rights conflicts</CardDescription>
@@ -216,7 +217,7 @@ export default function Rights() {
           </TabsContent>
 
           <TabsContent value="territories" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>Territory Rights</CardTitle>
                 <CardDescription>Distribution rights by geographic region</CardDescription>

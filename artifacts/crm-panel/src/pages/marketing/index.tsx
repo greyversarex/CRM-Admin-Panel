@@ -41,9 +41,10 @@ export default function Marketing() {
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Marketing</h1>
-            <p className="text-muted-foreground mt-1">Pre-save campaigns, smart links, editorial pitches and promo assets.</p>
+          <div className="relative pl-4">
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
+            <h1 className="text-2xl font-bold tracking-tight">Marketing</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Pre-save campaigns, smart links, editorial pitches and promo assets.</p>
           </div>
           <Button>
             <Plus className="mr-2 h-4 w-4" />
@@ -107,7 +108,7 @@ export default function Marketing() {
           </TabsList>
 
           <TabsContent value="presave" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Pre-save Campaigns</CardTitle>
@@ -152,7 +153,7 @@ export default function Marketing() {
           </TabsContent>
 
           <TabsContent value="smartlinks" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Smart Links</CardTitle>
@@ -200,7 +201,7 @@ export default function Marketing() {
           </TabsContent>
 
           <TabsContent value="pitch" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Editorial Pitches</CardTitle>
@@ -242,7 +243,7 @@ export default function Marketing() {
           <TabsContent value="promo" className="mt-4">
             <div className="grid gap-4 md:grid-cols-3">
               {PROMO_ASSETS.map((a, i) => (
-                <Card key={i} className="bg-card/50 backdrop-blur border-border/50">
+                <Card key={i} className="card-surface no-lift border-border/60">
                   <CardContent className="pt-5">
                     <div className="w-full aspect-square bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg mb-4 flex items-center justify-center">
                       <Image className="h-12 w-12 text-primary/40" />

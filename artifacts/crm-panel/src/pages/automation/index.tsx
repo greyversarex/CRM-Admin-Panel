@@ -150,7 +150,7 @@ export default function Automation() {
 
           <TabsContent value="workflows" className="mt-4 space-y-3">
             {workflows.map((wf, i) => (
-              <Card key={i} className="bg-card/50 backdrop-blur border-border/50">
+              <Card key={i} className="card-surface border-border/60">
                 <CardContent className="pt-5 pb-5">
                   <div className="flex items-start gap-4">
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${wf.enabled ? "bg-primary/10" : "bg-muted"}`}>
@@ -190,7 +190,7 @@ export default function Automation() {
           </TabsContent>
 
           <TabsContent value="fraud" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Fraud & Risk Alerts</CardTitle>
                 <CardDescription>Suspicious streaming activity automatically flagged by the system</CardDescription>
@@ -237,7 +237,7 @@ export default function Automation() {
           </TabsContent>
 
           <TabsContent value="moderation" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Content QC Rules</CardTitle>
                 <CardDescription>Automatic quality control checks applied to every submitted release</CardDescription>

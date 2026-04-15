@@ -65,9 +65,10 @@ export default function Distribution() {
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Distribution</h1>
-            <p className="text-muted-foreground mt-1">Release moderation, DDEX delivery, DSP status and takedowns.</p>
+          <div className="relative pl-4">
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
+            <h1 className="text-2xl font-bold tracking-tight">Distribution</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Release moderation, DDEX delivery, DSP status and takedowns.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="bg-card">
@@ -146,7 +147,7 @@ export default function Distribution() {
           </TabsList>
 
           <TabsContent value="moderation" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>Release Moderation Queue</CardTitle>
                 <CardDescription>Releases awaiting review before delivery to DSPs</CardDescription>
@@ -285,7 +286,7 @@ export default function Distribution() {
           </TabsContent>
 
           <TabsContent value="takedowns" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Takedowns</CardTitle>
@@ -329,7 +330,7 @@ export default function Distribution() {
           </TabsContent>
 
           <TabsContent value="scheduled" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface no-lift border-border/60">
               <CardHeader>
                 <CardTitle>Scheduled Releases</CardTitle>
                 <CardDescription>Approved releases waiting for their release date</CardDescription>

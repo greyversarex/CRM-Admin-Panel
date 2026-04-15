@@ -80,9 +80,10 @@ export default function Analytics() {
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="relative pl-4">
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
             <h1 className="text-2xl font-bold tracking-tight">{a.title}</h1>
-            <p className="text-[13px] text-muted-foreground mt-1">{a.subtitle}</p>
+            <p className="text-[13px] text-muted-foreground mt-0.5">{a.subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>
@@ -219,7 +220,7 @@ export default function Analytics() {
               </Card>
             </div>
 
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Top Tracks</CardTitle>
                 <CardDescription>Most streamed tracks this period</CardDescription>
@@ -262,7 +263,7 @@ export default function Analytics() {
           </TabsContent>
 
           <TabsContent value="revenue" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Revenue Overview</CardTitle>
                 <CardDescription>DSP vs Publishing revenue by month</CardDescription>
@@ -300,7 +301,7 @@ export default function Analytics() {
           </TabsContent>
 
           <TabsContent value="geo" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Geography</CardTitle>
                 <CardDescription>Top countries by stream volume</CardDescription>
@@ -336,7 +337,7 @@ export default function Analytics() {
                 { label: "Total UGC Views", value: "1.58M", change: "+18.2%" },
                 { label: "Content ID Revenue", value: "$4,320", change: "+11.4%" },
               ].map((kpi) => (
-                <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
+                <Card key={kpi.label} className="card-surface border-border/60">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.label}</CardTitle>
                   </CardHeader>
@@ -347,7 +348,7 @@ export default function Analytics() {
                 </Card>
               ))}
             </div>
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>YouTube UGC Trend</CardTitle>
                 <CardDescription>Claims and views from user-generated content</CardDescription>
@@ -376,7 +377,7 @@ export default function Analytics() {
                 { label: "TikTok Plays", value: "54M", change: "+31.7%" },
                 { label: "Unique Sounds", value: "124", change: "+8 this month" },
               ].map((kpi) => (
-                <Card key={kpi.label} className="bg-card/50 backdrop-blur border-border/50">
+                <Card key={kpi.label} className="card-surface border-border/60">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.label}</CardTitle>
                   </CardHeader>
@@ -387,7 +388,7 @@ export default function Analytics() {
                 </Card>
               ))}
             </div>
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>TikTok Growth</CardTitle>
                 <CardDescription>Videos created using your tracks each month</CardDescription>
@@ -410,7 +411,7 @@ export default function Analytics() {
           </TabsContent>
 
           <TabsContent value="playlist" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Playlist Placements</CardTitle>
                 <CardDescription>Your tracks featured in editorial and algorithmic playlists</CardDescription>

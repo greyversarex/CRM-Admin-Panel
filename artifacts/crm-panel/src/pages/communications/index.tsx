@@ -137,7 +137,7 @@ export default function Communications() {
               </Card>
             )}
 
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Email Campaigns</CardTitle>
                 <CardDescription>History of sent and draft campaigns</CardDescription>
@@ -182,7 +182,7 @@ export default function Communications() {
           </TabsContent>
 
           <TabsContent value="push" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader>
                 <CardTitle>Recent Notifications</CardTitle>
                 <CardDescription>Push, email and messaging channel activity</CardDescription>
@@ -213,7 +213,7 @@ export default function Communications() {
           </TabsContent>
 
           <TabsContent value="templates" className="mt-4">
-            <Card className="bg-card/50 backdrop-blur border-border/50">
+            <Card className="card-surface border-border/60">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Message Templates</CardTitle>
