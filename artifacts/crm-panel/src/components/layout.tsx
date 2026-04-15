@@ -26,7 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Input
                 type="search"
                 placeholder={t.header.search}
-                className="w-full pl-9 h-9 text-sm bg-background/60 border-border/50 focus-visible:ring-primary/50 placeholder:text-muted-foreground/40 rounded-lg"
+                className="w-full pl-9 h-9 text-sm bg-white/[0.07] border-white/[0.12] text-white placeholder:text-white/35 focus-visible:ring-primary/40 focus-visible:bg-white/[0.10] focus-visible:border-white/20 rounded-lg transition-all"
               />
             </div>
           </div>
