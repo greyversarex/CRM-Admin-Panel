@@ -119,25 +119,24 @@ export function SidebarNav() {
     >
       {/* Logo */}
       <div className={cn(
-        "border-b border-[hsl(var(--sidebar-border))] transition-all duration-300",
-        collapsed ? "px-3 pt-5 pb-4" : "px-5 pt-6 pb-5"
+        "border-b border-[hsl(var(--sidebar-border))] transition-all duration-300 flex items-center",
+        collapsed ? "px-3 py-4 justify-center" : "px-4 py-3"
       )}>
-        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
+        {collapsed ? (
+          /* Collapsed: just the icon badge */
           <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[hsl(271_80%_68%)] flex items-center justify-center shadow-lg shadow-primary/30 shrink-0">
             <Music2 className="h-[18px] w-[18px] text-white" />
             <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
           </div>
-          {!collapsed && (
-            <div>
-              <h1 className="text-[13px] font-bold text-white tracking-tight leading-none mb-0.5">
-                TAJIK MUSIC
-              </h1>
-              <span className="text-[9.5px] font-semibold text-primary/70 uppercase tracking-[0.15em]">
-                Distribution
-              </span>
-            </div>
-          )}
-        </div>
+        ) : (
+          /* Expanded: logo image */
+          <img
+            src="/tajikmusic-logo.png"
+            alt="Tajik Music"
+            className="h-10 w-auto object-contain select-none"
+            draggable={false}
+          />
+        )}
       </div>
 
       {/* Nav groups */}
