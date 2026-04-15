@@ -378,23 +378,23 @@
     color: hsl(var(--sidebar-foreground) / 0.75);
   }
 
-  /* ─── Global input brightness lift ─── */
+  /* ─── Global input: white background, dark text ─── */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   textarea,
   select {
-    background-color: rgba(255,255,255,0.07) !important;
-    border-color: rgba(255,255,255,0.12) !important;
-    color: hsl(var(--foreground)) !important;
+    background-color: #ffffff !important;
+    border-color: rgba(0,0,0,0.15) !important;
+    color: #111827 !important;
   }
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
   textarea:focus,
   select:focus {
-    background-color: rgba(255,255,255,0.10) !important;
-    border-color: rgba(255,255,255,0.20) !important;
+    background-color: #ffffff !important;
+    border-color: hsl(var(--primary)) !important;
   }
   input::placeholder,
   textarea::placeholder {
-    color: rgba(255,255,255,0.35) !important;
+    color: #9ca3af !important;
   }
 
   .glow-primary {

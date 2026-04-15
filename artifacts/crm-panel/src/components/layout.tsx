@@ -22,11 +22,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header className="h-[60px] flex items-center justify-between px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center flex-1 max-w-sm">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 z-10" />
               <Input
                 type="search"
                 placeholder={t.header.search}
-                className="w-full pl-9 h-9 text-sm bg-white/[0.07] border-white/[0.12] text-white placeholder:text-white/35 focus-visible:ring-primary/40 focus-visible:bg-white/[0.10] focus-visible:border-white/20 rounded-lg transition-all"
+                className="w-full pl-9 h-9 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary/50"
               />
             </div>
           </div>
