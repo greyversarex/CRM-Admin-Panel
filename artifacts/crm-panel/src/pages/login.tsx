@@ -207,8 +207,8 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       // ── 5. Spectrum analyzer bars — bottom ──
       const BAR_W = (W * 0.9) / BAR_COUNT;
       const BAR_X0 = W * 0.05;
-      const BAR_BASE = H * 0.88;
-      const BAR_MAX_H = H * 0.18;
+      const BAR_BASE = H;
+      const BAR_MAX_H = H * 0.22;
 
       // Evolve bar energies (simulate music beat)
       const beat = 0.5 + 0.5 * Math.sin(t * 4.2) * Math.sin(t * 2.7);
@@ -255,19 +255,6 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
         ctx.restore();
       }
 
-      // Reflection below bar base line
-      ctx.save();
-      ctx.globalAlpha = 0.12;
-      ctx.scale(1, -0.25);
-      for (let i = 0; i < BAR_COUNT; i++) {
-        const bx = BAR_X0 + i * BAR_W;
-        const bh = Math.max(2, barEnergy[i] * BAR_MAX_H);
-        const hue1 = 220 + (i / BAR_COUNT) * 80;
-        ctx.fillStyle = `hsla(${hue1},85%,70%,0.4)`;
-        const bw = BAR_W * 0.65;
-        ctx.fillRect(bx + (BAR_W - bw) / 2, -(BAR_BASE + 4), bw, bh * 0.6);
-      }
-      ctx.restore();
 
       // ── 6. Particles ──
       if (particles.length < MAX_PARTICLES && Math.random() < 0.35) spawnParticle(W, H);
