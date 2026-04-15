@@ -117,19 +117,18 @@ export function SidebarNav() {
         collapsed ? "w-[64px]" : "w-[230px]"
       )}
     >
-      {/* Logo + collapse toggle */}
+      {/* Logo */}
       <div className={cn(
         "border-b border-[hsl(var(--sidebar-border))] transition-all duration-300",
-        collapsed ? "px-3 pt-5 pb-4" : "px-4 pt-5 pb-4"
+        collapsed ? "px-3 pt-5 pb-4" : "px-5 pt-6 pb-5"
       )}>
-        <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "gap-3")}>
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
           <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[hsl(271_80%_68%)] flex items-center justify-center shadow-lg shadow-primary/30 shrink-0">
             <Music2 className="h-[18px] w-[18px] text-white" />
             <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
           </div>
-
           {!collapsed && (
-            <div className="flex-1 min-w-0">
+            <div>
               <h1 className="text-[13px] font-bold text-white tracking-tight leading-none mb-0.5">
                 TAJIK MUSIC
               </h1>
@@ -138,21 +137,6 @@ export function SidebarNav() {
               </span>
             </div>
           )}
-
-          {/* Collapse toggle — prominent button next to logo */}
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Развернуть меню" : "Свернуть меню"}
-            className={cn(
-              "flex items-center justify-center rounded-lg border border-white/[0.10] bg-white/[0.05] hover:bg-white/[0.12] hover:border-white/[0.20] transition-all duration-150 cursor-pointer text-white/50 hover:text-white shrink-0",
-              collapsed ? "h-8 w-8" : "h-8 w-8"
-            )}
-          >
-            {collapsed
-              ? <ChevronRight className="h-4 w-4" />
-              : <ChevronLeft className="h-4 w-4" />
-            }
-          </button>
         </div>
       </div>
 
@@ -276,6 +260,35 @@ export function SidebarNav() {
         )}
       </div>
 
+      {/* ── Collapse / Expand button — bottom, gradient, embossed ── */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        title={collapsed ? "Развернуть меню" : "Свернуть меню"}
+        className={cn(
+          "relative flex items-center justify-center gap-2 w-full cursor-pointer select-none",
+          "h-11 transition-all duration-200",
+          "bg-gradient-to-r from-primary to-[hsl(271_80%_68%)]",
+          "hover:from-[hsl(226_84%_72%)] hover:to-[hsl(271_80%_74%)]",
+          "active:scale-[0.98] active:brightness-90",
+          // embossed / raised effect
+          "shadow-[0_-1px_0_rgba(255,255,255,0.12)_inset,0_2px_8px_hsl(226_84%_67%/0.45),0_1px_0_rgba(0,0,0,0.25)]",
+          "border-t border-primary/40",
+          "text-white font-semibold text-[12px] tracking-wide",
+          "overflow-hidden"
+        )}
+      >
+        {/* Subtle shine overlay */}
+        <span className="absolute inset-0 bg-gradient-to-b from-white/[0.12] to-transparent pointer-events-none" />
+
+        {collapsed ? (
+          <ChevronRight className="h-4 w-4 relative" />
+        ) : (
+          <>
+            <ChevronLeft className="h-4 w-4 relative" />
+            <span className="relative uppercase text-[10px] tracking-[0.1em] font-bold">Свернуть</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }
