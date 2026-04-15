@@ -205,8 +205,8 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       });
 
       // ── 5. Spectrum analyzer bars — bottom ──
-      const BAR_W = (W * 0.9) / BAR_COUNT;
-      const BAR_X0 = W * 0.05;
+      const BAR_W = W / BAR_COUNT;
+      const BAR_X0 = 0;
       const BAR_BASE = H;
       const BAR_MAX_H = H * 0.22;
 
