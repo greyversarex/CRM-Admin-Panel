@@ -267,25 +267,26 @@ export function SidebarNav() {
         className={cn(
           "relative flex items-center justify-center gap-2 w-full cursor-pointer select-none",
           "h-11 transition-all duration-200",
-          "bg-gradient-to-r from-primary to-[hsl(271_80%_68%)]",
-          "hover:from-[hsl(226_84%_72%)] hover:to-[hsl(271_80%_74%)]",
-          "active:scale-[0.98] active:brightness-90",
-          // embossed / raised effect
-          "shadow-[0_-1px_0_rgba(255,255,255,0.12)_inset,0_2px_8px_hsl(226_84%_67%/0.45),0_1px_0_rgba(0,0,0,0.25)]",
-          "border-t border-primary/40",
-          "text-white font-semibold text-[12px] tracking-wide",
+          "bg-[hsl(222_40%_6%)]",
+          "hover:bg-[hsl(222_40%_8%)]",
+          "active:scale-[0.98]",
+          // neon glow border top + outer glow
+          "border-t border-primary/30",
+          "shadow-[0_-2px_12px_hsl(226_84%_67%/0.25),0_-1px_0_hsl(226_84%_67%/0.3)_inset]",
+          "hover:shadow-[0_-2px_20px_hsl(226_84%_67%/0.45),0_-1px_0_hsl(226_84%_67%/0.5)_inset,0_0_30px_hsl(271_80%_68%/0.15)]",
+          "text-primary font-bold text-[10px] tracking-[0.12em] uppercase",
           "overflow-hidden"
         )}
       >
-        {/* Subtle shine overlay */}
-        <span className="absolute inset-0 bg-gradient-to-b from-white/[0.12] to-transparent pointer-events-none" />
+        {/* Neon top-edge line */}
+        <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent pointer-events-none" />
 
         {collapsed ? (
-          <ChevronRight className="h-4 w-4 relative" />
+          <ChevronRight className="h-4 w-4 relative drop-shadow-[0_0_6px_hsl(var(--primary))]" />
         ) : (
           <>
-            <ChevronLeft className="h-4 w-4 relative" />
-            <span className="relative uppercase text-[10px] tracking-[0.1em] font-bold">Свернуть</span>
+            <ChevronLeft className="h-4 w-4 relative drop-shadow-[0_0_6px_hsl(var(--primary))]" />
+            <span className="relative drop-shadow-[0_0_8px_hsl(var(--primary))]">Свернуть</span>
           </>
         )}
       </button>
