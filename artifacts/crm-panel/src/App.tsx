@@ -5,7 +5,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LangProvider } from "@/lib/i18n";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { canAccess } from "@/lib/permissions";
-import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 
@@ -47,9 +46,7 @@ function ProtectedRoute({
 
   return (
     <Route path={path}>
-      <Layout>
-        <Component />
-      </Layout>
+      <Component />
     </Route>
   );
 }
