@@ -1,9 +1,13 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LangProvider } from "@/lib/i18n";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { canAccess } from "@/lib/permissions";
+import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
+import Login from "@/pages/login";
 
 import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
@@ -26,28 +30,67 @@ import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient();
 
+function ProtectedRoute({
+  path,
+  component: Component,
+}: {
+  path: string;
+  component: React.ComponentType;
+}) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (!user) return <Route path={path}><Redirect to="/login" /></Route>;
+
+  const allowed = canAccess(user.role, path);
+  if (!allowed) return <Route path={path}><Redirect to="/" /></Route>;
+
+  return (
+    <Route path={path}>
+      <Layout>
+        <Component />
+      </Layout>
+    </Route>
+  );
+}
+
 function Router() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/distribution" component={Distribution} />
-      <Route path="/delivery" component={Distribution} />
-      <Route path="/releases" component={Releases} />
-      <Route path="/artists" component={Artists} />
-      <Route path="/labels" component={Labels} />
-      <Route path="/videos" component={Videos} />
-      <Route path="/users" component={Users} />
-      <Route path="/publishing" component={Publishing} />
-      <Route path="/rights" component={Rights} />
-      <Route path="/crm" component={CRM} />
-      <Route path="/communications" component={Communications} />
-      <Route path="/marketing" component={Marketing} />
-      <Route path="/finance" component={Finance} />
-      <Route path="/splits" component={Splits} />
-      <Route path="/payouts" component={Payouts} />
-      <Route path="/automation" component={Automation} />
-      <Route path="/settings" component={Settings} />
+      <Route path="/login">
+        {user ? <Redirect to="/" /> : <Login />}
+      </Route>
+
+      <ProtectedRoute path="/"               component={Dashboard} />
+      <ProtectedRoute path="/analytics"      component={Analytics} />
+      <ProtectedRoute path="/distribution"   component={Distribution} />
+      <ProtectedRoute path="/delivery"       component={Distribution} />
+      <ProtectedRoute path="/releases"       component={Releases} />
+      <ProtectedRoute path="/artists"        component={Artists} />
+      <ProtectedRoute path="/labels"         component={Labels} />
+      <ProtectedRoute path="/videos"         component={Videos} />
+      <ProtectedRoute path="/users"          component={Users} />
+      <ProtectedRoute path="/publishing"     component={Publishing} />
+      <ProtectedRoute path="/rights"         component={Rights} />
+      <ProtectedRoute path="/crm"            component={CRM} />
+      <ProtectedRoute path="/communications" component={Communications} />
+      <ProtectedRoute path="/marketing"      component={Marketing} />
+      <ProtectedRoute path="/finance"        component={Finance} />
+      <ProtectedRoute path="/splits"         component={Splits} />
+      <ProtectedRoute path="/payouts"        component={Payouts} />
+      <ProtectedRoute path="/automation"     component={Automation} />
+      <ProtectedRoute path="/settings"       component={Settings} />
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -57,12 +100,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <LangProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
       </LangProvider>
     </QueryClientProvider>
   );

@@ -1,6 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { canAccess } from "@/lib/permissions";
+import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -101,6 +104,7 @@ export function SidebarNav() {
   const [location] = useLocation();
   const { t } = useLang();
   const nav = t.nav as Record<string, string>;
+  const { user, logout } = useAuth();
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
@@ -141,7 +145,12 @@ export function SidebarNav() {
 
       {/* Nav groups */}
       <div className="flex-1 overflow-y-auto py-3 space-y-4" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
-        {navGroups.map((group) => (
+        {navGroups.map((group) => {
+          const visibleItems = user
+            ? group.items.filter(item => canAccess(user.role, item.href))
+            : [];
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={group.titleKey}>
             {/* Section label — hidden when collapsed */}
             {!collapsed && (
@@ -152,7 +161,7 @@ export function SidebarNav() {
             {collapsed && <div className="h-px bg-white/[0.07] mb-2 mx-1" />}
 
             <div className="space-y-0.5">
-              {group.items.map((item) => {
+              {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const isActive =
                   location === item.href ||
@@ -231,7 +240,8 @@ export function SidebarNav() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* User footer */}
@@ -241,20 +251,35 @@ export function SidebarNav() {
       )}>
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center cursor-pointer hover:border-primary/40 transition-all">
-              <span className="text-[11px] font-bold text-primary">AU</span>
-            </div>
+            <button
+              onClick={logout}
+              title={user?.name}
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center cursor-pointer hover:border-primary/40 transition-all"
+            >
+              <span className="text-[11px] font-bold text-primary">{user?.avatarInitials ?? "?"}</span>
+            </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white/[0.04] cursor-pointer transition-all duration-150 group">
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg transition-all duration-150">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-[11px] font-bold text-primary">AU</span>
+              <span className="text-[11px] font-bold text-primary">{user?.avatarInitials ?? "?"}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-white truncate leading-tight">Admin User</p>
-              <p className="text-[10px] text-white/40 truncate">admin@tajikmusic.com</p>
+              <p className="text-[12px] font-semibold text-white truncate leading-tight">{user?.name ?? "—"}</p>
+              <span className={cn(
+                "inline-block text-[9px] font-bold uppercase tracking-[0.1em] px-1.5 py-px rounded border",
+                user ? ROLE_COLORS[user.role] : ""
+              )}>
+                {user ? ROLE_LABELS[user.role] : ""}
+              </span>
             </div>
-            <LogOut className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
+            <button
+              onClick={logout}
+              title="Выйти"
+              className="group p-1 rounded hover:bg-red-500/10 transition-colors shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5 text-white/30 group-hover:text-red-400 transition-colors" />
+            </button>
           </div>
         )}
       </div>

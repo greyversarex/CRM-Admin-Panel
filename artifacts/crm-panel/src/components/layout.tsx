@@ -5,6 +5,9 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useLang } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +17,7 @@ import {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { lang, setLang, t } = useLang();
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -65,13 +69,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-2.5 pl-2 ml-1 border-l border-border/60">
               <div className="hidden md:block text-right">
-                <p className="text-[12px] font-semibold text-foreground leading-tight">Admin User</p>
-                <p className="text-[10px] text-muted-foreground/70 leading-tight">admin@tajikmusic.com</p>
+                <p className="text-[12px] font-semibold text-foreground leading-tight">{user?.name ?? "—"}</p>
+                <span className={cn(
+                  "inline-block text-[9px] font-bold uppercase tracking-[0.1em] px-1.5 py-px rounded border",
+                  user ? ROLE_COLORS[user.role] : ""
+                )}>
+                  {user ? ROLE_LABELS[user.role] : ""}
+                </span>
               </div>
-              <Avatar className="h-8 w-8 border border-border/50 ring-1 ring-primary/10">
-                <AvatarImage src="" alt="Admin" />
-                <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary text-[11px] font-bold">AU</AvatarFallback>
-              </Avatar>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Avatar className="h-8 w-8 border border-border/50 ring-1 ring-primary/10 cursor-pointer">
+                    <AvatarImage src="" alt={user?.name} />
+                    <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary text-[11px] font-bold">
+                      {user?.avatarInitials ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44 bg-card border-border shadow-lg">
+                  <DropdownMenuItem
+                    className="text-xs cursor-pointer text-red-400 hover:text-red-300"
+                    onClick={logout}
+                  >
+                    Выйти из системы
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
