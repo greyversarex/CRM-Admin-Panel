@@ -29,6 +29,7 @@ const translations = {
       payouts: "Payouts",
       system: "System",
       automation: "Automation",
+      integrations: "API Integrations",
       settings: "Settings",
     },
     header: {
@@ -142,6 +143,7 @@ const translations = {
       payouts: "Выплаты",
       system: "Система",
       automation: "Автоматизация",
+      integrations: "Интеграции API",
       settings: "Настройки",
     },
     header: {

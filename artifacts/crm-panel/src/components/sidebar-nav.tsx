@@ -24,6 +24,7 @@ import {
   UserCog,
   Zap,
   Settings2,
+  PlugZap,
   LogOut,
   Music2,
   ChevronLeft,
@@ -94,8 +95,9 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "system",
     items: [
-      { nameKey: "automation", href: "/automation", icon: Zap,      iconColor: "text-slate-400" },
-      { nameKey: "settings",   href: "/settings",   icon: Settings2,iconColor: "text-slate-400" },
+      { nameKey: "automation",   href: "/automation",   icon: Zap,      iconColor: "text-slate-400" },
+      { nameKey: "integrations", href: "/integrations", icon: PlugZap,  iconColor: "text-amber-400" },
+      { nameKey: "settings",     href: "/settings",     icon: Settings2,iconColor: "text-slate-400" },
     ],
   },
 ];

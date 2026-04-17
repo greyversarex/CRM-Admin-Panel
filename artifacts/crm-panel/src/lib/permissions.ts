@@ -20,6 +20,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/payouts":        ["admin", "manager", "label", "artist"],
   "/automation":     ["admin"],
   "/settings":       ["admin"],
+  "/integrations":   ["admin"],
 };
 
 export function canAccess(role: Role, path: string): boolean {
