@@ -7,7 +7,7 @@
 set -e
 
 APP_DIR="/var/www/tajikmusic"
-REPO_URL="https://github.com/YOUR_USERNAME/YOUR_REPO.git"  # <-- замени на свой репо
+REPO_URL="https://github.com/greyversarex/CRM-Admin-Panel.git"
 
 # ── Загружаем переменные окружения ──────────────────────
 if [ -f "$APP_DIR/.env" ]; then
