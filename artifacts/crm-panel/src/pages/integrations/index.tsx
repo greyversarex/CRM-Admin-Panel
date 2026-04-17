@@ -28,6 +28,10 @@ import {
   Activity,
   PlugZap,
   Server,
+  Video,
+  Film,
+  PlayCircle,
+  Tv,
   ShieldCheck,
   RefreshCw,
   CheckCircle2,
@@ -39,7 +43,7 @@ import {
 } from "lucide-react";
 
 type IntegrationStatus = "connected" | "disconnected" | "pending" | "error";
-type IntegrationCategory = "dsp" | "social" | "delivery" | "analytics";
+type IntegrationCategory = "dsp" | "video" | "social" | "delivery" | "analytics";
 
 type FieldType = "text" | "password" | "url" | "number";
 
@@ -72,6 +76,11 @@ const CATEGORIES: Record<IntegrationCategory, { title: string; subtitle: string;
     title: "Стриминговые площадки (DSP)",
     subtitle: "Доставка треков и сбор статистики прослушиваний",
     icon: Radio,
+  },
+  video: {
+    title: "Видеоплощадки",
+    subtitle: "Дистрибуция клипов, Content ID и монетизация видео",
+    icon: Video,
   },
   social: {
     title: "Социальные сети и UGC",
@@ -181,6 +190,73 @@ const initialIntegrations: Integration[] = [
     description: "Сбер Звук — российский стриминг",
     icon: Music2, iconColor: "text-green-300", iconBg: "bg-green-500/10",
     status: "disconnected", enabled: false,
+    fields: apiKeyFields, values: {},
+  },
+
+  // ── Video platforms ──
+  {
+    id: "youtube_cms", name: "YouTube CMS / Content ID", category: "video",
+    description: "Управление каналом, монетизация и Content ID для клипов",
+    icon: Youtube, iconColor: "text-red-400", iconBg: "bg-red-500/10",
+    status: "disconnected", enabled: false,
+    docsUrl: "https://developers.google.com/youtube/partner",
+    fields: [
+      { key: "client_id", label: "Client ID", type: "text" },
+      { key: "client_secret", label: "Client Secret", type: "password" },
+      { key: "channel_id", label: "ID канала (UC...)", type: "text" },
+      { key: "cms_account_id", label: "CMS Account ID", type: "text", hint: "Только для партнёров YouTube" },
+    ],
+    values: {},
+  },
+  {
+    id: "vk_video", name: "VK Video / VK Клипы", category: "video",
+    description: "Загрузка клипов и аналитика в ВК",
+    icon: PlayCircle, iconColor: "text-blue-300", iconBg: "bg-blue-500/10",
+    status: "disconnected", enabled: false,
+    docsUrl: "https://dev.vk.com/method/video",
+    fields: [
+      { key: "access_token", label: "Access Token", type: "password" },
+      { key: "group_id", label: "ID группы / страницы", type: "text" },
+    ],
+    values: {},
+  },
+  {
+    id: "rutube", name: "Rutube", category: "video",
+    description: "Российская видеоплатформа (клипы и live)",
+    icon: Tv, iconColor: "text-orange-300", iconBg: "bg-orange-500/10",
+    status: "disconnected", enabled: false,
+    fields: [
+      { key: "api_key", label: "API ключ", type: "password" },
+      { key: "channel_id", label: "ID канала", type: "text" },
+    ],
+    values: {},
+  },
+  {
+    id: "yandex_zen", name: "Дзен (Видео)", category: "video",
+    description: "Яндекс Дзен — видео и Shorts-формат",
+    icon: Film, iconColor: "text-yellow-300", iconBg: "bg-yellow-500/10",
+    status: "disconnected", enabled: false,
+    fields: apiKeyFields, values: {},
+  },
+  {
+    id: "ok_video", name: "Одноклассники Видео", category: "video",
+    description: "OK.ru — видео и музыка",
+    icon: PlayCircle, iconColor: "text-orange-400", iconBg: "bg-orange-500/10",
+    status: "disconnected", enabled: false,
+    fields: oauthFields, values: {},
+  },
+  {
+    id: "likee", name: "Likee", category: "video",
+    description: "Короткие видео — аудитория Азии и СНГ",
+    icon: Video, iconColor: "text-pink-300", iconBg: "bg-pink-500/10",
+    status: "disconnected", enabled: false,
+    fields: apiKeyFields, values: {},
+  },
+  {
+    id: "vevo", name: "Vevo", category: "video",
+    description: "Глобальная сеть музыкальных клипов",
+    icon: Film, iconColor: "text-purple-300", iconBg: "bg-purple-500/10",
+    status: "pending", enabled: false,
     fields: apiKeyFields, values: {},
   },
 
@@ -331,7 +407,7 @@ export default function Integrations() {
 
   const grouped = useMemo(() => {
     const map: Record<IntegrationCategory, Integration[]> = {
-      dsp: [], social: [], delivery: [], analytics: [],
+      dsp: [], video: [], social: [], delivery: [], analytics: [],
     };
     integrations.forEach((i) => map[i.category].push(i));
     return map;
@@ -421,6 +497,7 @@ export default function Integrations() {
           <TabsList className="bg-[hsl(222_40%_7%)] border border-white/[0.06]">
             <TabsTrigger value="all">Все</TabsTrigger>
             <TabsTrigger value="dsp">Стриминги</TabsTrigger>
+            <TabsTrigger value="video">Видео</TabsTrigger>
             <TabsTrigger value="social">Соцсети</TabsTrigger>
             <TabsTrigger value="delivery">DDEX-доставка</TabsTrigger>
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
