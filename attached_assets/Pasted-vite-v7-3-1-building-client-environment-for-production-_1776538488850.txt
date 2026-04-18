@@ -1,0 +1,41 @@
+vite v7.3.1 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 2485 modules transformed.
+dist/public/index.html                     0.74 kB │ gzip:   0.42 kB
+dist/public/assets/index-Dt3cLAEm.css    150.40 kB │ gzip:  22.90 kB
+dist/public/assets/index-BymXBf0u.js   1,078.70 kB │ gzip: 301.49 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 32.43s
+▶ Запускаем / перезапускаем PM2...
+[PM2] Applying action reloadProcessId on app [tajikmusic-api](ids: [ 0 ])
+[PM2] [tajikmusic-api](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ tajikmusic-api     │ fork     │ 1    │ online    │ 0%       │ 21.9mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+▶ Сохраняем список процессов PM2 (автозапуск)...
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+bash: line 1: $: command not found
+▶ Перезагружаем Nginx...
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+
+✅ Деплой завершён!
+   API:      http://localhost:3001
+   Фронт:    /var/www/tajikmusic/artifacts/crm-panel/dist/public
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ tajikmusic-api     │ fork     │ 1    │ online    │ 0%       │ 77.3mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+root@ubuntu:/var/www/tajikmusic#
