@@ -1,0 +1,73 @@
+root@ubuntu:~# cd /var/www/tajikmusic && bash deploy/2_deploy.sh
+▶ Обновляем код из репозитория...
+remote: Enumerating objects: 70, done.
+remote: Counting objects: 100% (70/70), done.
+remote: Compressing objects: 100% (18/18), done.
+remote: Total 53 (delta 31), reused 53 (delta 31), pack-reused 0 (from 0)
+Unpacking objects: 100% (53/53), 18.57 MiB | 9.69 MiB/s, done.
+From https://github.com/greyversarex/CRM-Admin-Panel
+ * branch            main       -> FETCH_HEAD
+   72bf679..2b06151  main       -> origin/main
+Updating 72bf679..2b06151
+Fast-forward
+ artifacts/crm-panel/public/opengraph.jpg           | Bin 32064 -> 54443 bytes
+ artifacts/crm-panel/src/App.tsx                    |   2 +
+ .../src/components/dashboard-sections.tsx          | 236 ++++++++
+ artifacts/crm-panel/src/components/sidebar-nav.tsx |   6 +-
+ artifacts/crm-panel/src/data/dashboard-extras.ts   | 218 +++++++
+ artifacts/crm-panel/src/lib/i18n.tsx               |   2 +
+ artifacts/crm-panel/src/lib/permissions.ts         |   1 +
+ artifacts/crm-panel/src/pages/dashboard.tsx        |  24 +-
+ .../crm-panel/src/pages/integrations/index.tsx     | 645 +++++++++++++++++++++
+ artifacts/crm-panel/src/pages/publishing/index.tsx | 308 +++++++---
+ attached_assets/Admin_Panel_1776533254743.png      | Bin 0 -> 10121626 bytes
+ attached_assets/CRM_1776533254744.png              | Bin 0 -> 4531258 bytes
+ attached_assets/Dashboard_1776533254744.png        | Bin 0 -> 4950042 bytes
+ attached_assets/image_1776441052548.png            | Bin 0 -> 14864 bytes
+ attached_assets/image_1776441622549.png            | Bin 0 -> 64686 bytes
+ 15 files changed, 1368 insertions(+), 74 deletions(-)
+ create mode 100644 artifacts/crm-panel/src/components/dashboard-sections.tsx
+ create mode 100644 artifacts/crm-panel/src/data/dashboard-extras.ts
+ create mode 100644 artifacts/crm-panel/src/pages/integrations/index.tsx
+ create mode 100644 attached_assets/Admin_Panel_1776533254743.png
+ create mode 100644 attached_assets/CRM_1776533254744.png
+ create mode 100644 attached_assets/Dashboard_1776533254744.png
+ create mode 100644 attached_assets/image_1776441052548.png
+ create mode 100644 attached_assets/image_1776441622549.png
+▶ Создаём папки...
+▶ Устанавливаем зависимости...
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_use…
+└─ Done in 44ms
+Done in 6.4s using pnpm v10.33.0
+▶ Собираем API-сервер...
+
+> @workspace/api-server@0.0.0 build /var/www/tajikmusic/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       2.2mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                   3.9mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 1676ms
+▶ Собираем фронтенд...
+
+> @workspace/crm-panel@0.0.0 build /var/www/tajikmusic/artifacts/crm-panel
+> vite build --config vite.config.ts
+
+vite v7.3.1 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
