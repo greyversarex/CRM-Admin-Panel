@@ -8,7 +8,9 @@ import {
   useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Music2 } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Music2, BookMarked } from "lucide-react";
+import { GeoStreamsCard, UgcOverviewCard, SocialViewsCard } from "@/components/dashboard-sections";
+import { getGeoStreams, getUgcOverview, getSocialBlocks, getPublishingKpis } from "@/data/dashboard-extras";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLang } from "@/lib/i18n";
@@ -199,7 +201,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── KPI Cards ── */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             label={role === "artist" ? "Мой доход" : role === "label" ? "Доход лейбла" : d.total_revenue}
             value={`$${(summaryRaw?.totalRevenue ?? roleData.summary.totalRevenue).toLocaleString()}`}
@@ -235,6 +237,15 @@ export default function Dashboard() {
             iconBg="bg-sky-500/12"
             iconBorder="border-sky-500/20"
             trend={{ value: role === "admin" || role === "manager" ? "9/10 DSPs" : "В обработке", up: undefined }}
+          />
+          <KpiCard
+            label="Publishing"
+            value={getPublishingKpis(role).totalWorks.toLocaleString()}
+            icon={BookMarked}
+            iconColor="text-cyan-400"
+            iconBg="bg-cyan-500/12"
+            iconBorder="border-cyan-500/20"
+            trend={{ value: `$${getPublishingKpis(role).publishingRoyalties.toLocaleString()}`, up: true, label: "роялти" }}
           />
         </div>
 
@@ -405,6 +416,15 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Гео-распределение ── */}
+        <GeoStreamsCard data={getGeoStreams(role)} />
+
+        {/* ── UGC обзор ── */}
+        <UgcOverviewCard data={getUgcOverview(role)} />
+
+        {/* ── Соцсети ── */}
+        <SocialViewsCard blocks={getSocialBlocks(role)} />
       </div>
     </Layout>
   );
