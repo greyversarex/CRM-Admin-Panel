@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -373,12 +373,45 @@ const STATUS_META: Record<IntegrationStatus, { label: string; cls: string; icon:
   error:        { label: "Ошибка",            cls: "bg-red-500/15 text-red-300 border-red-500/30",             icon: XCircle },
 };
 
+// Загрузка реальных статусов с бэкенда — мерджим с UI-каталогом
+async function fetchIntegrationStatuses(): Promise<Map<string, { status: IntegrationStatus; enabled: boolean; lastSync?: string }>> {
+  try {
+    const res = await fetch("/api/integrations");
+    if (!res.ok) return new Map();
+    const json = await res.json();
+    const map = new Map<string, { status: IntegrationStatus; enabled: boolean; lastSync?: string }>();
+    for (const r of json.data ?? []) {
+      map.set(r.code, {
+        status: r.status as IntegrationStatus,
+        enabled: r.enabled,
+        lastSync: r.lastSyncAt ? new Date(r.lastSyncAt).toLocaleString("ru-RU") : undefined,
+      });
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
 export default function Integrations() {
   const { toast } = useToast();
   const [integrations, setIntegrations] = useState<Integration[]>(initialIntegrations);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState(false);
+
+  // Подгружаем реальные статусы с бэкенда
+  useEffect(() => {
+    fetchIntegrationStatuses().then((statusMap) => {
+      if (statusMap.size === 0) return;
+      setIntegrations((arr) =>
+        arr.map((i) => {
+          const real = statusMap.get(i.id);
+          return real ? { ...i, status: real.status, enabled: real.enabled, lastSync: real.lastSync } : i;
+        }),
+      );
+    });
+  }, []);
 
   const editing = useMemo(
     () => integrations.find((i) => i.id === editingId) || null,
@@ -403,48 +436,96 @@ export default function Integrations() {
     setFormValues({});
   };
 
-  const saveCredentials = () => {
+  const saveCredentials = async () => {
     if (!editing) return;
-    const filledCount = Object.values(formValues).filter(Boolean).length;
-    setIntegrations((arr) =>
-      arr.map((i) =>
-        i.id === editing.id
-          ? {
-              ...i,
-              values: { ...formValues },
-              status: filledCount >= 1 ? "connected" : "disconnected",
-              enabled: filledCount >= 1 ? true : i.enabled,
-              lastSync: filledCount >= 1 ? new Date().toLocaleString("ru-RU") : i.lastSync,
-            }
-          : i,
-      ),
-    );
-    toast({
-      title: "Настройки сохранены",
-      description: `Интеграция «${editing.name}» обновлена.`,
-    });
-    closeEdit();
+    try {
+      const res = await fetch(`/api/integrations/${editing.id}/credentials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: formValues }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Ошибка сохранения");
+
+      const filledCount = Object.values(formValues).filter(Boolean).length;
+      setIntegrations((arr) =>
+        arr.map((i) =>
+          i.id === editing.id
+            ? {
+                ...i,
+                values: { ...formValues },
+                status: filledCount >= 1 ? "pending" : "disconnected",
+              }
+            : i,
+        ),
+      );
+      toast({
+        title: "Настройки сохранены",
+        description: `Ключи для «${editing.name}» зашифрованы (AES-256-GCM) и записаны в БД. Нажмите «Тест соединения» для проверки.`,
+      });
+      closeEdit();
+    } catch (e) {
+      toast({
+        title: "Ошибка сохранения",
+        description: e instanceof Error ? e.message : "Неизвестная ошибка",
+        variant: "destructive",
+      });
+    }
   };
 
   const testConnection = async () => {
     if (!editing) return;
     setTesting(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setTesting(false);
-    const filled = Object.values(formValues).filter(Boolean).length > 0;
-    toast({
-      title: filled ? "Соединение успешно" : "Заполните обязательные поля",
-      description: filled
-        ? `Сервер ${editing.name} ответил на запрос.`
-        : "Без credentials тест не пройдёт.",
-      variant: filled ? "default" : "destructive",
-    });
+    try {
+      // Сначала сохраняем текущие значения формы (чтобы тест шёл с актуальными кредами)
+      await fetch(`/api/integrations/${editing.id}/credentials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: formValues }),
+      });
+      const res = await fetch(`/api/integrations/${editing.id}/test`, { method: "POST" });
+      const json = await res.json() as { ok: boolean; message?: string };
+
+      setIntegrations((arr) =>
+        arr.map((i) =>
+          i.id === editing.id
+            ? {
+                ...i,
+                status: json.ok ? "connected" : "error",
+                lastSync: json.ok ? new Date().toLocaleString("ru-RU") : i.lastSync,
+              }
+            : i,
+        ),
+      );
+      toast({
+        title: json.ok ? "Соединение установлено" : "Соединение не прошло",
+        description: json.message ?? (json.ok ? "Сервер ответил успешно" : "Проверьте креды"),
+        variant: json.ok ? "default" : "destructive",
+      });
+    } catch (e) {
+      toast({
+        title: "Ошибка теста",
+        description: e instanceof Error ? e.message : "Бэкенд недоступен",
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
-  const toggleEnabled = (id: string, value: boolean) => {
+  const toggleEnabled = async (id: string, value: boolean) => {
     setIntegrations((arr) =>
       arr.map((i) => (i.id === id ? { ...i, enabled: value } : i)),
     );
+    try {
+      await fetch(`/api/integrations/${id}/enable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: value }),
+      });
+    } catch {
+      // молча — UI уже обновлён
+    }
   };
 
   const grouped = useMemo(() => {

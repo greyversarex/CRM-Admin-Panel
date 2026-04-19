@@ -12,6 +12,7 @@ import splitsRouter from "./splits";
 import publishingRouter from "./publishing";
 import analyticsRouter from "./analytics";
 import deliveryRouter from "./delivery";
+import integrationsRouter from "./integrations";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(splitsRouter);
 router.use(publishingRouter);
 router.use(analyticsRouter);
 router.use(deliveryRouter);
+router.use(integrationsRouter);
 
 export default router;

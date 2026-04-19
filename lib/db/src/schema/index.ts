@@ -12,3 +12,4 @@ export * from "./publishing_works";
 export * from "./analytics";
 export * from "./deliveries";
 export * from "./activity_log";
+export * from "./integrations";
