@@ -186,6 +186,34 @@ const initialIntegrations: Integration[] = [
     fields: apiKeyFields, values: {},
   },
   {
+    id: "ok_music", name: "Одноклассники Музыка", category: "dsp",
+    description: "OK Music — музыкальный каталог для пользователей ОК",
+    icon: Disc3, iconColor: "text-orange-400", iconBg: "bg-orange-500/10",
+    status: "disconnected", enabled: false,
+    fields: oauthFields, values: {},
+  },
+  {
+    id: "pandora", name: "Pandora", category: "dsp",
+    description: "AMP API — стриминг и Pandora Radio (США)",
+    icon: Radio, iconColor: "text-sky-400", iconBg: "bg-sky-500/10",
+    status: "disconnected", enabled: false,
+    fields: apiKeyFields, values: {},
+  },
+  {
+    id: "boomplay", name: "Boomplay", category: "dsp",
+    description: "Крупнейший стриминг в Африке — DDEX-доставка",
+    icon: Headphones, iconColor: "text-yellow-400", iconBg: "bg-yellow-500/10",
+    status: "disconnected", enabled: false,
+    fields: sftpFields, values: { port: "22" },
+  },
+  {
+    id: "soundcloud", name: "SoundCloud", category: "dsp",
+    description: "SoundCloud for Artists — загрузка и Insights",
+    icon: Music2, iconColor: "text-orange-300", iconBg: "bg-orange-500/10",
+    status: "disconnected", enabled: false,
+    fields: oauthFields, values: {},
+  },
+  {
     id: "zvuk", name: "Звук (СберЗвук)", category: "dsp",
     description: "Сбер Звук — российский стриминг",
     icon: Music2, iconColor: "text-green-300", iconBg: "bg-green-500/10",
@@ -283,6 +311,20 @@ const initialIntegrations: Integration[] = [
     icon: Youtube, iconColor: "text-red-400", iconBg: "bg-red-500/10",
     status: "disconnected", enabled: false,
     fields: oauthFields, values: {},
+  },
+  {
+    id: "facebook", name: "Facebook (Meta) Audio Library", category: "social",
+    description: "Использование музыки в Facebook видео и Reels",
+    icon: PlayCircle, iconColor: "text-blue-400", iconBg: "bg-blue-500/10",
+    status: "disconnected", enabled: false,
+    fields: oauthFields, values: {},
+  },
+  {
+    id: "snapchat", name: "Snapchat Sounds", category: "social",
+    description: "Каталог Sounds для Snap Stories и Spotlight",
+    icon: Globe2, iconColor: "text-yellow-300", iconBg: "bg-yellow-500/10",
+    status: "disconnected", enabled: false,
+    fields: apiKeyFields, values: {},
   },
 
   // ── DDEX delivery ──
