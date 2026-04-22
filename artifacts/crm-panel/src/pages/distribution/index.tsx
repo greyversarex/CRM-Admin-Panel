@@ -186,6 +186,11 @@ export default function Distribution() {
               <CalendarClock className="h-3.5 w-3.5" />
               Scheduled
             </TabsTrigger>
+            <TabsTrigger value="disputes" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Disputes
+              <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center bg-rose-500 text-white text-[10px]">2</Badge>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="moderation" className="mt-4">
@@ -437,6 +442,52 @@ export default function Distribution() {
                         <TableCell className="text-xs text-muted-foreground">{s.dsp}</TableCell>
                         <TableCell>
                           <StatusBadge status={s.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="disputes" className="mt-4">
+            <Card className="card-surface no-lift border-border/60">
+              <CardHeader>
+                <CardTitle>Distribution Disputes</CardTitle>
+                <CardDescription>Споры с DSP по доставке, отказы и возвраты XML</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-background/30">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>ID</TableHead>
+                      <TableHead>Release / Track</TableHead>
+                      <TableHead>DSP</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Opened</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[
+                      { id: "DIS-401", release: "Шаби нав", artist: "Камол Хасанов", dsp: "Spotify", type: "Metadata mismatch", opened: "2026-04-09", status: "in_review" },
+                      { id: "DIS-402", release: "Ишки ман", artist: "Рустам Назаров", dsp: "TikTok", type: "Audio fingerprint conflict", opened: "2026-04-07", status: "open" },
+                      { id: "DIS-403", release: "Наврӯз 2024", artist: "Зарина Саидова", dsp: "Apple Music", type: "Cover art rejected (under 3000px)", opened: "2026-04-02", status: "resolved" },
+                    ].map((d) => (
+                      <TableRow key={d.id} className="hover:bg-accent/20">
+                        <TableCell className="font-mono text-xs text-muted-foreground">{d.id}</TableCell>
+                        <TableCell>
+                          <div className="text-sm font-medium">{d.release}</div>
+                          <div className="text-xs text-muted-foreground">{d.artist}</div>
+                        </TableCell>
+                        <TableCell className="text-sm">{d.dsp}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{d.type}</Badge></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{d.opened}</TableCell>
+                        <TableCell><StatusBadge status={d.status} /></TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs">View Thread</Button>
                         </TableCell>
                       </TableRow>
                     ))}

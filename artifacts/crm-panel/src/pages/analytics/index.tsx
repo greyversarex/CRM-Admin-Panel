@@ -267,6 +267,7 @@ export default function Analytics() {
             <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.ugc}</TabsTrigger>
             <TabsTrigger value="tiktok" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.tiktok}</TabsTrigger>
             <TabsTrigger value="playlist" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{a.tabs.playlist}</TabsTrigger>
+            <TabsTrigger value="alerts" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Real-time Alerts</TabsTrigger>
           </TabsList>
 
           <TabsContent value="streams" className="mt-4 space-y-4">
@@ -559,6 +560,81 @@ export default function Analytics() {
                     </div>
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-4 space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <Card className="card-surface no-lift border-rose-500/30 bg-rose-500/[0.03]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    Stream Spike Detection
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-xs text-muted-foreground">«Шаби нав» получил +840% стримов за 6 часов</p>
+                  <p className="text-[10px] text-muted-foreground/70">2026-04-11 13:42 · Spotify · возможный буст или фрод</p>
+                  <Button size="sm" variant="outline" className="w-full mt-2 text-xs h-7">Investigate</Button>
+                </CardContent>
+              </Card>
+              <Card className="card-surface no-lift border-amber-500/30 bg-amber-500/[0.03]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Skip Rate Threshold
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-xs text-muted-foreground">«Unknown 882» — skip rate 78% за последние 24ч</p>
+                  <p className="text-[10px] text-muted-foreground/70">2026-04-11 09:15 · Apple Music · ниже среднего по каталогу</p>
+                  <Button size="sm" variant="outline" className="w-full mt-2 text-xs h-7">Review Track</Button>
+                </CardContent>
+              </Card>
+              <Card className="card-surface no-lift border-emerald-500/30 bg-emerald-500/[0.03]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Editorial Playlist Add
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-xs text-muted-foreground">«Дилам мехохад» добавлен в Tajik Hits (Spotify Editorial)</p>
+                  <p className="text-[10px] text-muted-foreground/70">2026-04-10 18:30 · 1.2M followers · ожидаемый прирост +180K</p>
+                  <Button size="sm" variant="outline" className="w-full mt-2 text-xs h-7">View Playlist</Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="card-surface no-lift border-border/60">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Alert Rules</CardTitle>
+                  <CardDescription>Триггеры мониторинга — настраиваются в Automation</CardDescription>
+                </div>
+                <Button size="sm" variant="outline">+ New Rule</Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border/50">
+                  {[
+                    { rule: "Stream spike > 500% за 24ч", channel: "Email + Telegram", enabled: true },
+                    { rule: "Skip rate > 60% по треку", channel: "In-app + Email", enabled: true },
+                    { rule: "Editorial playlist add", channel: "Push + Email", enabled: true },
+                    { rule: "DSP delivery failure", channel: "Email + Telegram", enabled: true },
+                    { rule: "Daily revenue drop > 30%", channel: "Email", enabled: false },
+                  ].map((r, i) => (
+                    <div key={i} className="flex items-center justify-between px-6 py-3">
+                      <div>
+                        <p className="text-sm font-medium">{r.rule}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">via {r.channel}</p>
+                      </div>
+                      <Badge variant="outline" className={`text-[10px] ${r.enabled ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground bg-muted/50"}`}>
+                        {r.enabled ? "Active" : "Disabled"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
