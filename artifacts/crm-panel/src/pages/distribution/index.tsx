@@ -12,8 +12,10 @@ import { useListDeliveries, useListReleases } from "@workspace/api-client-react"
 import {
   Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock,
   Send, Shield, FileCode2, Zap, Ban, CalendarClock, Filter,
-  ChevronRight, Download, MoreHorizontal, ExternalLink,
+  ChevronRight, Download, MoreHorizontal, ExternalLink, FileAudio,
 } from "lucide-react";
+import { ModerationDialog, type ModerationRelease } from "@/components/moderation-dialog";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -31,10 +33,35 @@ const DSP_LIST = [
   { name: "Amazon Music", status: "connected", releases: 153, icon: "🟢" },
 ];
 
-const PENDING_MODERATION = [
-  { id: 1, title: "Дилам мехохад", artist: "Давлатмандов Ш.", type: "Single", submitted: "2026-04-13", issues: [], upc: "886448726301" },
-  { id: 2, title: "Бахори нав", artist: "Зарина Саидова", type: "Album", submitted: "2026-04-12", issues: ["Missing ISRC on track 3"], upc: "886448726302" },
-  { id: 3, title: "Ишки ман", artist: "Рустам Назаров", type: "EP", submitted: "2026-04-12", issues: [], upc: "886448726303" },
+const PENDING_MODERATION: ModerationRelease[] = [
+  {
+    id: 1, title: "Дилам мехохад", artist: "Давлатмандов Ш.", type: "Single",
+    submitted: "2026-04-13", issues: [], upc: "886448726301",
+    audio: { format: ".wav", sampleRate: "44.1 kHz", bitDepth: "16 bit", ok: true },
+    tracks: [
+      { id: 1, title: "Дилам мехохад", isrc: "TJM2026000001", duration: "03:24" },
+    ],
+  },
+  {
+    id: 2, title: "Бахори нав", artist: "Зарина Саидова", type: "Album",
+    submitted: "2026-04-12", issues: ["Missing ISRC on track 3", "Cover artwork below 3000×3000"],
+    upc: "886448726302",
+    audio: { format: ".wav", sampleRate: "48 kHz", bitDepth: "24 bit", ok: false },
+    tracks: [
+      { id: 1, title: "Бахори нав", isrc: "TJM2026000010", duration: "03:48" },
+      { id: 2, title: "Гулҳои сурх", isrc: "TJM2026000011", duration: "04:12" },
+      { id: 3, title: "Шаби тирамоҳ", isrc: undefined, duration: "03:55" },
+    ],
+  },
+  {
+    id: 3, title: "Ишки ман", artist: "Рустам Назаров", type: "EP",
+    submitted: "2026-04-12", issues: [], upc: "886448726303",
+    audio: { format: ".flac", sampleRate: "44.1 kHz", bitDepth: "16 bit", ok: true },
+    tracks: [
+      { id: 1, title: "Ишки ман", isrc: "TJM2026000020", duration: "04:01", explicit: true },
+      { id: 2, title: "Дилбари ман", isrc: "TJM2026000021", duration: "03:36" },
+    ],
+  },
 ];
 
 const DDEX_LOGS = [
@@ -59,7 +86,18 @@ const SCHEDULED = [
 
 export default function Distribution() {
   const [search, setSearch] = useState("");
+  const [modRelease, setModRelease] = useState<ModerationRelease | null>(null);
+  const [modOpen, setModOpen] = useState(false);
+  const [pending, setPending] = useState<ModerationRelease[]>(PENDING_MODERATION);
   const { data: deliveries, isLoading } = useListDeliveries({ limit: 50 });
+
+  const openRelease = (r: ModerationRelease) => { setModRelease(r); setModOpen(true); };
+  const handleApprove = (id: number) => setPending(p => p.filter(r => r.id !== id));
+  const handleReject  = (id: number, reasons: string[], comment: string) => {
+    // TODO: отправить на API: { releaseId: id, reasons, comment }
+    console.log("[moderation] reject", { id, reasons, comment });
+    setPending(p => p.filter(r => r.id !== id));
+  };
 
   return (
     <Layout>
@@ -85,7 +123,7 @@ export default function Distribution() {
         <div className="grid gap-3 md:grid-cols-4">
           <KpiCard
             label="Pending Moderation"
-            value="3"
+            value={String(pending.length)}
             icon={Clock}
             iconColor="text-amber-400"
             iconBg="bg-amber-500/12"
@@ -126,7 +164,7 @@ export default function Distribution() {
             <TabsTrigger value="moderation" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Clock className="h-3.5 w-3.5" />
               Moderation
-              <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center bg-amber-500 text-white text-[10px]">3</Badge>
+                <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center bg-amber-500 text-white text-[10px]">{pending.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="ddex" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <FileCode2 className="h-3.5 w-3.5" />
@@ -160,13 +198,25 @@ export default function Distribution() {
                       <TableHead>Type</TableHead>
                       <TableHead>UPC</TableHead>
                       <TableHead>Submitted</TableHead>
+                      <TableHead>Audio</TableHead>
                       <TableHead>QC Check</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {PENDING_MODERATION.map((r) => (
-                      <TableRow key={r.id} >
+                    {pending.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center h-24 text-muted-foreground text-sm">
+                          Очередь модерации пуста — все релизы обработаны.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {pending.map((r) => (
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer hover:bg-accent/30"
+                        onClick={() => openRelease(r)}
+                      >
                         <TableCell>
                           <div className="font-medium text-sm">{r.title}</div>
                           <div className="text-xs text-muted-foreground">{r.artist}</div>
@@ -177,7 +227,16 @@ export default function Distribution() {
                         <TableCell className="text-xs text-muted-foreground font-mono">{r.upc}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.submitted}</TableCell>
                         <TableCell>
-                          {r.issues.length === 0 ? (
+                          <span className={cn(
+                            "inline-flex items-center gap-1 text-[11px] font-mono",
+                            r.audio?.ok ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            <FileAudio className="h-3.5 w-3.5" />
+                            {r.audio?.format} · {r.audio?.sampleRate} · {r.audio?.bitDepth}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {r.issues.length === 0 && r.audio?.ok ? (
                             <span className="flex items-center gap-1 text-xs text-emerald-500">
                               <CheckCircle2 className="h-3.5 w-3.5" /> Passed
                             </span>
@@ -185,22 +244,28 @@ export default function Distribution() {
                             <Tooltip>
                               <TooltipTrigger>
                                 <span className="flex items-center gap-1 text-xs text-amber-500">
-                                  <AlertCircle className="h-3.5 w-3.5" /> {r.issues.length} issue{r.issues.length > 1 ? "s" : ""}
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  {r.issues.length + (r.audio?.ok ? 0 : 1)} issue(s)
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="bg-card border-border">
+                                {!r.audio?.ok && <p className="text-xs">Audio specs не соответствуют требованиям</p>}
                                 {r.issues.map((iss, i) => <p key={i} className="text-xs">{iss}</p>)}
                               </TooltipContent>
                             </Tooltip>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
-                            <Button size="sm" variant="outline" className="h-7 text-xs text-rose-500 border-rose-500/30 hover:bg-rose-500/10">
-                              <XCircle className="mr-1 h-3.5 w-3.5" /> Reject
+                            <Button
+                              size="sm" variant="outline"
+                              className="h-7 text-xs text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
+                              onClick={() => openRelease(r)}
+                            >
+                              <XCircle className="mr-1 h-3.5 w-3.5" /> Review
                             </Button>
-                            <Button size="sm" className="h-7 text-xs">
-                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Approve
+                            <Button size="sm" className="h-7 text-xs" onClick={() => openRelease(r)}>
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Open
                             </Button>
                           </div>
                         </TableCell>
@@ -365,6 +430,14 @@ export default function Distribution() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <ModerationDialog
+          release={modRelease}
+          open={modOpen}
+          onOpenChange={setModOpen}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
       </div>
     </Layout>
   );

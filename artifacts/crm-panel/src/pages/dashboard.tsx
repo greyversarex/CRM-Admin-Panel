@@ -65,9 +65,28 @@ const DATA_ADMIN = {
 
 // Label (Звук Азии Records) — только своё
 const DATA_LABEL = {
-  summary: { totalRevenue: 12400, revenueGrowth: 7.1, totalArtists: 8, totalReleases: 42, releasesThisMonth: 2, activeDeliveries: 5 },
-  kpi2Label: "Мои артисты", kpi2Value: "8", kpi2Sub: "8 активных",
+  summary: { totalRevenue: 12400, revenueGrowth: 7.1, totalArtists: 8, totalReleases: 42, releasesThisMonth: 2, activeDeliveries: 5, totalStreams: 2840000, streamsGrowth: 11.3 },
+  kpi2Label: "Стримы лейбла", kpi2Value: "2.84M", kpi2Sub: "+11.3% за месяц",
   kpi3Label: "Мои релизы", kpi4Label: "Доставок (мои)",
+  labelTracks: [
+    { id: "1", title: "Дилам мехохад",  artist: "Ансамбли Бахор", streams: 482000, revenue: 1820, trend: 12.4, dsp: "Spotify" },
+    { id: "2", title: "Бахор омад",     artist: "Ансамбли Бахор", streams: 364000, revenue: 1410, trend:  8.1, dsp: "Apple Music" },
+    { id: "3", title: "Шаби нав",       artist: "Камол Хасанов",  streams: 287000, revenue: 1090, trend: 22.5, dsp: "YouTube Music" },
+    { id: "4", title: "Гулҳои сурх",    artist: "Нилуфар Рашид",  streams: 198000, revenue:  760, trend:  3.2, dsp: "Spotify" },
+    { id: "5", title: "Дустони ман",    artist: "Ансамбли Бахор", streams: 124000, revenue:  470, trend:  5.9, dsp: "TikTok" },
+  ],
+  playlists: [
+    { id: "1", name: "Tajik Hits 2026",       curator: "Spotify Editorial", reach: 845000, addedTracks: 4, type: "Editorial",  delta: "+2 на этой неделе" },
+    { id: "2", name: "Central Asia Top",      curator: "Apple Music",       reach: 412000, addedTracks: 2, type: "Editorial",  delta: "+1 новая" },
+    { id: "3", name: "Yangi Tojikiston",      curator: "Yandex Music",      reach: 198000, addedTracks: 3, type: "Algorithmic", delta: "—" },
+    { id: "4", name: "Discover Weekly TJ",    curator: "Spotify",           reach: 156000, addedTracks: 1, type: "Algorithmic", delta: "Новый" },
+  ],
+  trends: [
+    { label: "Рост стримов",        value: "+11.3%", up: true,  hint: "за последние 30 дней" },
+    { label: "Новые слушатели",     value: "+18.7%", up: true,  hint: "уник. за месяц" },
+    { label: "Save Rate",           value: "12.4%",  up: true,  hint: "выше среднего по жанру" },
+    { label: "Skip Rate",           value: "21.8%",  up: false, hint: "ниже = лучше" },
+  ],
   revenue: [
     { month: "Jun '25", dspRevenue: 3800, publishingRevenue: 500 },
     { month: "Jul '25", dspRevenue: 5200, publishingRevenue: 620 },
@@ -416,6 +435,91 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Label-only sections ── */}
+        {role === "label" && (
+          <>
+            {/* Trends */}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {DATA_LABEL.trends.map((tr) => (
+                <Card key={tr.label} className="card-surface border-border/60">
+                  <CardContent className="p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{tr.label}</p>
+                    <div className="flex items-baseline gap-2 mt-1.5">
+                      <p className={`text-2xl font-bold ${tr.up ? "text-emerald-400" : "text-rose-400"}`}>{tr.value}</p>
+                      {tr.up ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-rose-400" />}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">{tr.hint}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-7">
+              {/* Tracks of the label */}
+              <Card className="col-span-4 card-surface border-border/60">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Треки лейбла</CardTitle>
+                  <CardDescription className="text-[12px]">Топ по стримам за этот месяц</CardDescription>
+                </CardHeader>
+                <CardContent className="px-4">
+                  <div className="space-y-1">
+                    {DATA_LABEL.labelTracks.map((tr, i) => (
+                      <div key={tr.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1">
+                        <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
+                        <div className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
+                          <Music2 className="h-3.5 w-3.5 text-violet-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium truncate">{tr.title}</p>
+                          <p className="text-[10px] text-muted-foreground">{tr.artist} · {tr.dsp}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[12px] font-semibold">{(tr.streams / 1000).toFixed(0)}K</p>
+                          <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${tr.trend > 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {tr.trend > 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                            {tr.trend > 0 ? "+" : ""}{tr.trend}%
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Playlists */}
+              <Card className="col-span-3 card-surface border-border/60">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Плейлисты</CardTitle>
+                  <CardDescription className="text-[12px]">Куда попали треки лейбла</CardDescription>
+                </CardHeader>
+                <CardContent className="px-4">
+                  <div className="space-y-1">
+                    {DATA_LABEL.playlists.map((pl) => (
+                      <div key={pl.id} className="flex items-start gap-3 py-2.5 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1">
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/15 border border-primary/20 flex items-center justify-center shrink-0">
+                          <Headphones className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[12px] font-medium truncate">{pl.name}</p>
+                            <Badge variant="outline" className={`text-[9px] px-1 py-0 ${pl.type === "Editorial" ? "border-amber-500/30 text-amber-400 bg-amber-500/10" : "border-cyan-500/30 text-cyan-400 bg-cyan-500/10"}`}>
+                              {pl.type}
+                            </Badge>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">{pl.curator} · охват {(pl.reach / 1000).toFixed(0)}K</p>
+                          <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                            <span className="text-primary font-semibold">{pl.addedTracks} трек(ов)</span> · {pl.delta}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
 
         {/* ── Гео-распределение ── */}
         <GeoStreamsCard data={getGeoStreams(role)} />
