@@ -13,6 +13,24 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** Auto-detected from uploaded audio file (на бэке через ffprobe / mediainfo) */
+export type AudioFileInfo = {
+  format: string;        // напр. ".wav" / ".flac" — расширение
+  sampleRateHz: number;  // напр. 44100
+  bitDepth: number;      // напр. 16
+  channels: number;      // 2 = stereo
+  fileSizeMb: number;    // размер файла
+};
+
+export type ModerationTrack = {
+  id: number;
+  title: string;
+  isrc?: string;
+  duration: string;
+  explicit?: boolean;
+  audio?: AudioFileInfo;
+};
+
 export type ModerationRelease = {
   id: number;
   title: string;
@@ -22,9 +40,28 @@ export type ModerationRelease = {
   upc: string;
   issues: string[];
   coverUrl?: string;
-  audio?: { format: string; sampleRate: string; bitDepth: string; ok: boolean };
-  tracks?: { id: number; title: string; isrc?: string; duration: string; explicit?: boolean }[];
+  tracks: ModerationTrack[];
 };
+
+/** Эталонные требования платформы */
+export const AUDIO_REQUIREMENTS = {
+  formats: [".wav", ".flac"] as const,
+  sampleRateHz: 44100,
+  bitDepth: 16,
+};
+
+export function audioMatchesSpec(a?: AudioFileInfo): boolean {
+  if (!a) return false;
+  return (
+    AUDIO_REQUIREMENTS.formats.includes(a.format.toLowerCase() as (typeof AUDIO_REQUIREMENTS.formats)[number]) &&
+    a.sampleRateHz === AUDIO_REQUIREMENTS.sampleRateHz &&
+    a.bitDepth === AUDIO_REQUIREMENTS.bitDepth
+  );
+}
+
+export function formatSampleRate(hz: number): string {
+  return `${(hz / 1000).toFixed(1)} kHz`;
+}
 
 const FAIL_CATEGORIES: { key: string; title: string; reasons: string[] }[] = [
   { key: "artwork",     title: "Artwork",
@@ -135,10 +172,9 @@ export function ModerationDialog({
   }, [release?.id, open]);
 
   if (!release) return null;
-  const audio = release.audio ?? { format: ".wav", sampleRate: "44.1 kHz", bitDepth: "16 bit", ok: true };
-  const tracks = release.tracks ?? [
-    { id: 1, title: release.title, isrc: "TJM2026000001", duration: "03:24", explicit: false },
-  ];
+  const tracks = release.tracks;
+  const failedTracks = tracks.filter(t => !audioMatchesSpec(t.audio));
+  const allOk = failedTracks.length === 0 && tracks.every(t => t.audio);
 
   const toggleReason = (r: string) => {
     setReasons(prev => {
@@ -211,25 +247,26 @@ export function ModerationDialog({
             </div>
           </DialogHeader>
 
-          {/* ── Audio Specs ── */}
+          {/* ── Audio File Requirements (эталон) ── */}
           <Card className="p-4 bg-background/40 border-border/60">
             <div className="flex items-center gap-2 mb-3">
               <FileAudio className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold">Audio File Requirements</h3>
-              {audio.ok ? (
+              <span className="text-[10px] text-muted-foreground">·  определяется автоматически из файла</span>
+              {allOk ? (
                 <Badge className="ml-auto bg-emerald-500/15 text-emerald-400 border-emerald-500/25 text-[10px]">
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> Соответствует
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Все треки прошли
                 </Badge>
               ) : (
                 <Badge className="ml-auto bg-rose-500/15 text-rose-400 border-rose-500/25 text-[10px]">
-                  <XCircle className="h-3 w-3 mr-1" /> Не соответствует
+                  <XCircle className="h-3 w-3 mr-1" /> {failedTracks.length} из {tracks.length} не прошли
                 </Badge>
               )}
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <SpecItem label="Format" value={audio.format} expected=".wav, .flac" ok={[".wav",".flac"].includes(audio.format.toLowerCase())} />
-              <SpecItem label="Sampling rate" value={audio.sampleRate} expected="44.1 kHz" ok={audio.sampleRate === "44.1 kHz"} />
-              <SpecItem label="Bit depth" value={audio.bitDepth} expected="16 bit" ok={audio.bitDepth === "16 bit"} />
+              <SpecItem label="Допустимые форматы" value={AUDIO_REQUIREMENTS.formats.join(", ")} expected="lossless" ok />
+              <SpecItem label="Sampling rate" value={formatSampleRate(AUDIO_REQUIREMENTS.sampleRateHz)} expected="ровно 44.1 kHz" ok />
+              <SpecItem label="Bit depth" value={`${AUDIO_REQUIREMENTS.bitDepth} bit`} expected="ровно 16 bit" ok />
             </div>
           </Card>
 
@@ -246,19 +283,61 @@ export function ModerationDialog({
               </Button>
             </div>
             <div className="space-y-1">
-              {tracks.map((tr, i) => (
-                <div key={tr.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-white/[0.025] border-b border-border/30 last:border-0">
-                  <span className="text-[10px] font-bold text-muted-foreground/50 w-5 text-right">{String(i + 1).padStart(2, "0")}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium truncate">{tr.title}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">ISRC: {tr.isrc ?? "—"}</p>
+              {tracks.map((tr, i) => {
+                const a = tr.audio;
+                const ok = audioMatchesSpec(a);
+                const fmtOk = a && AUDIO_REQUIREMENTS.formats.includes(a.format.toLowerCase() as any);
+                const srOk  = a?.sampleRateHz === AUDIO_REQUIREMENTS.sampleRateHz;
+                const bdOk  = a?.bitDepth === AUDIO_REQUIREMENTS.bitDepth;
+                return (
+                  <div key={tr.id} className="py-2.5 px-2 rounded-lg hover:bg-white/[0.025] border-b border-border/30 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-muted-foreground/50 w-5 text-right">{String(i + 1).padStart(2, "0")}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium truncate">{tr.title}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">ISRC: {tr.isrc ?? "—"}</p>
+                      </div>
+                      {tr.explicit && (
+                        <Badge variant="outline" className="text-[9px] border-rose-500/30 text-rose-400 bg-rose-500/10">E</Badge>
+                      )}
+                      <span className="text-[11px] text-muted-foreground font-mono">{tr.duration}</span>
+                      {a ? (
+                        ok ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/25 text-[9px] px-1.5">
+                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> OK
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/25 text-[9px] px-1.5">
+                            <XCircle className="h-2.5 w-2.5 mr-0.5" /> FAIL
+                          </Badge>
+                        )
+                      ) : (
+                        <Badge variant="outline" className="text-[9px]">no file</Badge>
+                      )}
+                    </div>
+                    {a && (
+                      <div className="mt-1.5 ml-8 flex flex-wrap items-center gap-1.5 text-[10px]">
+                        <span className="text-muted-foreground/60">Detected:</span>
+                        <span className={cn("px-1.5 py-0.5 rounded font-mono", fmtOk ? "bg-emerald-500/10 text-emerald-300" : "bg-rose-500/10 text-rose-300")}>
+                          {a.format}
+                        </span>
+                        <span className={cn("px-1.5 py-0.5 rounded font-mono", srOk ? "bg-emerald-500/10 text-emerald-300" : "bg-rose-500/10 text-rose-300")}>
+                          {formatSampleRate(a.sampleRateHz)}
+                        </span>
+                        <span className={cn("px-1.5 py-0.5 rounded font-mono", bdOk ? "bg-emerald-500/10 text-emerald-300" : "bg-rose-500/10 text-rose-300")}>
+                          {a.bitDepth} bit
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded font-mono bg-white/[0.03] text-muted-foreground">
+                          {a.channels === 2 ? "stereo" : a.channels === 1 ? "mono" : `${a.channels}ch`}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded font-mono bg-white/[0.03] text-muted-foreground">
+                          {a.fileSizeMb.toFixed(1)} MB
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {tr.explicit && (
-                    <Badge variant="outline" className="text-[9px] border-rose-500/30 text-rose-400 bg-rose-500/10">E</Badge>
-                  )}
-                  <span className="text-[11px] text-muted-foreground font-mono">{tr.duration}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
 

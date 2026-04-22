@@ -14,7 +14,7 @@ import {
   Send, Shield, FileCode2, Zap, Ban, CalendarClock, Filter,
   ChevronRight, Download, MoreHorizontal, ExternalLink, FileAudio,
 } from "lucide-react";
-import { ModerationDialog, type ModerationRelease } from "@/components/moderation-dialog";
+import { ModerationDialog, audioMatchesSpec, type ModerationRelease } from "@/components/moderation-dialog";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,33 +33,37 @@ const DSP_LIST = [
   { name: "Amazon Music", status: "connected", releases: 153, icon: "🟢" },
 ];
 
+// Audio specs приходят с бэка авто-определёнными (ffprobe / mediainfo) при загрузке файла
 const PENDING_MODERATION: ModerationRelease[] = [
   {
     id: 1, title: "Дилам мехохад", artist: "Давлатмандов Ш.", type: "Single",
     submitted: "2026-04-13", issues: [], upc: "886448726301",
-    audio: { format: ".wav", sampleRate: "44.1 kHz", bitDepth: "16 bit", ok: true },
     tracks: [
-      { id: 1, title: "Дилам мехохад", isrc: "TJM2026000001", duration: "03:24" },
+      { id: 1, title: "Дилам мехохад", isrc: "TJM2026000001", duration: "03:24",
+        audio: { format: ".wav", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 36.2 } },
     ],
   },
   {
     id: 2, title: "Бахори нав", artist: "Зарина Саидова", type: "Album",
     submitted: "2026-04-12", issues: ["Missing ISRC on track 3", "Cover artwork below 3000×3000"],
     upc: "886448726302",
-    audio: { format: ".wav", sampleRate: "48 kHz", bitDepth: "24 bit", ok: false },
     tracks: [
-      { id: 1, title: "Бахори нав", isrc: "TJM2026000010", duration: "03:48" },
-      { id: 2, title: "Гулҳои сурх", isrc: "TJM2026000011", duration: "04:12" },
-      { id: 3, title: "Шаби тирамоҳ", isrc: undefined, duration: "03:55" },
+      { id: 1, title: "Бахори нав",     isrc: "TJM2026000010", duration: "03:48",
+        audio: { format: ".wav",  sampleRateHz: 48000, bitDepth: 24, channels: 2, fileSizeMb: 78.4 } },
+      { id: 2, title: "Гулҳои сурх",   isrc: "TJM2026000011", duration: "04:12",
+        audio: { format: ".wav",  sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 44.7 } },
+      { id: 3, title: "Шаби тирамоҳ",  isrc: undefined,        duration: "03:55",
+        audio: { format: ".mp3",  sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 9.1 } },
     ],
   },
   {
     id: 3, title: "Ишки ман", artist: "Рустам Назаров", type: "EP",
     submitted: "2026-04-12", issues: [], upc: "886448726303",
-    audio: { format: ".flac", sampleRate: "44.1 kHz", bitDepth: "16 bit", ok: true },
     tracks: [
-      { id: 1, title: "Ишки ман", isrc: "TJM2026000020", duration: "04:01", explicit: true },
-      { id: 2, title: "Дилбари ман", isrc: "TJM2026000021", duration: "03:36" },
+      { id: 1, title: "Ишки ман",      isrc: "TJM2026000020", duration: "04:01", explicit: true,
+        audio: { format: ".flac", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 28.6 } },
+      { id: 2, title: "Дилбари ман",   isrc: "TJM2026000021", duration: "03:36",
+        audio: { format: ".flac", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 25.3 } },
     ],
   },
 ];
@@ -227,33 +231,45 @@ export default function Distribution() {
                         <TableCell className="text-xs text-muted-foreground font-mono">{r.upc}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.submitted}</TableCell>
                         <TableCell>
-                          <span className={cn(
-                            "inline-flex items-center gap-1 text-[11px] font-mono",
-                            r.audio?.ok ? "text-emerald-400" : "text-rose-400"
-                          )}>
-                            <FileAudio className="h-3.5 w-3.5" />
-                            {r.audio?.format} · {r.audio?.sampleRate} · {r.audio?.bitDepth}
-                          </span>
+                          {(() => {
+                            const failed = r.tracks.filter(t => !audioMatchesSpec(t.audio));
+                            const ok = failed.length === 0;
+                            return (
+                              <span className={cn(
+                                "inline-flex items-center gap-1 text-[11px] font-mono",
+                                ok ? "text-emerald-400" : "text-rose-400"
+                              )}>
+                                <FileAudio className="h-3.5 w-3.5" />
+                                {ok ? `${r.tracks.length} OK` : `${failed.length}/${r.tracks.length} fail`}
+                              </span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
-                          {r.issues.length === 0 && r.audio?.ok ? (
-                            <span className="flex items-center gap-1 text-xs text-emerald-500">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-                            </span>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <span className="flex items-center gap-1 text-xs text-amber-500">
-                                  <AlertCircle className="h-3.5 w-3.5" />
-                                  {r.issues.length + (r.audio?.ok ? 0 : 1)} issue(s)
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="bg-card border-border">
-                                {!r.audio?.ok && <p className="text-xs">Audio specs не соответствуют требованиям</p>}
-                                {r.issues.map((iss, i) => <p key={i} className="text-xs">{iss}</p>)}
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
+                          {(() => {
+                            const failed = r.tracks.filter(t => !audioMatchesSpec(t.audio));
+                            const total = r.issues.length + failed.length;
+                            return total === 0 ? (
+                              <span className="flex items-center gap-1 text-xs text-emerald-500">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Passed
+                              </span>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <span className="flex items-center gap-1 text-xs text-amber-500">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    {total} issue(s)
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-card border-border">
+                                  {failed.map(t => (
+                                    <p key={t.id} className="text-xs">Аудио «{t.title}» не соответствует требованиям</p>
+                                  ))}
+                                  {r.issues.map((iss, i) => <p key={i} className="text-xs">{iss}</p>)}
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
