@@ -7,35 +7,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users2, UserPlus, ShieldCheck, FileSignature, Activity, Ban,
   Search, CheckCircle2, XCircle, Clock, Eye, Mail, MapPin, Plus, Download,
+  MoreHorizontal,
 } from "lucide-react";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import type { Role } from "@/lib/auth";
+import { useListUsers, type User } from "@workspace/api-client-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast } from "@/hooks/use-toast";
 
-type UserRow = {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status: "active" | "suspended" | "pending";
-  kyc: "verified" | "pending" | "rejected" | "none";
-  contractType: "exclusive" | "non_exclusive" | "publishing" | "none";
-  joined: string;
-  releases: number;
-  revenue: string;
+// Mock-only KYC/contract enrichment by user.id (until DB has these columns)
+const KYC_BY_USER: Record<number, "verified" | "pending" | "rejected" | "none"> = {
+  1: "verified", 2: "verified", 3: "pending", 4: "verified", 5: "rejected", 6: "verified", 7: "verified",
 };
-
-const USERS: UserRow[] = [
-  { id: "U-001", name: "Давлатмандов Шерзод", email: "sherzod@tajikmusic.tj", role: "artist", status: "active", kyc: "verified", contractType: "exclusive", joined: "2023-04-12", releases: 14, revenue: "$3,420" },
-  { id: "U-002", name: "Зарина Саидова", email: "zarina.s@gmail.com", role: "artist", status: "active", kyc: "verified", contractType: "non_exclusive", joined: "2023-08-22", releases: 7, revenue: "$1,890" },
-  { id: "U-003", name: "Камол Хасанов", email: "kamol@yandex.ru", role: "artist", status: "active", kyc: "pending", contractType: "exclusive", joined: "2024-01-15", releases: 4, revenue: "$540" },
-  { id: "U-004", name: "Студия «Парвоз»", email: "studio@parvoz.tj", role: "label", status: "active", kyc: "verified", contractType: "publishing", joined: "2022-11-03", releases: 56, revenue: "$12,700" },
-  { id: "U-005", name: "Рустам Назаров", email: "rustam@mail.ru", role: "artist", status: "suspended", kyc: "rejected", contractType: "none", joined: "2024-06-30", releases: 1, revenue: "$0" },
-  { id: "U-006", name: "Manager Алишер", email: "alisher@tajikmusic.tj", role: "manager", status: "active", kyc: "verified", contractType: "none", joined: "2023-02-01", releases: 0, revenue: "—" },
-  { id: "U-007", name: "Lead Финдер", email: "lead@tajikmusic.tj", role: "admin", status: "active", kyc: "verified", contractType: "none", joined: "2022-09-15", releases: 0, revenue: "—" },
-];
+const CONTRACT_BY_USER: Record<number, "exclusive" | "non_exclusive" | "publishing" | "none"> = {
+  1: "exclusive", 2: "non_exclusive", 3: "exclusive", 4: "publishing", 5: "none", 6: "none", 7: "none",
+};
 
 const SIGNUP_REQUESTS = [
   { id: "SR-101", name: "Madina Karimova", email: "madina.k@gmail.com", phone: "+992 901 23 45 67", country: "Tajikistan", referrer: "TikTok ad", submitted: "2026-04-11 09:14", followers: "12.4K IG", note: "Singer, 3 self-released tracks" },
@@ -74,11 +64,17 @@ const ROLES_PERMISSIONS = [
 export default function Users() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const filteredUsers = USERS.filter(u =>
-    (roleFilter === "all" || u.role === roleFilter) &&
-    (!search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
-  );
+  const { data: usersResp, isLoading } = useListUsers({
+    role: roleFilter === "all" ? undefined : (roleFilter as any),
+    status: statusFilter === "all" ? undefined : (statusFilter as any),
+    search: search || undefined,
+    limit: 50,
+  } as any);
+  const apiUsers: User[] = usersResp?.data ?? [];
+  const totalUsers = usersResp?.pagination.total ?? apiUsers.length;
+  const suspendedCount = apiUsers.filter(u => u.status === "suspended").length;
 
   return (
     <Layout>
@@ -102,10 +98,10 @@ export default function Users() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
-          <KpiCard label="Total Users" value="357" icon={Users2} iconColor="text-primary" iconBg="bg-primary/12" iconBorder="border-primary/20" trend={{ value: "+18", up: true, label: "this month" }} />
+          <KpiCard label="Total Users" value={String(totalUsers)} icon={Users2} iconColor="text-primary" iconBg="bg-primary/12" iconBorder="border-primary/20" trend={{ value: "+18", up: true, label: "this month" }} />
           <KpiCard label="Pending Signups" value={String(SIGNUP_REQUESTS.length)} icon={UserPlus} iconColor="text-amber-400" iconBg="bg-amber-500/12" iconBorder="border-amber-500/20" trend={{ value: "review now", label: "queue" }} />
-          <KpiCard label="KYC Pending" value="2" icon={FileSignature} iconColor="text-violet-400" iconBg="bg-violet-500/12" iconBorder="border-violet-500/20" trend={{ value: "1 rejected", up: false, label: "this week" }} />
-          <KpiCard label="Suspended / Blacklist" value={String(USERS.filter(u => u.status === "suspended").length + BLACKLIST.length)} icon={Ban} iconColor="text-rose-400" iconBg="bg-rose-500/12" iconBorder="border-rose-500/20" trend={{ value: "stable", label: "—" }} />
+          <KpiCard label="KYC Pending" value={String(KYC_QUEUE.filter(k => k.status === "pending").length)} icon={FileSignature} iconColor="text-violet-400" iconBg="bg-violet-500/12" iconBorder="border-violet-500/20" trend={{ value: "1 rejected", up: false, label: "this week" }} />
+          <KpiCard label="Suspended / Blacklist" value={String(suspendedCount + BLACKLIST.length)} icon={Ban} iconColor="text-rose-400" iconBg="bg-rose-500/12" iconBorder="border-rose-500/20" trend={{ value: "stable", label: "—" }} />
         </div>
 
         <Tabs defaultValue="users">
@@ -141,6 +137,7 @@ export default function Users() {
                   </div>
                   <div className="flex items-center gap-2">
                     <select
+                      aria-label="Filter by role"
                       className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
                       value={roleFilter}
                       onChange={(e) => setRoleFilter(e.target.value)}
@@ -150,6 +147,17 @@ export default function Users() {
                       <option value="manager">Manager</option>
                       <option value="label">Label</option>
                       <option value="artist">Artist</option>
+                    </select>
+                    <select
+                      aria-label="Filter by status"
+                      className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="pending">Pending</option>
+                      <option value="suspended">Suspended</option>
                     </select>
                     <div className="relative w-64">
                       <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -173,20 +181,43 @@ export default function Users() {
                       <TableHead>KYC</TableHead>
                       <TableHead>Contract</TableHead>
                       <TableHead>Joined</TableHead>
-                      <TableHead className="text-right">Releases</TableHead>
-                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead>Last login</TableHead>
+                      <TableHead className="text-right w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((u) => (
-                      <TableRow key={u.id} className="hover:bg-accent/20">
+                    {isLoading && Array.from({ length: 6 }).map((_, i) => (
+                      <TableRow key={`sk-${i}`}>
+                        <TableCell colSpan={8}><Skeleton className="h-9 w-full" /></TableCell>
+                      </TableRow>
+                    ))}
+                    {!isLoading && apiUsers.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                          Никто не нашёлся под эти фильтры.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoading && apiUsers.map((u) => {
+                      const kyc = KYC_BY_USER[u.id] ?? "none";
+                      const contract = CONTRACT_BY_USER[u.id] ?? "none";
+                      const role = u.role as Role;
+                      return (
+                      <TableRow key={u.id} className="hover:bg-accent/20" data-testid={`row-user-${u.id}`}>
                         <TableCell>
-                          <div className="text-sm font-medium">{u.name}</div>
-                          <div className="text-xs text-muted-foreground">{u.email}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] font-bold text-primary">{u.name.slice(0, 2).toUpperCase()}</span>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">{u.name}</div>
+                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${ROLE_COLORS[u.role]}`}>
-                            {ROLE_LABELS[u.role]}
+                          <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${ROLE_COLORS[role] ?? ""}`}>
+                            {ROLE_LABELS[role] ?? u.role}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -195,17 +226,51 @@ export default function Users() {
                           {u.status === "pending" && <span className="text-xs text-amber-400 flex items-center gap-1"><Clock className="h-3 w-3" /> Pending</span>}
                         </TableCell>
                         <TableCell>
-                          {u.kyc === "verified" && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Verified</Badge>}
-                          {u.kyc === "pending" && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">Pending</Badge>}
-                          {u.kyc === "rejected" && <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/20">Rejected</Badge>}
-                          {u.kyc === "none" && <span className="text-[10px] text-muted-foreground">—</span>}
+                          {kyc === "verified" && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Verified</Badge>}
+                          {kyc === "pending" && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">Pending</Badge>}
+                          {kyc === "rejected" && <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/20">Rejected</Badge>}
+                          {kyc === "none" && <span className="text-[10px] text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell className="text-xs capitalize text-muted-foreground">{u.contractType.replace("_", "-")}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{u.joined}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{u.releases}</TableCell>
-                        <TableCell className="text-right text-sm font-medium text-emerald-400 tabular-nums">{u.revenue}</TableCell>
+                        <TableCell className="text-xs capitalize text-muted-foreground">{contract.replace("_", "-")}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Действия для ${u.name}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem onClick={() => toast({ title: "View profile", description: u.email })}>
+                                <Eye className="h-3.5 w-3.5 mr-2" /> View profile
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toast({ title: "Edit user", description: u.name })}>
+                                <UserPlus className="h-3.5 w-3.5 mr-2" /> Edit role / status
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {u.status !== "suspended" ? (
+                                <DropdownMenuItem
+                                  className="text-rose-400 focus:text-rose-300"
+                                  onClick={() => toast({ title: "Пользователь приостановлен", description: u.email, variant: "destructive" as any })}
+                                >
+                                  <Ban className="h-3.5 w-3.5 mr-2" /> Suspend
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  className="text-emerald-400 focus:text-emerald-300"
+                                  onClick={() => toast({ title: "Пользователь восстановлен", description: u.email })}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Reactivate
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               </CardContent>

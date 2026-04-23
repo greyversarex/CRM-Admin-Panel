@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
-import { count, eq, desc } from "drizzle-orm";
+import { count, eq, desc, ilike, or, and } from "drizzle-orm";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 
 const router = Router();
@@ -19,9 +19,17 @@ router.get("/users", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
   const role = req.query.role as string | undefined;
+  const status = req.query.status as string | undefined;
+  const search = req.query.search as string | undefined;
 
-  const users = await db.select().from(usersTable).limit(limit).offset(offset).orderBy(desc(usersTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(usersTable);
+  const filters: any[] = [];
+  if (role)   filters.push(eq(usersTable.role, role));
+  if (status) filters.push(eq(usersTable.status, status));
+  if (search) filters.push(or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`)));
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const users = await db.select().from(usersTable).where(where).limit(limit).offset(offset).orderBy(desc(usersTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(usersTable).where(where);
 
   res.json({
     data: users.map(formatUser),
