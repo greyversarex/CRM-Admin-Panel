@@ -1,5 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import SupportInbox from "./inbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,15 @@ const FAQ_CATEGORIES = [
 ];
 
 export default function SupportPage() {
+  const { user } = useAuth();
+  // Admin/manager get the helpdesk inbox; label/artist get the customer view.
+  if (user && (user.role === "admin" || user.role === "manager")) {
+    return <SupportInbox />;
+  }
+  return <SupportCustomer />;
+}
+
+function SupportCustomer() {
   const { toast } = useToast();
   const [tab, setTab] = useState("tickets");
   const [search, setSearch] = useState("");
