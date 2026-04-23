@@ -651,6 +651,74 @@ export interface Balance {
   pendingPayout: number;
 }
 
+export interface RoyaltySummaryPoint {
+  period: string;
+  gross: number;
+  net: number;
+}
+
+export interface RoyaltySummary {
+  availableBalance: number;
+  pendingBalance: number;
+  lifetimeEarnings: number;
+  currency: string;
+  currentPeriodGross: number;
+  previousPeriodGross: number;
+  currentPeriodStreams: number;
+  previousPeriodStreams: number;
+  nextPaymentDate?: string | null;
+  nextStatementDate?: string | null;
+  minimumPayout: number;
+  timeline: RoyaltySummaryPoint[];
+}
+
+export type RoyaltyStatementStatus =
+  (typeof RoyaltyStatementStatus)[keyof typeof RoyaltyStatementStatus];
+
+export const RoyaltyStatementStatus = {
+  draft: "draft",
+  finalized: "finalized",
+  paid: "paid",
+} as const;
+
+export interface RoyaltyStatement {
+  id: number;
+  period: string;
+  periodLabel: string;
+  gross: number;
+  fees: number;
+  net: number;
+  currency: string;
+  streams: number;
+  status: RoyaltyStatementStatus;
+  publishedAt?: string | null;
+  pdfUrl: string;
+  csvUrl: string;
+}
+
+export interface RoyaltyByRelease {
+  releaseId: number;
+  title: string;
+  artistName: string;
+  coverUrl?: string | null;
+  upc?: string | null;
+  streams: number;
+  gross: number;
+  net: number;
+  currency: string;
+  trend: number;
+}
+
+export interface RoyaltyByDsp {
+  dsp: string;
+  streams: number;
+  gross: number;
+  net: number;
+  currency: string;
+  share: number;
+  trend: number;
+}
+
 export type SplitParticipantEntityType =
   (typeof SplitParticipantEntityType)[keyof typeof SplitParticipantEntityType];
 
@@ -1068,6 +1136,61 @@ export const ListTransactionsType = {
   content_id: "content_id",
   manual: "manual",
   payout: "payout",
+} as const;
+
+export type GetRoyaltySummaryParams = {
+  entity_type?: GetRoyaltySummaryEntityType;
+  entity_id?: number;
+};
+
+export type GetRoyaltySummaryEntityType =
+  (typeof GetRoyaltySummaryEntityType)[keyof typeof GetRoyaltySummaryEntityType];
+
+export const GetRoyaltySummaryEntityType = {
+  artist: "artist",
+  label: "label",
+} as const;
+
+export type ListRoyaltyStatementsParams = {
+  entity_type?: ListRoyaltyStatementsEntityType;
+  entity_id?: number;
+  year?: number;
+};
+
+export type ListRoyaltyStatementsEntityType =
+  (typeof ListRoyaltyStatementsEntityType)[keyof typeof ListRoyaltyStatementsEntityType];
+
+export const ListRoyaltyStatementsEntityType = {
+  artist: "artist",
+  label: "label",
+} as const;
+
+export type ListRoyaltyByReleaseParams = {
+  entity_type?: ListRoyaltyByReleaseEntityType;
+  entity_id?: number;
+  period?: string;
+};
+
+export type ListRoyaltyByReleaseEntityType =
+  (typeof ListRoyaltyByReleaseEntityType)[keyof typeof ListRoyaltyByReleaseEntityType];
+
+export const ListRoyaltyByReleaseEntityType = {
+  artist: "artist",
+  label: "label",
+} as const;
+
+export type ListRoyaltyByDspParams = {
+  entity_type?: ListRoyaltyByDspEntityType;
+  entity_id?: number;
+  period?: string;
+};
+
+export type ListRoyaltyByDspEntityType =
+  (typeof ListRoyaltyByDspEntityType)[keyof typeof ListRoyaltyByDspEntityType];
+
+export const ListRoyaltyByDspEntityType = {
+  artist: "artist",
+  label: "label",
 } as const;
 
 export type ListSplitsParams = {

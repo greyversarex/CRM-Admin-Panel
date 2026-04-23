@@ -21,6 +21,7 @@ import {
   Banknote,
   PieChart,
   Wallet,
+  Coins,
   UserCog,
   Zap,
   Settings2,
@@ -87,9 +88,10 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "financials",
     items: [
-      { nameKey: "finance", href: "/finance", icon: Banknote, iconColor: "text-green-400" },
-      { nameKey: "splits",  href: "/splits",  icon: PieChart, iconColor: "text-green-400" },
-      { nameKey: "payouts", href: "/payouts", icon: Wallet,   iconColor: "text-green-400" },
+      { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400" },
+      { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
+      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
+      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
     ],
   },
   {

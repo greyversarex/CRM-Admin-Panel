@@ -41,6 +41,7 @@ import type {
   Delivery,
   GeographyAnalytics,
   GetGeographyAnalyticsParams,
+  GetRoyaltySummaryParams,
   GetStreamAnalyticsParams,
   HealthStatus,
   ImportByUpcBody,
@@ -52,6 +53,9 @@ import type {
   ListPayoutsParams,
   ListPublishingWorksParams,
   ListReleasesParams,
+  ListRoyaltyByDspParams,
+  ListRoyaltyByReleaseParams,
+  ListRoyaltyStatementsParams,
   ListSplitsParams,
   ListTasksParams,
   ListTracksParams,
@@ -77,6 +81,10 @@ import type {
   ReleaseCounts,
   ReleaseDetail,
   RevenueByMonth,
+  RoyaltyByDsp,
+  RoyaltyByRelease,
+  RoyaltyStatement,
+  RoyaltySummary,
   Split,
   SpotifySearchReleasesParams,
   SpotifySearchResult,
@@ -4454,6 +4462,400 @@ export function useListBalances<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListBalancesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Aggregated royalty summary for the requesting entity (or whole catalog for admin/manager)
+ */
+export const getGetRoyaltySummaryUrl = (params?: GetRoyaltySummaryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/royalties/summary?${stringifiedParams}`
+    : `/api/royalties/summary`;
+};
+
+export const getRoyaltySummary = async (
+  params?: GetRoyaltySummaryParams,
+  options?: RequestInit,
+): Promise<RoyaltySummary> => {
+  return customFetch<RoyaltySummary>(getGetRoyaltySummaryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRoyaltySummaryQueryKey = (
+  params?: GetRoyaltySummaryParams,
+) => {
+  return [`/api/royalties/summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetRoyaltySummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRoyaltySummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetRoyaltySummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRoyaltySummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRoyaltySummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRoyaltySummary>>
+  > = ({ signal }) => getRoyaltySummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRoyaltySummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRoyaltySummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRoyaltySummary>>
+>;
+export type GetRoyaltySummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Aggregated royalty summary for the requesting entity (or whole catalog for admin/manager)
+ */
+
+export function useGetRoyaltySummary<
+  TData = Awaited<ReturnType<typeof getRoyaltySummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetRoyaltySummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRoyaltySummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRoyaltySummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Monthly statements (downloadable PDF/CSV)
+ */
+export const getListRoyaltyStatementsUrl = (
+  params?: ListRoyaltyStatementsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/royalties/statements?${stringifiedParams}`
+    : `/api/royalties/statements`;
+};
+
+export const listRoyaltyStatements = async (
+  params?: ListRoyaltyStatementsParams,
+  options?: RequestInit,
+): Promise<RoyaltyStatement[]> => {
+  return customFetch<RoyaltyStatement[]>(getListRoyaltyStatementsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRoyaltyStatementsQueryKey = (
+  params?: ListRoyaltyStatementsParams,
+) => {
+  return [`/api/royalties/statements`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRoyaltyStatementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRoyaltyStatements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyStatementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyStatements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRoyaltyStatementsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRoyaltyStatements>>
+  > = ({ signal }) =>
+    listRoyaltyStatements(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRoyaltyStatements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRoyaltyStatementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRoyaltyStatements>>
+>;
+export type ListRoyaltyStatementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Monthly statements (downloadable PDF/CSV)
+ */
+
+export function useListRoyaltyStatements<
+  TData = Awaited<ReturnType<typeof listRoyaltyStatements>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyStatementsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyStatements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRoyaltyStatementsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Earnings broken down by release
+ */
+export const getListRoyaltyByReleaseUrl = (
+  params?: ListRoyaltyByReleaseParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/royalties/by-release?${stringifiedParams}`
+    : `/api/royalties/by-release`;
+};
+
+export const listRoyaltyByRelease = async (
+  params?: ListRoyaltyByReleaseParams,
+  options?: RequestInit,
+): Promise<RoyaltyByRelease[]> => {
+  return customFetch<RoyaltyByRelease[]>(getListRoyaltyByReleaseUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRoyaltyByReleaseQueryKey = (
+  params?: ListRoyaltyByReleaseParams,
+) => {
+  return [`/api/royalties/by-release`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRoyaltyByReleaseQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRoyaltyByRelease>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyByReleaseParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyByRelease>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRoyaltyByReleaseQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRoyaltyByRelease>>
+  > = ({ signal }) =>
+    listRoyaltyByRelease(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRoyaltyByRelease>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRoyaltyByReleaseQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRoyaltyByRelease>>
+>;
+export type ListRoyaltyByReleaseQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Earnings broken down by release
+ */
+
+export function useListRoyaltyByRelease<
+  TData = Awaited<ReturnType<typeof listRoyaltyByRelease>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyByReleaseParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyByRelease>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRoyaltyByReleaseQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Earnings broken down by streaming platform / DSP
+ */
+export const getListRoyaltyByDspUrl = (params?: ListRoyaltyByDspParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/royalties/by-dsp?${stringifiedParams}`
+    : `/api/royalties/by-dsp`;
+};
+
+export const listRoyaltyByDsp = async (
+  params?: ListRoyaltyByDspParams,
+  options?: RequestInit,
+): Promise<RoyaltyByDsp[]> => {
+  return customFetch<RoyaltyByDsp[]>(getListRoyaltyByDspUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRoyaltyByDspQueryKey = (
+  params?: ListRoyaltyByDspParams,
+) => {
+  return [`/api/royalties/by-dsp`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRoyaltyByDspQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRoyaltyByDsp>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyByDspParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyByDsp>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRoyaltyByDspQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRoyaltyByDsp>>
+  > = ({ signal }) => listRoyaltyByDsp(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRoyaltyByDsp>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRoyaltyByDspQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRoyaltyByDsp>>
+>;
+export type ListRoyaltyByDspQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Earnings broken down by streaming platform / DSP
+ */
+
+export function useListRoyaltyByDsp<
+  TData = Awaited<ReturnType<typeof listRoyaltyByDsp>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListRoyaltyByDspParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRoyaltyByDsp>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRoyaltyByDspQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

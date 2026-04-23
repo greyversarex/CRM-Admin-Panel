@@ -1088,6 +1088,117 @@ paths:
                 items:
                   $ref: "#/components/schemas/Balance"
 
+  # ==================== ROYALTIES ====================
+  /royalties/summary:
+    get:
+      operationId: getRoyaltySummary
+      tags: [royalties]
+      summary: Aggregated royalty summary for the requesting entity (or whole catalog for admin/manager)
+      parameters:
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [artist, label]
+        - name: entity_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Royalty summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoyaltySummary"
+
+  /royalties/statements:
+    get:
+      operationId: listRoyaltyStatements
+      tags: [royalties]
+      summary: Monthly statements (downloadable PDF/CSV)
+      parameters:
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [artist, label]
+        - name: entity_id
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoyaltyStatement"
+
+  /royalties/by-release:
+    get:
+      operationId: listRoyaltyByRelease
+      tags: [royalties]
+      summary: Earnings broken down by release
+      parameters:
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [artist, label]
+        - name: entity_id
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Earnings per release
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoyaltyByRelease"
+
+  /royalties/by-dsp:
+    get:
+      operationId: listRoyaltyByDsp
+      tags: [royalties]
+      summary: Earnings broken down by streaming platform / DSP
+      parameters:
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [artist, label]
+        - name: entity_id
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Earnings per DSP
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoyaltyByDsp"
+
   # ==================== SPLITS ====================
   /splits:
     get:
@@ -2534,6 +2645,128 @@ components:
         pendingPayout:
           type: number
       required: [entityType, entityId, entityName, balance, currency, pendingPayout]
+
+    # ==================== ROYALTIES ====================
+    RoyaltySummaryPoint:
+      type: object
+      properties:
+        period:
+          type: string
+        gross:
+          type: number
+        net:
+          type: number
+      required: [period, gross, net]
+
+    RoyaltySummary:
+      type: object
+      properties:
+        availableBalance:
+          type: number
+        pendingBalance:
+          type: number
+        lifetimeEarnings:
+          type: number
+        currency:
+          type: string
+        currentPeriodGross:
+          type: number
+        previousPeriodGross:
+          type: number
+        currentPeriodStreams:
+          type: integer
+        previousPeriodStreams:
+          type: integer
+        nextPaymentDate:
+          type: string
+          nullable: true
+        nextStatementDate:
+          type: string
+          nullable: true
+        minimumPayout:
+          type: number
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoyaltySummaryPoint"
+      required: [availableBalance, pendingBalance, lifetimeEarnings, currency, currentPeriodGross, previousPeriodGross, currentPeriodStreams, previousPeriodStreams, minimumPayout, timeline]
+
+    RoyaltyStatement:
+      type: object
+      properties:
+        id:
+          type: integer
+        period:
+          type: string
+        periodLabel:
+          type: string
+        gross:
+          type: number
+        fees:
+          type: number
+        net:
+          type: number
+        currency:
+          type: string
+        streams:
+          type: integer
+        status:
+          type: string
+          enum: [draft, finalized, paid]
+        publishedAt:
+          type: string
+          nullable: true
+        pdfUrl:
+          type: string
+        csvUrl:
+          type: string
+      required: [id, period, periodLabel, gross, fees, net, currency, streams, status, pdfUrl, csvUrl]
+
+    RoyaltyByRelease:
+      type: object
+      properties:
+        releaseId:
+          type: integer
+        title:
+          type: string
+        artistName:
+          type: string
+        coverUrl:
+          type: string
+          nullable: true
+        upc:
+          type: string
+          nullable: true
+        streams:
+          type: integer
+        gross:
+          type: number
+        net:
+          type: number
+        currency:
+          type: string
+        trend:
+          type: number
+      required: [releaseId, title, artistName, streams, gross, net, currency, trend]
+
+    RoyaltyByDsp:
+      type: object
+      properties:
+        dsp:
+          type: string
+        streams:
+          type: integer
+        gross:
+          type: number
+        net:
+          type: number
+        currency:
+          type: string
+        share:
+          type: number
+        trend:
+          type: number
+      required: [dsp, streams, gross, net, currency, share, trend]
 
     # ==================== SPLITS ====================
     SplitParticipant:

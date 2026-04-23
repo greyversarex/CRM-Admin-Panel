@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable } from "@workspace/db";
-import { count, eq, desc } from "drizzle-orm";
+import { count, eq, desc, and } from "drizzle-orm";
 import {
   CreateTransactionBody,
   CreatePayoutRequestBody,
@@ -105,8 +105,24 @@ router.get("/payouts", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const payouts = await db.select().from(payoutsTable).limit(limit).offset(offset).orderBy(desc(payoutsTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(payoutsTable);
+  const filters: any[] = [];
+  if (req.query.artist_id !== undefined) {
+    const v = parseInt(req.query.artist_id as string, 10);
+    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid artist_id" }); return; }
+    filters.push(eq(payoutsTable.artistId, v));
+  }
+  if (req.query.label_id !== undefined) {
+    const v = parseInt(req.query.label_id as string, 10);
+    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid label_id" }); return; }
+    filters.push(eq(payoutsTable.labelId, v));
+  }
+  if (req.query.status !== undefined) {
+    filters.push(eq(payoutsTable.status, req.query.status as string));
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const payouts = await db.select().from(payoutsTable).where(where).limit(limit).offset(offset).orderBy(desc(payoutsTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(payoutsTable).where(where);
 
   const artists = await db.select({ id: artistsTable.id, name: artistsTable.name }).from(artistsTable);
   const labels = await db.select({ id: labelsTable.id, name: labelsTable.name }).from(labelsTable);

@@ -62,7 +62,9 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 - `GET/POST/PUT/DELETE /api/crm/tasks/*` — CRM tasks
 - `GET/POST /api/finance/transactions` — transaction ledger
 - `GET /api/finance/balances` — artist/label balances
-- `GET/POST/PATCH /api/payouts/*` — payout management with approve/reject
+- `GET/POST/PATCH /api/payouts/*` — payout management with approve/reject (filterable by artist_id/label_id/status)
+- `GET /api/royalties/summary|statements|by-release|by-dsp` — user-facing royalty aggregates (entity-scoped)
+- `GET /api/royalties/statements/:period/download?format=pdf|csv` — statement download
 - `GET/POST/PUT/DELETE /api/splits/*` — revenue splits
 - `GET/POST/PUT /api/publishing/works/*` — publishing rights
 - `GET /api/analytics/*` — streams, platform breakdown, geography
@@ -78,9 +80,10 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 - `/artists/:id` — Artist profile with stats
 - `/labels` — Label management
 - `/crm` — CRM: contacts + tasks board
-- `/finance` — Financial overview: transaction ledger + artist balances
+- `/royalties` — User-facing royalty hub (6 tabs: summary, statements PDF/CSV, by release, by DSP, request payment, history)
+- `/finance` — Admin financial overview: transaction ledger + artist balances
 - `/splits` — Revenue split management with visual distribution bars
-- `/payouts` — Payout requests with approve/reject workflow
+- `/payouts` — Admin payout requests with approve/reject workflow
 - `/publishing` — Publishing works with ASCAP/BMI/Songtrust badges
 - `/analytics` — Streams, platform breakdown, geography analytics
 - `/delivery` — DDEX delivery queue

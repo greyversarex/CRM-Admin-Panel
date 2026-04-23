@@ -1453,6 +1453,107 @@ export const ListBalancesResponseItem = zod.object({
 export const ListBalancesResponse = zod.array(ListBalancesResponseItem);
 
 /**
+ * @summary Aggregated royalty summary for the requesting entity (or whole catalog for admin/manager)
+ */
+export const GetRoyaltySummaryQueryParams = zod.object({
+  entity_type: zod.enum(["artist", "label"]).optional(),
+  entity_id: zod.coerce.number().optional(),
+});
+
+export const GetRoyaltySummaryResponse = zod.object({
+  availableBalance: zod.number(),
+  pendingBalance: zod.number(),
+  lifetimeEarnings: zod.number(),
+  currency: zod.string(),
+  currentPeriodGross: zod.number(),
+  previousPeriodGross: zod.number(),
+  currentPeriodStreams: zod.number(),
+  previousPeriodStreams: zod.number(),
+  nextPaymentDate: zod.string().nullish(),
+  nextStatementDate: zod.string().nullish(),
+  minimumPayout: zod.number(),
+  timeline: zod.array(
+    zod.object({
+      period: zod.string(),
+      gross: zod.number(),
+      net: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Monthly statements (downloadable PDF/CSV)
+ */
+export const ListRoyaltyStatementsQueryParams = zod.object({
+  entity_type: zod.enum(["artist", "label"]).optional(),
+  entity_id: zod.coerce.number().optional(),
+  year: zod.coerce.number().optional(),
+});
+
+export const ListRoyaltyStatementsResponseItem = zod.object({
+  id: zod.number(),
+  period: zod.string(),
+  periodLabel: zod.string(),
+  gross: zod.number(),
+  fees: zod.number(),
+  net: zod.number(),
+  currency: zod.string(),
+  streams: zod.number(),
+  status: zod.enum(["draft", "finalized", "paid"]),
+  publishedAt: zod.string().nullish(),
+  pdfUrl: zod.string(),
+  csvUrl: zod.string(),
+});
+export const ListRoyaltyStatementsResponse = zod.array(
+  ListRoyaltyStatementsResponseItem,
+);
+
+/**
+ * @summary Earnings broken down by release
+ */
+export const ListRoyaltyByReleaseQueryParams = zod.object({
+  entity_type: zod.enum(["artist", "label"]).optional(),
+  entity_id: zod.coerce.number().optional(),
+  period: zod.coerce.string().optional(),
+});
+
+export const ListRoyaltyByReleaseResponseItem = zod.object({
+  releaseId: zod.number(),
+  title: zod.string(),
+  artistName: zod.string(),
+  coverUrl: zod.string().nullish(),
+  upc: zod.string().nullish(),
+  streams: zod.number(),
+  gross: zod.number(),
+  net: zod.number(),
+  currency: zod.string(),
+  trend: zod.number(),
+});
+export const ListRoyaltyByReleaseResponse = zod.array(
+  ListRoyaltyByReleaseResponseItem,
+);
+
+/**
+ * @summary Earnings broken down by streaming platform / DSP
+ */
+export const ListRoyaltyByDspQueryParams = zod.object({
+  entity_type: zod.enum(["artist", "label"]).optional(),
+  entity_id: zod.coerce.number().optional(),
+  period: zod.coerce.string().optional(),
+});
+
+export const ListRoyaltyByDspResponseItem = zod.object({
+  dsp: zod.string(),
+  streams: zod.number(),
+  gross: zod.number(),
+  net: zod.number(),
+  currency: zod.string(),
+  share: zod.number(),
+  trend: zod.number(),
+});
+export const ListRoyaltyByDspResponse = zod.array(ListRoyaltyByDspResponseItem);
+
+/**
  * @summary List revenue splits
  */
 export const listSplitsQueryPageDefault = 1;
