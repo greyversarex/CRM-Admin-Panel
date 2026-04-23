@@ -39,6 +39,12 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
 Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trust-proxy=1, чтобы за nginx работал HTTPS.
 
+## Security baseline
+
+- `helmet()` подключён в `app.ts` — отдаёт X-Frame-Options=SAMEORIGIN, X-Content-Type-Options=nosniff, HSTS, Referrer-Policy и пр. CSP/COEP отключены (SPA тянет ассеты из многих источников; CSP сделаем отдельным заходом).
+- `express-rate-limit` на `POST /auth/login`: 10 попыток/5 мин (prod) или 100 (dev), `skipSuccessfulRequests:true` чтобы успешный логин не жрал лимит. IP читается через `trust proxy=1` за nginx.
+- На проде API должен слушать только за nginx (UFW в `1_setup.sh` блокирует все порты кроме SSH/Nginx) — иначе rate-limit обходится через прямые запросы с подменой `X-Forwarded-For`.
+
 ## Auth & Data Scoping (Phase 1.1 + 1.2)
 
 - Real session auth: `express-session` + `connect-pg-simple`, bcrypt password hashes, session ID regen on login.

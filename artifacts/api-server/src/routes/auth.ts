@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -6,7 +7,18 @@ import type { SessionUser, AuthRole } from "../lib/auth";
 
 const router = Router();
 
-router.post("/auth/login", async (req, res): Promise<void> => {
+// Brute-force guard: 10 login attempts per 5 min per IP. In dev (Replit
+// preview iframe) the limit is relaxed so the demo buttons remain usable.
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: "Слишком много попыток входа. Попробуй через несколько минут." },
+});
+
+router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const email = String(req.body?.email ?? "").toLowerCase().trim();
   const password = String(req.body?.password ?? "");
 

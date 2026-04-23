@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
@@ -10,6 +11,13 @@ import { logger } from "./lib/logger";
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Security headers. In production frontend statics ship from a different
+// origin (nginx) so we keep the Helmet defaults but disable CSP — the SPA
+// pulls assets from many CDNs (recharts, fonts, replit dev banners, etc.)
+// and a strict CSP would need a much more careful policy. CSP can be added
+// later once the asset graph is fully known.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
 app.use(
   pinoHttp({
