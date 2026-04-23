@@ -1,4 +1,5 @@
 import { db, labelsTable, artistsTable, releasesTable, tracksTable, usersTable, contactsTable, crmTasksTable, transactionsTable, deliveriesTable, activityLogTable, publishingWorksTable, payoutsTable, splitsTable } from "./index";
+import bcrypt from "bcryptjs";
 
 async function seed() {
   console.log("Seeding database...");
@@ -29,12 +30,14 @@ async function seed() {
   ]);
   console.log("Tracks seeded");
 
+  const hash = (p: string) => bcrypt.hashSync(p, 10);
   await db.insert(usersTable).values([
-    { name: "Admin User", email: "admin@tajik-music.tj", role: "admin", status: "active" },
-    { name: "Label Manager", email: "manager@tajik-sounds.tj", role: "label", status: "active", labelId: label1.id },
-    { name: "Daler Nazarov", email: "daler@artist.tj", role: "artist", status: "active", artistId: artist1.id },
+    { name: "Admin User",         email: "admin@tajikmusic.com",   role: "admin",   status: "active", passwordHash: hash("admin123") },
+    { name: "Рустам Назаров",     email: "manager@tajikmusic.com", role: "manager", status: "active", passwordHash: hash("manager123") },
+    { name: "Tajik Sounds Records", email: "label@tajikmusic.com", role: "label",   status: "active", labelId: label1.id, passwordHash: hash("label123") },
+    { name: "Daler Nazarov",      email: "artist@tajikmusic.com",  role: "artist",  status: "active", artistId: artist1.id, passwordHash: hash("artist123") },
   ]);
-  console.log("Users seeded");
+  console.log("Users seeded (with password hashes)");
 
   await db.insert(contactsTable).values([
     { name: "Bahrom Mirzoyev", type: "manager", email: "bahrom@mgmt.tj", phone: "+992501234567", company: "BM Management", country: "TJ" },

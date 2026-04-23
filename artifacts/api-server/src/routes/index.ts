@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import dashboardRouter from "./dashboard";
 import artistsRouter from "./artists";
 import labelsRouter from "./labels";
@@ -14,15 +15,23 @@ import publishingRouter from "./publishing";
 import analyticsRouter from "./analytics";
 import deliveryRouter from "./delivery";
 import integrationsRouter from "./integrations";
+import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
 
+// Public — no auth required
 router.use(healthRouter);
+router.use(authRouter);
+
+// All other API routes require an active session
+router.use(requireAuth);
+
 router.use(dashboardRouter);
 router.use(artistsRouter);
 router.use(labelsRouter);
 router.use(releasesRouter);
 router.use(tracksRouter);
+router.use("/users", requireRole("admin", "manager"));  // user management is admin/manager only
 router.use(usersRouter);
 router.use(crmRouter);
 router.use(financeRouter);

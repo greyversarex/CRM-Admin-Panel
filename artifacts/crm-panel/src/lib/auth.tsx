@@ -16,85 +16,87 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  loginAs: (role: Role) => void;
-  logout: () => void;
+  loginAs: (role: Role) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
-const DEMO_USERS: Record<string, AuthUser & { password: string }> = {
-  "admin@tajikmusic.com": {
-    id: 1, password: "admin123",
-    name: "Admin User", email: "admin@tajikmusic.com",
-    role: "admin", avatarInitials: "AU",
-  },
-  "manager@tajikmusic.com": {
-    id: 2, password: "manager123",
-    name: "Рустам Назаров", email: "manager@tajikmusic.com",
-    role: "manager", avatarInitials: "РН",
-  },
-  "label@tajikmusic.com": {
-    id: 3, password: "label123",
-    name: "Звук Азии Records", email: "label@tajikmusic.com",
-    role: "label", labelId: 1, avatarInitials: "ЗА",
-    orgName: "Звук Азии Records",
-  },
-  "artist@tajikmusic.com": {
-    id: 4, password: "artist123",
-    name: "Ансамбли Бахор", email: "artist@tajikmusic.com",
-    role: "artist", artistId: 1, avatarInitials: "АБ",
-    orgName: "Ансамбли Бахор",
-  },
-};
-
-const DEMO_BY_ROLE: Record<Role, string> = {
-  admin:   "admin@tajikmusic.com",
-  manager: "manager@tajikmusic.com",
-  label:   "label@tajikmusic.com",
-  artist:  "artist@tajikmusic.com",
+const DEMO_PASSWORDS: Record<Role, { email: string; password: string }> = {
+  admin:   { email: "admin@tajikmusic.com",   password: "admin123" },
+  manager: { email: "manager@tajikmusic.com", password: "manager123" },
+  label:   { email: "label@tajikmusic.com",   password: "label123" },
+  artist:  { email: "artist@tajikmusic.com",  password: "artist123" },
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const STORAGE_KEY = "tm_auth_user";
+function deriveAuthUser(raw: {
+  id: number; name: string; email: string; role: Role;
+  artistId: number | null; labelId: number | null;
+}): AuthUser {
+  const initials = raw.name.split(/\s+/).map(s => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "U";
+  return {
+    id: raw.id,
+    name: raw.name,
+    email: raw.email,
+    role: raw.role,
+    artistId: raw.artistId,
+    labelId: raw.labelId,
+    avatarInitials: initials,
+    orgName: raw.role === "label" || raw.role === "artist" ? raw.name : undefined,
+  };
+}
+
+async function apiJson<T>(url: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; error: string; status: number }> {
+  try {
+    const res = await fetch(url, {
+      ...init,
+      credentials: "same-origin",
+      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); msg = j.error || msg; } catch { /* ignore */ }
+      return { ok: false, error: msg, status: res.status };
+    }
+    const data = (await res.json()) as T;
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Network error", status: 0 };
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
-    } catch { /* ignore */ }
-    setIsLoading(false);
+    (async () => {
+      const r = await apiJson<{ user: any }>("/api/auth/me");
+      if (r.ok) setUser(deriveAuthUser(r.data.user));
+      setIsLoading(false);
+    })();
   }, []);
 
-  const persist = (u: AuthUser | null) => {
-    setUser(u);
-    if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    else localStorage.removeItem(STORAGE_KEY);
-  };
-
   const login = async (email: string, password: string) => {
-    const found = DEMO_USERS[email.toLowerCase().trim()];
-    if (!found || found.password !== password) {
-      return { ok: false, error: "Неверный email или пароль" };
-    }
-    const { password: _pw, ...authUser } = found;
-    persist(authUser);
+    const r = await apiJson<{ user: any }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    setUser(deriveAuthUser(r.data.user));
     return { ok: true };
   };
 
-  const loginAs = (role: Role) => {
-    const email = DEMO_BY_ROLE[role];
-    const found = DEMO_USERS[email];
-    if (found) {
-      const { password: _pw, ...authUser } = found;
-      persist(authUser);
-    }
+  const loginAs = async (role: Role) => {
+    const creds = DEMO_PASSWORDS[role];
+    return login(creds.email, creds.password);
   };
 
-  const logout = () => persist(null);
+  const logout = async () => {
+    await apiJson("/api/auth/logout", { method: "POST" });
+    setUser(null);
+  };
 
   return (
     <AuthContext.Provider value={{ user, login, loginAs, logout, isLoading }}>
