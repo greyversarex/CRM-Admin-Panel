@@ -518,6 +518,70 @@ paths:
               schema:
                 $ref: "#/components/schemas/Release"
 
+  /releases/counts:
+    get:
+      operationId: getReleaseCounts
+      tags: [releases]
+      summary: Get release counts grouped by status
+      responses:
+        "200":
+          description: Status counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseCounts"
+
+  /releases/transfer-imports:
+    get:
+      operationId: listTransferImports
+      tags: [releases]
+      summary: List transfer-track import jobs
+      responses:
+        "200":
+          description: List of import jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TransferImport"
+    post:
+      operationId: createTransferImport
+      tags: [releases]
+      summary: Create a transfer-track import from selected Spotify releases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransferImportBody"
+      responses:
+        "201":
+          description: Import created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferImport"
+
+  /releases/transfer-imports/spotify-search:
+    get:
+      operationId: spotifySearchReleases
+      tags: [releases]
+      summary: Search releases for a Spotify artist link or UPC
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Spotify search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifySearchResult"
+
   # ==================== TRACKS ====================
   /tracks:
     get:
@@ -1890,6 +1954,130 @@ components:
           enum: [spotify, apple, musicbrainz]
           default: spotify
       required: [upc]
+
+    ReleaseCounts:
+      type: object
+      properties:
+        all:
+          type: integer
+        draft:
+          type: integer
+        pending_review:
+          type: integer
+        approved:
+          type: integer
+        scheduled:
+          type: integer
+        live:
+          type: integer
+        takedown:
+          type: integer
+        unfinished:
+          type: integer
+        readyToSubmit:
+          type: integer
+      required: [all, draft, pending_review, approved, scheduled, live, takedown, unfinished, readyToSubmit]
+
+    TransferImport:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, complete, error]
+        spotifyArtistId:
+          type: string
+          nullable: true
+        spotifyArtistName:
+          type: string
+          nullable: true
+        importedCount:
+          type: integer
+        failedCount:
+          type: integer
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransferImportItem"
+      required: [id, status, importedCount, failedCount, createdAt, items]
+
+    TransferImportItem:
+      type: object
+      properties:
+        upc:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        label:
+          type: string
+          nullable: true
+        tracks:
+          type: integer
+        coverUrl:
+          type: string
+          nullable: true
+        success:
+          type: boolean
+      required: [upc, title, artist, tracks, success]
+
+    CreateTransferImportBody:
+      type: object
+      properties:
+        spotifyArtistId:
+          type: string
+        spotifyArtistName:
+          type: string
+        labelName:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransferImportItem"
+      required: [spotifyArtistId, items]
+
+    SpotifySearchResult:
+      type: object
+      properties:
+        artistId:
+          type: string
+        artistName:
+          type: string
+        artistImage:
+          type: string
+          nullable: true
+        releases:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpotifyReleaseResult"
+      required: [artistId, artistName, releases]
+
+    SpotifyReleaseResult:
+      type: object
+      properties:
+        upc:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        label:
+          type: string
+          nullable: true
+        tracks:
+          type: integer
+        coverUrl:
+          type: string
+          nullable: true
+        releaseDate:
+          type: string
+          nullable: true
+      required: [upc, title, artist, tracks]
 
     PaginatedReleases:
       type: object

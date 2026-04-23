@@ -10,6 +10,10 @@ import Login from "@/pages/login";
 
 import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
+import ReleaseDetail from "@/pages/releases/[id]";
+import CreateRelease from "@/pages/releases/new";
+import TransferTrack from "@/pages/releases/transfer";
+import NewImport from "@/pages/releases/transfer/new";
 import Artists from "@/pages/artists";
 import Labels from "@/pages/labels";
 import Videos from "@/pages/videos";
@@ -73,7 +77,11 @@ function Router() {
       <ProtectedRoute path="/analytics"      component={Analytics} />
       <ProtectedRoute path="/distribution"   component={Distribution} />
       <ProtectedRoute path="/delivery"       component={Distribution} />
-      <ProtectedRoute path="/releases"       component={Releases} />
+      <ProtectedRoute path="/releases"                  component={Releases} />
+      <ProtectedRoute path="/releases/new"              component={CreateRelease} />
+      <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
+      <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
+      <ProtectedRoute path="/releases/:id"              component={ReleaseDetail} />
       <ProtectedRoute path="/artists"        component={Artists} />
       <ProtectedRoute path="/labels"         component={Labels} />
       <ProtectedRoute path="/videos"         component={Videos} />

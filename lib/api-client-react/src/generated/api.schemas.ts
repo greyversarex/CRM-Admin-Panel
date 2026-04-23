@@ -296,6 +296,72 @@ export interface ImportByUpcBody {
   source?: ImportByUpcBodySource;
 }
 
+export interface ReleaseCounts {
+  all: number;
+  draft: number;
+  pending_review: number;
+  approved: number;
+  scheduled: number;
+  live: number;
+  takedown: number;
+  unfinished: number;
+  readyToSubmit: number;
+}
+
+export type TransferImportStatus =
+  (typeof TransferImportStatus)[keyof typeof TransferImportStatus];
+
+export const TransferImportStatus = {
+  in_progress: "in_progress",
+  complete: "complete",
+  error: "error",
+} as const;
+
+export interface TransferImportItem {
+  upc: string;
+  title: string;
+  artist: string;
+  label?: string | null;
+  tracks: number;
+  coverUrl?: string | null;
+  success: boolean;
+}
+
+export interface TransferImport {
+  id: number;
+  status: TransferImportStatus;
+  spotifyArtistId?: string | null;
+  spotifyArtistName?: string | null;
+  importedCount: number;
+  failedCount: number;
+  createdAt: string;
+  items: TransferImportItem[];
+}
+
+export interface CreateTransferImportBody {
+  spotifyArtistId: string;
+  spotifyArtistName?: string;
+  labelName?: string | null;
+  items: TransferImportItem[];
+}
+
+export interface SpotifyReleaseResult {
+  upc: string;
+  title: string;
+  artist: string;
+  label?: string | null;
+  tracks: number;
+  coverUrl?: string | null;
+  releaseDate?: string | null;
+}
+
+export interface SpotifySearchResult {
+  artistId: string;
+  artistName: string;
+  artistImage?: string | null;
+  releases: SpotifyReleaseResult[];
+}
+
 export interface PaginatedReleases {
   data: Release[];
   pagination: Pagination;
@@ -909,6 +975,10 @@ export const ListReleasesReleaseType = {
   ep: "ep",
   compilation: "compilation",
 } as const;
+
+export type SpotifySearchReleasesParams = {
+  query: string;
+};
 
 export type ListTracksParams = {
   search?: string;

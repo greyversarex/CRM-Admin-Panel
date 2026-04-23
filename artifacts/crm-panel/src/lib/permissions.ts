@@ -24,9 +24,17 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
 };
 
 export function canAccess(role: Role, path: string): boolean {
-  const allowed = ROUTE_ROLES[path];
-  if (!allowed) return role === "admin";
-  return allowed.includes(role);
+  // Exact match first
+  const exact = ROUTE_ROLES[path];
+  if (exact) return exact.includes(role);
+  // Longest matching prefix (e.g. /releases/123 inherits /releases)
+  const prefixes = Object.keys(ROUTE_ROLES)
+    .filter((p) => p !== "/" && (path === p || path.startsWith(p + "/")))
+    .sort((a, b) => b.length - a.length);
+  if (prefixes.length > 0) {
+    return ROUTE_ROLES[prefixes[0]].includes(role);
+  }
+  return role === "admin";
 }
 
 /** Human-readable role labels */

@@ -759,6 +759,92 @@ export const ImportReleaseByUpcResponse = zod.object({
 });
 
 /**
+ * @summary Get release counts grouped by status
+ */
+export const GetReleaseCountsResponse = zod.object({
+  all: zod.number(),
+  draft: zod.number(),
+  pending_review: zod.number(),
+  approved: zod.number(),
+  scheduled: zod.number(),
+  live: zod.number(),
+  takedown: zod.number(),
+  unfinished: zod.number(),
+  readyToSubmit: zod.number(),
+});
+
+/**
+ * @summary List transfer-track import jobs
+ */
+export const ListTransferImportsResponseItem = zod.object({
+  id: zod.number(),
+  status: zod.enum(["in_progress", "complete", "error"]),
+  spotifyArtistId: zod.string().nullish(),
+  spotifyArtistName: zod.string().nullish(),
+  importedCount: zod.number(),
+  failedCount: zod.number(),
+  createdAt: zod.string(),
+  items: zod.array(
+    zod.object({
+      upc: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      label: zod.string().nullish(),
+      tracks: zod.number(),
+      coverUrl: zod.string().nullish(),
+      success: zod.boolean(),
+    }),
+  ),
+});
+export const ListTransferImportsResponse = zod.array(
+  ListTransferImportsResponseItem,
+);
+
+/**
+ * @summary Create a transfer-track import from selected Spotify releases
+ */
+export const CreateTransferImportBody = zod.object({
+  spotifyArtistId: zod.string(),
+  spotifyArtistName: zod.string().optional(),
+  labelName: zod.string().nullish(),
+  items: zod.array(
+    zod.object({
+      upc: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      label: zod.string().nullish(),
+      tracks: zod.number(),
+      coverUrl: zod.string().nullish(),
+      success: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Search releases for a Spotify artist link or UPC
+ */
+export const SpotifySearchReleasesQueryParams = zod.object({
+  query: zod.coerce.string(),
+});
+
+export const SpotifySearchReleasesResponse = zod.object({
+  artistId: zod.string(),
+  artistName: zod.string(),
+  artistImage: zod.string().nullish(),
+  releases: zod.array(
+    zod.object({
+      upc: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      label: zod.string().nullish(),
+      tracks: zod.number(),
+      coverUrl: zod.string().nullish(),
+      releaseDate: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary List all tracks
  */
 export const listTracksQueryPageDefault = 1;

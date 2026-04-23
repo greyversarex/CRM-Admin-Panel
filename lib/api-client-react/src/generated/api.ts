@@ -34,6 +34,7 @@ import type {
   CreateSplitBody,
   CreateTrackBody,
   CreateTransactionBody,
+  CreateTransferImportBody,
   CreateUserBody,
   CrmTask,
   DashboardSummary,
@@ -73,14 +74,18 @@ import type {
   PublishingWork,
   RejectPayoutBody,
   Release,
+  ReleaseCounts,
   ReleaseDetail,
   RevenueByMonth,
   Split,
+  SpotifySearchReleasesParams,
+  SpotifySearchResult,
   StatusCount,
   StreamAnalytics,
   TopArtist,
   Track,
   Transaction,
+  TransferImport,
   UpdateReleaseStatusBody,
   User,
 } from "./api.schemas";
@@ -2118,6 +2123,346 @@ export const useImportReleaseByUpc = <
 > => {
   return useMutation(getImportReleaseByUpcMutationOptions(options));
 };
+
+/**
+ * @summary Get release counts grouped by status
+ */
+export const getGetReleaseCountsUrl = () => {
+  return `/api/releases/counts`;
+};
+
+export const getReleaseCounts = async (
+  options?: RequestInit,
+): Promise<ReleaseCounts> => {
+  return customFetch<ReleaseCounts>(getGetReleaseCountsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReleaseCountsQueryKey = () => {
+  return [`/api/releases/counts`] as const;
+};
+
+export const getGetReleaseCountsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReleaseCounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseCounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReleaseCountsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReleaseCounts>>
+  > = ({ signal }) => getReleaseCounts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseCounts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReleaseCountsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReleaseCounts>>
+>;
+export type GetReleaseCountsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get release counts grouped by status
+ */
+
+export function useGetReleaseCounts<
+  TData = Awaited<ReturnType<typeof getReleaseCounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseCounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReleaseCountsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List transfer-track import jobs
+ */
+export const getListTransferImportsUrl = () => {
+  return `/api/releases/transfer-imports`;
+};
+
+export const listTransferImports = async (
+  options?: RequestInit,
+): Promise<TransferImport[]> => {
+  return customFetch<TransferImport[]>(getListTransferImportsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTransferImportsQueryKey = () => {
+  return [`/api/releases/transfer-imports`] as const;
+};
+
+export const getListTransferImportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTransferImports>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTransferImports>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTransferImportsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTransferImports>>
+  > = ({ signal }) => listTransferImports({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTransferImports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTransferImportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTransferImports>>
+>;
+export type ListTransferImportsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List transfer-track import jobs
+ */
+
+export function useListTransferImports<
+  TData = Awaited<ReturnType<typeof listTransferImports>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTransferImports>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTransferImportsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a transfer-track import from selected Spotify releases
+ */
+export const getCreateTransferImportUrl = () => {
+  return `/api/releases/transfer-imports`;
+};
+
+export const createTransferImport = async (
+  createTransferImportBody: CreateTransferImportBody,
+  options?: RequestInit,
+): Promise<TransferImport> => {
+  return customFetch<TransferImport>(getCreateTransferImportUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createTransferImportBody),
+  });
+};
+
+export const getCreateTransferImportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTransferImport>>,
+    TError,
+    { data: BodyType<CreateTransferImportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTransferImport>>,
+  TError,
+  { data: BodyType<CreateTransferImportBody> },
+  TContext
+> => {
+  const mutationKey = ["createTransferImport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTransferImport>>,
+    { data: BodyType<CreateTransferImportBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTransferImport(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTransferImportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTransferImport>>
+>;
+export type CreateTransferImportMutationBody =
+  BodyType<CreateTransferImportBody>;
+export type CreateTransferImportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a transfer-track import from selected Spotify releases
+ */
+export const useCreateTransferImport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTransferImport>>,
+    TError,
+    { data: BodyType<CreateTransferImportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTransferImport>>,
+  TError,
+  { data: BodyType<CreateTransferImportBody> },
+  TContext
+> => {
+  return useMutation(getCreateTransferImportMutationOptions(options));
+};
+
+/**
+ * @summary Search releases for a Spotify artist link or UPC
+ */
+export const getSpotifySearchReleasesUrl = (
+  params: SpotifySearchReleasesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/releases/transfer-imports/spotify-search?${stringifiedParams}`
+    : `/api/releases/transfer-imports/spotify-search`;
+};
+
+export const spotifySearchReleases = async (
+  params: SpotifySearchReleasesParams,
+  options?: RequestInit,
+): Promise<SpotifySearchResult> => {
+  return customFetch<SpotifySearchResult>(getSpotifySearchReleasesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSpotifySearchReleasesQueryKey = (
+  params?: SpotifySearchReleasesParams,
+) => {
+  return [
+    `/api/releases/transfer-imports/spotify-search`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getSpotifySearchReleasesQueryOptions = <
+  TData = Awaited<ReturnType<typeof spotifySearchReleases>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SpotifySearchReleasesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof spotifySearchReleases>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSpotifySearchReleasesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof spotifySearchReleases>>
+  > = ({ signal }) =>
+    spotifySearchReleases(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof spotifySearchReleases>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SpotifySearchReleasesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof spotifySearchReleases>>
+>;
+export type SpotifySearchReleasesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search releases for a Spotify artist link or UPC
+ */
+
+export function useSpotifySearchReleases<
+  TData = Awaited<ReturnType<typeof spotifySearchReleases>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SpotifySearchReleasesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof spotifySearchReleases>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSpotifySearchReleasesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all tracks
