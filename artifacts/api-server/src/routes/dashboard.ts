@@ -1,24 +1,92 @@
 import { Router } from "express";
 import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable } from "@workspace/db";
-import { count, sum, eq, desc, gte, sql, and } from "drizzle-orm";
+import { count, sum, eq, desc, gte, sql, and, inArray } from "drizzle-orm";
+import { getDataScope, type DataScope } from "../lib/auth";
 
 const router = Router();
 
+// ─── Scope helpers ────────────────────────────────────────────────────────
+// Each helper returns either a Drizzle condition (or `undefined` for full
+// access) for filtering the named table by the current session's scope, or
+// the literal `false` to indicate "no rows" (empty result set).
+function txScope(scope: DataScope) {
+  if (scope.fullAccess) return undefined;
+  if (scope.role === "artist") return scope.artistId == null ? false : eq(transactionsTable.artistId, scope.artistId);
+  if (scope.role === "label")  return scope.labelId  == null ? false : eq(transactionsTable.labelId,  scope.labelId);
+  return false;
+}
+function releaseScope(scope: DataScope) {
+  if (scope.fullAccess) return undefined;
+  if (scope.role === "artist") return scope.artistId == null ? false : eq(releasesTable.artistId, scope.artistId);
+  if (scope.role === "label")  return scope.labelId  == null ? false : eq(releasesTable.labelId,  scope.labelId);
+  return false;
+}
+function artistScope(scope: DataScope) {
+  if (scope.fullAccess) return undefined;
+  if (scope.role === "artist") return scope.artistId == null ? false : eq(artistsTable.id,      scope.artistId);
+  if (scope.role === "label")  return scope.labelId  == null ? false : eq(artistsTable.labelId, scope.labelId);
+  return false;
+}
+function payoutScope(scope: DataScope) {
+  if (scope.fullAccess) return undefined;
+  if (scope.role === "artist") return scope.artistId == null ? false : eq(payoutsTable.artistId, scope.artistId);
+  if (scope.role === "label")  return scope.labelId  == null ? false : eq(payoutsTable.labelId,  scope.labelId);
+  return false;
+}
+function deliveryScope(scope: DataScope, releaseIds: number[]) {
+  if (scope.fullAccess) return undefined;
+  if (releaseIds.length === 0) return false;
+  return inArray(deliveriesTable.releaseId, releaseIds);
+}
+// Combine an optional base condition with the scope condition.
+function withCond(...conds: any[]) {
+  const real = conds.filter((c) => c !== undefined && c !== null && c !== false);
+  if (real.length === 0) return undefined;
+  if (real.length === 1) return real[0];
+  return and(...real);
+}
+
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
-  const [artistCount] = await db.select({ count: count() }).from(artistsTable);
-  const [releaseCount] = await db.select({ count: count() }).from(releasesTable);
-  const [trackCount] = await db.select({ count: count() }).from(tracksTable);
+  const scope = getDataScope(req);
+  const txS = txScope(scope);
+  const relS = releaseScope(scope);
+  const artS = artistScope(scope);
+  const payS = payoutScope(scope);
+
+  // For deliveries we need release ids in scope (no direct fk on the table).
+  let scopedReleaseIds: number[] = [];
+  if (!scope.fullAccess) {
+    const rows = await db.select({ id: releasesTable.id }).from(releasesTable).where(relS === false ? sql`false` : relS);
+    scopedReleaseIds = rows.map((r) => r.id);
+  }
+  const delS = deliveryScope(scope, scopedReleaseIds);
+
+  // For tracks: artist scope direct, label scope via artist ids.
+  let scopedArtistIds: number[] = [];
+  if (!scope.fullAccess && scope.role === "label") {
+    const rows = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId!));
+    scopedArtistIds = rows.map((r) => r.id);
+  }
+  const trackWhere = scope.fullAccess
+    ? undefined
+    : scope.role === "artist"
+      ? (scope.artistId == null ? sql`false` : eq(tracksTable.artistId, scope.artistId))
+      : (scopedArtistIds.length === 0 ? sql`false` : inArray(tracksTable.artistId, scopedArtistIds));
+
+  const [artistCount] = await db.select({ count: count() }).from(artistsTable).where(artS === false ? sql`false` : artS);
+  const [releaseCount] = await db.select({ count: count() }).from(releasesTable).where(relS === false ? sql`false` : relS);
+  const [trackCount] = await db.select({ count: count() }).from(tracksTable).where(trackWhere);
   const [revenueResult] = await db.select({ total: sum(transactionsTable.amount) }).from(transactionsTable)
-    .where(eq(transactionsTable.type, "dsp_revenue"));
+    .where(withCond(eq(transactionsTable.type, "dsp_revenue"), txS === false ? sql`false` : txS));
   const [pendingPayouts] = await db.select({ count: count() }).from(payoutsTable)
-    .where(eq(payoutsTable.status, "pending"));
+    .where(withCond(eq(payoutsTable.status, "pending"), payS === false ? sql`false` : payS));
   const [activeDeliveries] = await db.select({ count: count() }).from(deliveriesTable)
-    .where(eq(deliveriesTable.status, "in_progress"));
+    .where(withCond(eq(deliveriesTable.status, "in_progress"), delS === false ? sql`false` : delS));
 
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const [releasesThisMonth] = await db.select({ count: count() }).from(releasesTable)
-    .where(gte(releasesTable.createdAt, firstOfMonth));
+    .where(withCond(gte(releasesTable.createdAt, firstOfMonth), relS === false ? sql`false` : relS));
 
   res.json({
     totalArtists: artistCount.count,
@@ -33,6 +101,11 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  // Activity log has no entity-scope columns and arbitrary entityType/entityId values.
+  // Until we backfill that, the global feed is admin/manager-only.
+  if (!scope.fullAccess) { res.json([]); return; }
+
   const activities = await db.select().from(activityLogTable)
     .orderBy(desc(activityLogTable.createdAt))
     .limit(20);
@@ -49,6 +122,10 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/top-artists", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const artS = artistScope(scope);
+  if (artS === false) { res.json([]); return; }
+
   // Агрегируем доход по артисту из transactions
   const rows = await db.select({
     id: artistsTable.id,
@@ -62,7 +139,7 @@ router.get("/dashboard/top-artists", async (req, res): Promise<void> => {
       eq(transactionsTable.artistId, artistsTable.id),
       eq(transactionsTable.type, "dsp_revenue"),
     ))
-    .where(eq(artistsTable.status, "active"))
+    .where(withCond(eq(artistsTable.status, "active"), artS))
     .groupBy(artistsTable.id, artistsTable.name, artistsTable.imageUrl, artistsTable.country)
     .orderBy(desc(sql`coalesce(sum(${transactionsTable.amount}), 0)`))
     .limit(10);
@@ -91,6 +168,9 @@ router.get("/dashboard/top-artists", async (req, res): Promise<void> => {
 router.get("/dashboard/revenue-by-month", async (req, res): Promise<void> => {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const now = new Date();
+  const scope = getDataScope(req);
+  const txS = txScope(scope);
+  if (txS === false) { res.json([]); return; }
 
   // Период: последние 12 месяцев
   const startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -101,9 +181,10 @@ router.get("/dashboard/revenue-by-month", async (req, res): Promise<void> => {
     total: sum(transactionsTable.amount),
   })
     .from(transactionsTable)
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "dsp_revenue"),
       gte(transactionsTable.createdAt, startDate),
+      txS,
     ))
     .groupBy(transactionsTable.period);
 
@@ -112,9 +193,10 @@ router.get("/dashboard/revenue-by-month", async (req, res): Promise<void> => {
     total: sum(transactionsTable.amount),
   })
     .from(transactionsTable)
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "publishing_revenue"),
       gte(transactionsTable.createdAt, startDate),
+      txS,
     ))
     .groupBy(transactionsTable.period);
 
@@ -139,10 +221,14 @@ router.get("/dashboard/revenue-by-month", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/releases-by-status", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const relS = releaseScope(scope);
+  if (relS === false) { res.json([]); return; }
+
   const statuses = await db.select({
     status: releasesTable.status,
     count: count(),
-  }).from(releasesTable).groupBy(releasesTable.status);
+  }).from(releasesTable).where(relS).groupBy(releasesTable.status);
 
   res.json(statuses.map(s => ({ status: s.status, count: s.count })));
 });
@@ -153,15 +239,20 @@ router.get("/dashboard/releases-by-status", async (req, res): Promise<void> => {
 
 // Top DSPs (streams & revenue) — для двух donut-чартов
 router.get("/dashboard/top-dsp", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const txS = txScope(scope);
+  if (txS === false) { res.json([]); return; }
+
   const rows = await db.select({
     platform: transactionsTable.platform,
     revenue: sum(transactionsTable.amount),
     txCount: count(),
   })
     .from(transactionsTable)
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "dsp_revenue"),
       sql`${transactionsTable.platform} is not null`,
+      txS,
     ))
     .groupBy(transactionsTable.platform)
     .orderBy(desc(sql`sum(${transactionsTable.amount})`))
@@ -186,6 +277,10 @@ router.get("/dashboard/top-dsp", async (req, res): Promise<void> => {
 
 // Top Territories — из releases.territories + transactions + artists.country
 router.get("/dashboard/top-territories", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const artS = artistScope(scope);
+  if (artS === false) { res.json([]); return; }
+
   // Используем страну артиста + домен релиза как фолбэк
   const rows = await db.select({
     country: artistsTable.country,
@@ -197,7 +292,7 @@ router.get("/dashboard/top-territories", async (req, res): Promise<void> => {
       eq(transactionsTable.artistId, artistsTable.id),
       eq(transactionsTable.type, "dsp_revenue"),
     ))
-    .where(sql`${artistsTable.country} is not null`)
+    .where(withCond(sql`${artistsTable.country} is not null`, artS))
     .groupBy(artistsTable.country)
     .orderBy(desc(sql`coalesce(sum(${transactionsTable.amount}), 0)`))
     .limit(10);
@@ -220,6 +315,10 @@ router.get("/dashboard/top-territories", async (req, res): Promise<void> => {
 
 // Latest Releases — карточная сетка с обложками
 router.get("/dashboard/latest-releases", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const relS = releaseScope(scope);
+  if (relS === false) { res.json([]); return; }
+
   const rows = await db.select({
     id: releasesTable.id,
     title: releasesTable.title,
@@ -234,6 +333,7 @@ router.get("/dashboard/latest-releases", async (req, res): Promise<void> => {
   })
     .from(releasesTable)
     .leftJoin(artistsTable, eq(releasesTable.artistId, artistsTable.id))
+    .where(relS)
     .orderBy(desc(releasesTable.createdAt))
     .limit(10);
 
@@ -258,6 +358,22 @@ router.get("/dashboard/latest-releases", async (req, res): Promise<void> => {
 // распределяется поровну между его треками (estimated). Для реальной трек-аналитики
 // нужен usage_reports с isrc-привязкой.
 router.get("/dashboard/top-tracks", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  // Build a track-scope SQL fragment.
+  let scopeSql = sql``;
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) { res.json([]); return; }
+      scopeSql = sql`AND t.artist_id = ${scope.artistId}`;
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.json([]); return; }
+      const labelArtists = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId));
+      const ids = labelArtists.map((a) => a.id);
+      if (ids.length === 0) { res.json([]); return; }
+      scopeSql = sql`AND t.artist_id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})`;
+    }
+  }
+
   const result = await db.execute(sql`
     WITH release_rev AS (
       SELECT release_id, SUM(amount) AS total
@@ -278,6 +394,7 @@ router.get("/dashboard/top-tracks", async (req, res): Promise<void> => {
     LEFT JOIN releases r ON r.id = t.release_id
     LEFT JOIN release_rev rr ON rr.release_id = t.release_id
     LEFT JOIN release_track_count rtc ON rtc.release_id = t.release_id
+    WHERE 1 = 1 ${scopeSql}
     ORDER BY COALESCE(rr.total, 0) / NULLIF(rtc.cnt, 0) DESC NULLS LAST, t.id ASC
     LIMIT 10
   `);
@@ -310,21 +427,28 @@ router.get("/dashboard/top-tracks", async (req, res): Promise<void> => {
 router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const scope = getDataScope(req);
+  const txS = txScope(scope);
+  if (txS === false) {
+    res.json({ totalRoyalties: 0, dspRoyalties: 0, publishingRoyalties: 0, mtd: 0, topArtists: [], topReleases: [] });
+    return;
+  }
 
   const [totalResult] = await db.select({ total: sum(transactionsTable.amount) })
     .from(transactionsTable)
-    .where(eq(transactionsTable.type, "dsp_revenue"));
+    .where(withCond(eq(transactionsTable.type, "dsp_revenue"), txS));
 
   const [mtdResult] = await db.select({ total: sum(transactionsTable.amount) })
     .from(transactionsTable)
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "dsp_revenue"),
       gte(transactionsTable.createdAt, startOfMonth),
+      txS,
     ));
 
   const [pubTotal] = await db.select({ total: sum(transactionsTable.amount) })
     .from(transactionsTable)
-    .where(eq(transactionsTable.type, "publishing_revenue"));
+    .where(withCond(eq(transactionsTable.type, "publishing_revenue"), txS));
 
   // Top earners by artist
   const topArtists = await db.select({
@@ -334,9 +458,10 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
   })
     .from(transactionsTable)
     .leftJoin(artistsTable, eq(transactionsTable.artistId, artistsTable.id))
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "dsp_revenue"),
       sql`${transactionsTable.artistId} is not null`,
+      txS,
     ))
     .groupBy(artistsTable.id, artistsTable.name)
     .orderBy(desc(sql`sum(${transactionsTable.amount})`))
@@ -351,9 +476,10 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
   })
     .from(transactionsTable)
     .leftJoin(releasesTable, eq(transactionsTable.releaseId, releasesTable.id))
-    .where(and(
+    .where(withCond(
       eq(transactionsTable.type, "dsp_revenue"),
       sql`${transactionsTable.releaseId} is not null`,
+      txS,
     ))
     .groupBy(releasesTable.id, releasesTable.title, releasesTable.coverUrl)
     .orderBy(desc(sql`sum(${transactionsTable.amount})`))
@@ -386,6 +512,18 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
 // ВАЖНО: revenue и releaseCount считаем отдельными подзапросами, чтобы избежать fan-out
 // от двойного join (releases × transactions).
 router.get("/dashboard/artists-table", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  let scopeSql = sql``;
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) { res.json([]); return; }
+      scopeSql = sql`WHERE a.id = ${scope.artistId}`;
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.json([]); return; }
+      scopeSql = sql`WHERE a.label_id = ${scope.labelId}`;
+    }
+  }
+
   const rows = await db.execute(sql`
     SELECT
       a.id, a.name, a.image_url AS "imageUrl", a.genre, a.country, a.status,
@@ -402,6 +540,7 @@ router.get("/dashboard/artists-table", async (req, res): Promise<void> => {
     LEFT JOIN (
       SELECT artist_id, COUNT(*) AS cnt FROM releases GROUP BY artist_id
     ) rc ON rc.artist_id = a.id
+    ${scopeSql}
     ORDER BY COALESCE(rev.total, 0) DESC
     LIMIT 30
   `);

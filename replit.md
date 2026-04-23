@@ -24,6 +24,19 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 - `artifacts/api-server` — Express 5 API server (port 8080, served at `/api`)
 - `artifacts/crm-panel` — React + Vite frontend (previewPath `/`)
 
+## Auth & Data Scoping (Phase 1.1 + 1.2)
+
+- Real session auth: `express-session` + `connect-pg-simple`, bcrypt password hashes, session ID regen on login.
+- Roles: `admin`, `manager` — full access. `label` — scoped by `users.labelId`. `artist` — scoped by `users.artistId`.
+- Helpers in `artifacts/api-server/src/lib/auth.ts`:
+  - `requireAuth`, `requireRole(...roles)`
+  - `getDataScope(req) → { fullAccess, role, artistId, labelId }`
+  - `resolveScopeFilter(table, scope, { artistCol, labelCol })` — returns Drizzle SQL fragment or `false` for "no rows".
+- Admin/manager-only routers (mounted in `routes/index.ts` behind `requireRole("admin","manager")`): `/labels`, `/users`, `/contacts`, `/crm`, `/splits`, `/publishing`, `/analytics`, `/deliveries`, `/integrations`.
+- All read endpoints in `artists`, `releases`, `tracks`, `finance`, `royalties`, `dashboard` apply scope filters server-side; mutations include pre-flight scope checks. For non-privileged users, `query.artist_id` / `label_id` overrides are ignored.
+- Test users (seeded): `admin@tajikmusic.com / admin123`, `manager@tajikmusic.com / manager123`, `label@tajikmusic.com / label123` (labelId=1), `artist@tajikmusic.com / artist123` (artistId=1).
+- Known gaps: activity log has no entity-scope columns → `/dashboard/recent-activity` returns `[]` for non-admin/manager. CSRF deferred (sameSite=lax used).
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

@@ -6,8 +6,52 @@ import {
   CreatePayoutRequestBody,
   RejectPayoutBody,
 } from "@workspace/api-zod";
+import { getDataScope, requireRole } from "../lib/auth";
 
 const router = Router();
+
+// Build a scope filter for transactions/payouts tables that have artist_id and label_id
+// columns. Returns null if the caller's query asked for something outside their scope.
+function scopedArtistLabelFilter(
+  req: any,
+  artistCol: any,
+  labelCol: any,
+): any[] | null {
+  const scope = getDataScope(req);
+  const conditions: any[] = [];
+
+  let qArtist: number | undefined;
+  let qLabel: number | undefined;
+  if (req.query.artist_id !== undefined) {
+    const v = parseInt(req.query.artist_id as string, 10);
+    if (!Number.isFinite(v)) return null;
+    qArtist = v;
+  }
+  if (req.query.label_id !== undefined) {
+    const v = parseInt(req.query.label_id as string, 10);
+    if (!Number.isFinite(v)) return null;
+    qLabel = v;
+  }
+
+  if (scope.fullAccess) {
+    if (qArtist !== undefined) conditions.push(eq(artistCol, qArtist));
+    if (qLabel  !== undefined) conditions.push(eq(labelCol,  qLabel));
+    return conditions;
+  }
+  if (scope.role === "artist") {
+    if (scope.artistId == null) return null; // signals "no rows"
+    if (qArtist !== undefined && qArtist !== scope.artistId) return null;
+    conditions.push(eq(artistCol, scope.artistId));
+    return conditions;
+  }
+  if (scope.role === "label") {
+    if (scope.labelId == null) return null;
+    if (qLabel !== undefined && qLabel !== scope.labelId) return null;
+    conditions.push(eq(labelCol, scope.labelId));
+    return conditions;
+  }
+  return null;
+}
 
 function formatTransaction(t: typeof transactionsTable.$inferSelect) {
   return {
@@ -33,17 +77,14 @@ router.get("/finance/transactions", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const filters: any[] = [];
-  if (req.query.artist_id !== undefined) {
-    const v = parseInt(req.query.artist_id as string, 10);
-    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid artist_id" }); return; }
-    filters.push(eq(transactionsTable.artistId, v));
+  const scoped = scopedArtistLabelFilter(req, transactionsTable.artistId, transactionsTable.labelId);
+  if (scoped === null) {
+    // Either an out-of-scope query or a non-privileged user with no entity assignment.
+    // Return empty page rather than 403 — keeps the UI clean for the user's own view.
+    res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    return;
   }
-  if (req.query.label_id !== undefined) {
-    const v = parseInt(req.query.label_id as string, 10);
-    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid label_id" }); return; }
-    filters.push(eq(transactionsTable.labelId, v));
-  }
+  const filters: any[] = [...scoped];
   if (req.query.type !== undefined) {
     filters.push(eq(transactionsTable.type, req.query.type as string));
   }
@@ -80,7 +121,7 @@ router.get("/finance/transactions", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/finance/transactions", async (req, res): Promise<void> => {
+router.post("/finance/transactions", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = CreateTransactionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -101,13 +142,27 @@ router.post("/finance/transactions", async (req, res): Promise<void> => {
 
 // Balances
 router.get("/finance/balances", async (req, res): Promise<void> => {
-  const artistIdFilter = req.query.artist_id !== undefined ? parseInt(req.query.artist_id as string, 10) : undefined;
-  const labelIdFilter  = req.query.label_id  !== undefined ? parseInt(req.query.label_id  as string, 10) : undefined;
+  const scope = getDataScope(req);
+  let artistIdFilter = req.query.artist_id !== undefined ? parseInt(req.query.artist_id as string, 10) : undefined;
+  let labelIdFilter  = req.query.label_id  !== undefined ? parseInt(req.query.label_id  as string, 10) : undefined;
   if (req.query.artist_id !== undefined && !Number.isFinite(artistIdFilter)) {
     res.status(400).json({ error: "Invalid artist_id" }); return;
   }
   if (req.query.label_id !== undefined && !Number.isFinite(labelIdFilter)) {
     res.status(400).json({ error: "Invalid label_id" }); return;
+  }
+
+  // Override scope for non-privileged roles.
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) { res.json([]); return; }
+      if (artistIdFilter !== undefined && artistIdFilter !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+      artistIdFilter = scope.artistId; labelIdFilter = undefined;
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.json([]); return; }
+      if (labelIdFilter !== undefined && labelIdFilter !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      labelIdFilter = scope.labelId; artistIdFilter = undefined;
+    }
   }
 
   const conditions: any[] = [eq(artistsTable.status, "active")];
@@ -134,17 +189,12 @@ router.get("/payouts", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const filters: any[] = [];
-  if (req.query.artist_id !== undefined) {
-    const v = parseInt(req.query.artist_id as string, 10);
-    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid artist_id" }); return; }
-    filters.push(eq(payoutsTable.artistId, v));
+  const scoped = scopedArtistLabelFilter(req, payoutsTable.artistId, payoutsTable.labelId);
+  if (scoped === null) {
+    res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    return;
   }
-  if (req.query.label_id !== undefined) {
-    const v = parseInt(req.query.label_id as string, 10);
-    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid label_id" }); return; }
-    filters.push(eq(payoutsTable.labelId, v));
-  }
+  const filters: any[] = [...scoped];
   if (req.query.status !== undefined) {
     filters.push(eq(payoutsTable.status, req.query.status as string));
   }
@@ -180,6 +230,28 @@ router.post("/payouts", async (req, res): Promise<void> => {
     return;
   }
 
+  // Scope: artist may only request payout for own artistId; label only own labelId.
+  // Also enforce pair consistency: if both artistId and labelId are present,
+  // they must reference the same tenant subtree.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null || parsed.data.artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // If a labelId is also passed in by an artist user, it must match their artist's label.
+      if (parsed.data.labelId != null) {
+        const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, scope.artistId));
+        if (!a || a.labelId !== parsed.data.labelId) { res.status(403).json({ error: "labelId mismatch" }); return; }
+      }
+    } else if (scope.role === "label") {
+      if (scope.labelId == null || parsed.data.labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // If an artistId is supplied, it must belong to this label.
+      if (parsed.data.artistId != null) {
+        const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, parsed.data.artistId));
+        if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Artist does not belong to your label" }); return; }
+      }
+    }
+  }
+
   const [payout] = await db.insert(payoutsTable).values({
     ...parsed.data,
     amount: parsed.data.amount.toString(),
@@ -191,7 +263,7 @@ router.post("/payouts", async (req, res): Promise<void> => {
   });
 });
 
-router.patch("/payouts/:id/approve", async (req, res): Promise<void> => {
+router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
 
@@ -212,7 +284,7 @@ router.patch("/payouts/:id/approve", async (req, res): Promise<void> => {
   });
 });
 
-router.patch("/payouts/:id/reject", async (req, res): Promise<void> => {
+router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
 

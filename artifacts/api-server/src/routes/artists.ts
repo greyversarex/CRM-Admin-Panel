@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, artistsTable, releasesTable, tracksTable, labelsTable } from "@workspace/db";
 import { count, eq, ilike, and, desc } from "drizzle-orm";
 import { CreateArtistBody, UpdateArtistBody, GetArtistParams, UpdateArtistParams, DeleteArtistParams, GetArtistStatsParams } from "@workspace/api-zod";
+import { getDataScope, requireRole } from "../lib/auth";
 
 const router = Router();
 
@@ -14,11 +15,22 @@ router.get("/artists", async (req, res): Promise<void> => {
   const page = parseInt(req.query.page as string ?? "1", 10) || 1;
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const search = req.query.search as string | undefined;
-  const labelId = req.query.label_id ? parseInt(req.query.label_id as string, 10) : undefined;
+  const queryLabelId = req.query.label_id ? parseInt(req.query.label_id as string, 10) : undefined;
   const offset = (page - 1) * limit;
+  const scope = getDataScope(req);
 
+  // Scoping: admin/manager honor query; label sees only own labelId; artist sees only own artist.
   const conditions: any[] = [];
-  if (labelId && Number.isFinite(labelId)) conditions.push(eq(artistsTable.labelId, labelId));
+  if (scope.fullAccess) {
+    if (queryLabelId && Number.isFinite(queryLabelId)) conditions.push(eq(artistsTable.labelId, queryLabelId));
+  } else if (scope.role === "label") {
+    if (scope.labelId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
+    if (queryLabelId !== undefined && queryLabelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+    conditions.push(eq(artistsTable.labelId, scope.labelId));
+  } else if (scope.role === "artist") {
+    if (scope.artistId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
+    conditions.push(eq(artistsTable.id, scope.artistId));
+  }
   if (search) conditions.push(ilike(artistsTable.name, `%${search}%`));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -67,7 +79,7 @@ router.get("/artists", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/artists", async (req, res): Promise<void> => {
+router.post("/artists", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = CreateArtistBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -101,6 +113,13 @@ router.get("/artists/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Scope check: artist sees only own; label sees only own-label artists.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (scope.role === "artist" && artist.id !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+    if (scope.role === "label"  && (scope.labelId == null || artist.labelId !== scope.labelId)) { res.status(403).json({ error: "Forbidden" }); return; }
+  }
+
   const releases = await db.select().from(releasesTable).where(eq(releasesTable.artistId, artist.id)).limit(10);
   const recentTracks = await db.select().from(tracksTable).where(eq(tracksTable.artistId, artist.id)).limit(10);
 
@@ -121,7 +140,7 @@ router.get("/artists/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.put("/artists/:id", async (req, res): Promise<void> => {
+router.put("/artists/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = UpdateArtistParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -151,7 +170,7 @@ router.put("/artists/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.delete("/artists/:id", async (req, res): Promise<void> => {
+router.delete("/artists/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = DeleteArtistParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -172,6 +191,20 @@ router.get("/artists/:id/stats", async (req, res): Promise<void> => {
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
+  }
+
+  // Scope: artist may only read own stats; label only stats of artists in their label.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null || params.data.id !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+      const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, params.data.id));
+      if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+    } else {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
   }
 
   const platforms = ["Spotify", "Apple Music", "YouTube", "Yandex Music", "VK Music", "Tidal"];

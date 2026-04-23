@@ -6,8 +6,18 @@ import {
   DeleteReleaseParams, UpdateReleaseStatusParams, UpdateReleaseStatusBody, ImportReleaseByUpcBody,
   CreateTransferImportBody, SpotifySearchReleasesQueryParams,
 } from "@workspace/api-zod";
+import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 
 const router = Router();
+
+// Verifies a release row is visible to the current session user. Fail-closed
+// when the session user has no linked artist/label record.
+function releaseInScope(scope: ReturnType<typeof getDataScope>, r: { artistId: number; labelId: number | null }): boolean {
+  if (scope.fullAccess) return true;
+  if (scope.role === "artist") return scope.artistId != null && r.artistId === scope.artistId;
+  if (scope.role === "label")  return scope.labelId  != null && r.labelId  === scope.labelId;
+  return false;
+}
 
 // ─── In-memory transfer import storage (mock) ──────────────────────────────
 type TransferImportItem = {
@@ -68,10 +78,24 @@ router.get("/releases", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
   const status = req.query.status as string | undefined;
-  const artistId = req.query.artist_id ? parseInt(req.query.artist_id as string, 10) : undefined;
-  const labelId = req.query.label_id ? parseInt(req.query.label_id as string, 10) : undefined;
+  let artistId = req.query.artist_id ? parseInt(req.query.artist_id as string, 10) : undefined;
+  let labelId = req.query.label_id ? parseInt(req.query.label_id as string, 10) : undefined;
   const releaseType = req.query.release_type as string | undefined;
   const search = (req.query.search as string | undefined)?.trim();
+
+  // Override scope: artist/label users may only see their own data; query overrides ignored.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
+      if (artistId !== undefined && artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+      artistId = scope.artistId; labelId = undefined;
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
+      if (labelId !== undefined && labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      labelId = scope.labelId; artistId = undefined;
+    }
+  }
 
   const conditions: any[] = [];
   if (status) {
@@ -122,10 +146,29 @@ router.get("/releases", async (req, res): Promise<void> => {
 });
 
 // Counts grouped by status (must be declared before /:id)
-router.get("/releases/counts", async (_req, res): Promise<void> => {
+router.get("/releases/counts", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  let where: any = undefined;
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) {
+        res.json({ all: 0, draft: 0, pending_review: 0, approved: 0, scheduled: 0, live: 0, takedown: 0, unfinished: 0, readyToSubmit: 0 });
+        return;
+      }
+      where = eq(releasesTable.artistId, scope.artistId);
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) {
+        res.json({ all: 0, draft: 0, pending_review: 0, approved: 0, scheduled: 0, live: 0, takedown: 0, unfinished: 0, readyToSubmit: 0 });
+        return;
+      }
+      where = eq(releasesTable.labelId, scope.labelId);
+    }
+  }
+
   const rows = await db
     .select({ status: releasesTable.status, c: count() })
     .from(releasesTable)
+    .where(where)
     .groupBy(releasesTable.status);
 
   const byStatus: Record<string, number> = {};
@@ -157,11 +200,12 @@ router.get("/releases/counts", async (_req, res): Promise<void> => {
 });
 
 // ─── Transfer Imports (mock) ────────────────────────────────────────────────
-router.get("/releases/transfer-imports", (_req, res): void => {
+// Global catalog-import jobs (manual back-catalog ingestion). Admin/manager only.
+router.get("/releases/transfer-imports", requireRole("admin", "manager"), (_req, res): void => {
   res.json([...transferImports].sort((a, b) => b.id - a.id));
 });
 
-router.post("/releases/transfer-imports", (req, res): void => {
+router.post("/releases/transfer-imports", requireRole("admin", "manager"), (req, res): void => {
   const parsed = CreateTransferImportBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -188,7 +232,7 @@ router.post("/releases/transfer-imports", (req, res): void => {
   res.status(201).json(job);
 });
 
-router.get("/releases/transfer-imports/spotify-search", (req, res): void => {
+router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager"), (req, res): void => {
   const parsed = SpotifySearchReleasesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -224,6 +268,27 @@ router.post("/releases", async (req, res): Promise<void> => {
     return;
   }
 
+  // Scope: artist can only create releases under their own artistId; label only under their labelId.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null || parsed.data.artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // If a labelId is supplied by an artist user, it must equal their artist's actual label.
+      // Otherwise, derive labelId server-side to prevent cross-tenant pollution.
+      const [own] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, scope.artistId));
+      const ownLabelId = own?.labelId ?? null;
+      if (parsed.data.labelId != null && parsed.data.labelId !== ownLabelId) {
+        res.status(403).json({ error: "labelId mismatch" }); return;
+      }
+      parsed.data.labelId = ownLabelId ?? undefined;
+    } else if (scope.role === "label") {
+      if (scope.labelId == null || parsed.data.labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // Label users must also assign an artist that belongs to their label.
+      const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, parsed.data.artistId));
+      if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Artist does not belong to your label" }); return; }
+    }
+  }
+
   const [release] = await db.insert(releasesTable).values(parsed.data).returning();
 
   await db.insert(activityLogTable).values({
@@ -250,6 +315,7 @@ router.get("/releases/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Release not found" });
     return;
   }
+  if (!releaseInScope(getDataScope(req), release)) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const tracks = await db.select().from(tracksTable).where(eq(tracksTable.releaseId, release.id));
   const enriched = await enrichRelease(release);
@@ -273,6 +339,23 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Pre-flight scope check: load existing row before mutating.
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Non-privileged users cannot reassign ownership (artistId/labelId).
+  if (!scope.fullAccess) {
+    const body = parsed.data as Record<string, unknown>;
+    if (body.artistId !== undefined && body.artistId !== existing.artistId) {
+      res.status(403).json({ error: "Cannot change artistId" }); return;
+    }
+    if (body.labelId !== undefined && body.labelId !== existing.labelId) {
+      res.status(403).json({ error: "Cannot change labelId" }); return;
+    }
+  }
+
   const [release] = await db.update(releasesTable).set(parsed.data).where(eq(releasesTable.id, params.data.id)).returning();
   if (!release) {
     res.status(404).json({ error: "Release not found" });
@@ -290,6 +373,10 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+  if (!releaseInScope(getDataScope(req), existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
   const [release] = await db.delete(releasesTable).where(eq(releasesTable.id, params.data.id)).returning();
   if (!release) {
     res.status(404).json({ error: "Release not found" });
@@ -299,7 +386,7 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.patch("/releases/:id/status", async (req, res): Promise<void> => {
+router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = UpdateReleaseStatusParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -334,7 +421,7 @@ router.patch("/releases/:id/status", async (req, res): Promise<void> => {
   res.json(enriched);
 });
 
-router.post("/releases/import-upc", async (req, res): Promise<void> => {
+router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = ImportReleaseByUpcBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

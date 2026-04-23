@@ -26,20 +26,33 @@ router.use(authRouter);
 // All other API routes require an active session
 router.use(requireAuth);
 
-router.use(dashboardRouter);
-router.use(artistsRouter);
+// Org-wide back-office modules — admin/manager only.
+// Artists and labels do not directly call these endpoints; their own data is
+// surfaced through the scoped artists/releases/tracks/finance/royalties routes.
+const adminOnly = requireRole("admin", "manager");
+
+router.use(dashboardRouter);          // scoped per-route inside (artist/label get filtered widgets)
+router.use(artistsRouter);            // scoped per-route inside
+router.use("/labels", adminOnly);     // labels mgmt is admin-only (own label info comes via /me + embeds)
 router.use(labelsRouter);
-router.use(releasesRouter);
-router.use(tracksRouter);
-router.use("/users", requireRole("admin", "manager"));  // user management is admin/manager only
+router.use(releasesRouter);           // scoped per-route inside
+router.use(tracksRouter);             // scoped per-route inside
+router.use("/users", adminOnly);
 router.use(usersRouter);
+router.use("/contacts", adminOnly);
+router.use("/crm", adminOnly);
 router.use(crmRouter);
-router.use(financeRouter);
-router.use(royaltiesRouter);
+router.use(financeRouter);            // scoped per-route inside
+router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id forced from session)
+router.use("/splits", adminOnly);
 router.use(splitsRouter);
+router.use("/publishing", adminOnly);
 router.use(publishingRouter);
+router.use("/analytics", adminOnly);  // currently mock org-wide aggregates
 router.use(analyticsRouter);
+router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
+router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 
 export default router;

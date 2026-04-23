@@ -3,6 +3,7 @@ import {
   db, transactionsTable, releasesTable, artistsTable, labelsTable,
 } from "@workspace/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
+import { getDataScope } from "../lib/auth";
 
 const router = Router();
 
@@ -23,9 +24,25 @@ type EntityFilterResult =
   | { ok: true; conditions: any[]; type?: "artist" | "label"; id?: number }
   | { ok: false; error: string };
 
-function entityFilter(req: { query: any }): EntityFilterResult {
-  const t = req.query.entity_type as string | undefined;
-  const rawId = req.query.entity_id as string | undefined;
+function entityFilter(req: any): EntityFilterResult {
+  // For non-privileged roles, force entity_type/entity_id from session — query is ignored.
+  const scope = getDataScope(req);
+  let t: string | undefined;
+  let rawId: string | undefined;
+
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) return { ok: false, error: "Artist account is not linked to an artist record" };
+      t = "artist"; rawId = String(scope.artistId);
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) return { ok: false, error: "Label account is not linked to a label record" };
+      t = "label"; rawId = String(scope.labelId);
+    }
+  } else {
+    t = req.query.entity_type as string | undefined;
+    rawId = req.query.entity_id as string | undefined;
+  }
+
   if (t && t !== "artist" && t !== "label") return { ok: false, error: "entity_type must be 'artist' or 'label'" };
   if ((t && !rawId) || (!t && rawId)) return { ok: false, error: "entity_type and entity_id must be provided together" };
   if (!t) return { ok: true, conditions: [] };
