@@ -28,6 +28,8 @@ import {
   PlugZap,
   LogOut,
   Music2,
+  CircleUser,
+  LifeBuoy,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -92,6 +94,13 @@ const navGroups: NavGroup[] = [
       { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
       { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
       { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+    ],
+  },
+  {
+    titleKey: "account_group",
+    items: [
+      { nameKey: "profile", href: "/profile", icon: CircleUser, iconColor: "text-pink-400" },
+      { nameKey: "support", href: "/support", icon: LifeBuoy,   iconColor: "text-yellow-400" },
     ],
   },
   {

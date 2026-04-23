@@ -32,6 +32,8 @@ import Automation from "@/pages/automation";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import Integrations from "@/pages/integrations";
+import ProfilePage from "@/pages/profile";
+import SupportPage from "@/pages/support";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +101,8 @@ function Router() {
       <ProtectedRoute path="/automation"     component={Automation} />
       <ProtectedRoute path="/settings"       component={Settings} />
       <ProtectedRoute path="/integrations"   component={Integrations} />
+      <ProtectedRoute path="/profile"        component={ProfilePage} />
+      <ProtectedRoute path="/support"        component={SupportPage} />
 
       <Route component={NotFound} />
     </Switch>

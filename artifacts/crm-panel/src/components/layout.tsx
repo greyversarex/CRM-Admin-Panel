@@ -1,23 +1,49 @@
 import { SidebarNav } from "./sidebar-nav";
 import { WaveBackground } from "./wave-background";
-import { Bell, Search, Globe, ChevronDown } from "lucide-react";
+import {
+  Bell, Search, Globe, ChevronDown,
+  User as UserIcon, CreditCard, Repeat, Moon, LogOut,
+} from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Switch } from "./ui/switch";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { lang, setLang, t } = useLang();
   const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    try { return localStorage.getItem("theme") !== "light"; } catch { return true; }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add("dark");
+      root.classList.remove("light");
+    } else {
+      root.classList.remove("dark");
+      root.classList.add("light");
+    }
+    try { localStorage.setItem("theme", darkMode ? "dark" : "light"); } catch { /* ignore */ }
+  }, [darkMode]);
+  const accountNumber = "28301";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -86,13 +112,89 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </AvatarFallback>
                   </Avatar>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44 bg-card border-border shadow-lg">
-                  <DropdownMenuItem
-                    className="text-xs cursor-pointer text-red-400 hover:text-red-300"
-                    onClick={logout}
-                  >
-                    Выйти из системы
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-72 bg-card border-border shadow-xl p-0">
+                  {/* Header with user info */}
+                  <div className="flex items-center gap-3 p-3 border-b border-border/60">
+                    <Avatar className="h-10 w-10 ring-2 ring-primary/30">
+                      <AvatarFallback className="bg-gradient-to-br from-primary/40 to-primary/10 text-primary text-sm font-bold">
+                        {user?.avatarInitials ?? "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold leading-tight truncate">{user?.name ?? "Tajik Music"}</p>
+                      <p className="text-[11px] text-muted-foreground">Account# {accountNumber}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-1">
+                    <DropdownMenuItem
+                      className="text-sm cursor-pointer gap-3 py-2.5"
+                      onClick={() => navigate("/profile")}
+                    >
+                      <span className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
+                        <UserIcon className="h-3.5 w-3.5 text-primary" />
+                      </span>
+                      Мой профиль
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-sm cursor-pointer gap-3 py-2.5"
+                      onClick={() => navigate("/payouts")}
+                    >
+                      <span className="h-7 w-7 rounded-md bg-violet-500/10 flex items-center justify-center">
+                        <CreditCard className="h-3.5 w-3.5 text-violet-400" />
+                      </span>
+                      Оплата и налоги
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-sm cursor-pointer gap-3 py-2.5"
+                      onClick={(e) => { e.preventDefault(); toast({ title: "Скоро", description: "Переключение между несколькими аккаунтами появится в следующем релизе." }); }}
+                    >
+                      <span className="h-7 w-7 rounded-md bg-cyan-500/10 flex items-center justify-center">
+                        <Repeat className="h-3.5 w-3.5 text-cyan-400" />
+                      </span>
+                      Сменить аккаунт
+                      <span className="ml-auto text-[9px] uppercase tracking-wider text-muted-foreground/70 bg-muted/40 px-1.5 py-0.5 rounded">Скоро</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuLabel className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+                      Предпочтения
+                    </DropdownMenuLabel>
+                    <div className="flex items-center gap-3 px-2 py-2 rounded-md">
+                      <span className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                        <Globe className="h-3.5 w-3.5 text-emerald-400" />
+                      </span>
+                      <span className="text-sm flex-1">Язык</span>
+                      <select
+                        value={lang}
+                        onChange={(e) => setLang(e.target.value as "en" | "ru")}
+                        className="h-7 px-2 text-xs rounded-md bg-background border border-border focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      >
+                        <option value="en">English</option>
+                        <option value="ru">Русский</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3 px-2 py-2 rounded-md">
+                      <span className="h-7 w-7 rounded-md bg-indigo-500/10 flex items-center justify-center">
+                        <Moon className="h-3.5 w-3.5 text-indigo-400" />
+                      </span>
+                      <span className="text-sm flex-1">Тёмная тема</span>
+                      <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+                    </div>
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuItem
+                      className="text-sm cursor-pointer text-red-400 hover:text-red-300 gap-3 py-2.5"
+                      onClick={logout}
+                    >
+                      <span className="h-7 w-7 rounded-md bg-red-500/10 flex items-center justify-center">
+                        <LogOut className="h-3.5 w-3.5" />
+                      </span>
+                      Выйти из системы
+                    </DropdownMenuItem>
+                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
