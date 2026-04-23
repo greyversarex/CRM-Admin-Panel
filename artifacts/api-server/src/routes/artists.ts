@@ -17,10 +17,12 @@ router.get("/artists", async (req, res): Promise<void> => {
   const labelId = req.query.label_id ? parseInt(req.query.label_id as string, 10) : undefined;
   const offset = (page - 1) * limit;
 
-  const conditions: ReturnType<typeof eq>[] = [];
-  if (labelId) conditions.push(eq(artistsTable.labelId, labelId));
+  const conditions: any[] = [];
+  if (labelId && Number.isFinite(labelId)) conditions.push(eq(artistsTable.labelId, labelId));
+  if (search) conditions.push(ilike(artistsTable.name, `%${search}%`));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  let query = db.select({
+  const artists = await db.select({
     id: artistsTable.id,
     name: artistsTable.name,
     slug: artistsTable.slug,
@@ -35,10 +37,8 @@ router.get("/artists", async (req, res): Promise<void> => {
     status: artistsTable.status,
     createdAt: artistsTable.createdAt,
     updatedAt: artistsTable.updatedAt,
-  }).from(artistsTable);
-
-  const artists = await query.limit(limit).offset(offset).orderBy(desc(artistsTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(artistsTable);
+  }).from(artistsTable).where(where).limit(limit).offset(offset).orderBy(desc(artistsTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(artistsTable).where(where);
 
   const labelIds = artists.map(a => a.labelId).filter(Boolean) as number[];
   const labels = labelIds.length > 0 ? await db.select({ id: labelsTable.id, name: labelsTable.name }).from(labelsTable) : [];

@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useListPayouts } from "@workspace/api-client-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -6,25 +7,43 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Wallet, CheckCircle, XCircle } from "lucide-react";
+import { Search, Filter, Wallet, CheckCircle, XCircle, Plus } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Payouts() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  
-  const { data: payoutsData, isLoading } = useListPayouts({ 
+
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isArtist    = user?.role === "artist";
+  const isLabel     = user?.role === "label";
+
+  const { data: payoutsData, isLoading } = useListPayouts({
     search: searchQuery || undefined,
-    limit: 50 
+    limit: 50,
+    ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+    ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
   });
+
+  const titleByRole = isAdminLike ? "Заявки на выплату" : "Мои выплаты";
+  const subtitleByRole = isAdminLike
+    ? "Review and process payout requests from artists and labels."
+    : "Твои заявки на выплату и их статусы.";
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Payout Requests</h1>
-            <p className="text-muted-foreground mt-1">Review and process payout requests from artists and labels.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
+            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
+          {!isAdminLike && (
+            <Button onClick={() => toast({ title: "Заявка на выплату", description: "Форма откроется после привязки банковских реквизитов в профиле." })}>
+              <Plus className="mr-2 h-4 w-4" /> Запросить выплату
+            </Button>
+          )}
         </div>
 
         <Card className="flex-1 bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">
@@ -102,15 +121,18 @@ export default function Payouts() {
                         <StatusBadge status={payout.status} />
                       </TableCell>
                       <TableCell className="text-right">
-                        {payout.status === 'pending' && (
+                        {payout.status === 'pending' && isAdminLike && (
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" title="Approve">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" title="Approve" aria-label="Одобрить выплату">
                               <CheckCircle className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" title="Reject">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" title="Reject" aria-label="Отклонить выплату">
                               <XCircle className="h-4 w-4" />
                             </Button>
                           </div>
+                        )}
+                        {payout.status === 'pending' && !isAdminLike && (
+                          <span className="text-[10px] text-amber-300">Ожидает рассмотрения</span>
                         )}
                       </TableCell>
                     </TableRow>

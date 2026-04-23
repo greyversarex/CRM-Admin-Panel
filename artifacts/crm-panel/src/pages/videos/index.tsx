@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,22 +37,44 @@ function platformColor(p: string) {
 }
 
 export default function Videos() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
 
-  const filtered = VIDEOS.filter(
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isArtist    = user?.role === "artist";
+  const isLabel     = user?.role === "label";
+
+  // For demo: artist sees only own videos (matched by orgName), label sees its roster.
+  const myArtistName = user?.orgName ?? "";
+  const scoped = isAdminLike
+    ? VIDEOS
+    : isArtist
+      ? VIDEOS.filter(v => v.artist.toLowerCase().includes(myArtistName.toLowerCase().split(" ")[0] ?? ""))
+      : isLabel
+        ? VIDEOS // demo label has no roster mapping; show full mock as label-roster placeholder
+        : [];
+
+  const filtered = scoped.filter(
     (v) =>
       !search ||
       v.title.toLowerCase().includes(search.toLowerCase()) ||
       v.artist.toLowerCase().includes(search.toLowerCase())
   );
 
+  const titleByRole = isAdminLike ? "Video Distribution"
+    : isArtist ? "Мои видео"
+    : "Видео лейбла";
+  const subtitleByRole = isAdminLike
+    ? "YouTube, VEVO, art tracks, and Content ID video management."
+    : "Твои клипы, art-треки и Content ID claims.";
+
   return (
     <Layout>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Video Distribution</h1>
-            <p className="text-muted-foreground mt-1">YouTube, VEVO, art tracks, and Content ID video management.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
+            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
           <Button>
             <Upload className="mr-2 h-4 w-4" />
@@ -121,6 +144,11 @@ export default function Videos() {
                     </tr>
                   </thead>
                   <tbody>
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                        У тебя пока нет видео в этом разделе.
+                      </td></tr>
+                    )}
                     {filtered.map((v, i) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-accent/20 transition-colors cursor-pointer">
                         <td className="px-6 py-3">

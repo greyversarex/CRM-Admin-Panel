@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useListArtists } from "@workspace/api-client-react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,26 +14,45 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useLocation } from "wouter";
 
 export default function Artists() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [, setLocation] = useLocation();
-  
-  const { data: artistsData, isLoading } = useListArtists({ 
+
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isArtist    = user?.role === "artist";
+  const isLabel     = user?.role === "label";
+
+  const { data: artistsDataRaw, isLoading } = useListArtists({
     search: searchQuery || undefined,
-    limit: 50 
+    limit: 50,
+    ...(isLabel && user?.labelId ? { label_id: user.labelId } : {}),
   });
+  // Artist sees only themselves
+  const artistsData = isArtist
+    ? { ...artistsDataRaw, data: (artistsDataRaw?.data ?? []).filter(a => a.id === user?.artistId) }
+    : artistsDataRaw;
+
+  const titleByRole = isAdminLike ? "Artists"
+    : isLabel  ? "Артисты лейбла"
+    :            "Мой артист-профиль";
+  const subtitleByRole = isAdminLike ? "Manage artist roster and profiles."
+    : isLabel  ? "Артисты твоего ростера."
+    :            "Твоя страница артиста.";
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Artists</h1>
-            <p className="text-muted-foreground mt-1">Manage artist roster and profiles.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
+            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Artist
-          </Button>
+          {(isAdminLike || isLabel) && (
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              {isLabel ? "Подписать артиста" : "New Artist"}
+            </Button>
+          )}
         </div>
 
         <Card className="flex-1 bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">

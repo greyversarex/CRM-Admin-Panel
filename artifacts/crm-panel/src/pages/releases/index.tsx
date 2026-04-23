@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useListReleases, useGetReleaseCounts } from "@workspace/api-client-react";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -47,6 +48,7 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 ];
 
 export default function Releases() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -54,11 +56,16 @@ export default function Releases() {
   const [pageSize, setPageSize] = useState(20);
   const [, setLocation] = useLocation();
 
+  const isArtist = user?.role === "artist";
+  const isLabel  = user?.role === "label";
+
   const { data: releasesData, isLoading } = useListReleases({
     search: searchQuery || undefined,
     status: TAB_TO_STATUS[statusFilter],
     page,
     limit: pageSize,
+    ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+    ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
   });
   const { data: counts } = useGetReleaseCounts();
 
@@ -83,9 +90,15 @@ export default function Releases() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Releases</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {isArtist ? "Мои релизы" : isLabel ? "Релизы лейбла" : "Releases"}
+            </h1>
             <p className="text-muted-foreground mt-1 max-w-2xl">
-              View and manage your catalog. Create new releases, complete unfinished ones, and pull back releases to edit and provide more information.
+              {isArtist
+                ? "Твой каталог релизов: создавай новые, дорабатывай черновики и отзывай для правок."
+                : isLabel
+                  ? "Каталог релизов лейбла: создание, доработка, отзыв и повторная отправка."
+                  : "View and manage your catalog. Create new releases, complete unfinished ones, and pull back releases to edit and provide more information."}
             </p>
           </div>
           <div className="flex gap-2">
@@ -100,7 +113,8 @@ export default function Releases() {
           </div>
         </div>
 
-        {/* Top stat cards */}
+        {/* Top stat cards — admin/manager only (counts are global) */}
+        {!isArtist && !isLabel && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard
             label="Ready to submit"
@@ -131,6 +145,7 @@ export default function Releases() {
             onClick={() => setStatusFilter("takedown")}
           />
         </div>
+        )}
 
         {/* Tabs + filters bar */}
         <Card className="bg-card/50 backdrop-blur border-border/50 overflow-hidden">

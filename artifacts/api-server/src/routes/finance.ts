@@ -33,8 +33,24 @@ router.get("/finance/transactions", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const transactions = await db.select().from(transactionsTable).limit(limit).offset(offset).orderBy(desc(transactionsTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(transactionsTable);
+  const filters: any[] = [];
+  if (req.query.artist_id !== undefined) {
+    const v = parseInt(req.query.artist_id as string, 10);
+    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid artist_id" }); return; }
+    filters.push(eq(transactionsTable.artistId, v));
+  }
+  if (req.query.label_id !== undefined) {
+    const v = parseInt(req.query.label_id as string, 10);
+    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid label_id" }); return; }
+    filters.push(eq(transactionsTable.labelId, v));
+  }
+  if (req.query.type !== undefined) {
+    filters.push(eq(transactionsTable.type, req.query.type as string));
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const transactions = await db.select().from(transactionsTable).where(where).limit(limit).offset(offset).orderBy(desc(transactionsTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(transactionsTable).where(where);
 
   const artistIds = transactions.map(t => t.artistId).filter(Boolean) as number[];
   const labelIds = transactions.map(t => t.labelId).filter(Boolean) as number[];
@@ -85,7 +101,20 @@ router.post("/finance/transactions", async (req, res): Promise<void> => {
 
 // Balances
 router.get("/finance/balances", async (req, res): Promise<void> => {
-  const artists = await db.select().from(artistsTable).where(eq(artistsTable.status, "active"));
+  const artistIdFilter = req.query.artist_id !== undefined ? parseInt(req.query.artist_id as string, 10) : undefined;
+  const labelIdFilter  = req.query.label_id  !== undefined ? parseInt(req.query.label_id  as string, 10) : undefined;
+  if (req.query.artist_id !== undefined && !Number.isFinite(artistIdFilter)) {
+    res.status(400).json({ error: "Invalid artist_id" }); return;
+  }
+  if (req.query.label_id !== undefined && !Number.isFinite(labelIdFilter)) {
+    res.status(400).json({ error: "Invalid label_id" }); return;
+  }
+
+  const conditions: any[] = [eq(artistsTable.status, "active")];
+  if (artistIdFilter !== undefined) conditions.push(eq(artistsTable.id, artistIdFilter));
+  if (labelIdFilter  !== undefined) conditions.push(eq(artistsTable.labelId, labelIdFilter));
+
+  const artists = await db.select().from(artistsTable).where(and(...conditions));
 
   const balances = artists.map(a => ({
     entityType: "artist",

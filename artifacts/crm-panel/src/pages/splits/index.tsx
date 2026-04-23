@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useListSplits, getListSplitsQueryKey, useDeleteSplit } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,13 +22,25 @@ const COLORS = [
 const BAR_COLORS = ["bg-violet-500", "bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500"];
 
 export default function Splits() {
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const params = { page, limit: 20 };
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isArtist    = user?.role === "artist";
+
+  const params = {
+    page, limit: 20,
+    ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+  };
   const { data, isLoading } = useListSplits(params, {
     query: { queryKey: getListSplitsQueryKey(params) },
   });
+
+  const titleByRole = isAdminLike ? "Revenue Splits" : isArtist ? "Мои сплиты" : "Сплиты лейбла";
+  const subtitleByRole = isAdminLike
+    ? "Manage how revenue is distributed between artists, labels, and collaborators."
+    : "Раскладка роялти по релизам и трекам, где ты участник.";
 
   const deleteSplit = useDeleteSplit({
     mutation: {
@@ -46,13 +59,15 @@ export default function Splits() {
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Revenue Splits</h1>
-            <p className="text-muted-foreground mt-1">Manage how revenue is distributed between artists, labels, and collaborators.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
+            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
-          <Button className="gap-2" data-testid="button-new-split">
-            <Plus className="h-4 w-4" />
-            New Split
-          </Button>
+          {isAdminLike && (
+            <Button className="gap-2" data-testid="button-new-split">
+              <Plus className="h-4 w-4" />
+              New Split
+            </Button>
+          )}
         </div>
 
         <Card className="bg-card/50 backdrop-blur border-border/50">
@@ -129,15 +144,20 @@ export default function Splits() {
                         {new Date(split.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-rose-500"
-                          data-testid={`button-delete-split-${split.id}`}
-                          onClick={() => deleteSplit.mutate({ id: split.id })}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {isAdminLike ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-rose-500"
+                            data-testid={`button-delete-split-${split.id}`}
+                            onClick={() => deleteSplit.mutate({ id: split.id })}
+                            aria-label={`Удалить сплит ${split.releaseName ?? split.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, splitsTable, releasesTable, tracksTable } from "@workspace/db";
-import { count, eq, desc } from "drizzle-orm";
+import { count, eq, desc, and, sql } from "drizzle-orm";
 import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, DeleteSplitParams } from "@workspace/api-zod";
 
 const router = Router();
@@ -33,8 +33,25 @@ router.get("/splits", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const splits = await db.select().from(splitsTable).limit(limit).offset(offset).orderBy(desc(splitsTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(splitsTable);
+  const filters: any[] = [];
+  if (req.query.release_id !== undefined) {
+    const v = parseInt(req.query.release_id as string, 10);
+    if (Number.isFinite(v)) filters.push(eq(splitsTable.releaseId, v));
+  }
+  if (req.query.track_id !== undefined) {
+    const v = parseInt(req.query.track_id as string, 10);
+    if (Number.isFinite(v)) filters.push(eq(splitsTable.trackId, v));
+  }
+  // artist_id: match if any participant in the JSONB array has this artistId
+  if (req.query.artist_id !== undefined) {
+    const v = parseInt(req.query.artist_id as string, 10);
+    if (!Number.isFinite(v)) { res.status(400).json({ error: "Invalid artist_id" }); return; }
+    filters.push(sql`${splitsTable.participants} @> ${JSON.stringify([{ entityType: "artist", entityId: v }])}::jsonb`);
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const splits = await db.select().from(splitsTable).where(where).limit(limit).offset(offset).orderBy(desc(splitsTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(splitsTable).where(where);
 
   const data = await Promise.all(splits.map(enrichSplit));
 

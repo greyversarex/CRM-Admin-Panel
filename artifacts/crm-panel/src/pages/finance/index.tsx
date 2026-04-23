@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout";
+import { useAuth } from "@/lib/auth";
 import { useListTransactions, useListBalances, getListTransactionsQueryKey, useCreateTransaction } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,15 +29,36 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function Finance() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const params = { page, limit: 20 };
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isArtist    = user?.role === "artist";
+  const isLabel     = user?.role === "label";
+
+  const params = {
+    page, limit: 20,
+    ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+    ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
+  };
   const { data: transactionsData, isLoading: txLoading } = useListTransactions(params, {
     query: { queryKey: getListTransactionsQueryKey(params) },
   });
   const { data: balances, isLoading: balLoading } = useListBalances();
+  const filteredBalances = balances?.filter(b => {
+    if (isArtist) return b.entityType === "artist" && b.entityId === user?.artistId;
+    if (isLabel)  return b.entityType === "label"  && b.entityId === user?.labelId;
+    return true;
+  }) ?? [];
+
+  const titleByRole = isAdminLike ? "Финансы платформы"
+    : isLabel  ? "Финансы лейбла"
+    :            "Мои финансы";
+  const subtitleByRole = isAdminLike
+    ? "Транзакции, балансы артистов и лейблов, ингест отчётов DSP."
+    : "Твои транзакции и текущий баланс.";
 
   const totalIncome = transactionsData?.data
     .filter(t => t.amount > 0)
@@ -58,8 +80,8 @@ export default function Finance() {
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Finance</h1>
-            <p className="text-muted-foreground mt-1">Transactions, balances, and financial overview.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
+            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
         </div>
 
@@ -99,17 +121,24 @@ export default function Finance() {
           </Card>
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Artist Balances</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {isAdminLike ? "Artist Balances" : "Текущий баланс"}
+              </CardTitle>
               <Wallet className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              {balLoading ? <Skeleton className="h-8 w-16" /> : (
+              {balLoading ? <Skeleton className="h-8 w-16" /> : isAdminLike ? (
                 <div className="text-2xl font-bold">{balances?.length ?? 0}</div>
+              ) : (
+                <div className="text-2xl font-bold text-emerald-400">
+                  ${(filteredBalances[0]?.balance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
 
+        {isAdminLike && (
         <Card className="bg-card/50 backdrop-blur border-border/50">
           <CardHeader className="pb-3 border-b border-border/50">
             <div className="flex items-center justify-between">
@@ -178,6 +207,7 @@ export default function Finance() {
             </Table>
           </CardContent>
         </Card>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2 bg-card/50 backdrop-blur border-border/50 flex flex-col">
@@ -259,8 +289,12 @@ export default function Finance() {
 
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="pb-3 border-b border-border/50">
-              <CardTitle className="text-base">Artist Balances</CardTitle>
-              <CardDescription>Current pending balances by artist</CardDescription>
+              <CardTitle className="text-base">
+                {isAdminLike ? "Artist Balances" : "Балансы"}
+              </CardTitle>
+              <CardDescription>
+                {isAdminLike ? "Current pending balances by artist" : "Твой текущий и pending-баланс"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-auto max-h-[500px]">
               {balLoading ? (
@@ -274,7 +308,7 @@ export default function Finance() {
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
-                  {balances?.map((b, i) => (
+                  {filteredBalances.map((b, i) => (
                     <div key={i} className="flex items-center justify-between p-4 hover:bg-accent/30" data-testid={`row-balance-${i}`}>
                       <div>
                         <div className="text-sm font-medium">{b.entityName}</div>
