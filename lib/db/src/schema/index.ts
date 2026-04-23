@@ -14,3 +14,4 @@ export * from "./deliveries";
 export * from "./activity_log";
 export * from "./integrations";
 export * from "./sessions";
+export * from "./assets";

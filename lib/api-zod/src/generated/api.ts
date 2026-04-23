@@ -2191,3 +2191,119 @@ export const GetDeliveryResponse = zod.object({
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
+
+/**
+ * @summary List assets the caller can see
+ */
+export const ListAssetsQueryParams = zod.object({
+  release_id: zod.coerce.number().optional(),
+  track_id: zod.coerce.number().optional(),
+  kind: zod.enum(["audio", "cover", "image", "document"]).optional(),
+});
+
+export const ListAssetsResponseItem = zod.object({
+  id: zod.number(),
+  kind: zod.enum(["audio", "cover", "image", "document"]),
+  objectPath: zod.string(),
+  filename: zod.string(),
+  mimeType: zod.string(),
+  sizeBytes: zod.number(),
+  sha256: zod.string().nullish(),
+  durationSeconds: zod.number().nullish(),
+  releaseId: zod.number().nullish(),
+  trackId: zod.number().nullish(),
+  artistId: zod.number().nullish(),
+  labelId: zod.number().nullish(),
+  uploadedBy: zod.number().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListAssetsResponse = zod.array(ListAssetsResponseItem);
+
+/**
+ * @summary Request a presigned upload URL for a new asset
+ */
+export const presignAssetUploadBodyFilenameMax = 255;
+
+export const presignAssetUploadBodyMimeTypeMax = 127;
+
+export const PresignAssetUploadBody = zod.object({
+  kind: zod.enum(["audio", "cover", "image", "document"]),
+  filename: zod.string().min(1).max(presignAssetUploadBodyFilenameMax),
+  mimeType: zod.string().min(1).max(presignAssetUploadBodyMimeTypeMax),
+  sizeBytes: zod.number().min(1),
+  releaseId: zod.number().nullish(),
+  trackId: zod.number().nullish(),
+});
+
+export const PresignAssetUploadResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+  storageKey: zod.string(),
+  expiresAt: zod.string(),
+});
+
+/**
+ * @summary Persist an asset record after the file has been uploaded to GCS
+ */
+export const confirmAssetUploadBodyFilenameMax = 255;
+
+export const confirmAssetUploadBodyMimeTypeMax = 127;
+
+export const confirmAssetUploadBodyAttachDefault = true;
+
+export const ConfirmAssetUploadBody = zod.object({
+  storageKey: zod.string(),
+  objectPath: zod.string(),
+  kind: zod.enum(["audio", "cover", "image", "document"]),
+  filename: zod.string().min(1).max(confirmAssetUploadBodyFilenameMax),
+  mimeType: zod.string().min(1).max(confirmAssetUploadBodyMimeTypeMax),
+  releaseId: zod.number().nullish(),
+  trackId: zod.number().nullish(),
+  attach: zod
+    .boolean()
+    .default(confirmAssetUploadBodyAttachDefault)
+    .describe(
+      "If true, also writes the resulting URL to release.coverUrl \/ track.audioUrl.",
+    ),
+});
+
+/**
+ * @summary Get an asset by id (with a fresh signed download URL)
+ */
+export const GetAssetParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetAssetResponse = zod
+  .object({
+    id: zod.number(),
+    kind: zod.enum(["audio", "cover", "image", "document"]),
+    objectPath: zod.string(),
+    filename: zod.string(),
+    mimeType: zod.string(),
+    sizeBytes: zod.number(),
+    sha256: zod.string().nullish(),
+    durationSeconds: zod.number().nullish(),
+    releaseId: zod.number().nullish(),
+    trackId: zod.number().nullish(),
+    artistId: zod.number().nullish(),
+    labelId: zod.number().nullish(),
+    uploadedBy: zod.number().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      downloadUrl: zod
+        .string()
+        .describe("Short-lived signed GET URL (TTL ~5 minutes)"),
+    }),
+  );
+
+/**
+ * @summary Delete an asset
+ */
+export const DeleteAssetParams = zod.object({
+  id: zod.coerce.number(),
+});

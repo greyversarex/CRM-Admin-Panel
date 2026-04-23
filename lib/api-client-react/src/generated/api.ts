@@ -21,7 +21,10 @@ import type {
   Artist,
   ArtistDetail,
   ArtistStats,
+  Asset,
+  AssetWithDownload,
   Balance,
+  ConfirmAssetBody,
   Contact,
   CreateArtistBody,
   CreateContactBody,
@@ -47,6 +50,7 @@ import type {
   ImportByUpcBody,
   Label,
   ListArtistsParams,
+  ListAssetsParams,
   ListContactsParams,
   ListDeliveriesParams,
   ListLabelsParams,
@@ -75,6 +79,8 @@ import type {
   PaginatedUsers,
   Payout,
   PlatformAnalytics,
+  PresignAssetBody,
+  PresignAssetResponse,
   PublishingWork,
   RejectPayoutBody,
   Release,
@@ -6557,3 +6563,438 @@ export function useGetDelivery<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List assets the caller can see
+ */
+export const getListAssetsUrl = (params?: ListAssetsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/assets?${stringifiedParams}`
+    : `/api/assets`;
+};
+
+export const listAssets = async (
+  params?: ListAssetsParams,
+  options?: RequestInit,
+): Promise<Asset[]> => {
+  return customFetch<Asset[]>(getListAssetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAssetsQueryKey = (params?: ListAssetsParams) => {
+  return [`/api/assets`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAssetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAssets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAssetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAssets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAssetsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAssets>>> = ({
+    signal,
+  }) => listAssets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAssets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAssetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAssets>>
+>;
+export type ListAssetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List assets the caller can see
+ */
+
+export function useListAssets<
+  TData = Awaited<ReturnType<typeof listAssets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAssetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAssets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAssetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Request a presigned upload URL for a new asset
+ */
+export const getPresignAssetUploadUrl = () => {
+  return `/api/assets/presign`;
+};
+
+export const presignAssetUpload = async (
+  presignAssetBody: PresignAssetBody,
+  options?: RequestInit,
+): Promise<PresignAssetResponse> => {
+  return customFetch<PresignAssetResponse>(getPresignAssetUploadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(presignAssetBody),
+  });
+};
+
+export const getPresignAssetUploadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof presignAssetUpload>>,
+    TError,
+    { data: BodyType<PresignAssetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof presignAssetUpload>>,
+  TError,
+  { data: BodyType<PresignAssetBody> },
+  TContext
+> => {
+  const mutationKey = ["presignAssetUpload"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof presignAssetUpload>>,
+    { data: BodyType<PresignAssetBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return presignAssetUpload(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PresignAssetUploadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof presignAssetUpload>>
+>;
+export type PresignAssetUploadMutationBody = BodyType<PresignAssetBody>;
+export type PresignAssetUploadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Request a presigned upload URL for a new asset
+ */
+export const usePresignAssetUpload = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof presignAssetUpload>>,
+    TError,
+    { data: BodyType<PresignAssetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof presignAssetUpload>>,
+  TError,
+  { data: BodyType<PresignAssetBody> },
+  TContext
+> => {
+  return useMutation(getPresignAssetUploadMutationOptions(options));
+};
+
+/**
+ * @summary Persist an asset record after the file has been uploaded to GCS
+ */
+export const getConfirmAssetUploadUrl = () => {
+  return `/api/assets/confirm`;
+};
+
+export const confirmAssetUpload = async (
+  confirmAssetBody: ConfirmAssetBody,
+  options?: RequestInit,
+): Promise<Asset> => {
+  return customFetch<Asset>(getConfirmAssetUploadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(confirmAssetBody),
+  });
+};
+
+export const getConfirmAssetUploadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmAssetUpload>>,
+    TError,
+    { data: BodyType<ConfirmAssetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmAssetUpload>>,
+  TError,
+  { data: BodyType<ConfirmAssetBody> },
+  TContext
+> => {
+  const mutationKey = ["confirmAssetUpload"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmAssetUpload>>,
+    { data: BodyType<ConfirmAssetBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return confirmAssetUpload(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmAssetUploadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmAssetUpload>>
+>;
+export type ConfirmAssetUploadMutationBody = BodyType<ConfirmAssetBody>;
+export type ConfirmAssetUploadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Persist an asset record after the file has been uploaded to GCS
+ */
+export const useConfirmAssetUpload = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmAssetUpload>>,
+    TError,
+    { data: BodyType<ConfirmAssetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmAssetUpload>>,
+  TError,
+  { data: BodyType<ConfirmAssetBody> },
+  TContext
+> => {
+  return useMutation(getConfirmAssetUploadMutationOptions(options));
+};
+
+/**
+ * @summary Get an asset by id (with a fresh signed download URL)
+ */
+export const getGetAssetUrl = (id: number) => {
+  return `/api/assets/${id}`;
+};
+
+export const getAsset = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AssetWithDownload> => {
+  return customFetch<AssetWithDownload>(getGetAssetUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAssetQueryKey = (id: number) => {
+  return [`/api/assets/${id}`] as const;
+};
+
+export const getGetAssetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAsset>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAssetQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAsset>>> = ({
+    signal,
+  }) => getAsset(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAsset>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetAssetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAsset>>
+>;
+export type GetAssetQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get an asset by id (with a fresh signed download URL)
+ */
+
+export function useGetAsset<
+  TData = Awaited<ReturnType<typeof getAsset>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAssetQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete an asset
+ */
+export const getDeleteAssetUrl = (id: number) => {
+  return `/api/assets/${id}`;
+};
+
+export const deleteAsset = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteAssetUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteAssetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAsset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAsset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteAsset"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAsset>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteAsset(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAssetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAsset>>
+>;
+
+export type DeleteAssetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an asset
+ */
+export const useDeleteAsset = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAsset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAsset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteAssetMutationOptions(options));
+};

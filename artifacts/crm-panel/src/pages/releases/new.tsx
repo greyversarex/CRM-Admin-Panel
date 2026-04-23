@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ImageIcon, Save } from "lucide-react";
+import { ChevronLeft, Save } from "lucide-react";
+import { CoverUploader } from "@/components/asset-uploader";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import {
@@ -176,20 +177,13 @@ export default function CreateRelease() {
           </Card>
 
           <Card className="bg-card/50 backdrop-blur border-border/50 h-fit">
-            <CardHeader><CardTitle className="text-base">Cover Art</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Обложка</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="aspect-square rounded-lg overflow-hidden bg-muted border border-border/50">
-                {form.coverUrl
-                  ? <img src={form.coverUrl} alt="Cover" className="h-full w-full object-cover" onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")} />
-                  : <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground/50 gap-2 bg-gradient-to-br from-indigo-900/20 to-violet-900/30">
-                      <ImageIcon className="h-10 w-10" />
-                      <span className="text-xs">No cover</span>
-                    </div>}
-              </div>
-              <Field label="Cover URL">
-                <Input value={form.coverUrl} onChange={(e) => set("coverUrl", e.target.value)} placeholder="https://…" className="bg-background/40" />
-              </Field>
-              <p className="text-[10px] text-muted-foreground/70">3000×3000 px, square JPG/PNG recommended.</p>
+              <CoverUploader
+                value={form.coverUrl || null}
+                onChange={(p) => set("coverUrl", p ?? "")}
+                attach={false}
+              />
             </CardContent>
           </Card>
         </div>

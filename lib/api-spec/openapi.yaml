@@ -37,6 +37,8 @@ tags:
     description: DDEX delivery
   - name: dashboard
     description: Dashboard summaries
+  - name: assets
+    description: File uploads (covers, audio) backed by object storage
 
 paths:
   /healthz:
@@ -1634,6 +1636,106 @@ paths:
               schema:
                 $ref: "#/components/schemas/Delivery"
 
+  # ==================== ASSETS ====================
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List assets the caller can see
+      parameters:
+        - name: release_id
+          in: query
+          schema:
+            type: integer
+        - name: track_id
+          in: query
+          schema:
+            type: integer
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [audio, cover, image, document]
+      responses:
+        "200":
+          description: Assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+
+  /assets/presign:
+    post:
+      operationId: presignAssetUpload
+      tags: [assets]
+      summary: Request a presigned upload URL for a new asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignAssetBody"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignAssetResponse"
+
+  /assets/confirm:
+    post:
+      operationId: confirmAssetUpload
+      tags: [assets]
+      summary: Persist an asset record after the file has been uploaded to GCS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmAssetBody"
+      responses:
+        "201":
+          description: Asset persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /assets/{id}:
+    get:
+      operationId: getAsset
+      tags: [assets]
+      summary: Get an asset by id (with a fresh signed download URL)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Asset with downloadUrl
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetWithDownload"
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      summary: Delete an asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -3157,3 +3259,70 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
       required: [data, pagination]
+
+    # ==================== ASSETS ====================
+    Asset:
+      type: object
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [audio, cover, image, document] }
+        objectPath: { type: string }
+        filename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        sha256: { type: string, nullable: true }
+        durationSeconds: { type: integer, nullable: true }
+        releaseId: { type: integer, nullable: true }
+        trackId: { type: integer, nullable: true }
+        artistId: { type: integer, nullable: true }
+        labelId: { type: integer, nullable: true }
+        uploadedBy: { type: integer, nullable: true }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+      required: [id, kind, objectPath, filename, mimeType, sizeBytes, createdAt, updatedAt]
+
+    AssetWithDownload:
+      allOf:
+        - $ref: "#/components/schemas/Asset"
+        - type: object
+          properties:
+            downloadUrl:
+              type: string
+              description: Short-lived signed GET URL (TTL ~5 minutes)
+          required: [downloadUrl]
+
+    PresignAssetBody:
+      type: object
+      properties:
+        kind: { type: string, enum: [audio, cover, image, document] }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        mimeType: { type: string, minLength: 1, maxLength: 127 }
+        sizeBytes: { type: integer, minimum: 1 }
+        releaseId: { type: integer, nullable: true }
+        trackId: { type: integer, nullable: true }
+      required: [kind, filename, mimeType, sizeBytes]
+
+    PresignAssetResponse:
+      type: object
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
+        storageKey: { type: string }
+        expiresAt: { type: string }
+      required: [uploadURL, objectPath, storageKey, expiresAt]
+
+    ConfirmAssetBody:
+      type: object
+      properties:
+        storageKey: { type: string }
+        objectPath: { type: string }
+        kind: { type: string, enum: [audio, cover, image, document] }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        mimeType: { type: string, minLength: 1, maxLength: 127 }
+        releaseId: { type: integer, nullable: true }
+        trackId: { type: integer, nullable: true }
+        attach:
+          type: boolean
+          description: If true, also writes the resulting URL to release.coverUrl / track.audioUrl.
+          default: true
+      required: [storageKey, objectPath, kind, filename, mimeType]

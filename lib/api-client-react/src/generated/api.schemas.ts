@@ -995,6 +995,103 @@ export interface PaginatedDeliveries {
   pagination: Pagination;
 }
 
+export type AssetKind = (typeof AssetKind)[keyof typeof AssetKind];
+
+export const AssetKind = {
+  audio: "audio",
+  cover: "cover",
+  image: "image",
+  document: "document",
+} as const;
+
+export interface Asset {
+  id: number;
+  kind: AssetKind;
+  objectPath: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256?: string | null;
+  durationSeconds?: number | null;
+  releaseId?: number | null;
+  trackId?: number | null;
+  artistId?: number | null;
+  labelId?: number | null;
+  uploadedBy?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AssetWithDownload = Asset & {
+  /** Short-lived signed GET URL (TTL ~5 minutes) */
+  downloadUrl: string;
+};
+
+export type PresignAssetBodyKind =
+  (typeof PresignAssetBodyKind)[keyof typeof PresignAssetBodyKind];
+
+export const PresignAssetBodyKind = {
+  audio: "audio",
+  cover: "cover",
+  image: "image",
+  document: "document",
+} as const;
+
+export interface PresignAssetBody {
+  kind: PresignAssetBodyKind;
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  filename: string;
+  /**
+   * @minLength 1
+   * @maxLength 127
+   */
+  mimeType: string;
+  /** @minimum 1 */
+  sizeBytes: number;
+  releaseId?: number | null;
+  trackId?: number | null;
+}
+
+export interface PresignAssetResponse {
+  uploadURL: string;
+  objectPath: string;
+  storageKey: string;
+  expiresAt: string;
+}
+
+export type ConfirmAssetBodyKind =
+  (typeof ConfirmAssetBodyKind)[keyof typeof ConfirmAssetBodyKind];
+
+export const ConfirmAssetBodyKind = {
+  audio: "audio",
+  cover: "cover",
+  image: "image",
+  document: "document",
+} as const;
+
+export interface ConfirmAssetBody {
+  storageKey: string;
+  objectPath: string;
+  kind: ConfirmAssetBodyKind;
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  filename: string;
+  /**
+   * @minLength 1
+   * @maxLength 127
+   */
+  mimeType: string;
+  releaseId?: number | null;
+  trackId?: number | null;
+  /** If true, also writes the resulting URL to release.coverUrl / track.audioUrl. */
+  attach?: boolean;
+}
+
 export type ListArtistsParams = {
   search?: string;
   genre?: string;
@@ -1273,4 +1370,20 @@ export const ListDeliveriesStatus = {
   delivered: "delivered",
   failed: "failed",
   acknowledged: "acknowledged",
+} as const;
+
+export type ListAssetsParams = {
+  release_id?: number;
+  track_id?: number;
+  kind?: ListAssetsKind;
+};
+
+export type ListAssetsKind =
+  (typeof ListAssetsKind)[keyof typeof ListAssetsKind];
+
+export const ListAssetsKind = {
+  audio: "audio",
+  cover: "cover",
+  image: "image",
+  document: "document",
 } as const;

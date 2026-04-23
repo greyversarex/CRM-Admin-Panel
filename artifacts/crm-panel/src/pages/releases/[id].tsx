@@ -1,14 +1,20 @@
 import { Layout } from "@/components/layout";
-import { useGetRelease, useUpdateReleaseStatus, useUpdateRelease, getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey } from "@workspace/api-client-react";
+import {
+  useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
+  getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
+  type Track,
+} from "@workspace/api-client-react";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
-  Headphones, Calendar, Tag,
+  Calendar, Plus, Trash2,
 } from "lucide-react";
+import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -157,16 +163,12 @@ export default function ReleaseDetail() {
                 <KV label="Territories" value={(release.territories || ["WW"]).join(", ")} />
               </div>
             </div>
-            <div className="aspect-square rounded-lg overflow-hidden bg-muted border border-border/50">
-              {release.coverUrl
-                ? <img src={release.coverUrl} alt={release.title} className="h-full w-full object-cover" />
-                : (
-                  <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground/50 gap-2 bg-gradient-to-br from-indigo-900/20 to-violet-900/30">
-                    <ImageIcon className="h-10 w-10" />
-                    <span className="text-xs">No cover</span>
-                  </div>
-                )}
-            </div>
+            <CoverUploader
+              value={release.coverUrl ?? null}
+              releaseId={id}
+              attach
+              onChange={() => invalidateAll()}
+            />
           </CardContent>
         </Card>
 
@@ -174,40 +176,27 @@ export default function ReleaseDetail() {
         <Card className="bg-card/50 backdrop-blur border-border/50">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Music2 className="h-4 w-4" /> Tracks ({release.tracks?.length ?? 0})
+              <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {(release.tracks ?? []).length === 0 ? (
               <div className="text-sm text-muted-foreground py-6 text-center border border-dashed border-border/50 rounded-md">
-                No tracks added yet.
+                Треков пока нет — добавь первый ниже.
               </div>
             ) : (
               release.tracks!.map((t, i) => (
-                <div key={t.id} className="rounded-md border border-border/50 bg-background/40 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold text-sm flex items-center gap-2">
-                      <span className="text-muted-foreground">Track {i + 1}</span>
-                      <span className="text-foreground">· {t.title}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Metadata Language: <span className="text-foreground">{t.language || "English"}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <KV label="Primary Artist" value={release.artistName} mini />
-                    <KV label="Featuring" value={"—"} mini />
-                    <KV label="Mix Version" value={"Remix"} mini />
-                    <KV label="ISRC" value={t.isrc || "—"} mini mono />
-                    <KV label="Explicit Status" value={t.isExplicit ? "EXPLICIT" : "NON-EXPLICIT"} mini />
-                    <KV label="Genre" value={t.genre || "Pop"} mini />
-                    <KV label="Recorded" value="2026" mini />
-                    <KV label="Subgenre" value="Dance Pop" mini />
-                  </div>
-                  <Waveform />
-                </div>
+                <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />
               ))
             )}
+            <AddTrackForm
+              releaseId={id}
+              artistId={release.artistId}
+              defaultLanguage={release.language || "Tajik"}
+              defaultGenre={release.genre || "Pop"}
+              nextTrackNumber={(release.tracks?.length ?? 0) + 1}
+              onAdded={invalidateAll}
+            />
           </CardContent>
         </Card>
 
@@ -272,23 +261,122 @@ function KV({
   );
 }
 
-function Waveform() {
-  // pseudo-random deterministic bars
-  const bars = Array.from({ length: 80 }, (_, i) => 12 + Math.abs(Math.sin(i * 1.3) * 28));
+// ─── Track row ────────────────────────────────────────────────────────────
+function TrackRow({
+  t, index, release, onChange,
+}: { t: Track; index: number; release: any; onChange: () => void }) {
+  const deleteTrack = useDeleteTrack();
   return (
-    <div className="flex items-center gap-2 mt-2">
-      <button className="h-8 w-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/25">
-        <Headphones className="h-3.5 w-3.5" />
-      </button>
-      <div className="flex-1 h-9 flex items-center gap-[2px] overflow-hidden">
-        {bars.map((h, i) => (
-          <div key={i}
-            className={"w-[3px] rounded-sm " + (i < 20 ? "bg-emerald-400/80" : "bg-muted-foreground/30")}
-            style={{ height: `${h}px` }}
-          />
-        ))}
+    <div className="rounded-md border border-border/50 bg-background/40 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="font-semibold text-sm flex items-center gap-2">
+          <span className="text-muted-foreground">Трек {index + 1}</span>
+          <span className="text-foreground">· {t.title}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-muted-foreground">
+            Язык: <span className="text-foreground">{t.language || "—"}</span>
+          </div>
+          <Button
+            variant="ghost" size="sm"
+            className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-7 px-2"
+            onClick={async () => {
+              if (!confirm(`Удалить трек "${t.title}"?`)) return;
+              await deleteTrack.mutateAsync({ id: t.id });
+              toast({ title: "Трек удалён" });
+              onChange();
+            }}
+            disabled={deleteTrack.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
-      <span className="text-[10px] text-muted-foreground font-mono">00:00 / 03:24</span>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <KV label="Артист" value={release.artistName} mini />
+        <KV label="ISRC" value={t.isrc || "—"} mini mono />
+        <KV label="Жанр" value={t.genre || "—"} mini />
+        <KV label="Explicit" value={t.isExplicit ? "EXPLICIT" : "Чисто"} mini />
+      </div>
+      <AudioUploader
+        value={t.audioUrl ?? null}
+        trackId={t.id}
+        durationSeconds={t.durationSeconds ?? null}
+        onChange={() => onChange()}
+      />
+    </div>
+  );
+}
+
+// ─── Add Track form ───────────────────────────────────────────────────────
+function AddTrackForm({
+  releaseId, artistId, defaultLanguage, defaultGenre, nextTrackNumber, onAdded,
+}: {
+  releaseId: number; artistId: number;
+  defaultLanguage: string; defaultGenre: string;
+  nextTrackNumber: number; onAdded: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [isrc, setIsrc] = useState("");
+  const [isExplicit, setIsExplicit] = useState(false);
+  const createTrack = useCreateTrack();
+
+  const submit = async () => {
+    if (!title.trim()) {
+      toast({ title: "Укажи название трека", variant: "destructive" });
+      return;
+    }
+    try {
+      await createTrack.mutateAsync({
+        data: {
+          title: title.trim(),
+          artistId, releaseId,
+          trackNumber: nextTrackNumber,
+          language: defaultLanguage,
+          genre: defaultGenre,
+          isrc: isrc.trim() || null,
+          isExplicit,
+        },
+      });
+      setTitle(""); setIsrc(""); setIsExplicit(false); setOpen(false);
+      toast({ title: "Трек добавлен", description: "Теперь загрузи аудиофайл." });
+      onAdded();
+    } catch (e: any) {
+      toast({ title: "Не удалось добавить трек", description: e?.message ?? "Ошибка", variant: "destructive" });
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => setOpen(true)}>
+        <Plus className="h-3.5 w-3.5 mr-1.5" /> Добавить трек
+      </Button>
+    );
+  }
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-4 space-y-3">
+      <div className="text-sm font-semibold">Новый трек #{nextTrackNumber}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Название *</label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Track title" className="bg-background/40" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">ISRC (опционально)</label>
+          <Input value={isrc} onChange={(e) => setIsrc(e.target.value)} placeholder="USRC17607839" className="bg-background/40 font-mono" />
+        </div>
+      </div>
+      <div className="flex items-center justify-between p-2 rounded-md bg-background/40 border border-border/50">
+        <span className="text-xs text-muted-foreground">Explicit Content</span>
+        <Switch checked={isExplicit} onCheckedChange={setIsExplicit} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Отмена</Button>
+        <Button size="sm" onClick={submit} disabled={createTrack.isPending}>
+          {createTrack.isPending ? "Сохраняю…" : "Сохранить"}
+        </Button>
+      </div>
     </div>
   );
 }

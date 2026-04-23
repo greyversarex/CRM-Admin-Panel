@@ -15,6 +15,7 @@ import publishingRouter from "./publishing";
 import analyticsRouter from "./analytics";
 import deliveryRouter from "./delivery";
 import integrationsRouter from "./integrations";
+import assetsRouter from "./assets";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -55,5 +56,6 @@ router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
 router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
+router.use(assetsRouter);                // scoped per-route inside
 
 export default router;

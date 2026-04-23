@@ -56,6 +56,18 @@ Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trus
 - Все icon-only кнопки имеют `aria-label`; экшены раскрываются по `group-hover` **и** `group-focus-within` (доступны с клавиатуры). Anchor-кнопки сделаны через `<Button asChild>`, чтобы не было невалидного `<a><button>`.
 - Вкладку «Заметки» из старого мока убрал — таблицы для заметок нет, есть только поле `notes` на контакте.
 
+## Asset storage & uploads (Task #1)
+
+Хранилище — **Replit Object Storage** (через `@google-cloud/storage` + sidecar token). В проде заменим на Yandex Object Storage по тем же контрактам.
+
+- Таблица `assets` (`lib/db/src/schema/assets.ts`): `kind` (audio/cover/image/document), уникальный `storageKey`, `objectPath` (вида `/objects/uploads/<uuid>`), `sha256` (уникальный когда не null → дедуп при повторной заливке того же файла), `durationSeconds` (для аудио), FK на `release/track/artist/label`, `uploadedBy`.
+- API (`POST /api/assets/presign` → `PUT` напрямую в GCS → `POST /api/assets/confirm`):
+  - presign: лимиты — audio 200 МБ, cover/image/document 25 МБ; scope-чек по `release/track/artist/label`.
+  - confirm: тянет метаданные из GCS, считает sha256, для аудио вытаскивает длительность через `music-metadata.parseStream`. При совпадении sha256 возвращает существующий `assets` ряд (дедуп). Если `attach: true` (default) — пишет URL в `release.coverUrl` / `track.audioUrl`.
+- Чтение в браузере: `GET /api/storage/objects/uploads/:id` — стримит файл напрямую из GCS под session-cookie со scope-чеком (без подписанных URL для UI). Подписанные URL отдаются только через `GET /api/assets/:id` (5 мин TTL) — оставлено для будущего «Скачать оригинал».
+- Frontend: `components/asset-uploader.tsx` — `useAssetUpload()` (XHR с прогрессом), `<CoverUploader>` (квадратный превью), `<AudioUploader>` (HTML5 `<audio controls>` после загрузки). На `/releases/new` и `/releases/[id]` обложка теперь грузится файл-инпутом, не URL'ом. На `/releases/[id]` появилась форма «Добавить трек» + per-track audio uploader + удаление трека.
+- `coverUrl` / `audioUrl` хранят `objectPath`; в UI рендерится через `assetHref()` → `/api/storage{objectPath}`. Старые внешние URL (если попадутся) проходят без обёртки.
+
 ## Profile / Self-service users API
 
 Колонки в таблице `users`, добавленные для страницы `/profile`:
