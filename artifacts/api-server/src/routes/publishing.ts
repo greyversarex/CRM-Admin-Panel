@@ -5,6 +5,29 @@ import { CreatePublishingWorkBody, UpdatePublishingWorkBody, GetPublishingWorkPa
 
 const router = Router();
 
+// Server-side guard: zod schemas are codegen'd from OpenAPI and don't enforce
+// share bounds or duplicate-writer rules, so we re-validate here.
+function validateWriters(writers: { name: string; share: number; caeIpi?: string | null }[]):
+  string | null {
+  if (!Array.isArray(writers) || writers.length === 0) return "Need at least one writer";
+  const seen = new Set<string>();
+  let total = 0;
+  for (const w of writers) {
+    const name = (w.name ?? "").trim();
+    if (!name) return "Writer name is required";
+    const share = Number(w.share);
+    if (!Number.isFinite(share) || share < 0 || share > 100) {
+      return `Writer "${name}" has invalid share (must be 0–100)`;
+    }
+    const key = `${name.toLowerCase()}|${(w.caeIpi ?? "").trim()}`;
+    if (seen.has(key)) return `Writer "${name}" is duplicated`;
+    seen.add(key);
+    total += share;
+  }
+  if (Math.round(total) !== 100) return `Writer shares must sum to 100% (got ${total}%)`;
+  return null;
+}
+
 function formatWork(w: typeof publishingWorksTable.$inferSelect) {
   return {
     ...w,
@@ -38,6 +61,11 @@ router.post("/publishing/works", async (req, res): Promise<void> => {
   const parsed = CreatePublishingWorkBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const writersError = validateWriters(parsed.data.writers);
+  if (writersError) {
+    res.status(400).json({ error: writersError });
     return;
   }
 
@@ -74,6 +102,11 @@ router.put("/publishing/works/:id", async (req, res): Promise<void> => {
   const parsed = UpdatePublishingWorkBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const writersError = validateWriters(parsed.data.writers);
+  if (writersError) {
+    res.status(400).json({ error: writersError });
     return;
   }
 

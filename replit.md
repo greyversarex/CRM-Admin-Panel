@@ -145,7 +145,7 @@ Self-service эндпоинты (НЕ требуют admin):
 - `/finance` — Admin financial overview: transaction ledger + artist balances
 - `/splits` — Revenue split management with visual distribution bars
 - `/payouts` — Admin payout requests with approve/reject workflow
-- `/publishing` — Publishing works with ASCAP/BMI/Songtrust badges
+- `/publishing` — DB-backed publishing works (admin/manager only). CRUD via `/api/publishing/works` (POST/PUT, no DELETE — works are IP). Editor dialog with dynamic writers list (name/role/share/CAE-IPI), share-sum-100% validation, ASCAP/BMI/Songtrust toggles, territory list. Server-side `validateWriters()` enforces share bounds 0–100, no duplicates by `(name, caeIpi)`, sum=100%; client mirrors same checks.
 - `/analytics` — Streams, platform breakdown, geography analytics
 - `/delivery` — DDEX delivery queue
 - `/users` — User management with roles
