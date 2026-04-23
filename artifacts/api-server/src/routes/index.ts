@@ -37,7 +37,8 @@ router.use("/labels", adminOnly);     // labels mgmt is admin-only (own label in
 router.use(labelsRouter);
 router.use(releasesRouter);           // scoped per-route inside
 router.use(tracksRouter);             // scoped per-route inside
-router.use("/users", adminOnly);
+// Per-route admin guard inside usersRouter so /users/me is accessible to all
+// authenticated users (their own profile / password change).
 router.use(usersRouter);
 router.use("/contacts", adminOnly);
 router.use("/crm", adminOnly);

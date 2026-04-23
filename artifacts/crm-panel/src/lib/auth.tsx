@@ -1,6 +1,24 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 
 export type Role = "admin" | "manager" | "label" | "artist";
+
+export type DspProfiles = {
+  appleMusic?: string;
+  spotify?: string;
+  yandex?: string;
+  youtube?: string;
+};
+
+export type SocialLinks = {
+  facebook?: string;
+  instagram?: string;
+  youtube?: string;
+  tiktok?: string;
+  linkedin?: string;
+  x?: string;
+  telegram?: string;
+  vk?: string;
+};
 
 export interface AuthUser {
   id: number;
@@ -9,6 +27,17 @@ export interface AuthUser {
   role: Role;
   artistId?: number | null;
   labelId?: number | null;
+  avatarUrl?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  country?: string | null;
+  region?: string | null;
+  city?: string | null;
+  zipCode?: string | null;
+  about?: string | null;
+  dspProfiles: DspProfiles;
+  socialLinks: SocialLinks;
+  // Derived
   avatarInitials: string;
   orgName?: string;
 }
@@ -18,6 +47,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   loginAs: (role: Role) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
+  refresh: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -30,18 +60,31 @@ const DEMO_PASSWORDS: Record<Role, { email: string; password: string }> = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function deriveAuthUser(raw: {
-  id: number; name: string; email: string; role: Role;
-  artistId: number | null; labelId: number | null;
-}): AuthUser {
-  const initials = raw.name.split(/\s+/).map(s => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "U";
+function deriveAuthUser(raw: any): AuthUser {
+  const initials = String(raw.name ?? "")
+    .split(/\s+/)
+    .map((s: string) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "U";
   return {
     id: raw.id,
     name: raw.name,
     email: raw.email,
     role: raw.role,
-    artistId: raw.artistId,
-    labelId: raw.labelId,
+    artistId: raw.artistId ?? null,
+    labelId: raw.labelId ?? null,
+    avatarUrl: raw.avatarUrl ?? null,
+    phone: raw.phone ?? null,
+    address: raw.address ?? null,
+    country: raw.country ?? null,
+    region: raw.region ?? null,
+    city: raw.city ?? null,
+    zipCode: raw.zipCode ?? null,
+    about: raw.about ?? null,
+    dspProfiles: (raw.dspProfiles ?? {}) as DspProfiles,
+    socialLinks: (raw.socialLinks ?? {}) as SocialLinks,
     avatarInitials: initials,
     orgName: raw.role === "label" || raw.role === "artist" ? raw.name : undefined,
   };
@@ -70,13 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refresh = useCallback(async () => {
+    const r = await apiJson<{ user: any }>("/api/auth/me");
+    if (r.ok) setUser(deriveAuthUser(r.data.user));
+    else setUser(null);
+  }, []);
+
   useEffect(() => {
     (async () => {
-      const r = await apiJson<{ user: any }>("/api/auth/me");
-      if (r.ok) setUser(deriveAuthUser(r.data.user));
+      await refresh();
       setIsLoading(false);
     })();
-  }, []);
+  }, [refresh]);
 
   const login = async (email: string, password: string) => {
     const r = await apiJson<{ user: any }>("/api/auth/login", {
@@ -99,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginAs, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginAs, logout, refresh, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

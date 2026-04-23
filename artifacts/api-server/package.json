@@ -22,7 +22,8 @@
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
