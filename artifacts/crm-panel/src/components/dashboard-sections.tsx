@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Globe2, Eye, Clock4, Film, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import type { GeoCountry, UgcMonth, SocialBlock } from "@/data/dashboard-extras";
+import { ComposableMap, Geographies, Geography, Marker, Line } from "react-simple-maps";
 
 // ════════════════ Гео-карта ════════════════
 
@@ -64,9 +65,9 @@ export function GeoStreamsCard({ data }: { data: GeoCountry[] }) {
   );
 }
 
-// ════════════════ Dotted World Map ════════════════
+// ════════════════ Real World Map (TopoJSON + react-simple-maps) ════════════════
 
-// Координаты стран: [longitude, latitude]
+// ISO A2 → [longitude, latitude] центроиды столиц/центров
 const COUNTRY_LATLNG: Record<string, [number, number]> = {
   tj: [71.0, 38.9], ru: [100.0, 61.5], uz: [64.6, 41.4], kz: [66.9, 48.0],
   kg: [74.8, 41.2], us: [-95.7, 38.0], de: [10.5, 51.2], tr: [35.2, 39.0],
@@ -74,74 +75,64 @@ const COUNTRY_LATLNG: Record<string, [number, number]> = {
   jp: [138.3, 36.2], br: [-51.9, -14.2], au: [133.8, -25.3], ae: [53.8, 23.4],
 };
 
-// equirectangular projection внутри viewBox 800×400
-function project(lon: number, lat: number): [number, number] {
-  const x = ((lon + 180) / 360) * 800;
-  const y = ((90 - lat) / 180) * 400;
-  return [x, y];
-}
+// ISO A2 → ISO 3166-1 numeric (строки — как в Natural Earth topojson `id`)
+const ISO_A2_TO_NUMERIC: Record<string, string> = {
+  tj: "762", ru: "643", uz: "860", kz: "398", kg: "417", us: "840",
+  de: "276", tr: "792", fr: "250", gb: "826", in: "356", cn: "156",
+  jp: "392", br: "076", au: "036", ae: "784",
+};
 
-// Упрощённые эллипсы континентов для маски dot-grid
-const CONTINENTS = [
-  { cx: 500, cy: 110, rx: 220, ry: 70 },   // Евразия север
-  { cx: 540, cy: 160, rx: 180, ry: 50 },   // Евразия юг/Индия
-  { cx: 420, cy: 210, rx: 70, ry: 100 },   // Африка
-  { cx: 180, cy: 130, rx: 110, ry: 80 },   // Северная Америка
-  { cx: 270, cy: 270, rx: 55, ry: 90 },    // Южная Америка
-  { cx: 690, cy: 270, rx: 60, ry: 35 },    // Австралия
-  { cx: 425, cy: 100, rx: 60, ry: 28 },    // Европа
-  { cx: 630, cy: 155, rx: 40, ry: 30 },    // ЮВ Азия
-  { cx: 680, cy: 180, rx: 25, ry: 22 },    // Индонезия
-  { cx: 710, cy: 125, rx: 20, ry: 20 },    // Япония
-];
-
-function isLand(x: number, y: number): boolean {
-  for (const c of CONTINENTS) {
-    const dx = (x - c.cx) / c.rx;
-    const dy = (y - c.cy) / c.ry;
-    if (dx * dx + dy * dy <= 1) return true;
-  }
-  return false;
-}
+const geoUrl = `${import.meta.env.BASE_URL}maps/world-110m.json`;
 
 function WorldStreamsMap({ data }: { data: GeoCountry[] }) {
-  // Генерируем сетку точек один раз
-  const dots: Array<[number, number]> = [];
-  const step = 9;
-  for (let y = 20; y < 400; y += step) {
-    for (let x = 20; x < 800; x += step) {
-      if (isLand(x, y)) dots.push([x, y]);
-    }
+  const maxStreams = Math.max(...data.map((c) => c.streams), 1);
+  const home = COUNTRY_LATLNG.tj;
+
+  // set активных numeric id для подсветки
+  const activeIds = new Map<string, number>();
+  for (const c of data) {
+    const num = ISO_A2_TO_NUMERIC[c.code.toLowerCase()];
+    if (num) activeIds.set(num, c.streams / maxStreams);
   }
 
-  const maxStreams = Math.max(...data.map((c) => c.streams), 1);
-  const home = project(...COUNTRY_LATLNG.tj);
+  const homeNumeric = ISO_A2_TO_NUMERIC.tj;
 
   return (
-    <div className="relative aspect-[16/9] rounded-xl bg-gradient-to-br from-[hsl(226_60%_8%)] via-[hsl(222_50%_5%)] to-[hsl(240_70%_6%)] border border-white/[0.06] overflow-hidden hidden lg:block">
-      {/* радиальное свечение за Евразией */}
+    <div className="relative aspect-[16/9] rounded-xl bg-gradient-to-br from-[hsl(226_60%_7%)] via-[hsl(222_55%_4%)] to-[hsl(240_70%_5%)] border border-white/[0.06] overflow-hidden hidden lg:block">
+      {/* фон-глоу */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle at 68% 30%, hsl(226 84% 67% / 0.18) 0%, transparent 45%), radial-gradient(circle at 30% 60%, hsl(271 80% 68% / 0.12) 0%, transparent 50%)",
+            "radial-gradient(circle at 65% 35%, hsl(226 84% 67% / 0.16) 0%, transparent 45%), radial-gradient(circle at 20% 65%, hsl(271 80% 68% / 0.10) 0%, transparent 50%)",
         }}
       />
 
-      <svg viewBox="0 0 800 400" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice">
+      <ComposableMap
+        projection="geoEqualEarth"
+        projectionConfig={{ scale: 155, center: [20, 15] }}
+        width={820}
+        height={460}
+        style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}
+      >
         <defs>
-          <radialGradient id="pulseGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0.9" />
+          <radialGradient id="countryPulseGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0.85" />
             <stop offset="60%" stopColor="hsl(226 84% 67%)" stopOpacity="0.2" />
             <stop offset="100%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
           </radialGradient>
-          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
-            <stop offset="50%" stopColor="hsl(226 84% 67%)" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="hsl(271 80% 68%)" stopOpacity="0.1" />
+          <radialGradient id="homePulseGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="hsl(271 85% 70%)" stopOpacity="0.9" />
+            <stop offset="60%" stopColor="hsl(271 85% 70%)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="hsl(271 85% 70%)" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="geoArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="hsl(271 85% 70%)" stopOpacity="0" />
+            <stop offset="50%" stopColor="hsl(226 84% 67%)" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
           </linearGradient>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <filter id="markerGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.8" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -149,111 +140,145 @@ function WorldStreamsMap({ data }: { data: GeoCountry[] }) {
           </filter>
         </defs>
 
-        {/* dotted continents */}
-        <g>
-          {dots.map(([x, y], i) => (
-            <circle key={i} cx={x} cy={y} r={1} fill="hsl(226 30% 45%)" opacity={0.35} />
-          ))}
-        </g>
+        {/* континенты */}
+        <Geographies geography={geoUrl}>
+          {({ geographies }) =>
+            geographies.map((geo: any) => {
+              const id = String(geo.id).padStart(3, "0");
+              const weight = activeIds.get(id) ?? 0;
+              const isHome = id === homeNumeric;
+              const fill = isHome
+                ? "hsl(271 70% 35%)"
+                : weight > 0
+                  ? `hsl(226 70% ${18 + weight * 22}%)`
+                  : "hsl(222 30% 11%)";
+              return (
+                <Geography
+                  key={geo.rsmKey}
+                  geography={geo}
+                  fill={fill}
+                  stroke="hsl(226 30% 22%)"
+                  strokeWidth={0.4}
+                  style={{
+                    default: { outline: "none" },
+                    hover: { fill: "hsl(226 70% 40%)", outline: "none", cursor: "pointer" },
+                    pressed: { outline: "none" },
+                  }}
+                />
+              );
+            })
+          }
+        </Geographies>
 
-        {/* дуги от TJ к топ-5 странам */}
+        {/* анимированные дуги от TJ к топ-5 */}
         <g style={{ mixBlendMode: "screen" }}>
           {data.slice(0, 5).map((c, i) => {
             const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
-            if (!ll) return null;
-            const [tx, ty] = project(ll[0], ll[1]);
-            if (tx === home[0] && ty === home[1]) return null;
-            const midX = (home[0] + tx) / 2;
-            const midY = (home[1] + ty) / 2 - Math.abs(tx - home[0]) * 0.25 - 20;
-            const path = `M ${home[0]} ${home[1]} Q ${midX} ${midY} ${tx} ${ty}`;
-            const len = Math.hypot(tx - home[0], ty - home[1]) + 60;
+            if (!ll || c.code.toLowerCase() === "tj") return null;
             return (
-              <path
+              <Line
                 key={`arc-${c.code}`}
-                d={path}
-                fill="none"
-                stroke="url(#arcGrad)"
-                strokeWidth={1.2}
+                from={home}
+                to={ll}
+                stroke="url(#geoArcGrad)"
+                strokeWidth={1.3}
                 strokeLinecap="round"
-                strokeDasharray={`${len} ${len}`}
-                strokeDashoffset={len}
+                strokeDasharray="4 3"
                 style={{
-                  animation: `geo-arc-draw 3.6s ${i * 0.4}s ease-out infinite`,
+                  default: {
+                    animation: `geo-dash 2.4s ${i * 0.3}s linear infinite`,
+                  } as any,
                 }}
               />
             );
           })}
         </g>
 
-        {/* пульсирующие точки стран */}
-        <g filter="url(#glow)">
+        {/* маркеры стран */}
+        <g filter="url(#markerGlow)">
           {data.slice(0, 10).map((c, i) => {
             const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
             if (!ll) return null;
-            const [x, y] = project(ll[0], ll[1]);
             const weight = c.streams / maxStreams;
-            const coreR = 2.2 + weight * 3.2;
-            const haloR = 6 + weight * 12;
+            const coreR = 2.4 + weight * 3.0;
+            const haloR = 7 + weight * 11;
             const isHome = c.code.toLowerCase() === "tj";
-            const core = isHome ? "hsl(271 85% 70%)" : "hsl(226 84% 67%)";
+            const core = isHome ? "hsl(271 85% 72%)" : "hsl(226 84% 67%)";
+            const gradId = isHome ? "homePulseGrad" : "countryPulseGrad";
             return (
-              <g key={c.code}>
-                {/* ripple */}
+              <Marker key={c.code} coordinates={ll}>
+                {/* пульсирующее кольцо */}
                 <circle
-                  cx={x} cy={y} r={coreR}
+                  r={coreR}
                   fill="none"
                   stroke={core}
-                  strokeWidth={1}
-                  opacity={0.6}
+                  strokeWidth={1.2}
                   style={{
-                    transformOrigin: `${x}px ${y}px`,
+                    transformOrigin: "0 0",
                     animation: `geo-ping 2.4s ${i * 0.25}s ease-out infinite`,
                   }}
                 />
-                {/* halo */}
-                <circle cx={x} cy={y} r={haloR} fill="url(#pulseGrad)" opacity={0.7} />
-                {/* core */}
-                <circle cx={x} cy={y} r={coreR} fill={core} />
-                <circle cx={x} cy={y} r={coreR * 0.4} fill="white" opacity={0.9} />
-              </g>
+                <circle r={haloR} fill={`url(#${gradId})`} />
+                <circle r={coreR} fill={core} />
+                <circle r={coreR * 0.4} fill="white" opacity={0.95} />
+              </Marker>
             );
           })}
         </g>
 
-        {/* метки топ-3 */}
-        <g>
-          {data.slice(0, 3).map((c) => {
-            const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
-            if (!ll) return null;
-            const [x, y] = project(ll[0], ll[1]);
-            const label = c.streams >= 1_000_000
+        {/* подписи топ-3 */}
+        {data.slice(0, 3).map((c) => {
+          const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
+          if (!ll) return null;
+          const label =
+            c.streams >= 1_000_000
               ? `${(c.streams / 1_000_000).toFixed(1)}M`
               : `${(c.streams / 1000).toFixed(0)}K`;
-            return (
-              <g key={`lbl-${c.code}`} transform={`translate(${x + 10}, ${y - 8})`}>
-                <rect x={0} y={-9} rx={3} ry={3} width={label.length * 6 + 8} height={14}
-                  fill="hsl(222 40% 10%)" stroke="hsl(226 84% 67% / 0.4)" strokeWidth={0.5} />
-                <text x={4} y={1} fontSize={9} fontFamily="ui-monospace, monospace"
-                  fill="hsl(226 84% 80%)" dominantBaseline="middle">
-                  {c.code.toUpperCase()} · {label}
+          const text = `${c.code.toUpperCase()} · ${label}`;
+          const w = text.length * 5.2 + 10;
+          return (
+            <Marker key={`lbl-${c.code}`} coordinates={ll}>
+              <g transform="translate(10,-6)">
+                <rect
+                  x={0} y={-8} rx={3} ry={3} width={w} height={13}
+                  fill="hsl(222 45% 9% / 0.9)"
+                  stroke="hsl(226 84% 67% / 0.45)"
+                  strokeWidth={0.5}
+                />
+                <text
+                  x={5} y={0} fontSize={8}
+                  fontFamily="ui-monospace, monospace"
+                  fill="hsl(226 84% 82%)"
+                  dominantBaseline="middle"
+                >
+                  {text}
                 </text>
               </g>
-            );
-          })}
-        </g>
-      </svg>
+            </Marker>
+          );
+        })}
+      </ComposableMap>
 
-      {/* локальные keyframes — не требуют правок глобального css */}
+      {/* легенда */}
+      <div className="absolute bottom-2 left-3 flex items-center gap-3 text-[10px] text-white/50 pointer-events-none">
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[hsl(271_85%_72%)] shadow-[0_0_6px_hsl(271_85%_72%)]" />
+          Home: Tajikistan
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[hsl(226_84%_67%)] shadow-[0_0_6px_hsl(226_84%_67%)]" />
+          Active markets
+        </span>
+      </div>
+
       <style>{`
         @keyframes geo-ping {
           0% { transform: scale(1); opacity: 0.7; }
-          80%, 100% { transform: scale(4.5); opacity: 0; }
+          80%, 100% { transform: scale(4); opacity: 0; }
         }
-        @keyframes geo-arc-draw {
-          0% { stroke-dashoffset: var(--len, 300); opacity: 0; }
-          20% { opacity: 1; }
-          70% { stroke-dashoffset: 0; opacity: 1; }
-          100% { stroke-dashoffset: 0; opacity: 0; }
+        @keyframes geo-dash {
+          from { stroke-dashoffset: 0; }
+          to { stroke-dashoffset: -14; }
         }
       `}</style>
     </div>
