@@ -43,13 +43,22 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     labelId: user.labelId,
   };
 
-  req.session.user = sessionUser;
-  req.session.save((err) => {
-    if (err) {
+  // Regenerate session ID to prevent session fixation
+  req.session.regenerate((regenErr) => {
+    if (regenErr) {
+      req.log?.error({ err: regenErr }, "session.regenerate failed");
       res.status(500).json({ error: "Не удалось создать сессию" });
       return;
     }
-    res.json({ user: sessionUser });
+    req.session.user = sessionUser;
+    req.session.save((err) => {
+      if (err) {
+        req.log?.error({ err }, "session.save failed");
+        res.status(500).json({ error: "Не удалось создать сессию" });
+        return;
+      }
+      res.json({ user: sessionUser });
+    });
   });
 });
 

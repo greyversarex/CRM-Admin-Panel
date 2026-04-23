@@ -36,6 +36,14 @@ app.use(express.urlencoded({ extended: true }));
 
 const PgStore = connectPgSimple(session);
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable is required in production");
+  }
+  logger.warn("SESSION_SECRET is not set — using insecure development fallback. DO NOT deploy without setting it.");
+}
+
 app.use(
   session({
     store: new PgStore({
@@ -44,7 +52,7 @@ app.use(
       createTableIfMissing: true,
     }),
     name: "tm.sid",
-    secret: process.env.SESSION_SECRET || "dev-only-secret-change-me-in-production",
+    secret: sessionSecret || "dev-only-insecure-fallback-do-not-use-in-prod",
     resave: false,
     saveUninitialized: false,
     rolling: true,

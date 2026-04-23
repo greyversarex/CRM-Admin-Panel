@@ -356,9 +356,13 @@ export default function Login() {
     else setError(result.error ?? "Ошибка входа");
   };
 
-  const handleDemo = (role: Role) => {
-    loginAs(role);
-    navigate("/");
+  const handleDemo = async (role: Role) => {
+    setError("");
+    setLoading(true);
+    const result = await loginAs(role);
+    setLoading(false);
+    if (result.ok) navigate("/");
+    else setError(result.error ?? "Не удалось войти как " + role);
   };
 
   return (
@@ -452,10 +456,11 @@ export default function Login() {
               </Button>
             </form>
 
-            {/* Demo accounts */}
+            {/* Demo accounts — visible only in development */}
+            {import.meta.env.DEV && (
             <div className="mt-6 pt-5 border-t border-white/10">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/30 mb-3">
-                Демо-аккаунты
+                Демо-аккаунты (dev)
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {DEMO_ACCOUNTS.map(acc => (
@@ -474,6 +479,7 @@ export default function Login() {
                 ))}
               </div>
             </div>
+            )}
           </div>
         </div>
 
