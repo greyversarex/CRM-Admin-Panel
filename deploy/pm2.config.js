@@ -1,3 +1,6 @@
+// pm2 запускает API-сервер. DATABASE_URL, SESSION_SECRET, PORT и пр.
+// загружаются деплой-скриптом (2_deploy.sh) в окружение перед `pm2 startOrReload`,
+// поэтому здесь их повторять не надо.
 module.exports = {
   apps: [
     {
@@ -11,7 +14,6 @@ module.exports = {
       max_memory_restart: "512M",
       env_production: {
         NODE_ENV: "production",
-        PORT: "3001",
       },
       log_date_format: "YYYY-MM-DD HH:mm:ss",
       out_file: "/var/log/tajikmusic/api-out.log",

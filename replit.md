@@ -24,6 +24,21 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 - `artifacts/api-server` — Express 5 API server (port 8080, served at `/api`)
 - `artifacts/crm-panel` — React + Vite frontend (previewPath `/`)
 
+## Production deployment
+
+Прод живёт **не на Replit** — на VPS (Таймвеб, далее возможен AWS). Replit = только разработка.
+Деплой-обвязка лежит в `deploy/` и `Dockerfile` / `docker-compose.yml` в корне.
+
+Два пути (см. `deploy/README.md`):
+- **Ubuntu + pm2 + nginx** — `bash deploy/1_setup.sh` (один раз) → `bash deploy/2_deploy.sh` (каждый деплой).
+  `2_deploy.sh` сам делает `pnpm install --frozen-lockfile`, `drizzle-kit push`, билд API/фронта, `pm2 startOrReload --update-env`.
+  Первый запуск с `SEED=1` для засева тестовых данных.
+- **Docker Compose** — `docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run push`.
+
+Все секреты живут в `/var/www/tajikmusic/.env` (или корневом `.env` в случае docker), шаблон — `deploy/.env.example`.
+Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
+Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trust-proxy=1, чтобы за nginx работал HTTPS.
+
 ## Auth & Data Scoping (Phase 1.1 + 1.2)
 
 - Real session auth: `express-session` + `connect-pg-simple`, bcrypt password hashes, session ID regen on login.
