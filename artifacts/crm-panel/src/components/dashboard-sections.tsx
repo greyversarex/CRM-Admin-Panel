@@ -56,57 +56,207 @@ export function GeoStreamsCard({ data }: { data: GeoCountry[] }) {
             ))}
           </div>
 
-          {/* Декоративная "карта" — стилизованные пятна */}
-          <div className="relative aspect-[16/10] rounded-xl bg-gradient-to-br from-[hsl(222_50%_8%)] to-[hsl(222_50%_4%)] border border-white/[0.05] overflow-hidden hidden lg:block">
-            <svg viewBox="0 0 800 500" className="absolute inset-0 w-full h-full opacity-50">
-              <defs>
-                <radialGradient id="dot1" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0.6" />
-                  <stop offset="100%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
-                </radialGradient>
-                <radialGradient id="dot2" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="hsl(271 80% 68%)" stopOpacity="0.5" />
-                  <stop offset="100%" stopColor="hsl(271 80% 68%)" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-              {/* TJ — крупная точка */}
-              <circle cx="500" cy="200" r="120" fill="url(#dot1)" />
-              {/* RU */}
-              <circle cx="540" cy="120" r="90" fill="url(#dot2)" />
-              {/* UZ */}
-              <circle cx="470" cy="220" r="60" fill="url(#dot1)" />
-              {/* US */}
-              <circle cx="180" cy="200" r="50" fill="url(#dot2)" />
-              {/* DE */}
-              <circle cx="400" cy="170" r="35" fill="url(#dot2)" />
-            </svg>
-            {/* Точки городов */}
-            {data.slice(0, 8).map((c, i) => {
-              const positions: Record<string, [number, number]> = {
-                tj: [62, 45], ru: [68, 25], uz: [60, 47], kz: [62, 30],
-                kg: [64, 42], us: [22, 42], de: [50, 38], tr: [54, 45],
-              };
-              const [x, y] = positions[c.code] ?? [50, 50];
-              const size = Math.max(4, c.percent / 8);
-              return (
-                <span
-                  key={c.code}
-                  className="absolute rounded-full bg-primary shadow-[0_0_12px_hsl(var(--primary)/0.8)] animate-pulse"
-                  style={{
-                    left: `${x}%`,
-                    top: `${y}%`,
-                    width: size,
-                    height: size,
-                    animationDelay: `${i * 200}ms`,
-                  }}
-                  title={`${c.name}: ${c.streams.toLocaleString()}`}
-                />
-              );
-            })}
-          </div>
+          {/* Dotted world map с пульсирующими странами */}
+          <WorldStreamsMap data={data} />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ════════════════ Dotted World Map ════════════════
+
+// Координаты стран: [longitude, latitude]
+const COUNTRY_LATLNG: Record<string, [number, number]> = {
+  tj: [71.0, 38.9], ru: [100.0, 61.5], uz: [64.6, 41.4], kz: [66.9, 48.0],
+  kg: [74.8, 41.2], us: [-95.7, 38.0], de: [10.5, 51.2], tr: [35.2, 39.0],
+  fr: [2.2, 46.6], gb: [-1.0, 52.5], in: [78.9, 20.6], cn: [104.2, 35.9],
+  jp: [138.3, 36.2], br: [-51.9, -14.2], au: [133.8, -25.3], ae: [53.8, 23.4],
+};
+
+// equirectangular projection внутри viewBox 800×400
+function project(lon: number, lat: number): [number, number] {
+  const x = ((lon + 180) / 360) * 800;
+  const y = ((90 - lat) / 180) * 400;
+  return [x, y];
+}
+
+// Упрощённые эллипсы континентов для маски dot-grid
+const CONTINENTS = [
+  { cx: 500, cy: 110, rx: 220, ry: 70 },   // Евразия север
+  { cx: 540, cy: 160, rx: 180, ry: 50 },   // Евразия юг/Индия
+  { cx: 420, cy: 210, rx: 70, ry: 100 },   // Африка
+  { cx: 180, cy: 130, rx: 110, ry: 80 },   // Северная Америка
+  { cx: 270, cy: 270, rx: 55, ry: 90 },    // Южная Америка
+  { cx: 690, cy: 270, rx: 60, ry: 35 },    // Австралия
+  { cx: 425, cy: 100, rx: 60, ry: 28 },    // Европа
+  { cx: 630, cy: 155, rx: 40, ry: 30 },    // ЮВ Азия
+  { cx: 680, cy: 180, rx: 25, ry: 22 },    // Индонезия
+  { cx: 710, cy: 125, rx: 20, ry: 20 },    // Япония
+];
+
+function isLand(x: number, y: number): boolean {
+  for (const c of CONTINENTS) {
+    const dx = (x - c.cx) / c.rx;
+    const dy = (y - c.cy) / c.ry;
+    if (dx * dx + dy * dy <= 1) return true;
+  }
+  return false;
+}
+
+function WorldStreamsMap({ data }: { data: GeoCountry[] }) {
+  // Генерируем сетку точек один раз
+  const dots: Array<[number, number]> = [];
+  const step = 9;
+  for (let y = 20; y < 400; y += step) {
+    for (let x = 20; x < 800; x += step) {
+      if (isLand(x, y)) dots.push([x, y]);
+    }
+  }
+
+  const maxStreams = Math.max(...data.map((c) => c.streams), 1);
+  const home = project(...COUNTRY_LATLNG.tj);
+
+  return (
+    <div className="relative aspect-[16/9] rounded-xl bg-gradient-to-br from-[hsl(226_60%_8%)] via-[hsl(222_50%_5%)] to-[hsl(240_70%_6%)] border border-white/[0.06] overflow-hidden hidden lg:block">
+      {/* радиальное свечение за Евразией */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(circle at 68% 30%, hsl(226 84% 67% / 0.18) 0%, transparent 45%), radial-gradient(circle at 30% 60%, hsl(271 80% 68% / 0.12) 0%, transparent 50%)",
+        }}
+      />
+
+      <svg viewBox="0 0 800 400" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <radialGradient id="pulseGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0.9" />
+            <stop offset="60%" stopColor="hsl(226 84% 67%)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="hsl(226 84% 67%)" stopOpacity="0" />
+            <stop offset="50%" stopColor="hsl(226 84% 67%)" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="hsl(271 80% 68%)" stopOpacity="0.1" />
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* dotted continents */}
+        <g>
+          {dots.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r={1} fill="hsl(226 30% 45%)" opacity={0.35} />
+          ))}
+        </g>
+
+        {/* дуги от TJ к топ-5 странам */}
+        <g style={{ mixBlendMode: "screen" }}>
+          {data.slice(0, 5).map((c, i) => {
+            const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
+            if (!ll) return null;
+            const [tx, ty] = project(ll[0], ll[1]);
+            if (tx === home[0] && ty === home[1]) return null;
+            const midX = (home[0] + tx) / 2;
+            const midY = (home[1] + ty) / 2 - Math.abs(tx - home[0]) * 0.25 - 20;
+            const path = `M ${home[0]} ${home[1]} Q ${midX} ${midY} ${tx} ${ty}`;
+            const len = Math.hypot(tx - home[0], ty - home[1]) + 60;
+            return (
+              <path
+                key={`arc-${c.code}`}
+                d={path}
+                fill="none"
+                stroke="url(#arcGrad)"
+                strokeWidth={1.2}
+                strokeLinecap="round"
+                strokeDasharray={`${len} ${len}`}
+                strokeDashoffset={len}
+                style={{
+                  animation: `geo-arc-draw 3.6s ${i * 0.4}s ease-out infinite`,
+                }}
+              />
+            );
+          })}
+        </g>
+
+        {/* пульсирующие точки стран */}
+        <g filter="url(#glow)">
+          {data.slice(0, 10).map((c, i) => {
+            const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
+            if (!ll) return null;
+            const [x, y] = project(ll[0], ll[1]);
+            const weight = c.streams / maxStreams;
+            const coreR = 2.2 + weight * 3.2;
+            const haloR = 6 + weight * 12;
+            const isHome = c.code.toLowerCase() === "tj";
+            const core = isHome ? "hsl(271 85% 70%)" : "hsl(226 84% 67%)";
+            return (
+              <g key={c.code}>
+                {/* ripple */}
+                <circle
+                  cx={x} cy={y} r={coreR}
+                  fill="none"
+                  stroke={core}
+                  strokeWidth={1}
+                  opacity={0.6}
+                  style={{
+                    transformOrigin: `${x}px ${y}px`,
+                    animation: `geo-ping 2.4s ${i * 0.25}s ease-out infinite`,
+                  }}
+                />
+                {/* halo */}
+                <circle cx={x} cy={y} r={haloR} fill="url(#pulseGrad)" opacity={0.7} />
+                {/* core */}
+                <circle cx={x} cy={y} r={coreR} fill={core} />
+                <circle cx={x} cy={y} r={coreR * 0.4} fill="white" opacity={0.9} />
+              </g>
+            );
+          })}
+        </g>
+
+        {/* метки топ-3 */}
+        <g>
+          {data.slice(0, 3).map((c) => {
+            const ll = COUNTRY_LATLNG[c.code.toLowerCase()];
+            if (!ll) return null;
+            const [x, y] = project(ll[0], ll[1]);
+            const label = c.streams >= 1_000_000
+              ? `${(c.streams / 1_000_000).toFixed(1)}M`
+              : `${(c.streams / 1000).toFixed(0)}K`;
+            return (
+              <g key={`lbl-${c.code}`} transform={`translate(${x + 10}, ${y - 8})`}>
+                <rect x={0} y={-9} rx={3} ry={3} width={label.length * 6 + 8} height={14}
+                  fill="hsl(222 40% 10%)" stroke="hsl(226 84% 67% / 0.4)" strokeWidth={0.5} />
+                <text x={4} y={1} fontSize={9} fontFamily="ui-monospace, monospace"
+                  fill="hsl(226 84% 80%)" dominantBaseline="middle">
+                  {c.code.toUpperCase()} · {label}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {/* локальные keyframes — не требуют правок глобального css */}
+      <style>{`
+        @keyframes geo-ping {
+          0% { transform: scale(1); opacity: 0.7; }
+          80%, 100% { transform: scale(4.5); opacity: 0; }
+        }
+        @keyframes geo-arc-draw {
+          0% { stroke-dashoffset: var(--len, 300); opacity: 0; }
+          20% { opacity: 1; }
+          70% { stroke-dashoffset: 0; opacity: 1; }
+          100% { stroke-dashoffset: 0; opacity: 0; }
+        }
+      `}</style>
+    </div>
   );
 }
 
