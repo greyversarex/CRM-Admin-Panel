@@ -146,10 +146,10 @@ Self-service эндпоинты (НЕ требуют admin):
 - `/splits` — Revenue split management with visual distribution bars
 - `/payouts` — Admin payout requests with approve/reject workflow
 - `/publishing` — DB-backed publishing works (admin/manager only). CRUD via `/api/publishing/works` (POST/PUT, no DELETE — works are IP). Editor dialog with dynamic writers list (name/role/share/CAE-IPI), share-sum-100% validation, ASCAP/BMI/Songtrust toggles, territory list. Server-side `validateWriters()` enforces share bounds 0–100, no duplicates by `(name, caeIpi)`, sum=100%; client mirrors same checks.
-- `/analytics` — Streams, platform breakdown, geography analytics
+- `/analytics` — Real analytics dashboard (admin/manager only). Backed by `/api/analytics/{streams,platforms,geography,top-tracks}` aggregating from `usage_reports` table. Period selector: 7d/30d/90d/180d/1y. Daily bar/area chart on short periods, monthly bins on long ones. Pie chart by platform with brand colours, geography progress bars by country with flags, top-tracks table with prior-period trend %. Removed legacy mock UGC/TikTok/Alerts/Playlists tabs (no real data sources). `usage_reports` is seeded deterministically (~52K rows, 6 months × 6 platforms × 8 countries × all tracks) — re-seed via raw SQL if needed (TRUNCATE + INSERT in scratchpad).
 - `/delivery` — DDEX delivery queue
 - `/users` — User management with roles
-- `/settings` — Settings placeholder
+- `/settings` — Admin-only system settings (6 tabs). **Live tabs**: DDEX & DSP (real `/api/integrations` filtered to `dsp`+`delivery` categories with enable/disable Switch via POST `/integrations/:code/enable` and Test button via POST `/integrations/:code/test`, optimistic updates with rollback), Audit Logs (real `/api/dashboard/recent-activity` with client-side filter, severity inferred from event type). **Demo tabs** (clearly marked with amber `Demo data` badge): General/Branding, API Keys (no `api_keys` table yet), Security (2FA/IP rules), Backup History.
 
 ## Theme
 
