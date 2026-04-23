@@ -9,7 +9,11 @@ import {
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
 import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Music2, BookMarked } from "lucide-react";
-import { GeoStreamsCard, UgcOverviewCard, SocialViewsCard } from "@/components/dashboard-sections";
+import {
+  GeoStreamsCard, UgcOverviewCard, SocialViewsCard,
+  TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
+  TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard,
+} from "@/components/dashboard-sections";
 import { getGeoStreams, getUgcOverview, getSocialBlocks, getPublishingKpis } from "@/data/dashboard-extras";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -521,7 +525,39 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* ── Гео-распределение ── */}
+        {/* ══ Admin/Manager-only widgets (реальные данные из API) ══ */}
+        {(role === "admin" || role === "manager") && (
+          <>
+            {/* Streams donut + Latest Releases */}
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div className="lg:col-span-2">
+                <TopDspCard metric="streams" />
+              </div>
+              <div className="lg:col-span-3">
+                <TopTerritoriesCard />
+              </div>
+            </div>
+
+            <LatestReleasesGridCard />
+
+            {/* Top Tracks + Royalty Summary + Earnings donut */}
+            <div className="grid gap-4 lg:grid-cols-7">
+              <div className="lg:col-span-3">
+                <TopTracksCard />
+              </div>
+              <div className="lg:col-span-2">
+                <TopDspCard metric="revenue" title="Top DSP · Earnings" />
+              </div>
+              <div className="lg:col-span-2">
+                <RoyaltySummaryCard />
+              </div>
+            </div>
+
+            <ArtistsStatsTableCard />
+          </>
+        )}
+
+        {/* ── Гео-распределение (все роли) ── */}
         <GeoStreamsCard data={getGeoStreams(role)} />
 
         {/* ── UGC обзор ── */}
