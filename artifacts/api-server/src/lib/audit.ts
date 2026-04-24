@@ -4,46 +4,96 @@ import { logger } from "./logger";
 
 // ─── Sanitization ───────────────────────────────────────────────────────────
 //
-// СТРОГИЙ blocklist + по-таблице whitelist.  Лучше пропустить безобидное поле,
-// чем случайно записать пароль или дешифрованный API-ключ. Все имена — camelCase,
-// поскольку Drizzle возвращает selected rows в camelCase.
-const NEVER_LOG_FIELDS = new Set([
-  "passwordHash",     // bcrypt hash (всё равно секрет — никогда не пишем)
-  "password",         // на всякий случай — если кто-то засунёт plain в before/after
-  "cipherText",       // зашифрованные креды интеграций (lib/db/src/schema/integrations.ts)
-  "secret",
-  "token",
-  "accessToken",
-  "refreshToken",
-  "apiKey",
-  "privateKey",
-  // Внутренние lockout-поля (Task #2) — не светим во внешних логах
-  "failedLoginAttempts",
-  "lockedUntil",
+// СТРОГИЙ allowlist по сущностям. Default-deny: если поле не в allowlist своей
+// сущности — оно НЕ попадает в audit. Это compliance-требование (§4.12 ТЗ):
+// «лучше не сохранить лишнее, чем случайно записать пароль/секрет/PII».
+//
+// Дополнительный nested-blocklist режет известно-секретные ключи на любой
+// глубине внутри jsonb-полей (defence-in-depth).
+const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
+  release: new Set([
+    "id", "title", "releaseType", "status", "upc", "artistId", "labelId",
+    "coverUrl", "genre", "releaseDate", "language", "isExplicit", "territories",
+    "pLine", "cLine", "statusNote", "createdAt", "updatedAt",
+  ]),
+  track: new Set([
+    "id", "title", "isrc", "releaseId", "artistId", "trackNumber",
+    "durationSeconds", "genre", "language", "isExplicit", "composerName",
+    "lyricistName", "iswc", "audioUrl", "createdAt", "updatedAt",
+  ]),
+  artist: new Set([
+    "id", "name", "slug", "imageUrl", "genre", "bio", "country", "labelId",
+    "spotifyId", "appleId", "status", "createdAt", "updatedAt",
+    // socialLinks НЕ включаем: это PII / контакты, не нужно для аудита изменений.
+  ]),
+  label: new Set([
+    "id", "name", "logoUrl", "country", "website", "parentLabelId", "status",
+    "createdAt", "updatedAt",
+  ]),
+  transaction: new Set([
+    "id", "type", "amount", "currency", "artistId", "labelId", "releaseId",
+    "platform", "description", "period", "createdAt",
+  ]),
+  payout: new Set([
+    "id", "artistId", "labelId", "amount", "currency", "method", "status",
+    "rejectionReason", "processedAt", "createdAt", "updatedAt",
+    // paymentDetails (банковские реквизиты) — категорически НЕ логируем.
+  ]),
+  split: new Set([
+    "id", "releaseId", "trackId", "participants", "createdAt", "updatedAt",
+    // participants содержит email + % share — это и есть смысл аудита splits.
+  ]),
+  user: new Set([
+    "id", "name", "email", "role", "status", "avatarUrl", "artistId", "labelId",
+    "lastLoginAt", "createdAt", "updatedAt",
+    // passwordHash, phone/address/zipCode (PII), failedLoginAttempts/lockedUntil
+    // (lockout механика — внутренняя), dspProfiles/socialLinks (могут содержать
+    // токены/ссылки) — НЕ логируем.
+  ]),
+};
+
+// Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если
+// разрешённое поле верхнего уровня (`participants`, `paymentDetails` etc) когда-то
+// случайно получит подобный nested-ключ — он не утечёт в audit.
+const NEVER_LOG_NESTED = new Set([
+  "passwordHash", "password", "cipherText", "secret", "token",
+  "accessToken", "refreshToken", "apiKey", "privateKey", "bearerToken",
+  "clientSecret", "webhookSecret",
 ]);
 
-// Рекурсивная санитизация: вырезает blocked-ключи на ЛЮБОЙ глубине вложенности.
-// Защищает на случай, если в jsonb-поле (вроде integrations.settings) когда-нибудь
-// окажется чувствительное поле во вложенном объекте.
-function sanitizeValue(v: unknown, depth: number): unknown {
+function sanitizeNested(v: unknown, depth: number): unknown {
   if (depth > 10) return v;
   if (v === null || v === undefined) return v;
   if (v instanceof Date) return v.toISOString();
-  if (Array.isArray(v)) return v.map((item) => sanitizeValue(item, depth + 1));
+  if (Array.isArray(v)) return v.map((item) => sanitizeNested(item, depth + 1));
   if (typeof v === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-      if (NEVER_LOG_FIELDS.has(k)) continue;
-      out[k] = sanitizeValue(val, depth + 1);
+      if (NEVER_LOG_NESTED.has(k)) continue;
+      out[k] = sanitizeNested(val, depth + 1);
     }
     return out;
   }
   return v;
 }
 
-export function sanitizeFields<T extends Record<string, unknown> | null | undefined>(row: T): T {
+export function sanitizeFields<T extends Record<string, unknown> | null | undefined>(
+  row: T,
+  entityType?: string,
+): T {
   if (row === null || row === undefined) return row;
-  return sanitizeValue(row, 0) as T;
+  const allow = entityType ? ENTITY_ALLOWLIST[entityType] : undefined;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    // Default-deny: если есть allowlist для этой сущности и поля в нём нет — пропускаем.
+    if (allow && !allow.has(k)) continue;
+    // Если allowlist неизвестен (новый entity_type без записи) — также default-deny:
+    // пишем только id и временные метки, остальное игнорируем. Это защита от
+    // случайной утечки при добавлении новых роут без обновления audit.ts.
+    if (!allow && !["id", "createdAt", "updatedAt"].includes(k)) continue;
+    out[k] = sanitizeNested(v, 0);
+  }
+  return out as T;
 }
 
 // ─── Diff ───────────────────────────────────────────────────────────────────
@@ -119,8 +169,8 @@ export interface AuditOptions {
 export async function auditMutation(req: Request, opts: AuditOptions): Promise<void> {
   try {
     const sessionUser = req.session?.user;
-    const sanitizedBefore = opts.before ? sanitizeFields(opts.before) : null;
-    const sanitizedAfter = opts.after ? sanitizeFields(opts.after) : null;
+    const sanitizedBefore = opts.before ? sanitizeFields(opts.before, opts.entityType) : null;
+    const sanitizedAfter = opts.after ? sanitizeFields(opts.after, opts.entityType) : null;
     const diff = computeDiff(sanitizedBefore, sanitizedAfter);
 
     await db.insert(auditLogTable).values({

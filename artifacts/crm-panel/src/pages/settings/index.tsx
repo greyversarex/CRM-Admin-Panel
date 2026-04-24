@@ -119,6 +119,9 @@ export default function Settings() {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === "admin";
+  // Task #3: audit-log доступен и менеджерам (бэкенд тоже разрешает обоим).
+  const canViewAudit = user?.role === "admin" || user?.role === "manager";
+  const canViewSettings = isAdmin || canViewAudit;
 
   // Static settings state (no backend wiring — visual only)
   const [revealKey, setRevealKey] = useState<string | null>(null);
@@ -198,17 +201,17 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canViewAudit) return;
     loadIntegrations();
     loadActivity();
     loadAudit();
     loadAuditFacets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [canViewAudit]);
 
   // Refetch audit when filters change
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canViewAudit) return;
     loadAudit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auditEntityType, auditAction, auditUserId]);
@@ -263,14 +266,14 @@ export default function Settings() {
   if (isLoading) {
     return <Layout><div className="p-6"><Skeleton className="h-32 w-full" /></div></Layout>;
   }
-  if (!isAdmin) {
+  if (!canViewSettings) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
           <Lock className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <h1 className="text-xl font-semibold">Доступ ограничен</h1>
           <p className="text-sm text-muted-foreground max-w-md">
-            Системные настройки доступны только администраторам.
+            Системные настройки доступны только администраторам и менеджерам.
           </p>
         </div>
       </Layout>

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable, activityLogTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable } from "@workspace/db";
 import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
@@ -292,13 +292,8 @@ router.post("/releases", async (req, res): Promise<void> => {
 
   const [release] = await db.insert(releasesTable).values(parsed.data).returning();
 
-  await db.insert(activityLogTable).values({
-    type: "release_created",
-    title: "New Release Created",
-    description: `Release "${release.title}" was created`,
-    entityType: "release",
-    entityId: release.id,
-  });
+  // Task #3: пишем только в audit_log, в activity_log больше не дублируем.
+  // Старые записи activity_log остаются для дашборд-виджета «Recent activity».
   void auditMutation(req, { action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
   const enriched = await enrichRelease(release);
@@ -416,13 +411,7 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
     return;
   }
 
-  await db.insert(activityLogTable).values({
-    type: "release_status_changed",
-    title: "Release Status Updated",
-    description: `Release "${release.title}" status changed to ${parsed.data.status}`,
-    entityType: "release",
-    entityId: release.id,
-  });
+  // Task #3: пишем только в audit_log, в activity_log больше не дублируем.
   void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
 
   const enriched = await enrichRelease(release);
