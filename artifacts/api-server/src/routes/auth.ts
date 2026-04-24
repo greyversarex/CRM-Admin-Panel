@@ -91,9 +91,20 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) {
     // Bad password: increment counter and, if threshold reached, set lockout window.
-    const nextAttempts = (user.failedLoginAttempts ?? 0) + 1;
+    // If a previous lockout window has already expired (lockedUntil is in the past),
+    // forget the old fail-count and start a fresh streak — so the user gets a full
+    // 5 attempts after each lockout instead of being instantly re-locked on the
+    // first miss after the window elapses.
+    const lockoutExpired =
+      user.lockedUntil !== null && user.lockedUntil.getTime() <= Date.now();
+    const baseAttempts = lockoutExpired ? 0 : user.failedLoginAttempts ?? 0;
+    const nextAttempts = baseAttempts + 1;
     const willLock = nextAttempts >= LOCKOUT_THRESHOLD;
-    const newLockedUntil = willLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : user.lockedUntil;
+    const newLockedUntil = willLock
+      ? new Date(Date.now() + LOCKOUT_DURATION_MS)
+      : lockoutExpired
+        ? null
+        : user.lockedUntil;
     await db
       .update(usersTable)
       .set({

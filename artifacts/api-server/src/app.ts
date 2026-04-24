@@ -146,7 +146,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.ip ?? "unknown",
-  skip: (req) => req.path === "/health",
+  skip: (req) => req.path === "/healthz",
   message: { error: "Слишком много запросов. Подожди немного и попробуй снова." },
 });
 app.use("/api", apiLimiter);
