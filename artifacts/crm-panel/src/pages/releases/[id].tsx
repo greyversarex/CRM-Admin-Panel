@@ -50,7 +50,10 @@ const DELIVER_TARGETS: Array<{ code: DeliveryTarget; label: string }> = [
   { code: "ok_music",      label: "OK Music" },
 ];
 
-const CAN_DELIVER_STATUSES = new Set(["approved", "delivering", "live"]);
+// Backend: POST /releases/:id/deliver принимает только status='approved' (409 иначе),
+// поэтому кнопку показываем строго на approved. Re-deliver на delivering/live — отдельная
+// фича (требует takedown→approve flow), сюда не входит.
+const CAN_DELIVER_STATUSES = new Set(["approved"]);
 const TAKEDOWN_REASONS = [
   "Other", "Legal/contractual obligations", "Incorrect metadata",
   "Wrong audio file", "Replacement release", "Artist request",
