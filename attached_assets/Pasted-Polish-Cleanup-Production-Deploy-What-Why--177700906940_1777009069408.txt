@@ -1,0 +1,38 @@
+Polish, Cleanup & Production Deploy
+What & Why
+Финальная сборка: убрать недоделанные разделы из меню, прогнать end-to-end сценарий маркетплейса, развернуть на VPS заказчика.
+
+Done looks like
+Из сайдбара убраны разделы без backend (/marketing, /communications, /automation, /rights) либо помечены бейджем «Скоро» и доступны только админу.
+Удалён дублирующий /integrations (его функционал уже в Settings → DSP).
+Удалён legacy-мок из dashboard.tsx, catalog.tsx, releases/index.tsx и т.п. — все страницы 100% на реальных API.
+Прогнан полный сценарий: артист регистрируется → подтверждает email → загружает релиз → ACRCloud clean → админ одобряет → пакет ERN 4.3 сгенерирован → отмечен live → стримы залиты в usage_reports → артист видит роялти за вычетом комиссии → запрашивает выплату → KYC → админ одобряет → ЮKassa переводит. Всё работает.
+README в репо обновлён с инструкцией для заказчика «как добавить нового админа» и т.п.
+Production deploy на VPS заказчика по deploy/2_deploy.sh. nginx + pm2, HTTPS-сертификат через Let's Encrypt.
+Доменное имя заказчика подключено.
+Резервное копирование БД настроено (pg_dump cron + загрузка в Yandex Object Storage).
+Базовый мониторинг: uptime-чек, алерт в Telegram при падении.
+Out of scope
+A/B тестирование, аналитика поведения.
+Многоязычность (пока только русский, английский — отдельная задача после запуска).
+Mobile-приложение.
+Полный security-аудит — только базовый чеклист (helmet, rate-limit, CSP заголовки).
+Steps
+Cleanup мок-страниц — Решить и реализовать: удалить или скрыть /marketing, /communications, /automation, /rights, /integrations. Обновить меню сайдбара. Убрать из роутера.
+Lint legacy-моков — Пройти по dashboard.tsx, catalog.tsx, releases/index.tsx, artists/index.tsx, labels/index.tsx, users/index.tsx, payouts/index.tsx: убедиться что все используют API. Заменить захардкоженные значения на реальные.
+End-to-end сценарий — Скрипт/чек-лист QA: пройти весь путь маркетплейса с тестовыми пользователями. Зафиксировать все найденные баги, исправить.
+Документация для заказчика — Обновить README.md и replit.md: как создать админа, как поменять комиссию, как просмотреть логи, что делать если ЮKassa-webhook не приходит.
+Деплой на VPS — Прогон deploy/1_setup.sh на чистом сервере, потом deploy/2_deploy.sh. Подключить домен, выпустить SSL через certbot.
+Резервное копирование — Cron pg_dump | gzip | aws s3 cp ежедневно в Yandex Object Storage с 30-дневной ротацией.
+Мониторинг — Простейший uptime-bot: cron curl /api/health каждые 5 минут, при фейле — сообщение в Telegram-канал заказчика.
+Финальный security-чеклист — Helmet, rate-limit, secrets в env, HTTPS, отключённые dev-эндпоинты, обновлённый CSP.
+Relevant files
+artifacts/crm-panel/src/App.tsx
+artifacts/crm-panel/src/components/sidebar.tsx
+artifacts/crm-panel/src/pages/dashboard.tsx
+artifacts/crm-panel/src/pages/catalog.tsx
+deploy/README.md
+deploy/1_setup.sh
+deploy/2_deploy.sh
+replit.md
+README.md

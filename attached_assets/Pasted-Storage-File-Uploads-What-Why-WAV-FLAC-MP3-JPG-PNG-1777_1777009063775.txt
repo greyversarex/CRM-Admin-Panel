@@ -1,0 +1,33 @@
+Storage & File Uploads
+What & Why
+Артисты должны загружать аудио (WAV/FLAC/MP3) и обложки (JPG/PNG) — без этого ни модерации, ни дистрибуции, ни ACRCloud. Это фундамент всего маркетплейса.
+
+Done looks like
+Артист на странице релиза/трека жмёт «Загрузить аудио», выбирает файл до 200 МБ, видит прогресс-бар, после загрузки имя файла, длительность, размер.
+То же для обложки релиза (минимум 3000×3000 px JPG/PNG).
+Файлы хранятся в Object Storage (Replit dev), доступны по приватным signed URL — не светятся в публичном CDN.
+На проде — переключаемая обёртка под S3-совместимое хранилище (Yandex Object Storage).
+Админ видит загруженные файлы в карточке релиза, может прослушать и скачать.
+Удаление трека удаляет связанные файлы из стораджа.
+Out of scope
+Транскодинг (конвертация WAV→MP3 на лету) — отложить.
+Watermark-предпрослушка для артистов до одобрения — отложить.
+Прямая отправка файлов на DSP — это в задаче Дистрибуция.
+Steps
+Storage abstraction layer — Тонкая обёртка StorageProvider с двумя реализациями: Replit Object Storage (dev) и S3-совместимая (prod через @aws-sdk/client-s3). Переключение через env STORAGE_DRIVER.
+DB-схема для assets — Таблица assets (id, kind: audio|cover|document, release_id, track_id, filename, mime, size_bytes, duration_sec, sha256, storage_key, uploaded_by, created_at). Уникальный индекс по sha256 для дедупликации.
+Загрузка через presigned URL — Эндпоинт POST /api/assets/presign возвращает upload-URL и ключ; клиент льёт напрямую в сторадж; POST /api/assets/confirm фиксирует запись в БД с метаданными.
+Извлечение метаданных аудио — Серверная утилита (music-metadata пакет) считывает duration/bitrate/sample-rate из загруженного файла, пишет в assets.
+Связь с релизом и треками — UI на /releases/:id и /releases/new для загрузки аудио к каждому треку и одной обложки на релиз. Прогресс-бар и валидация формата/размера на клиенте.
+Скачивание/прослушивание — GET /api/assets/:id/download отдаёт signed URL с TTL 5 мин. Доступ только владельцу артисту/лейблу/админу.
+Скоуп прав — Артист видит только свои ассеты, лейбл — только своих артистов, админ — все.
+Relevant files
+lib/db/src/schema/index.ts
+lib/db/src/schema/releases.ts
+lib/db/src/schema/tracks.ts
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/routes/releases.ts
+artifacts/api-server/src/routes/tracks.ts
+artifacts/crm-panel/src/pages/releases/[id].tsx
+artifacts/crm-panel/src/pages/releases/new.tsx
+.local/skills/object-storage/SKILL.md

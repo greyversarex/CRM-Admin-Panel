@@ -1,0 +1,29 @@
+Таблица kyc_documents — id, user_id, kind (passport_main|passport_address|inn|selfie), storage_key, mime, size_bytes, uploaded_at, status (pending|approved|rejected), reviewed_by, reviewed_at, notes. Колонка kyc_status (not_started|pending|approved|rejected) и kyc_decided_at в users.
+Загрузка KYC-документов — Эндпоинт POST /api/kyc/upload использует тот же presign/confirm pipeline из задачи Хранилище, кладёт в приватный bucket. GET /api/kyc/me — мои документы. DELETE /api/kyc/documents/:id — пока в pending можно удалять и перезагружать.
+Админ-ревью KYC — GET /api/users/:id/kyc (admin/manager only), POST /api/users/:id/kyc-review с body {decision, notes}. Атомарно ставит общий kyc_status пользователя по принципу «все 4 документа одобрены = approved».
+Frontend: блок KYC в /profile — Карточка со статусом, чек-лист 4 документов, кнопка загрузки для каждого, превью загруженного, бейдж статуса по каждому документу.
+Frontend: вкладка KYC в /users/:id — Для админа: галерея документов (превью с zoom), кнопки «Одобрить / Отклонить» по каждому документу + общая «Одобрить всё», обязательный комментарий при отказе.
+Гейты KYC — В /payouts и /distribution: блок-плашка «Пройдите верификацию» с CTA в /profile, серверная проверка kyc_status в соответствующих POST-эндпоинтах.
+Relevant files
+lib/db/src/schema/users.ts
+lib/db/src/schema/artists.ts
+lib/db/src/schema/transactions.ts
+lib/db/src/schema/index.ts
+lib/db/src/seed.ts
+artifacts/api-server/src/routes/auth.ts
+artifacts/api-server/src/routes/users.ts
+artifacts/api-server/src/routes/finance.ts
+artifacts/api-server/src/routes/royalties.ts
+artifacts/api-server/src/routes/payouts.ts
+artifacts/api-server/src/routes/index.ts
+artifacts/crm-panel/src/pages/login.tsx
+artifacts/crm-panel/src/pages/profile/index.tsx
+artifacts/crm-panel/src/pages/users/index.tsx
+artifacts/crm-panel/src/pages/settings/index.tsx
+artifacts/crm-panel/src/pages/finance/index.tsx
+artifacts/crm-panel/src/pages/royalties/index.tsx
+artifacts/crm-panel/src/pages/payouts/index.tsx
+Constraints
+KYC-документы — это персональные данные. Хранятся ТОЛЬКО в приватном бакете с signed URL и TTL ≤ 5 минут. Никогда не отдаются публично.
+Для загрузки KYC требуется уже сделанная задача Хранилище (presign/confirm pipeline).
+Минимальный набор документов считаем «утверждённым», если admin/manager поставил approved всем 4 типам. Опционально — в Settings можно сделать чеклист обязательных типов короче.

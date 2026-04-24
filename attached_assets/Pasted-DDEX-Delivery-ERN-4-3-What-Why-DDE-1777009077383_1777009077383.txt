@@ -1,0 +1,37 @@
+DDEX Delivery (ERN 4.3)
+What & Why
+Сердце маркетплейса: одобренный релиз должен превратиться в DDEX ERN 4.3 XML-пакет с аудио и обложкой, готовый к отправке в DSP. Без партнёров (FUGA/Believe) сейчас — выгрузка ZIP вручную; архитектура готовится под будущую авто-отправку через API партнёра.
+
+Done looks like
+В разделе /distribution (бывший mock) живая очередь: фильтры по DSP, статусу, дате; колонки релиз/артист/DSP/статус/дата.
+Статусы: draft → ready → submitted → live → takedown_requested → taken_down. Переходы логируются.
+Кнопка «Создать пакет» на релизе — генерит валидный ERN 4.3 XML по схеме DDEX, упаковывает с аудио (WAV) и обложкой в ZIP, кладёт в Object Storage, даёт ссылку на скачивание.
+Сгенерированный XML проходит валидацию против DDEX XSD-схемы (включаем XSD в репо).
+На каждый DSP создаётся отдельная запись в deliveries с уникальным release_id (как требует DDEX MessageId).
+Админ может: пометить «Отправлено вручную» (ввод даты + ссылки/комментария), «Live» (релиз появился в DSP с URL), «Takedown» (с причиной).
+В каталоге у релиза видны бейджи на каких DSP он live, с кликабельными ссылками.
+Лог отправок: кто, когда, в какой DSP, ID сообщения, комментарий.
+Out of scope
+Авто-отправка через API партнёра-агрегатора — добавится отдельным заходом, когда заказчик заключит договор.
+ERN 3.x для legacy-DSP — только 4.3.
+Pre-order, takedown-windows, territory restrictions сложнее списка стран — отложить.
+Steps
+Схема deliveries ревизия — Расширить существующую: dsp_code, message_id, ern_version, package_storage_key, status, submitted_at, live_at, taken_down_at, dsp_release_url, log (jsonb), notes. Уникальный (release_id, dsp_code).
+Генератор ERN 4.3 — Функция buildErn43(release, tracks, assets, party_id) собирает XML по DDEX-спецификации (NewReleaseMessage, ReleaseList, ResourceList с SoundRecording+Image, DealList с базовым commercial-моделем «PermanentDownload+Stream» по списку территорий).
+XSD валидация — Скачать ERN 4.3 XSD в lib/ddex/schemas/, валидировать сгенерированный XML через libxmljs2 или xsd-schema-validator перед сохранением.
+ZIP-пакетирование — buildDeliveryPackage() собирает MessageId.xml + resources/{ISRC}.wav + resources/{UPC}.jpg, складывает в zip-стрим, льёт в Object Storage. MD5-чек-сумма для каждого ресурса в манифесте.
+API эндпоинты — POST /api/deliveries (создать для конкретного DSP из одобренного релиза), POST /api/deliveries/:id/build (сгенерить пакет), PATCH /api/deliveries/:id (сменить статус с логом), GET /api/deliveries/:id/download (signed URL на ZIP).
+Страница /distribution — Полная замена нынешнего мока: таблица очереди с действиями, бейджи статусов, фильтры. Действие «Создать пакеты для всех DSP» по релизу.
+Детальный экран delivery — Метаданные пакета, лог переходов, кнопки смены статуса с обязательным полем (ссылка/комментарий).
+Бейджи в каталоге — В /catalog и /releases/:id показывать бейджи DSP с кликабельными ссылками на live-релизы.
+Relevant files
+lib/db/src/schema/deliveries.ts
+artifacts/api-server/src/routes/delivery.ts
+artifacts/crm-panel/src/pages/distribution/index.tsx
+artifacts/crm-panel/src/pages/releases/[id].tsx
+artifacts/crm-panel/src/pages/catalog.tsx
+TECHNICAL_SPECIFICATION.md:147-152
+Constraints
+DDEX Party ID заказчика: PA-DPIDA-2024053004-T (вшит в генератор).
+ERN 4.3 — единственная поддерживаемая версия.
+DSP-список конфигурируется через таблицу integrations (которая уже есть).

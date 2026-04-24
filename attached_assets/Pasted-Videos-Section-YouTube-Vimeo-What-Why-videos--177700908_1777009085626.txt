@@ -1,0 +1,33 @@
+Videos Section (YouTube/Vimeo)
+What & Why
+Половина дохода артиста — клипы. Сейчас раздел /videos — мок на 242 строки. Делаем без партнёров: артист сам заливает клип на YouTube/Vimeo (или загружает MP4 в наш сторадж), указывает ссылку, мы трекаем Content ID и доход в стандартной аналитике.
+
+Done looks like
+Раздел /videos — таблица клипов с фильтрами (артист, статус, DSP).
+Артист добавляет клип: привязка к релизу/треку, ссылка YouTube/Vimeo (или загрузка MP4 ≤500 МБ через тот же сторадж), миниатюра, описание, дата релиза.
+Поля Content ID: cid_status (not_submitted | claimed | monetized | disputed), cid_asset_id, последний апдейт. Меняет админ вручную (мы не интегрируемся с YouTube CMS — это уровень партнёра).
+Кнопка «Открыть на YouTube» прыгает на ссылку.
+В /analytics появляется таб «Видео» с отдельным датасетом (используем usage_reports с расширением kind=video).
+На странице артиста — список его клипов с миниатюрами.
+Файлы видео хранятся в Object Storage (если загружено в нас), с signed URL.
+Out of scope
+Реальная интеграция с YouTube Content ID API — только partner-tier, требует отдельного контракта. Отложить.
+Транскодинг видео.
+Плеер на странице — пока ссылка наружу.
+Steps
+Таблица videos — id, release_id, track_id, artist_id, title, kind (music_video|live|lyric), source (youtube|vimeo|upload), source_url, asset_id?, thumbnail_storage_key, duration_sec, cid_status, cid_asset_id, cid_updated_at, status (draft|published), published_at, created_at.
+API CRUD — GET/POST/PUT/DELETE /api/videos со скоупом по правам (артист — только свои, лейбл — своих артистов).
+YouTube/Vimeo oEmbed — Простой fetch на oembed для подтягивания title/thumbnail/duration по URL.
+Загрузка MP4 — Использовать тот же presign/confirm pipeline из задачи Storage. Лимит 500 МБ.
+Страница /videos — Полная замена мока: таблица с фильтрами, поиск, действия CRUD.
+Форма добавления/редактирования — Dialog с переключателем YouTube-link/Upload, превью миниатюры, привязка к релизу.
+CID-статус UI — Только админ может править поля Content ID; артист видит read-only с подсказкой.
+Аналитика «Видео» таб — В /analytics ещё одна вкладка с разбивкой по видео-стримам/ревеню (расширение usage_reports колонкой kind).
+Relevant files
+lib/db/src/schema/index.ts
+lib/db/src/schema/usage_reports.ts
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/routes/analytics.ts
+artifacts/crm-panel/src/pages/videos/index.tsx
+artifacts/crm-panel/src/pages/artists/index.tsx
+artifacts/crm-panel/src/pages/analytics/index.tsx
