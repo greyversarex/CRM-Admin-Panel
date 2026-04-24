@@ -6,3 +6,15 @@ id = "z9a4zc7aLOMtjMRhcYpyC"
 uri = "file://TECHNICAL_SPECIFICATION.md"
 type = "text"
 title = "Tajik Music — Полное Техническое Задание"
+
+[[outputs]]
+id = "76z618EZIhdUyaOijrxpc"
+uri = "file://deliverables/CRM_Status_Report.docx"
+type = "word_document"
+title = "Технический отчёт CRM Admin Panel (Word)"
+
+[[outputs]]
+id = "o9SHF9U0JZwqVul9TB5cU"
+uri = "file://deliverables/CRM_Status_Report.md"
+type = "text"
+title = "Технический отчёт CRM Admin Panel (Markdown — исходник)"
