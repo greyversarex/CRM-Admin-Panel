@@ -930,7 +930,7 @@ function KycTab() {
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant="outline" className={`text-[10px] ${statusCls}`}>{statusLabel}</Badge>
                         <Button asChild variant="outline" size="sm">
-                          <a href={`/api/kyc/objects/uploads/${objectId}`} target="_blank" rel="noopener noreferrer">
+                          <a href={`/api/storage/objects/uploads/${objectId}`} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         </Button>
@@ -1172,10 +1172,9 @@ function TaxTab() {
             <Select value={taxFormType || undefined} onValueChange={setTaxFormType}>
               <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери форму" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="individual">Физическое лицо</SelectItem>
-                <SelectItem value="self_employed">Самозанятый / ИП</SelectItem>
-                <SelectItem value="legal_entity">Юридическое лицо</SelectItem>
-                <SelectItem value="w8ben">W-8BEN (нерезидент США)</SelectItem>
+                <SelectItem value="self_employed">Самозанятый / физлицо</SelectItem>
+                <SelectItem value="individual_entrepreneur">Индивидуальный предприниматель</SelectItem>
+                <SelectItem value="w8">W-8 (нерезидент США)</SelectItem>
                 <SelectItem value="w9">W-9 (резидент США)</SelectItem>
               </SelectContent>
             </Select>

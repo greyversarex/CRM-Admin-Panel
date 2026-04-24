@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
-import { count, eq, desc, ilike, or, and } from "drizzle-orm";
+import { count, eq, desc, ilike, or, and, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -80,10 +80,13 @@ router.get("/users", adminOnly, async (req, res): Promise<void> => {
   const status = req.query.status as string | undefined;
   const search = req.query.search as string | undefined;
 
-  const filters: any[] = [];
+  const filters: SQL[] = [];
   if (role)   filters.push(eq(usersTable.role, role));
   if (status) filters.push(eq(usersTable.status, status));
-  if (search) filters.push(or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`)));
+  if (search) {
+    const expr = or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`));
+    if (expr) filters.push(expr);
+  }
   const where = filters.length > 0 ? and(...filters) : undefined;
 
   const users = await db.select().from(usersTable).where(where).limit(limit).offset(offset).orderBy(desc(usersTable.createdAt));
@@ -169,7 +172,7 @@ router.patch("/users/me/bank-info", requireAuth, async (req, res): Promise<void>
 const UpdateTaxInfoBody = z.object({
   taxId:       z.string().max(64).nullable().optional(),
   taxCountry:  z.string().max(8).nullable().optional(),
-  taxFormType: z.enum(["w8", "w9", "self_employed", "individual_entrepreneur", "none"]).nullable().optional(),
+  taxFormType: z.enum(["w8", "w9", "self_employed", "individual_entrepreneur"]).nullable().optional(),
 }).strict();
 
 router.patch("/users/me/tax-info", requireAuth, async (req, res): Promise<void> => {

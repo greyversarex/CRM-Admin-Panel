@@ -2,7 +2,7 @@ import { Router } from "express";
 import { createHash } from "crypto";
 import { Readable } from "stream";
 import * as mm from "music-metadata";
-import { db, assetsTable, releasesTable, tracksTable, artistsTable } from "@workspace/db";
+import { db, assetsTable, releasesTable, tracksTable, artistsTable, kycDocumentsTable } from "@workspace/db";
 import { and, desc, eq } from "drizzle-orm";
 import {
   PresignAssetUploadBody,
@@ -346,15 +346,39 @@ async function canAccessAsset(req: any, a: typeof assetsTable.$inferSelect): Pro
   return false;
 }
 
-// ─── In-browser proxy: stream an asset by its objectPath ────────────────
+// ─── In-browser proxy: stream an asset/KYC doc by its objectPath ────────
 // Used by <img src> for covers and by the in-app audio player so the browser
 // can fetch the file with its session cookie attached (no signed URL needed).
-// Scope is enforced via the assets row.
+// Scope is enforced per-record:
+//   • assets row → release/artist/label scope (canAccessAsset)
+//   • kyc_documents row → owner OR admin/manager (KYC sensitive PII)
 router.get("/storage/objects/uploads/:objectId", async (req, res): Promise<void> => {
   const objectPath = `/objects/uploads/${req.params.objectId}`;
+
   const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.objectPath, objectPath));
-  if (!asset) { res.status(404).json({ error: "Not found" }); return; }
-  if (!(await canAccessAsset(req, asset))) { res.status(403).json({ error: "Forbidden" }); return; }
+  let mimeType: string | null = null;
+  let cacheControl = "private, max-age=300";
+  let dispositionFilename: string | null = null;
+  let acceptRanges = true;
+
+  if (asset) {
+    if (!(await canAccessAsset(req, asset))) { res.status(403).json({ error: "Forbidden" }); return; }
+    mimeType = asset.mimeType;
+  } else {
+    // KYC document fallback: same /objects/uploads/ namespace, отдельный ACL.
+    const [doc] = await db.select().from(kycDocumentsTable)
+      .where(eq(kycDocumentsTable.objectPath, objectPath));
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    const sessionUser = req.session.user;
+    if (!sessionUser) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const isOwner = doc.userId === sessionUser.id;
+    const isReviewer = sessionUser.role === "admin" || sessionUser.role === "manager";
+    if (!isOwner && !isReviewer) { res.status(403).json({ error: "Forbidden" }); return; }
+    mimeType = doc.mimeType;
+    cacheControl = "private, no-store"; // sensitive PII — браузер не кэширует
+    dispositionFilename = doc.originalFilename;
+    acceptRanges = false; // KYC мелкие — диапазоны не нужны
+  }
 
   let file;
   try {
@@ -365,12 +389,15 @@ router.get("/storage/objects/uploads/:objectId", async (req, res): Promise<void>
   }
   const [meta] = await file.getMetadata();
   const totalSize = Number(meta.size ?? 0);
-  res.setHeader("Content-Type", (meta.contentType as string) || asset.mimeType || "application/octet-stream");
-  res.setHeader("Cache-Control", "private, max-age=300");
-  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Content-Type", (meta.contentType as string) || mimeType || "application/octet-stream");
+  res.setHeader("Cache-Control", cacheControl);
+  if (acceptRanges) res.setHeader("Accept-Ranges", "bytes");
+  if (dispositionFilename) {
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(dispositionFilename)}"`);
+  }
 
   // ─── Range support (HTML5 audio seek for large files) ────────────────
-  const rangeHeader = req.headers.range;
+  const rangeHeader = acceptRanges ? req.headers.range : undefined;
   let start = 0;
   let end = totalSize ? totalSize - 1 : 0;
   let isPartial = false;

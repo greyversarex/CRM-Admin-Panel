@@ -9,11 +9,12 @@ import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db, signupRequestsTable, usersTable, artistsTable, labelsTable } from "@workspace/db";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, type SQL } from "drizzle-orm";
 import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { generateTempPassword } from "../lib/kycUtils";
 import { logger } from "../lib/logger";
+import { sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
 
 const router = Router();
 
@@ -98,9 +99,31 @@ router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> =
     before: null, after: created,
   });
 
-  // Email-уведомление админу. SMTP пока не настроен — просто warn в логи.
-  logger.info({ requestId: created.id, email: data.email, entityType: data.entityType },
-    "[signup] new signup request — admin notification (email TODO if SMTP_URL set)");
+  // Email-уведомление админу — fire-and-forget. Если SMTP_URL не задан или
+  // ADMIN_NOTIFICATION_EMAIL пуст, mail-модуль просто пишет запись в лог
+  // (см. lib/mail.ts), чтобы flow никогда не блокировался почтовыми сбоями.
+  const adminEmail = getAdminNotificationEmail();
+  if (adminEmail) {
+    sendMailAndForget({
+      to: adminEmail,
+      subject: `[Tajik Music CRM] Новая заявка на регистрацию: ${data.name}`,
+      text:
+        `Поступила новая заявка на регистрацию.\n\n` +
+        `Тип: ${data.entityType === "label" ? "Лейбл" : "Артист"}\n` +
+        `Имя: ${data.name}\n` +
+        `Email: ${data.email}\n` +
+        `Телефон: ${data.phone ?? "—"}\n` +
+        `Страна: ${data.country ?? "—"}\n` +
+        `Юр. название: ${data.legalName ?? "—"}\n` +
+        `ИНН: ${data.inn ?? "—"}\n\n` +
+        `Сообщение:\n${data.message ?? "—"}\n\n` +
+        `Открой /admin/signups для рассмотрения.`,
+    });
+  }
+  logger.info(
+    { requestId: created.id, email: data.email, entityType: data.entityType, adminNotified: Boolean(adminEmail) },
+    "[signup] new signup request",
+  );
 
   res.status(201).json({ ok: true, requestId: created.id });
 });
@@ -109,9 +132,15 @@ router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> =
 router.get("/signup-requests", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const status = (req.query.status as string | undefined) ?? undefined;
   const search = (req.query.search as string | undefined) ?? undefined;
-  const filters: any[] = [];
+  const filters: SQL[] = [];
   if (status) filters.push(eq(signupRequestsTable.status, status));
-  if (search) filters.push(or(ilike(signupRequestsTable.name, `%${search}%`), ilike(signupRequestsTable.email, `%${search}%`)));
+  if (search) {
+    const expr = or(
+      ilike(signupRequestsTable.name, `%${search}%`),
+      ilike(signupRequestsTable.email, `%${search}%`),
+    );
+    if (expr) filters.push(expr);
+  }
   const where = filters.length ? and(...filters) : undefined;
   const rows = await db.select().from(signupRequestsTable).where(where)
     .orderBy(desc(signupRequestsTable.createdAt)).limit(200);
@@ -122,7 +151,7 @@ router.get("/signup-requests", requireRole("admin", "manager"), async (req, res)
 // Создаём User + (Artist|Label), сохраняем temp password в audit нельзя,
 // поэтому возвращаем его 1 раз в ответе → админ передаёт юзеру out-of-band.
 router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = ApproveBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -206,11 +235,31 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
     before: null, after: user,
   });
 
-  logger.info({ requestId: id, userId: user.id, email: user.email },
-    "[signup] approved — temporary password generated (TODO: email when SMTP_URL set)");
+  // Письмо новому пользователю с временным паролем — fire-and-forget. Если
+  // SMTP не настроен, mail-модуль логирует факт без падения, и админ всё ещё
+  // получает tempPassword в JSON-ответе (out-of-band fallback).
+  sendMailAndForget({
+    to: user.email,
+    subject: "Ваша заявка одобрена — Tajik Music CRM",
+    text:
+      `Здравствуйте, ${user.name}!\n\n` +
+      `Ваша заявка на регистрацию в Tajik Music CRM одобрена.\n\n` +
+      `Данные для входа:\n` +
+      `Логин (email): ${user.email}\n` +
+      `Временный пароль: ${tempPassword}\n\n` +
+      `Войдите по адресу: ${process.env.PUBLIC_APP_URL ?? "/login"}\n` +
+      `Сразу после входа смените пароль в разделе «Профиль → Безопасность».\n\n` +
+      `Следующий шаг — пройти KYC-верификацию (загрузить документы) и заполнить ` +
+      `банковские/налоговые реквизиты, чтобы получать выплаты роялти.`,
+  });
+  logger.info(
+    { requestId: id, userId: user.id, email: user.email },
+    "[signup] approved — onboarding email queued (SMTP_URL=" +
+      (process.env.SMTP_URL ? "set" : "noop") + ")",
+  );
 
   // ВНИМАНИЕ: tempPassword возвращается ТОЛЬКО в этом ответе и нигде не логируется.
-  // Админ обязан передать его пользователю безопасным каналом.
+  // Это out-of-band страховка на случай, если у юзера нет доступа к почте.
   res.status(201).json({
     ok: true,
     request: serializeRequest(updatedRequest),
@@ -221,7 +270,7 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
 
 // ─── ADMIN: reject ────────────────────────────────────────────────────────
 router.post("/signup-requests/:id/reject", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = RejectBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }

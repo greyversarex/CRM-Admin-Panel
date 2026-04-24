@@ -289,7 +289,7 @@ export default function AdminKyc() {
                   <div className="space-y-3">
                     {docs.map((d) => {
                       const objectId = d.objectPath.split("/").pop();
-                      const viewUrl = `/api/kyc/objects/uploads/${objectId}`;
+                      const viewUrl = `/api/storage/objects/uploads/${objectId}`;
                       const sizeKb = Math.round(d.sizeBytes / 1024);
                       return (
                         <div key={d.id} className="rounded-lg border border-border/60 bg-background/40 p-4">

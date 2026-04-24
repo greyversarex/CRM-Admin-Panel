@@ -1,12 +1,14 @@
 // ─── KYC документы пользователя (Task #6) ─────────────────────────────────
 // User uploads:
+//   POST   /users/me/kyc-documents          → multipart upload (фронт KycTab)
 //   POST   /users/me/kyc-documents/presign  → presigned PUT URL + objectPath
 //   POST   /users/me/kyc-documents/confirm  → создаёт row после успешной загрузки
 //   GET    /users/me/kyc-documents          → список своих доков со статусами
 //   DELETE /users/me/kyc-documents/:id      → удалить свой pending-документ
 //   POST   /users/me/submit-kyc             → отправить набор на ревью (kyc_status=pending)
-// Streaming (для просмотра самим юзером + админом):
-//   GET    /kyc/objects/uploads/:objectId   → отдаёт файл с scope-чеком
+// Streaming унифицирован с assets-стеком:
+//   GET    /api/storage/objects/uploads/:objectId  (см. routes/assets.ts —
+//   там добавлен fallback на kyc_documents с owner/admin/manager ACL).
 // Admin:
 //   GET    /admin/kyc/users                 → список юзеров с pending-доками
 //   GET    /admin/kyc/users/:id/documents   → доки конкретного юзера
@@ -20,10 +22,10 @@ import { db, kycDocumentsTable, usersTable } from "@workspace/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { logger } from "../lib/logger";
 import {
   ObjectStorageService, ObjectNotFoundError, objectStorageClient,
 } from "../lib/objectStorage";
-import { logger } from "../lib/logger";
 
 const router = Router();
 const storage = new ObjectStorageService();
@@ -79,10 +81,15 @@ function serializeDoc(d: typeof kycDocumentsTable.$inferSelect) {
 // прямой multipart endpoint: фронт KycTab отправляет field "kind" + "file".
 // Файл уходит в тот же бакет под /uploads/<uuid>, что и presign-flow, поэтому
 // streaming endpoint /kyc/objects/uploads/:objectId работает одинаково.
+type KycKind = (typeof KYC_KINDS)[number];
+function isKycKind(v: unknown): v is KycKind {
+  return typeof v === "string" && (KYC_KINDS as readonly string[]).includes(v);
+}
+
 router.post("/users/me/kyc-documents", upload.single("file"), async (req, res): Promise<void> => {
   const sessionUser = req.session.user!;
-  const kindRaw = (req.body?.kind ?? "") as string;
-  if (!KYC_KINDS.includes(kindRaw as any)) {
+  const kindRaw: unknown = req.body?.kind;
+  if (!isKycKind(kindRaw)) {
     res.status(400).json({ error: "Недопустимый тип документа" });
     return;
   }
@@ -114,7 +121,7 @@ router.post("/users/me/kyc-documents", upload.single("file"), async (req, res): 
       resumable: false,
       metadata: { contentType: file.mimetype },
     });
-  } catch (err: any) {
+  } catch (err) {
     req.log?.error({ err }, "[kyc] direct upload failed");
     res.status(500).json({ error: "Не удалось сохранить файл" });
     return;
@@ -122,7 +129,7 @@ router.post("/users/me/kyc-documents", upload.single("file"), async (req, res): 
 
   const [inserted] = await db.insert(kycDocumentsTable).values({
     userId: sessionUser.id,
-    kind: kindRaw as typeof KYC_KINDS[number],
+    kind: kindRaw,
     storageKey,
     objectPath,
     originalFilename: file.originalname,
@@ -153,7 +160,7 @@ router.post("/users/me/kyc-documents/presign", async (req, res): Promise<void> =
     });
     res.json({ uploadURL, objectPath, storageKey,
       expiresAt: new Date(Date.now() + 900_000).toISOString() });
-  } catch (err: any) {
+  } catch (err) {
     req.log?.error({ err }, "[kyc] presign failed");
     res.status(500).json({ error: "Не удалось получить URL для загрузки" });
   }
@@ -220,7 +227,7 @@ router.get("/users/me/kyc-documents", async (req, res): Promise<void> => {
 // ─── User: delete own pending doc ─────────────────────────────────────────
 router.delete("/users/me/kyc-documents/:id", async (req, res): Promise<void> => {
   const sessionUser = req.session.user!;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [doc] = await db.select().from(kycDocumentsTable).where(eq(kycDocumentsTable.id, id));
   if (!doc) { res.sendStatus(204); return; }
@@ -266,37 +273,9 @@ router.post("/users/me/submit-kyc", async (req, res): Promise<void> => {
   res.json({ ok: true, kycStatus: updated.kycStatus });
 });
 
-// ─── Streaming: own doc OR admin/manager can read any ─────────────────────
-router.get("/kyc/objects/uploads/:objectId", async (req, res): Promise<void> => {
-  const sessionUser = req.session.user!;
-  const objectPath = `/objects/uploads/${req.params.objectId}`;
-  const [doc] = await db.select().from(kycDocumentsTable)
-    .where(eq(kycDocumentsTable.objectPath, objectPath));
-  if (!doc) { res.status(404).json({ error: "Not found" }); return; }
-  const isOwner = doc.userId === sessionUser.id;
-  const isReviewer = sessionUser.role === "admin" || sessionUser.role === "manager";
-  if (!isOwner && !isReviewer) { res.status(403).json({ error: "Forbidden" }); return; }
-
-  let file;
-  try {
-    file = await storage.getObjectEntityFile(objectPath);
-  } catch (err) {
-    if (err instanceof ObjectNotFoundError) { res.status(404).json({ error: "Файл утерян" }); return; }
-    throw err;
-  }
-  const [meta] = await file.getMetadata();
-  res.setHeader("Content-Type", (meta.contentType as string) || doc.mimeType || "application/octet-stream");
-  res.setHeader("Cache-Control", "private, no-store");
-  if (meta.size) res.setHeader("Content-Length", String(meta.size));
-  // Inline display — браузер сам решит показать PDF/картинку
-  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.originalFilename)}"`);
-  const stream = file.createReadStream();
-  stream.on("error", (err) => {
-    req.log?.error({ err }, "[kyc] stream error");
-    if (!res.headersSent) res.sendStatus(500); else res.end();
-  });
-  stream.pipe(res);
-});
+// NOTE: streaming KYC файлов выполняется единым роутом /storage/objects/uploads/:objectId
+// в routes/assets.ts (там же где cover/audio assets) — он определяет тип записи
+// по objectPath и применяет нужный ACL (owner OR admin/manager для KYC).
 
 // ─── ADMIN: список юзеров на ревью ────────────────────────────────────────
 router.get("/admin/kyc/users", requireRole("admin", "manager"), async (req, res): Promise<void> => {
@@ -339,7 +318,7 @@ router.get("/admin/kyc/users", requireRole("admin", "manager"), async (req, res)
 
 // ─── ADMIN: документы конкретного юзера ───────────────────────────────────
 router.get("/admin/kyc/users/:id/documents", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const userId = parseInt(req.params.id, 10);
+  const userId = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const docs = await db.select().from(kycDocumentsTable)
     .where(eq(kycDocumentsTable.userId, userId))
@@ -349,7 +328,7 @@ router.get("/admin/kyc/users/:id/documents", requireRole("admin", "manager"), as
 
 // ─── ADMIN: approve/reject отдельный документ ─────────────────────────────
 router.post("/admin/kyc-documents/:id/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [doc] = await db.select().from(kycDocumentsTable).where(eq(kycDocumentsTable.id, id));
   if (!doc) { res.status(404).json({ error: "Документ не найден" }); return; }
@@ -365,7 +344,7 @@ router.post("/admin/kyc-documents/:id/approve", requireRole("admin", "manager"),
 });
 
 router.post("/admin/kyc-documents/:id/reject", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = RejectBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -384,7 +363,7 @@ router.post("/admin/kyc-documents/:id/reject", requireRole("admin", "manager"), 
 
 // ─── ADMIN: глобальный approve/reject юзера ───────────────────────────────
 router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const userId = parseInt(req.params.id, 10);
+  const userId = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -408,7 +387,7 @@ router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), asy
 });
 
 router.post("/admin/users/:id/kyc/reject", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const userId = parseInt(req.params.id, 10);
+  const userId = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = RejectBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }

@@ -48,8 +48,10 @@ router.use(tracksRouter);             // scoped per-route inside
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
 // authenticated users (their own profile / password change).
 router.use(usersRouter);
-// KYC routes должны быть ДО integrationsRouter (который имеет глобальный
-// router.use(requireRole) и иначе перехватывает любой /users/me/kyc-* запрос).
+// KYC и assets routes должны быть ДО integrationsRouter (который имеет
+// глобальный router.use(requireRole("admin","manager")) и иначе перехватывает
+// любой не-admin запрос — включая /users/me/kyc-* и /storage/objects/uploads/*
+// для скачивания собственных cover/audio артистом или KYC-документа owner'ом).
 router.use(kycRouter);                   // KYC docs + admin review (per-route guards inside)
 router.use("/contacts", adminOnly);
 router.use("/crm", adminOnly);
@@ -70,9 +72,9 @@ router.use(analyticsRouter);
 // Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
 router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
+router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
 router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
-router.use(assetsRouter);                // scoped per-route inside
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
 
 export default router;
