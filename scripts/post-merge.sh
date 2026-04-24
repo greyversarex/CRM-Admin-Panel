@@ -2,6 +2,7 @@
 set -e
 pnpm install --frozen-lockfile
 # Use migrate (not push) so prod gets atomic, versioned, reviewable schema changes.
-# The runner auto-detects "legacy push" databases and seeds the baseline as applied
-# without running it — so existing environments keep their data on first switch-over.
+# Migration files are idempotent (CREATE TABLE/INDEX IF NOT EXISTS, FK as
+# DO IF NOT EXISTS pg_constraint with NOT VALID + VALIDATE), so this is safe
+# against both pristine and previously-pushed databases.
 pnpm --filter @workspace/db migrate

@@ -283,147 +283,234 @@ CREATE TABLE IF NOT EXISTS "assets" (
 --> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'labels_parent_label_id_labels_id_fk') THEN
-    ALTER TABLE "labels" ADD CONSTRAINT "labels_parent_label_id_labels_id_fk" FOREIGN KEY ("parent_label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "labels" ADD CONSTRAINT "labels_parent_label_id_labels_id_fk" FOREIGN KEY ("parent_label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "labels" VALIDATE CONSTRAINT "labels_parent_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artists_label_id_labels_id_fk') THEN
-    ALTER TABLE "artists" ADD CONSTRAINT "artists_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "artists" ADD CONSTRAINT "artists_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "artists" VALIDATE CONSTRAINT "artists_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'releases_artist_id_artists_id_fk') THEN
-    ALTER TABLE "releases" ADD CONSTRAINT "releases_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "releases" ADD CONSTRAINT "releases_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "releases" VALIDATE CONSTRAINT "releases_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'releases_label_id_labels_id_fk') THEN
-    ALTER TABLE "releases" ADD CONSTRAINT "releases_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "releases" ADD CONSTRAINT "releases_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "releases" VALIDATE CONSTRAINT "releases_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tracks_release_id_releases_id_fk') THEN
-    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "tracks" VALIDATE CONSTRAINT "tracks_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tracks_artist_id_artists_id_fk') THEN
-    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "tracks" VALIDATE CONSTRAINT "tracks_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_artist_id_artists_id_fk') THEN
-    ALTER TABLE "users" ADD CONSTRAINT "users_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "users" ADD CONSTRAINT "users_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "users" VALIDATE CONSTRAINT "users_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_label_id_labels_id_fk') THEN
-    ALTER TABLE "users" ADD CONSTRAINT "users_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "users" ADD CONSTRAINT "users_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "users" VALIDATE CONSTRAINT "users_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'crm_tasks_assigned_to_id_users_id_fk') THEN
-    ALTER TABLE "crm_tasks" ADD CONSTRAINT "crm_tasks_assigned_to_id_users_id_fk" FOREIGN KEY ("assigned_to_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "crm_tasks" ADD CONSTRAINT "crm_tasks_assigned_to_id_users_id_fk" FOREIGN KEY ("assigned_to_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "crm_tasks" VALIDATE CONSTRAINT "crm_tasks_assigned_to_id_users_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_artist_id_artists_id_fk') THEN
-    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_label_id_labels_id_fk') THEN
-    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_release_id_releases_id_fk') THEN
-    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'splits_release_id_releases_id_fk') THEN
-    ALTER TABLE "splits" ADD CONSTRAINT "splits_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "splits" ADD CONSTRAINT "splits_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "splits" VALIDATE CONSTRAINT "splits_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'splits_track_id_tracks_id_fk') THEN
-    ALTER TABLE "splits" ADD CONSTRAINT "splits_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "splits" ADD CONSTRAINT "splits_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "splits" VALIDATE CONSTRAINT "splits_track_id_tracks_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payouts_artist_id_artists_id_fk') THEN
-    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "payouts" VALIDATE CONSTRAINT "payouts_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payouts_label_id_labels_id_fk') THEN
-    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action NOT VALID;
+    ALTER TABLE "payouts" VALIDATE CONSTRAINT "payouts_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'publishing_works_track_id_tracks_id_fk') THEN
-    ALTER TABLE "publishing_works" ADD CONSTRAINT "publishing_works_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "publishing_works" ADD CONSTRAINT "publishing_works_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "publishing_works" VALIDATE CONSTRAINT "publishing_works_track_id_tracks_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_artist_id_artists_id_fk') THEN
-    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "usage_reports" VALIDATE CONSTRAINT "usage_reports_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_release_id_releases_id_fk') THEN
-    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "usage_reports" VALIDATE CONSTRAINT "usage_reports_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_track_id_tracks_id_fk') THEN
-    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "usage_reports" VALIDATE CONSTRAINT "usage_reports_track_id_tracks_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deliveries_release_id_releases_id_fk') THEN
-    ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "deliveries" VALIDATE CONSTRAINT "deliveries_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'activity_log_user_id_users_id_fk') THEN
-    ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "activity_log" VALIDATE CONSTRAINT "activity_log_user_id_users_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'integration_credentials_integration_id_integrations_id_fk') THEN
-    ALTER TABLE "integration_credentials" ADD CONSTRAINT "integration_credentials_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "integration_credentials" ADD CONSTRAINT "integration_credentials_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "integration_credentials" VALIDATE CONSTRAINT "integration_credentials_integration_id_integrations_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'integration_sync_jobs_integration_id_integrations_id_fk') THEN
-    ALTER TABLE "integration_sync_jobs" ADD CONSTRAINT "integration_sync_jobs_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "integration_sync_jobs" ADD CONSTRAINT "integration_sync_jobs_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+    ALTER TABLE "integration_sync_jobs" VALIDATE CONSTRAINT "integration_sync_jobs_integration_id_integrations_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_release_id_releases_id_fk') THEN
-    ALTER TABLE "assets" ADD CONSTRAINT "assets_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "assets" VALIDATE CONSTRAINT "assets_release_id_releases_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_track_id_tracks_id_fk') THEN
-    ALTER TABLE "assets" ADD CONSTRAINT "assets_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "assets" VALIDATE CONSTRAINT "assets_track_id_tracks_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_artist_id_artists_id_fk') THEN
-    ALTER TABLE "assets" ADD CONSTRAINT "assets_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "assets" VALIDATE CONSTRAINT "assets_artist_id_artists_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_label_id_labels_id_fk') THEN
-    ALTER TABLE "assets" ADD CONSTRAINT "assets_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "assets" VALIDATE CONSTRAINT "assets_label_id_labels_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_uploaded_by_users_id_fk') THEN
-    ALTER TABLE "assets" ADD CONSTRAINT "assets_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+    -- Add as NOT VALID first so existing orphan rows don't block the migration;
+    -- VALIDATE separately so any orphans are reported with a clear, actionable error.
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action NOT VALID;
+    ALTER TABLE "assets" VALIDATE CONSTRAINT "assets_uploaded_by_users_id_fk";
   END IF;
 END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "labels_parent_idx" ON "labels" USING btree ("parent_label_id");--> statement-breakpoint

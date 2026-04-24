@@ -16,14 +16,23 @@ const MIGRATIONS_FOLDER = path.resolve(__dirname, "../migrations");
 /**
  * Drizzle migrator runner.
  *
- * Migration files are written to be idempotent (CREATE TABLE IF NOT EXISTS,
- * CREATE INDEX IF NOT EXISTS, FK constraints wrapped in `DO $$ IF NOT EXISTS
- * (SELECT … FROM pg_constraint) …`), so running the same migration twice — or
- * running the baseline against a database that previously used `drizzle-kit push`
- * — is a no-op for objects that already exist.
+ * Migration files are written to be idempotent:
+ *   - `CREATE TABLE IF NOT EXISTS`
+ *   - `CREATE INDEX IF NOT EXISTS`
+ *   - FK constraints wrapped in `DO $$ IF NOT EXISTS (SELECT 1 FROM pg_constraint
+ *     WHERE conname = '…') THEN ALTER TABLE … ADD CONSTRAINT … NOT VALID; ALTER
+ *     TABLE … VALIDATE CONSTRAINT …; END IF; END $$;`
  *
- * That property is what lets us safely roll out from "push-managed" dev/prod
- * environments to versioned migrations without losing data or duplicating work.
+ * Why NOT VALID + VALIDATE: on a legacy database that previously used
+ * `drizzle-kit push` (no FKs enforced), there might be orphan child rows. A plain
+ * `ADD CONSTRAINT FOREIGN KEY` would fail the entire migration on the first
+ * orphan. With `NOT VALID`, the constraint is added (and immediately enforces
+ * NEW writes), then `VALIDATE CONSTRAINT` checks existing rows. If there are
+ * orphans, only VALIDATE fails — with a clear error pointing to the offending
+ * constraint — and the operator can clean up data and re-run.
+ *
+ * This makes the same migration safe against pristine, previously-pushed, and
+ * already-migrated databases. Tested matrix: see `lib/db/scripts/test-migrations.sh`.
  *
  * The advisory lock serialises concurrent migrate runs (e.g. blue-green deploys
  * launching two replicas at once). 4242042 is an arbitrary 32-bit constant.

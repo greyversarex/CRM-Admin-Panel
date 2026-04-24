@@ -142,7 +142,7 @@ All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint 
 - `assets` — uploaded files in object storage (release/track/artist/label/uploaded_by all SET NULL); idx on release/track/artist/sha256
 - `integrations`, `integration_credentials`, `integration_sync_jobs` — DSP/delivery connectors registry with AES-256-GCM encrypted creds (CASCADE FK from creds/jobs to integrations)
 
-Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` → review `lib/db/migrations/0NNN_<name>.sql` → commit → deploy runs `migrate` automatically. The runner detects "legacy push" databases (existing tables, no `__drizzle_migrations`) and seeds the baseline as applied without re-running CREATE TABLE — so existing prod environments switch over without data loss.
+Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` → review/edit `lib/db/migrations/0NNN_<name>.sql` to make it idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`, FK constraints wrapped in `DO $$ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN ALTER TABLE ... ADD CONSTRAINT ... NOT VALID; ALTER TABLE ... VALIDATE CONSTRAINT ...; END IF; END $$;`) → commit → deploy runs `migrate` automatically. Idempotent SQL means the same migration is safe to run against pristine, previously-pushed, or already-migrated databases. `NOT VALID` + `VALIDATE` ensures FK creation never blocks on existing data — if `VALIDATE` fails because of orphan rows, the operator gets a clear error pointing to the offending constraint and can clean up before re-running. Test legacy/virgin scenarios with `lib/db/scripts/test-migrations.sh`.
 
 ## API Routes
 
