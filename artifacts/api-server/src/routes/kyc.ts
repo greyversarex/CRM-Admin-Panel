@@ -225,6 +225,9 @@ router.get("/users/me/kyc-documents", async (req, res): Promise<void> => {
 });
 
 // ─── User: delete own pending doc ─────────────────────────────────────────
+// Compliance §4.4: после того как юзер нажал «Отправить на проверку»
+// (kyc_status=pending или approved), удалять документы запрещено — иначе
+// возможен bypass: загрузить → submit → удалить → ждать approve с 0 доков.
 router.delete("/users/me/kyc-documents/:id", async (req, res): Promise<void> => {
   const sessionUser = req.session.user!;
   const id = parseInt(String(req.params.id), 10);
@@ -234,6 +237,15 @@ router.delete("/users/me/kyc-documents/:id", async (req, res): Promise<void> => 
   if (doc.userId !== sessionUser.id) { res.status(403).json({ error: "Forbidden" }); return; }
   if (doc.status !== "pending") {
     res.status(409).json({ error: "Нельзя удалять одобренные/отклонённые документы" });
+    return;
+  }
+  // Дополнительный compliance-чек: нельзя удалять доки после submit.
+  const [me] = await db.select({ kycStatus: usersTable.kycStatus })
+    .from(usersTable).where(eq(usersTable.id, sessionUser.id));
+  if (me && (me.kycStatus === "pending" || me.kycStatus === "approved")) {
+    res.status(409).json({
+      error: "Документы отправлены на проверку — удаление запрещено. Дождись решения админа.",
+    });
     return;
   }
   await storage.deleteByObjectPath(doc.objectPath).catch(() => {});
@@ -367,10 +379,25 @@ router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), asy
   if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
-  // Перед глобальным approve проверяем что нет rejected-доков (требуется явное решение)
-  const rejected = await db.select({ id: kycDocumentsTable.id }).from(kycDocumentsTable)
-    .where(and(eq(kycDocumentsTable.userId, userId), eq(kycDocumentsTable.status, "rejected")));
-  if (rejected.length > 0) {
+  // Compliance §4.4 minimum-evidence checks ДО глобального approve:
+  //   1. Должен быть хотя бы один загруженный документ.
+  //   2. Не должно быть pending-документов (admin обязан их сначала
+  //      approve/reject индивидуально — иначе апрув без ревью).
+  //   3. Не должно быть rejected-документов (нужно явное решение —
+  //      либо юзер перезагружает, либо global reject).
+  const allDocs = await db.select({ status: kycDocumentsTable.status })
+    .from(kycDocumentsTable).where(eq(kycDocumentsTable.userId, userId));
+  if (allDocs.length === 0) {
+    res.status(409).json({ error: "У пользователя нет загруженных документов — невозможно одобрить KYC" });
+    return;
+  }
+  const pendingCount  = allDocs.filter((d) => d.status === "pending").length;
+  const rejectedCount = allDocs.filter((d) => d.status === "rejected").length;
+  if (pendingCount > 0) {
+    res.status(409).json({ error: `Сначала разреши ${pendingCount} pending-документ(ов) индивидуально (approve/reject)` });
+    return;
+  }
+  if (rejectedCount > 0) {
     res.status(409).json({ error: "У пользователя есть отклонённые документы — их нужно разрешить отдельно" });
     return;
   }

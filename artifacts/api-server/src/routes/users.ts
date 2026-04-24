@@ -93,7 +93,10 @@ router.get("/users", adminOnly, async (req, res): Promise<void> => {
   const [totalResult] = await db.select({ count: count() }).from(usersTable).where(where);
 
   res.json({
-    data: users.map(formatUser),
+    // Не передаём formatUser напрямую — Array.prototype.map передаёт второй
+    // аргумент `index: number`, который попадает в viewerRole и приводит к
+    // случайной маскировке банковских полей даже в admin-list ответе.
+    data: users.map((u) => formatUser(u, "admin")),
     pagination: {
       page,
       limit,
