@@ -40,7 +40,7 @@ COPY --from=build /app/artifacts/api-server/dist artifacts/api-server/dist
 COPY --from=build /app/lib lib
 # Фронтовая статика — для удобства подмонтировать в nginx через volume
 COPY --from=build /app/artifacts/crm-panel/dist artifacts/crm-panel/dist
-# Drizzle нужен для миграций (drizzle-kit push)
+# Drizzle нужен для миграций (lib/db/src/migrate.ts → drizzle-kit migrate)
 COPY --from=build /app/node_modules ./node_modules
 
 EXPOSE 3001

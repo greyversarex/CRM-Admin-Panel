@@ -51,8 +51,8 @@ mkdir -p /var/log/tajikmusic
 echo "▶ Устанавливаем зависимости (frozen-lockfile)..."
 pnpm install --frozen-lockfile
 
-echo "▶ Применяем схему БД (drizzle push)..."
-pnpm --filter @workspace/db run push
+echo "▶ Применяем миграции БД (drizzle migrate)..."
+pnpm --filter @workspace/db run migrate
 
 if [ "${SEED:-0}" = "1" ]; then
   echo "▶ Сидим начальные данные (SEED=1)..."

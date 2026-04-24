@@ -1,6 +1,8 @@
-import { pgTable, text, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { artistsTable } from "./artists";
+import { labelsTable } from "./labels";
 
 export type DspProfiles = {
   appleMusic?: string;
@@ -28,8 +30,8 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("artist"),
   status: text("status").notNull().default("active"),
   avatarUrl: text("avatar_url"),
-  artistId: integer("artist_id"),
-  labelId: integer("label_id"),
+  artistId: integer("artist_id").references((): AnyPgColumn => artistsTable.id, { onDelete: "set null" }),
+  labelId: integer("label_id").references((): AnyPgColumn => labelsTable.id, { onDelete: "set null" }),
   // Profile fields (optional, used by /profile page)
   phone: text("phone"),
   address: text("address"),
@@ -43,7 +45,11 @@ export const usersTable = pgTable("users", {
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("users_role_idx").on(t.role),
+  index("users_artist_idx").on(t.artistId),
+  index("users_label_idx").on(t.labelId),
+]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;

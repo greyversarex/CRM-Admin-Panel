@@ -1,6 +1,11 @@
 import { pgTable, text, serial, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { releasesTable } from "./releases";
+import { tracksTable } from "./tracks";
+import { artistsTable } from "./artists";
+import { labelsTable } from "./labels";
+import { usersTable } from "./users";
 
 export const assetsTable = pgTable("assets", {
   id: serial("id").primaryKey(),
@@ -12,11 +17,12 @@ export const assetsTable = pgTable("assets", {
   sizeBytes: integer("size_bytes").notNull(),
   sha256: text("sha256"),
   durationSeconds: integer("duration_seconds"),
-  releaseId: integer("release_id"),
-  trackId: integer("track_id"),
-  artistId: integer("artist_id"),
-  labelId: integer("label_id"),
-  uploadedBy: integer("uploaded_by"),
+  // set null: ассет может остаться в storage даже после удаления родителя (для аудита/восстановления)
+  releaseId: integer("release_id").references(() => releasesTable.id, { onDelete: "set null" }),
+  trackId: integer("track_id").references(() => tracksTable.id, { onDelete: "set null" }),
+  artistId: integer("artist_id").references(() => artistsTable.id, { onDelete: "set null" }),
+  labelId: integer("label_id").references(() => labelsTable.id, { onDelete: "set null" }),
+  uploadedBy: integer("uploaded_by").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

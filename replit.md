@@ -31,9 +31,9 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 
 Два пути (см. `deploy/README.md`):
 - **Ubuntu + pm2 + nginx** — `bash deploy/1_setup.sh` (один раз) → `bash deploy/2_deploy.sh` (каждый деплой).
-  `2_deploy.sh` сам делает `pnpm install --frozen-lockfile`, `drizzle-kit push`, билд API/фронта, `pm2 startOrReload --update-env`.
+  `2_deploy.sh` сам делает `pnpm install --frozen-lockfile`, `pnpm --filter @workspace/db run migrate` (versioned migrations), билд API/фронта, `pm2 startOrReload --update-env`.
   Первый запуск с `SEED=1` для засева тестовых данных.
-- **Docker Compose** — `docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run push`.
+- **Docker Compose** — `docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run migrate`.
 
 Все секреты живут в `/var/www/tajikmusic/.env` (или корневом `.env` в случае docker), шаблон — `deploy/.env.example`.
 Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
@@ -115,26 +115,34 @@ Self-service эндпоинты (НЕ требуют admin):
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only, no history)
+- `pnpm --filter @workspace/db run generate` — generate a versioned SQL migration from schema diff
+- `pnpm --filter @workspace/db run migrate` — apply pending migrations (use this in prod / CI)
 - `pnpm --filter @workspace/db run seed` — seed the database with sample data
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
-## Database Schema (14 tables)
+## Database Schema (18 business tables + `session`)
 
-- `labels` — record labels with parent/sub-label hierarchy
-- `artists` — artists with genre, label, social links
-- `releases` — albums/singles/EPs with UPC, DDEX metadata
-- `tracks` — individual tracks with ISRC, composer credits
-- `users` — system users with roles (admin/label/artist/manager)
-- `contacts` — CRM contacts (artists/managers/partners/labels)
-- `crm_tasks` — CRM task management with priorities
-- `transactions` — financial ledger (DSP revenue/publishing/payouts)
-- `splits` — revenue split definitions with percentage validation
-- `payouts` — payout requests with approval workflow
-- `publishing_works` — publishing rights (ASCAP/BMI/Songtrust/The MLC)
-- `usage_reports` — streaming usage reports by platform
-- `deliveries` — DDEX delivery queue to DSP platforms
-- `activity_log` — system activity tracking
+All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint with an explicit `ON DELETE` strategy, and hot read paths are indexed. Schema is migrations-based (`lib/db/migrations/` + `lib/db/src/migrate.ts` runner) — `drizzle-kit push` is dev-only.
+
+- `labels` — record labels with parent/sub-label hierarchy (parent_label_id → labels, SET NULL)
+- `artists` — artists with genre, label, social links (label_id → labels, SET NULL)
+- `releases` — albums/singles/EPs (artist_id RESTRICT, label_id SET NULL); idx on artist/label/status/release_date/upc
+- `tracks` — individual tracks (release_id CASCADE, artist_id RESTRICT); idx on release/artist/isrc
+- `users` — system users with roles admin/label/artist/manager (artist_id, label_id SET NULL); idx on role/artist/label
+- `contacts` — CRM contacts (no FKs — standalone); idx on type/email
+- `crm_tasks` — CRM tasks (assigned_to_id → users SET NULL); polymorphic related_entity (idx on status/assignee/related)
+- `transactions` — financial ledger (artist_id, label_id, release_id all RESTRICT — finance is forever); idx on period/artist/label/release/type/(period+artist)
+- `splits` — revenue split definitions (release_id, track_id CASCADE)
+- `payouts` — payout requests (artist_id, label_id RESTRICT); idx on artist/label/status
+- `publishing_works` — publishing rights ASCAP/BMI/Songtrust/MLC (track_id SET NULL — work outlives track); idx on track/status/iswc
+- `usage_reports` — streaming usage reports (artist/release/track all SET NULL — history survives deletes); idx on period/track/release/artist/platform/(period+track)
+- `deliveries` — DDEX delivery queue (release_id CASCADE); idx on release/status/target
+- `activity_log` — system activity (user_id SET NULL — logs survive user deletion); idx on (entity_type+entity_id)/user/created
+- `assets` — uploaded files in object storage (release/track/artist/label/uploaded_by all SET NULL); idx on release/track/artist/sha256
+- `integrations`, `integration_credentials`, `integration_sync_jobs` — DSP/delivery connectors registry with AES-256-GCM encrypted creds (CASCADE FK from creds/jobs to integrations)
+
+Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` → review `lib/db/migrations/0NNN_<name>.sql` → commit → deploy runs `migrate` automatically. The runner detects "legacy push" databases (existing tables, no `__drizzle_migrations`) and seeds the baseline as applied without re-running CREATE TABLE — so existing prod environments switch over without data loss.
 
 ## API Routes
 
