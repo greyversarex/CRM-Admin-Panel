@@ -147,6 +147,8 @@ export default function Settings() {
   const [auditEntityType, setAuditEntityType] = useState<string>("");
   const [auditAction, setAuditAction] = useState<string>("");
   const [auditUserId, setAuditUserId] = useState<string>("");
+  const [auditFrom, setAuditFrom] = useState<string>(""); // YYYY-MM-DD из <input type="date">
+  const [auditTo, setAuditTo] = useState<string>("");
   const [auditExpanded, setAuditExpanded] = useState<Set<number>>(new Set());
 
   const loadIntegrations = async () => {
@@ -180,6 +182,9 @@ export default function Settings() {
       if (auditEntityType) params.set("entity_type", auditEntityType);
       if (auditAction) params.set("action", auditAction);
       if (auditUserId) params.set("user_id", auditUserId);
+      // Date inputs дают YYYY-MM-DD; конвертируем в ISO с границами суток в UTC.
+      if (auditFrom) params.set("from", new Date(`${auditFrom}T00:00:00.000Z`).toISOString());
+      if (auditTo) params.set("to", new Date(`${auditTo}T23:59:59.999Z`).toISOString());
       params.set("limit", "100");
       const r = await api<{ data: AuditRow[]; pagination: { total: number } }>(`/api/audit?${params.toString()}`);
       setAudit(r.data);
@@ -214,7 +219,7 @@ export default function Settings() {
     if (!canViewAudit) return;
     loadAudit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditEntityType, auditAction, auditUserId]);
+  }, [auditEntityType, auditAction, auditUserId, auditFrom, auditTo]);
 
   const toggleAuditRow = (id: number) => {
     setAuditExpanded((prev) => {
@@ -660,7 +665,7 @@ export default function Settings() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
                   <div className="space-y-1">
                     <label htmlFor="audit-entity" className="text-xs text-muted-foreground uppercase tracking-wider">Сущность</label>
                     <select
@@ -703,7 +708,46 @@ export default function Settings() {
                       ))}
                     </select>
                   </div>
+                  <div className="space-y-1">
+                    <label htmlFor="audit-from" className="text-xs text-muted-foreground uppercase tracking-wider">С</label>
+                    <input
+                      id="audit-from"
+                      type="date"
+                      value={auditFrom}
+                      max={auditTo || undefined}
+                      onChange={(e) => setAuditFrom(e.target.value)}
+                      className="w-full h-9 px-3 text-sm rounded-md bg-background/50 border border-border"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="audit-to" className="text-xs text-muted-foreground uppercase tracking-wider">По</label>
+                    <input
+                      id="audit-to"
+                      type="date"
+                      value={auditTo}
+                      min={auditFrom || undefined}
+                      onChange={(e) => setAuditTo(e.target.value)}
+                      className="w-full h-9 px-3 text-sm rounded-md bg-background/50 border border-border"
+                    />
+                  </div>
                 </div>
+                {(auditEntityType || auditAction || auditUserId || auditFrom || auditTo) && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAuditEntityType("");
+                        setAuditAction("");
+                        setAuditUserId("");
+                        setAuditFrom("");
+                        setAuditTo("");
+                      }}
+                    >
+                      Сбросить фильтры
+                    </Button>
+                  </div>
+                )}
 
                 {auditLoading ? (
                   <Skeleton className="h-48 w-full" />
