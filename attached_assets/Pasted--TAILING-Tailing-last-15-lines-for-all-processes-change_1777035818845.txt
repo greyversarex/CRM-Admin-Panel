@@ -1,0 +1,51 @@
+[TAILING] Tailing last 15 lines for [all] processes (change the value with --lines option)
+/root/.pm2/pm2.log last 15 lines:
+PM2        | 2026-04-24T12:42:02: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-04-24T12:42:02: PM2 log: pid=125131 msg=process killed
+PM2        | 2026-04-24T12:42:02: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-24T12:42:02: PM2 log: App [tajikmusic-api:0] online
+PM2        | 2026-04-24T12:46:23: PM2 log: Stopping app:tajikmusic-api id:0
+PM2        | 2026-04-24T12:46:24: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-04-24T12:46:24: PM2 log: pid=125212 msg=process killed
+PM2        | 2026-04-24T12:46:24: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-24T12:46:24: PM2 log: App [tajikmusic-api:0] online
+PM2        | 2026-04-24T13:01:56: PM2 log: Process 0 in a stopped status, starting it
+PM2        | 2026-04-24T13:01:56: PM2 log: Stopping app:tajikmusic-api id:0
+PM2        | 2026-04-24T13:01:56: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-04-24T13:01:56: PM2 log: pid=125313 msg=process killed
+PM2        | 2026-04-24T13:01:56: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-24T13:01:56: PM2 log: App [tajikmusic-api:0] online
+
+/var/log/tajikmusic/api-error.log last 15 lines:
+0|tajikmus | 2026-04-24 12:42:06:     hint: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     position: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     internalPosition: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     internalQuery: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     where: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     schema: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     table: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     column: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     dataType: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     constraint: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     file: 'auth.c',
+0|tajikmus | 2026-04-24 12:42:06:     line: '331',
+0|tajikmus | 2026-04-24 12:42:06:     routine: 'auth_failed'
+0|tajikmus | 2026-04-24 12:42:06:   }
+0|tajikmus | 2026-04-24 12:42:06: }
+
+/var/log/tajikmusic/api-out.log last 15 lines:
+0|tajikmus | 2026-04-24 12:46:24: {"level":30,"time":1777034784029,"pid":125212,"hostname":"ubuntu","signal":"SIGINT","msg":"shutdown signal received"}
+0|tajikmus | 2026-04-24 12:46:24: {"level":30,"time":1777034784030,"pid":125212,"hostname":"ubuntu","msg":"delivery worker stopped"}
+0|tajikmus | 2026-04-24 12:46:28: {"level":30,"time":1777034788185,"pid":125313,"hostname":"ubuntu","port":3001,"msg":"Server listening"}
+0|tajikmus | 2026-04-24 12:46:28: {"level":30,"time":1777034788425,"pid":125313,"hostname":"ubuntu","intervalMs":30000,"batch":10,"msg":"delivery worker started"}
+0|tajikmus | 2026-04-24 12:46:28: [seed] Реестр интеграций: 29/29 записей готово
+0|tajikmus | 2026-04-24 12:47:51: {"level":30,"time":1777034871336,"pid":125313,"hostname":"ubuntu","req":{"id":1,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":15,"msg":"request completed"}
+0|tajikmus | 2026-04-24 12:54:38: {"level":30,"time":1777035278871,"pid":125313,"hostname":"ubuntu","req":{"id":2,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":6,"msg":"request completed"}
+0|tajikmus | 2026-04-24 13:01:28: {"level":30,"time":1777035688626,"pid":125313,"hostname":"ubuntu","jobId":6,"target":"apple","releaseId":3,"attempts":1,"xmlBytes":1937,"msg":"delivery sent"}
+0|tajikmus | 2026-04-24 13:01:56: {"level":30,"time":1777035716703,"pid":125313,"hostname":"ubuntu","signal":"SIGINT","msg":"shutdown signal received"}
+0|tajikmus | 2026-04-24 13:01:56: {"level":30,"time":1777035716710,"pid":125313,"hostname":"ubuntu","msg":"delivery worker stopped"}
+0|tajikmus | 2026-04-24 13:02:01: {"level":30,"time":1777035721585,"pid":125736,"hostname":"ubuntu","port":3001,"msg":"Server listening"}
+0|tajikmus | 2026-04-24 13:02:01: {"level":30,"time":1777035721787,"pid":125736,"hostname":"ubuntu","intervalMs":30000,"batch":10,"msg":"delivery worker started"}
+0|tajikmus | 2026-04-24 13:02:01: [seed] Реестр интеграций: 29/29 записей готово
+0|tajikmus | 2026-04-24 13:02:20: {"level":30,"time":1777035740894,"pid":125736,"hostname":"ubuntu","req":{"id":1,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":19,"msg":"request completed"}
+0|tajikmus | 2026-04-24 13:02:24: {"level":30,"time":1777035744387,"pid":125736,"hostname":"ubuntu","req":{"id":2,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":7,"msg":"request completed"}
