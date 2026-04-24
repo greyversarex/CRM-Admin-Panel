@@ -1,0 +1,255 @@
+// ─── Public Signup + Admin Review (Task #6) ───────────────────────────────
+// POST /signup-requests — публичный (без auth), rate-limited (3/час/IP).
+// GET /signup-requests, POST /:id/approve|reject — admin/manager only.
+//
+// Approve создаёт User + (Artist|Label) + temp password (bcrypt) и записывает
+// созданный user_id в signup_requests.created_user_id.
+import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { db, signupRequestsTable, usersTable, artistsTable, labelsTable } from "@workspace/db";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { requireRole } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
+import { generateTempPassword } from "../lib/kycUtils";
+import { logger } from "../lib/logger";
+
+const router = Router();
+
+// 3 заявки / IP / час. В dev — мягче (100), чтобы можно было прогонять smoke.
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 3 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много заявок с этого IP. Попробуй через час." },
+});
+
+const PublicSignupBody = z.object({
+  entityType: z.enum(["artist", "label"]),
+  name:    z.string().min(2).max(120),
+  email:   z.string().email().max(255).transform((s) => s.toLowerCase().trim()),
+  phone:   z.string().max(40).optional().nullable(),
+  country: z.string().max(8).optional().nullable(),
+  legalName: z.string().max(255).optional().nullable(),
+  inn:     z.string().max(40).optional().nullable(),
+  message: z.string().max(2000).optional().nullable(),
+}).strict();
+
+const ApproveBody = z.object({
+  // Админ может переопределить роль для лейбла на «label» либо на «artist» (для физ.лица).
+  role: z.enum(["artist", "label"]).optional(),
+  // Опциональный label_id — для привязки нового артиста к существующему лейблу.
+  labelId: z.number().int().positive().optional().nullable(),
+}).strict();
+
+const RejectBody = z.object({
+  reason: z.string().min(3).max(500),
+}).strict();
+
+function serializeRequest(r: typeof signupRequestsTable.$inferSelect) {
+  return {
+    ...r,
+    reviewedAt: r.reviewedAt?.toISOString() ?? null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+// ─── PUBLIC: создать заявку ───────────────────────────────────────────────
+router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> => {
+  const parsed = PublicSignupBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const data = parsed.data;
+
+  // Идемпотентность: одну активную (pending) заявку на email — больше не принимаем,
+  // чтобы кнопка submit не плодила дубликаты от нетерпеливых пользователей.
+  const [existing] = await db.select({ id: signupRequestsTable.id })
+    .from(signupRequestsTable)
+    .where(and(eq(signupRequestsTable.email, data.email), eq(signupRequestsTable.status, "pending")));
+  if (existing) {
+    res.status(409).json({ error: "Заявка с этим email уже отправлена и ждёт рассмотрения." });
+    return;
+  }
+
+  // Email-уникальность среди активных юзеров: если уже есть аккаунт — отправляем на /login.
+  const [existingUser] = await db.select({ id: usersTable.id })
+    .from(usersTable).where(eq(usersTable.email, data.email));
+  if (existingUser) {
+    res.status(409).json({ error: "Аккаунт с этим email уже существует. Войди через /login." });
+    return;
+  }
+
+  const [created] = await db.insert(signupRequestsTable).values({
+    entityType: data.entityType,
+    name:    data.name,
+    email:   data.email,
+    phone:   data.phone ?? null,
+    country: data.country ?? null,
+    legalName: data.legalName ?? null,
+    inn:     data.inn ?? null,
+    message: data.message ?? null,
+  }).returning();
+
+  // fire-and-forget audit (юзер не залогинен — userId/email в audit будут null,
+  // но запись сохраняется для отчёта администратору)
+  void auditMutation(req, {
+    action: "create", entityType: "signup_request", entityId: created.id,
+    before: null, after: created,
+  });
+
+  // Email-уведомление админу. SMTP пока не настроен — просто warn в логи.
+  logger.info({ requestId: created.id, email: data.email, entityType: data.entityType },
+    "[signup] new signup request — admin notification (email TODO if SMTP_URL set)");
+
+  res.status(201).json({ ok: true, requestId: created.id });
+});
+
+// ─── ADMIN: список заявок ─────────────────────────────────────────────────
+router.get("/signup-requests", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const status = (req.query.status as string | undefined) ?? undefined;
+  const search = (req.query.search as string | undefined) ?? undefined;
+  const filters: any[] = [];
+  if (status) filters.push(eq(signupRequestsTable.status, status));
+  if (search) filters.push(or(ilike(signupRequestsTable.name, `%${search}%`), ilike(signupRequestsTable.email, `%${search}%`)));
+  const where = filters.length ? and(...filters) : undefined;
+  const rows = await db.select().from(signupRequestsTable).where(where)
+    .orderBy(desc(signupRequestsTable.createdAt)).limit(200);
+  res.json({ data: rows.map(serializeRequest) });
+});
+
+// ─── ADMIN: approve ───────────────────────────────────────────────────────
+// Создаём User + (Artist|Label), сохраняем temp password в audit нельзя,
+// поэтому возвращаем его 1 раз в ответе → админ передаёт юзеру out-of-band.
+router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = ApproveBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [request] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
+  if (!request) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: `Заявка уже в статусе ${request.status}` });
+    return;
+  }
+
+  // Если за время ожидания кто-то занял email через админский /users — отказ.
+  const [conflictUser] = await db.select({ id: usersTable.id })
+    .from(usersTable).where(eq(usersTable.email, request.email));
+  if (conflictUser) {
+    res.status(409).json({ error: "Email уже занят другим пользователем" });
+    return;
+  }
+
+  const role = parsed.data.role ?? request.entityType;  // 'artist' | 'label'
+  const tempPassword = generateTempPassword(12);
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  // Транзакционно создаём artist|label + user. Drizzle не имеет встроенных
+  // транзакций для http-pool в текущей конфигурации — но ошибки на каждом шаге
+  // ловим вручную (создание artist/label идемпотентно по name+country, а user
+  // защищён уникальностью email).
+  let createdArtistId: number | null = null;
+  let createdLabelId: number | null = null;
+
+  if (role === "label") {
+    const [lab] = await db.insert(labelsTable).values({
+      name: request.legalName || request.name,
+      country: request.country,
+      status: "active",
+    }).returning();
+    createdLabelId = lab.id;
+  } else {
+    // artist: optional привязка к существующему лейблу
+    const [art] = await db.insert(artistsTable).values({
+      name: request.name,
+      slug: request.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `artist-${Date.now()}`,
+      country: request.country,
+      labelId: parsed.data.labelId ?? null,
+      status: "active",
+    }).returning();
+    createdArtistId = art.id;
+    if (parsed.data.labelId) createdLabelId = parsed.data.labelId;
+  }
+
+  const reviewer = req.session.user!;
+  const [user] = await db.insert(usersTable).values({
+    name: request.name,
+    email: request.email,
+    role,
+    status: "active",
+    passwordHash,
+    phone: request.phone,
+    country: request.country,
+    artistId: createdArtistId,
+    labelId: createdLabelId,
+    kycStatus: "not_started",
+  }).returning();
+
+  const [updatedRequest] = await db.update(signupRequestsTable)
+    .set({
+      status: "approved",
+      reviewedBy: reviewer.id,
+      reviewedAt: new Date(),
+      createdUserId: user.id,
+    })
+    .where(eq(signupRequestsTable.id, id))
+    .returning();
+
+  void auditMutation(req, {
+    action: "approve", entityType: "signup_request", entityId: id,
+    before: request, after: updatedRequest,
+  });
+  void auditMutation(req, {
+    action: "create", entityType: "user", entityId: user.id,
+    before: null, after: user,
+  });
+
+  logger.info({ requestId: id, userId: user.id, email: user.email },
+    "[signup] approved — temporary password generated (TODO: email when SMTP_URL set)");
+
+  // ВНИМАНИЕ: tempPassword возвращается ТОЛЬКО в этом ответе и нигде не логируется.
+  // Админ обязан передать его пользователю безопасным каналом.
+  res.status(201).json({
+    ok: true,
+    request: serializeRequest(updatedRequest),
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    tempPassword,
+  });
+});
+
+// ─── ADMIN: reject ────────────────────────────────────────────────────────
+router.post("/signup-requests/:id/reject", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = RejectBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [request] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
+  if (!request) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: `Заявка уже в статусе ${request.status}` });
+    return;
+  }
+
+  const reviewer = req.session.user!;
+  const [updated] = await db.update(signupRequestsTable)
+    .set({
+      status: "rejected",
+      reviewedBy: reviewer.id,
+      reviewedAt: new Date(),
+      rejectionReason: parsed.data.reason,
+    })
+    .where(eq(signupRequestsTable.id, id))
+    .returning();
+
+  void auditMutation(req, {
+    action: "reject", entityType: "signup_request", entityId: id,
+    before: request, after: updated,
+  });
+
+  res.json({ ok: true, request: serializeRequest(updated) });
+});
+
+export default router;

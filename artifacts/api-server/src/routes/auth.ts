@@ -58,6 +58,21 @@ function buildProfilePayload(u: typeof usersTable.$inferSelect) {
     about: u.about,
     dspProfiles: u.dspProfiles ?? {},
     socialLinks: u.socialLinks ?? {},
+    // ─── KYC / Bank / Tax (Task #6) ───────────────────────────────────────
+    // Сам юзер должен видеть свой статус и реквизиты для редактирования.
+    // Account number/IBAN отдаются как есть (это его собственные данные —
+    // он сам их вводил), но в /users/{id} для других ролей маскируются.
+    kycStatus: u.kycStatus,
+    kycCompletedAt: u.kycCompletedAt?.toISOString() ?? null,
+    bankName: u.bankName,
+    bankAccountNumber: u.bankAccountNumber,
+    bankSwift: u.bankSwift,
+    bankIban: u.bankIban,
+    bankHolderName: u.bankHolderName,
+    bankCountry: u.bankCountry,
+    taxId: u.taxId,
+    taxCountry: u.taxCountry,
+    taxFormType: u.taxFormType,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuth, type Role } from "@/lib/auth";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import { Input } from "@/components/ui/input";
@@ -455,6 +455,14 @@ export default function Login() {
                 )}
               </Button>
             </form>
+
+            {/* Public-signup link (Task #6) — для тех, у кого нет аккаунта */}
+            <p className="text-center text-[12px] text-white/55 mt-5">
+              Ещё нет аккаунта?{" "}
+              <Link to="/signup" className="text-primary font-medium hover:underline">
+                Подать заявку
+              </Link>
+            </p>
 
             {/* Demo accounts — visible only in development */}
             {import.meta.env.DEV && (

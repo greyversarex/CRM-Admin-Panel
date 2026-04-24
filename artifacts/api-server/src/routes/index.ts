@@ -18,6 +18,8 @@ import integrationsRouter from "./integrations";
 import assetsRouter from "./assets";
 import auditRouter from "./audit";
 import ingestionRouter from "./ingestion";
+import signupRouter from "./signup";
+import kycRouter from "./kyc";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -25,6 +27,9 @@ const router: IRouter = Router();
 // Public — no auth required
 router.use(healthRouter);
 router.use(authRouter);
+// Public signup endpoint (POST /signup-requests). Admin endpoints в этом
+// router'е защищены своим requireRole внутри хендлеров.
+router.use(signupRouter);
 
 // All other API routes require an active session
 router.use(requireAuth);
@@ -43,6 +48,9 @@ router.use(tracksRouter);             // scoped per-route inside
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
 // authenticated users (their own profile / password change).
 router.use(usersRouter);
+// KYC routes должны быть ДО integrationsRouter (который имеет глобальный
+// router.use(requireRole) и иначе перехватывает любой /users/me/kyc-* запрос).
+router.use(kycRouter);                   // KYC docs + admin review (per-route guards inside)
 router.use("/contacts", adminOnly);
 router.use("/crm", adminOnly);
 router.use(crmRouter);

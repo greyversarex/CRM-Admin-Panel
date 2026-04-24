@@ -31,7 +31,9 @@ import {
 import {
   Wallet, TrendingUp, TrendingDown, FileText, Download, Disc3, Radio,
   Send, History, AlertCircle, ArrowUpRight, ArrowDownRight, DollarSign, Calendar, Info,
+  ShieldAlert, Banknote,
 } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "@/hooks/use-toast";
 
 const PIE_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#ec4899", "#10b981", "#8b5cf6", "#ef4444", "#14b8a6", "#a855f7"];
@@ -582,6 +584,36 @@ export default function Royalties() {
                       </AlertDescription>
                     </Alert>
                   )}
+                  {/* Task #6 — KYC + bank guard. Решение принимается на бэке
+                      (POST /payouts вернёт 403), но дублируем UI-блокировку,
+                      чтобы пользователь сразу понимал, что требуется. */}
+                  {canRequestPayout && user && user.kycStatus !== "approved" && (
+                    <Alert className="mb-4 border-rose-500/30 bg-rose-500/5">
+                      <ShieldAlert className="h-4 w-4 text-rose-400" />
+                      <AlertDescription className="text-rose-200/90">
+                        Запрос выплаты заблокирован: KYC ещё не одобрен{" "}
+                        {user.kycStatus === "pending" ? "(документы на проверке)" :
+                         user.kycStatus === "rejected" ? "(заявка отклонена — обнови документы)" :
+                         "(документы ещё не отправлены)"}.{" "}
+                        <Link to="/profile" className="underline font-medium hover:text-white">
+                          Перейти в профиль → KYC
+                        </Link>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {canRequestPayout && user && user.kycStatus === "approved" &&
+                   (!user.bankAccountNumber || !user.bankSwift || !user.bankHolderName) && (
+                    <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
+                      <Banknote className="h-4 w-4 text-amber-400" />
+                      <AlertDescription className="text-amber-200/90">
+                        Заполни банковские реквизиты, чтобы запрашивать выплаты: нужны номер счёта,
+                        SWIFT/BIC и имя владельца.{" "}
+                        <Link to="/profile" className="underline font-medium hover:text-white">
+                          Перейти в профиль → Банк
+                        </Link>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <form onSubmit={handlePayoutSubmit} className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
@@ -620,20 +652,38 @@ export default function Royalties() {
                         onChange={(e) => setPayDetails(e.target.value)}
                       />
                     </div>
-                    <div className="flex gap-3">
-                      <Button type="submit" disabled={createPayout.isPending || !canRequestPayout || !summary || summaryQ.isLoading}>
-                        <Send className="h-4 w-4 mr-2" />
-                        {createPayout.isPending ? "Отправка..." : "Отправить запрос"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!canRequestPayout || !summary}
-                        onClick={() => summary && setPayAmount(String(summary.availableBalance))}
-                      >
-                        Запросить максимум
-                      </Button>
-                    </div>
+                    {(() => {
+                      const kycMissing = !!user && user.kycStatus !== "approved";
+                      const bankMissing = !!user && (!user.bankAccountNumber || !user.bankSwift || !user.bankHolderName);
+                      const guardBlocked = canRequestPayout && (kycMissing || bankMissing);
+                      const submitDisabled =
+                        createPayout.isPending || !canRequestPayout ||
+                        !summary || summaryQ.isLoading || guardBlocked;
+                      return (
+                        <div className="flex gap-3">
+                          <Button
+                            type="submit"
+                            disabled={submitDisabled}
+                            title={
+                              guardBlocked
+                                ? (kycMissing ? "Сначала пройди KYC" : "Заполни банковские реквизиты")
+                                : undefined
+                            }
+                          >
+                            <Send className="h-4 w-4 mr-2" />
+                            {createPayout.isPending ? "Отправка..." : "Отправить запрос"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!canRequestPayout || !summary}
+                            onClick={() => summary && setPayAmount(String(summary.availableBalance))}
+                          >
+                            Запросить максимум
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </form>
                 </CardContent>
               </Card>

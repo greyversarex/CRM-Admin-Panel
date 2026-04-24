@@ -5,6 +5,7 @@ import { z } from "zod";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { isValidIban, isValidSwift, maskBankInfoFor } from "../lib/kycUtils";
 
 const adminOnly = requireRole("admin", "manager");
 
@@ -40,7 +41,7 @@ const UpdateMyProfileBody = z.object({
   }).strict().optional(),
 }).strict();
 
-function formatUser(u: typeof usersTable.$inferSelect) {
+function formatUser(u: typeof usersTable.$inferSelect, viewerRole: "admin" | "manager" | "label" | "artist" = "admin") {
   // Strip server-internal fields so they never leak via /users responses:
   //  - passwordHash             — secret
   //  - failedLoginAttempts      — internal lockout counter
@@ -51,8 +52,20 @@ function formatUser(u: typeof usersTable.$inferSelect) {
     lockedUntil: _locked,
     ...rest
   } = u;
+  // Bank info: для не-админов account_number / iban маскируются.
+  // Tax info: tax_id всегда возвращается только самому юзеру или admin/manager.
+  const masked = maskBankInfoFor({
+    bankName: u.bankName,
+    bankAccountNumber: u.bankAccountNumber,
+    bankSwift: u.bankSwift,
+    bankIban: u.bankIban,
+    bankHolderName: u.bankHolderName,
+    bankCountry: u.bankCountry,
+  }, viewerRole);
   return {
     ...rest,
+    ...masked,
+    kycCompletedAt: u.kycCompletedAt?.toISOString() ?? null,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
@@ -99,6 +112,88 @@ router.post("/users", adminOnly, async (req, res): Promise<void> => {
   res.status(201).json(formatUser(user));
 });
 
+// ─── Bank Info (Task #6) ─────────────────────────────────────────────────
+// Юзер сам редактирует свои банковские реквизиты. Аудит пишет ТОЛЬКО
+// нечувствительные поля (см. ENTITY_ALLOWLIST.profile_bank). После apply
+// возвращаем masked-вариант (для самого юзера тоже маскируем номер счёта,
+// чтобы в логах браузера не светилось).
+const UpdateBankInfoBody = z.object({
+  bankName:         z.string().max(120).nullable().optional(),
+  bankAccountNumber: z.string().max(64).nullable().optional(),
+  bankSwift:        z.string().max(32).nullable().optional(),
+  bankIban:         z.string().max(64).nullable().optional(),
+  bankHolderName:   z.string().max(180).nullable().optional(),
+  bankCountry:      z.string().max(8).nullable().optional(),
+}).strict();
+
+router.patch("/users/me/bank-info", requireAuth, async (req, res): Promise<void> => {
+  const sessionUser = req.session.user!;
+  const parsed = UpdateBankInfoBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const data = parsed.data;
+  if (Object.keys(data).length === 0) { res.status(400).json({ error: "Нечего обновлять" }); return; }
+
+  // Лёгкая валидация (если поля переданы и не null)
+  if (data.bankIban && !isValidIban(data.bankIban)) {
+    res.status(400).json({ error: "Невалидный IBAN" }); return;
+  }
+  if (data.bankSwift && !isValidSwift(data.bankSwift)) {
+    res.status(400).json({ error: "Невалидный SWIFT/BIC" }); return;
+  }
+
+  const [me] = await db.select().from(usersTable).where(eq(usersTable.id, sessionUser.id));
+  if (!me) { res.status(404).json({ error: "User not found" }); return; }
+  // Если KYC уже approved — bank info менять можно, но это вернёт kyc в pending
+  // (compliance: новые реквизиты должен заново проверить админ).
+  const patch: Partial<typeof usersTable.$inferInsert> = { ...data };
+  if (me.kycStatus === "approved") {
+    patch.kycStatus = "pending";
+    patch.kycCompletedAt = null;
+  }
+  const [updated] = await db.update(usersTable)
+    .set(patch)
+    .where(eq(usersTable.id, sessionUser.id))
+    .returning();
+
+  // Audit пишет только non-PII поля профиля (см. profile_bank allowlist)
+  void auditMutation(req, {
+    action: "update", entityType: "profile_bank", entityId: sessionUser.id,
+    before: { id: me.id, bankName: me.bankName, bankHolderName: me.bankHolderName, bankCountry: me.bankCountry },
+    after:  { id: updated.id, bankName: updated.bankName, bankHolderName: updated.bankHolderName, bankCountry: updated.bankCountry },
+  });
+
+  res.json(formatUser(updated, sessionUser.role));
+});
+
+// ─── Tax Info (Task #6) ───────────────────────────────────────────────────
+const UpdateTaxInfoBody = z.object({
+  taxId:       z.string().max(64).nullable().optional(),
+  taxCountry:  z.string().max(8).nullable().optional(),
+  taxFormType: z.enum(["w8", "w9", "self_employed", "individual_entrepreneur", "none"]).nullable().optional(),
+}).strict();
+
+router.patch("/users/me/tax-info", requireAuth, async (req, res): Promise<void> => {
+  const sessionUser = req.session.user!;
+  const parsed = UpdateTaxInfoBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (Object.keys(parsed.data).length === 0) { res.status(400).json({ error: "Нечего обновлять" }); return; }
+
+  const [me] = await db.select().from(usersTable).where(eq(usersTable.id, sessionUser.id));
+  if (!me) { res.status(404).json({ error: "User not found" }); return; }
+  const [updated] = await db.update(usersTable)
+    .set(parsed.data)
+    .where(eq(usersTable.id, sessionUser.id))
+    .returning();
+
+  void auditMutation(req, {
+    action: "update", entityType: "profile_tax", entityId: sessionUser.id,
+    before: { id: me.id, taxCountry: me.taxCountry, taxFormType: me.taxFormType },
+    after:  { id: updated.id, taxCountry: updated.taxCountry, taxFormType: updated.taxFormType },
+  });
+
+  res.json(formatUser(updated, sessionUser.role));
+});
+
 router.patch("/users/me", requireAuth, async (req, res): Promise<void> => {
   const sessionUser = req.session.user!;
   const parsed = UpdateMyProfileBody.safeParse(req.body);
@@ -124,7 +219,7 @@ router.patch("/users/me", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.name && req.session.user) {
     req.session.user.name = parsed.data.name;
   }
-  res.json(formatUser(user));
+  res.json(formatUser(user, sessionUser.role));
 });
 
 router.get("/users/:id", adminOnly, async (req, res): Promise<void> => {

@@ -20,6 +20,8 @@ export type SocialLinks = {
   vk?: string;
 };
 
+export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
+
 export interface AuthUser {
   id: number;
   name: string;
@@ -37,6 +39,18 @@ export interface AuthUser {
   about?: string | null;
   dspProfiles: DspProfiles;
   socialLinks: SocialLinks;
+  // ─── KYC / Bank / Tax (Task #6) ─────────────────────────────────────────
+  kycStatus: KycStatus;
+  kycCompletedAt?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankSwift?: string | null;
+  bankIban?: string | null;
+  bankHolderName?: string | null;
+  bankCountry?: string | null;
+  taxId?: string | null;
+  taxCountry?: string | null;
+  taxFormType?: string | null;
   // Derived
   avatarInitials: string;
   orgName?: string;
@@ -85,6 +99,17 @@ function deriveAuthUser(raw: any): AuthUser {
     about: raw.about ?? null,
     dspProfiles: (raw.dspProfiles ?? {}) as DspProfiles,
     socialLinks: (raw.socialLinks ?? {}) as SocialLinks,
+    kycStatus: (raw.kycStatus ?? "not_started") as KycStatus,
+    kycCompletedAt: raw.kycCompletedAt ?? null,
+    bankName: raw.bankName ?? null,
+    bankAccountNumber: raw.bankAccountNumber ?? null,
+    bankSwift: raw.bankSwift ?? null,
+    bankIban: raw.bankIban ?? null,
+    bankHolderName: raw.bankHolderName ?? null,
+    bankCountry: raw.bankCountry ?? null,
+    taxId: raw.taxId ?? null,
+    taxCountry: raw.taxCountry ?? null,
+    taxFormType: raw.taxFormType ?? null,
     avatarInitials: initials,
     orgName: raw.role === "label" || raw.role === "artist" ? raw.name : undefined,
   };

@@ -7,6 +7,9 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { canAccess } from "@/lib/permissions";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
+import AdminSignups from "@/pages/admin/signups";
+import AdminKyc from "@/pages/admin/kyc";
 
 import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
@@ -72,6 +75,13 @@ function Router() {
         {user ? <Redirect to="/" /> : <Login />}
       </Route>
 
+      {/* Public signup — намеренно ВНЕ ProtectedRoute. Залогиненных
+          пользователей редиректим в дашборд, чтобы случайный заход не
+          путал интерфейс. */}
+      <Route path="/signup">
+        {user ? <Redirect to="/" /> : <Signup />}
+      </Route>
+
       <ProtectedRoute path="/"               component={Dashboard} />
       <ProtectedRoute path="/analytics"      component={Analytics} />
       <ProtectedRoute path="/distribution"   component={Distribution} />
@@ -94,6 +104,10 @@ function Router() {
       <ProtectedRoute path="/settings"       component={Settings} />
       <ProtectedRoute path="/profile"        component={ProfilePage} />
       <ProtectedRoute path="/support"        component={SupportPage} />
+
+      {/* Task #6 — admin/manager only (gated через permissions.ts) */}
+      <ProtectedRoute path="/admin/signups"  component={AdminSignups} />
+      <ProtectedRoute path="/admin/kyc"      component={AdminKyc} />
 
       <Route component={NotFound} />
     </Switch>

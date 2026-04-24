@@ -20,6 +20,9 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/settings":       ["admin"],
   "/profile":        ["admin", "manager", "label", "artist"],
   "/support":        ["admin", "manager", "label", "artist"],
+  // Task #6 — приём заявок на регистрацию + рассмотрение KYC: только админ/менеджер.
+  "/admin/signups":  ["admin", "manager"],
+  "/admin/kyc":      ["admin", "manager"],
 };
 
 export function canAccess(role: Role, path: string): boolean {

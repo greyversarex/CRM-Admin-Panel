@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable } from "@workspace/db";
+import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable, usersTable } from "@workspace/db";
 import { count, eq, desc, and } from "drizzle-orm";
 import {
   CreateTransactionBody,
@@ -251,6 +251,36 @@ router.post("/payouts", async (req, res): Promise<void> => {
         const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, parsed.data.artistId));
         if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Artist does not belong to your label" }); return; }
       }
+    }
+  }
+
+  // ─── KYC + bank-info guard (Task #6, ТЗ §4.4) ────────────────────────────
+  // Без подтверждённого KYC и заполненных банк-реквизитов выплата не оформляется.
+  // admin/manager пропускаем — они инициируют выплаты от имени артиста/лейбла,
+  // и у них может быть свой процесс верификации.
+  const sessionUser = req.session.user!;
+  if (sessionUser.role === "artist" || sessionUser.role === "label") {
+    const [me] = await db.select({
+      kycStatus: usersTable.kycStatus,
+      bankAccountNumber: usersTable.bankAccountNumber,
+      bankSwift: usersTable.bankSwift,
+      bankHolderName: usersTable.bankHolderName,
+    }).from(usersTable).where(eq(usersTable.id, sessionUser.id));
+    if (!me) { res.status(401).json({ error: "Unauthorized" }); return; }
+    if (me.kycStatus !== "approved") {
+      res.status(400).json({
+        error: "Сначала пройди KYC-верификацию в профиле",
+        code: "kyc_not_approved",
+        kycStatus: me.kycStatus,
+      });
+      return;
+    }
+    if (!me.bankAccountNumber || !me.bankSwift || !me.bankHolderName) {
+      res.status(400).json({
+        error: "Заполни банковские реквизиты в профиле перед запросом выплаты",
+        code: "bank_info_missing",
+      });
+      return;
     }
   }
 

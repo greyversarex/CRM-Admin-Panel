@@ -17,3 +17,5 @@ export * from "./integrations";
 export * from "./sessions";
 export * from "./assets";
 export * from "./ingestion";
+export * from "./signup_requests";
+export * from "./kyc_documents";

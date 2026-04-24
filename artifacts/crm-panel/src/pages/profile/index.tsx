@@ -15,7 +15,8 @@ import {
   User as UserIcon, Link as LinkIcon, KeyRound, Users2,
   CheckCircle2, Phone, MapPin, Mail, ImagePlus, Eye, EyeOff,
   Music, Apple, Youtube, Facebook, Instagram, Linkedin, Twitter, Send as SendIcon,
-  Loader2,
+  Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Banknote, Receipt,
+  Upload, Trash2, FileText, AlertTriangle, ExternalLink,
 } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -292,6 +293,7 @@ export default function ProfilePage() {
               <Badge variant="outline" className="text-[10px] text-primary bg-primary/10 border-primary/20">
                 {ROLE_LABEL[user.role] ?? user.role}
               </Badge>
+              <KycStatusBadge status={user.kycStatus} />
             </div>
           </div>
         </div>
@@ -307,6 +309,16 @@ export default function ProfilePage() {
             </TabsTrigger>
             <TabsTrigger value="password" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <KeyRound className="h-3.5 w-3.5" /> Сменить пароль
+            </TabsTrigger>
+            {/* Task #6 — KYC/Bank/Tax табы доступны всем ролям */}
+            <TabsTrigger value="kyc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" /> KYC
+            </TabsTrigger>
+            <TabsTrigger value="bank" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <Banknote className="h-3.5 w-3.5" /> Банк
+            </TabsTrigger>
+            <TabsTrigger value="tax" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <Receipt className="h-3.5 w-3.5" /> Налоги
             </TabsTrigger>
             {isAdmin && (
               <TabsTrigger value="members" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
@@ -492,6 +504,21 @@ export default function ProfilePage() {
             </Card>
           </TabsContent>
 
+          {/* ============== KYC TAB (Task #6) ============== */}
+          <TabsContent value="kyc" className="mt-6">
+            <KycTab />
+          </TabsContent>
+
+          {/* ============== BANK TAB (Task #6) ============== */}
+          <TabsContent value="bank" className="mt-6">
+            <BankTab />
+          </TabsContent>
+
+          {/* ============== TAX TAB (Task #6) ============== */}
+          <TabsContent value="tax" className="mt-6">
+            <TaxTab />
+          </TabsContent>
+
           {/* ============== ACCOUNT MEMBERS TAB (admin only) ============== */}
           {isAdmin && (
             <TabsContent value="members" className="mt-6">
@@ -629,6 +656,538 @@ function SocialField({ icon, label, value, onChange }: {
         className="bg-background/50"
       />
     </div>
+  );
+}
+
+// ─── KYC status badge — компактная плашка для hero ─────────────────────────
+function KycStatusBadge({ status }: { status: "not_started" | "pending" | "approved" | "rejected" }) {
+  if (status === "approved") {
+    return (
+      <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/30 gap-1">
+        <ShieldCheck className="h-3 w-3" /> KYC одобрен
+      </Badge>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/30 gap-1">
+        <ShieldQuestion className="h-3 w-3" /> KYC на проверке
+      </Badge>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/30 gap-1">
+        <ShieldAlert className="h-3 w-3" /> KYC отклонён
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border gap-1">
+      <ShieldQuestion className="h-3 w-3" /> KYC не пройден
+    </Badge>
+  );
+}
+
+// ─── KYC documents tab (Task #6) ──────────────────────────────────────────
+// Загрузка через прямой multipart на /api/users/me/kyc-documents (multer в backend
+// обрабатывает файл сам — не используем presign на этом этапе, чтобы не зависеть
+// от внешнего storage). После загрузки документ имеет status=pending; список
+// ниже показывает уже загруженные с действиями «открыть» и «удалить» (только
+// для status=pending). Кнопка «Отправить на проверку» переводит kyc_status юзера
+// в pending — после этого админ рассматривает в /admin/kyc.
+const KYC_KIND_LABEL: Record<string, string> = {
+  passport: "Паспорт",
+  id_card: "ID-карта",
+  company_reg: "Свидетельство о регистрации",
+  tax_certificate: "Налоговая справка",
+  bank_statement: "Банковская выписка",
+  other: "Другое",
+};
+const KYC_KIND_OPTIONS = Object.entries(KYC_KIND_LABEL);
+const ALLOWED_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic"];
+const MAX_BYTES = 25 * 1024 * 1024;
+
+interface KycDoc {
+  id: number;
+  kind: string;
+  objectPath: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "pending" | "approved" | "rejected";
+  rejectionReason: string | null;
+  uploadedAt: string;
+}
+
+function KycTab() {
+  const { user, refresh } = useAuth();
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [docs, setDocs]       = useState<KycDoc[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [kind, setKind]       = useState<string>("passport");
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [busyDelId, setBusyDelId]   = useState<number | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/users/me/kyc-documents", { credentials: "same-origin" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setDocs(j.data ?? []);
+    } catch (err: any) {
+      toast({ title: "Ошибка загрузки", description: err.message, variant: "destructive" });
+      setDocs([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  async function handleUpload(file: File) {
+    if (!ALLOWED_MIME.includes(file.type)) {
+      toast({ title: "Недопустимый формат", description: "Разрешены PDF, PNG, JPEG, WEBP, HEIC", variant: "destructive" });
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      toast({ title: "Файл слишком большой", description: "Максимум 25 МБ", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("kind", kind);
+      fd.append("file", file);
+      const res = await fetch("/api/users/me/kyc-documents", {
+        method: "POST", credentials: "same-origin", body: fd,
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast({ title: "Документ загружен" });
+      if (fileRef.current) fileRef.current.value = "";
+      await load();
+    } catch (err: any) {
+      toast({ title: "Не удалось загрузить", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(docId: number) {
+    if (!confirm("Удалить документ?")) return;
+    setBusyDelId(docId);
+    try {
+      const res = await fetch(`/api/users/me/kyc-documents/${docId}`, {
+        method: "DELETE", credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      toast({ title: "Документ удалён" });
+      await load();
+    } catch (err: any) {
+      toast({ title: "Не удалось удалить", description: err.message, variant: "destructive" });
+    } finally {
+      setBusyDelId(null);
+    }
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/users/me/submit-kyc", {
+        method: "POST", credentials: "same-origin",
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast({ title: "Отправлено на проверку", description: "Менеджер рассмотрит документы в ближайшее время." });
+      await refresh();
+      await load();
+    } catch (err: any) {
+      toast({ title: "Не удалось отправить", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!user) return null;
+
+  const pendingDocsCount = (docs ?? []).filter((d) => d.status === "pending").length;
+  const canSubmit = user.kycStatus === "not_started" || user.kycStatus === "rejected";
+  const isLocked  = user.kycStatus === "pending" || user.kycStatus === "approved";
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <Card className="card-surface no-lift border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" /> KYC верификация
+          </CardTitle>
+          <CardDescription>
+            Загрузи документы, удостоверяющие личность (или регистрацию юр. лица), затем отправь на проверку.
+            Без одобренного KYC заявки на выплату недоступны.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Status alert */}
+          {user.kycStatus === "approved" && (
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200/90">
+              <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>KYC одобрен. Дальнейшая загрузка документов не требуется. Если хочешь обновить информацию — обратись к менеджеру.</span>
+            </div>
+          )}
+          {user.kycStatus === "pending" && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200/90">
+              <ShieldQuestion className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>Документы отправлены на проверку. Обычно решение принимается в течение 1–2 рабочих дней.</span>
+            </div>
+          )}
+          {user.kycStatus === "rejected" && (
+            <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200/90">
+              <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+              <span>KYC отклонён. Просмотри комментарии к документам ниже, замени отклонённые и отправь повторно.</span>
+            </div>
+          )}
+
+          {/* Upload form (заблокирована, пока статус pending или approved) */}
+          {!isLocked && (
+            <div className="rounded-lg border border-dashed border-border/60 p-4 space-y-3">
+              <div className="grid gap-3 md:grid-cols-[200px_1fr]">
+                <Field label="Тип документа">
+                  <Select value={kind} onValueChange={setKind}>
+                    <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {KYC_KIND_OPTIONS.map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Файл (PDF / PNG / JPEG / WEBP / HEIC, до 25 МБ)">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,application/pdf,image/png,image/jpeg,image/webp,image/heic"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUpload(f);
+                    }}
+                    className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-xs file:font-medium file:text-primary hover:file:bg-primary/20 file:cursor-pointer"
+                  />
+                </Field>
+              </div>
+              {uploading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Загрузка…
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Documents list */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Загруженные документы</Label>
+              <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Обновить"}
+              </Button>
+            </div>
+            {loading && !docs && <div className="p-6 text-center text-sm text-muted-foreground">Загрузка…</div>}
+            {docs && docs.length === 0 && (
+              <div className="p-6 text-center text-sm text-muted-foreground border border-dashed border-border/40 rounded-lg">
+                Документов пока нет
+              </div>
+            )}
+            {docs && docs.length > 0 && (
+              <div className="space-y-2">
+                {docs.map((d) => {
+                  const objectId = d.objectPath.split("/").pop();
+                  const sizeKb = Math.round(d.sizeBytes / 1024);
+                  const statusCls =
+                    d.status === "approved" ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" :
+                    d.status === "rejected" ? "text-rose-400 border-rose-500/30 bg-rose-500/10" :
+                    "text-amber-400 border-amber-500/30 bg-amber-500/10";
+                  const statusLabel =
+                    d.status === "approved" ? "Одобрен" :
+                    d.status === "rejected" ? "Отклонён" : "На проверке";
+                  return (
+                    <div key={d.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/50 bg-background/40">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <FileText className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{KYC_KIND_LABEL[d.kind] ?? d.kind}</div>
+                          <div className="text-xs text-muted-foreground truncate">{d.originalFilename} · {sizeKb} KB</div>
+                          {d.status === "rejected" && d.rejectionReason && (
+                            <div className="text-[11px] text-rose-400/80 mt-1">Причина: {d.rejectionReason}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className={`text-[10px] ${statusCls}`}>{statusLabel}</Badge>
+                        <Button asChild variant="outline" size="sm">
+                          <a href={`/api/kyc/objects/uploads/${objectId}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                        {d.status === "pending" && !isLocked && (
+                          <Button
+                            variant="outline" size="sm"
+                            className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
+                            disabled={busyDelId === d.id}
+                            onClick={() => handleDelete(d.id)}
+                          >
+                            {busyDelId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Submit button */}
+          {canSubmit && (
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
+              <p className="text-xs text-muted-foreground">
+                После отправки список документов будет заблокирован до решения менеджера.
+              </p>
+              <Button
+                onClick={handleSubmit}
+                disabled={submitting || pendingDocsCount === 0}
+              >
+                {submitting ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Отправка…</> : (
+                  <><Upload className="h-3.5 w-3.5 mr-2" /> Отправить на проверку ({pendingDocsCount})</>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Right: requirements card */}
+      <Card className="card-surface no-lift border-border/60 self-start">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-400" /> Что прислать
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2.5 text-xs text-muted-foreground">
+          <p>Для <span className="text-foreground font-medium">артиста</span>:</p>
+          <ul className="list-disc list-inside space-y-1 pl-1">
+            <li>Паспорт (разворот с фото) или ID-карта</li>
+            <li>Налоговый идентификатор (если есть)</li>
+          </ul>
+          <p className="pt-2">Для <span className="text-foreground font-medium">лейбла</span>:</p>
+          <ul className="list-disc list-inside space-y-1 pl-1">
+            <li>Свидетельство о регистрации</li>
+            <li>Налоговая справка</li>
+            <li>Документ подписанта (паспорт)</li>
+          </ul>
+          <p className="pt-3 border-t border-border/40 text-[11px]">
+            Документы хранятся зашифрованно. Доступ — только менеджер на этапе верификации.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Bank tab ─────────────────────────────────────────────────────────────
+function BankTab() {
+  const { user, refresh } = useAuth();
+  const { toast } = useToast();
+  const [bankName, setBankName]       = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [swift, setSwift]             = useState("");
+  const [iban, setIban]               = useState("");
+  const [holder, setHolder]           = useState("");
+  const [country, setCountry]         = useState("");
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setBankName(user.bankName ?? "");
+    setAccountNumber(user.bankAccountNumber ?? "");
+    setSwift(user.bankSwift ?? "");
+    setIban(user.bankIban ?? "");
+    setHolder(user.bankHolderName ?? "");
+    setCountry(user.bankCountry ?? "");
+  }, [user]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/users/me/bank-info", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bankName: bankName || null,
+          bankAccountNumber: accountNumber || null,
+          bankSwift: swift || null,
+          bankIban: iban || null,
+          bankHolderName: holder || null,
+          bankCountry: country || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast({ title: "Банковские реквизиты сохранены" });
+      await refresh();
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!user) return null;
+  return (
+    <Card className="card-surface no-lift border-border/60 max-w-3xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Banknote className="h-4 w-4 text-primary" /> Банковские реквизиты
+        </CardTitle>
+        <CardDescription>
+          На эти реквизиты будут производиться выплаты роялти. Поля чувствительны и
+          не отображаются в системных журналах.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Название банка">
+            <Input value={bankName} onChange={(e) => setBankName(e.target.value)} className="bg-background/50" />
+          </Field>
+          <Field label="Имя владельца счёта (по документам)">
+            <Input value={holder} onChange={(e) => setHolder(e.target.value)} className="bg-background/50" />
+          </Field>
+          <Field label="Номер счёта">
+            <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="bg-background/50 font-mono" />
+          </Field>
+          <Field label="IBAN (если применимо)">
+            <Input value={iban} onChange={(e) => setIban(e.target.value)} className="bg-background/50 font-mono" />
+          </Field>
+          <Field label="SWIFT / BIC">
+            <Input value={swift} onChange={(e) => setSwift(e.target.value)} className="bg-background/50 font-mono" />
+          </Field>
+          <Field label="Страна банка">
+            <Select value={country || undefined} onValueChange={setCountry}>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери страну" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tj">🇹🇯 Таджикистан</SelectItem>
+                <SelectItem value="ru">🇷🇺 Россия</SelectItem>
+                <SelectItem value="uz">🇺🇿 Узбекистан</SelectItem>
+                <SelectItem value="kz">🇰🇿 Казахстан</SelectItem>
+                <SelectItem value="kg">🇰🇬 Кыргызстан</SelectItem>
+                <SelectItem value="es">🇪🇸 Испания</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохранение…</> : "Сохранить"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Tax tab ──────────────────────────────────────────────────────────────
+function TaxTab() {
+  const { user, refresh } = useAuth();
+  const { toast } = useToast();
+  const [taxId, setTaxId]           = useState("");
+  const [taxCountry, setTaxCountry] = useState("");
+  const [taxFormType, setTaxFormType] = useState("");
+  const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setTaxId(user.taxId ?? "");
+    setTaxCountry(user.taxCountry ?? "");
+    setTaxFormType(user.taxFormType ?? "");
+  }, [user]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/users/me/tax-info", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          taxId: taxId || null,
+          taxCountry: taxCountry || null,
+          taxFormType: taxFormType || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      toast({ title: "Налоговые данные сохранены" });
+      await refresh();
+    } catch (err: any) {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!user) return null;
+  return (
+    <Card className="card-surface no-lift border-border/60 max-w-3xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Receipt className="h-4 w-4 text-primary" /> Налоговые данные
+        </CardTitle>
+        <CardDescription>
+          Используется для расчёта удержаний при выплате роялти. ИНН/Tax ID не отображается в журналах действий.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="ИНН / Tax ID">
+            <Input value={taxId} onChange={(e) => setTaxId(e.target.value)} className="bg-background/50 font-mono" />
+          </Field>
+          <Field label="Страна налоговой резиденции">
+            <Select value={taxCountry || undefined} onValueChange={setTaxCountry}>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери страну" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tj">🇹🇯 Таджикистан</SelectItem>
+                <SelectItem value="ru">🇷🇺 Россия</SelectItem>
+                <SelectItem value="uz">🇺🇿 Узбекистан</SelectItem>
+                <SelectItem value="kz">🇰🇿 Казахстан</SelectItem>
+                <SelectItem value="kg">🇰🇬 Кыргызстан</SelectItem>
+                <SelectItem value="es">🇪🇸 Испания</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Форма налогообложения">
+            <Select value={taxFormType || undefined} onValueChange={setTaxFormType}>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери форму" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual">Физическое лицо</SelectItem>
+                <SelectItem value="self_employed">Самозанятый / ИП</SelectItem>
+                <SelectItem value="legal_entity">Юридическое лицо</SelectItem>
+                <SelectItem value="w8ben">W-8BEN (нерезидент США)</SelectItem>
+                <SelectItem value="w9">W-9 (резидент США)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохранение…</> : "Сохранить"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

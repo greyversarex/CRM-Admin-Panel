@@ -62,6 +62,32 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     "insertedRows", "unmatchedRows", "totalRevenue", "currency",
     "idempotencyKey", "createdAt",
   ]),
+  // ─── Task #6: KYC + публичная регистрация ────────────────────────────────
+  signup_request: new Set([
+    "id", "entityType", "name", "email", "phone", "country", "legalName", "inn",
+    "status", "reviewedBy", "reviewedAt", "rejectionReason", "createdUserId",
+    "createdAt",
+    // message — свободный текст пользователя, может содержать PII, не логируем.
+  ]),
+  kyc_document: new Set([
+    "id", "userId", "kind", "originalFilename", "mimeType", "sizeBytes",
+    "status", "reviewedBy", "reviewedAt", "rejectionReason", "uploadedAt",
+    // storageKey/objectPath — внутренние ссылки на файл, не нужны в audit UI.
+  ]),
+  // Профильные блоки KYC: bank/tax. ВАЖНО: account_number/iban/swift НЕ логируем
+  // (PII + платёжные реквизиты). В аудите видно лишь сам факт изменения и страну/тип.
+  profile_bank: new Set([
+    "id", "bankName", "bankHolderName", "bankCountry",
+    // bankAccountNumber, bankIban, bankSwift — НЕ В ALLOWLIST по compliance.
+  ]),
+  profile_tax: new Set([
+    "id", "taxCountry", "taxFormType",
+    // taxId — налоговый идентификатор, считается PII; не логируем.
+  ]),
+  // KYC-статус юзера (admin approve/reject). Только статус и метки времени.
+  user_kyc: new Set([
+    "id", "kycStatus", "kycCompletedAt",
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если
@@ -168,7 +194,7 @@ export function computeDiff(
 //
 // Возвращаем Promise, чтобы тесты могли при желании await'ить и проверить
 // факт записи (рутины в проде должны передавать `void auditMutation(...)`).
-export type AuditAction = "create" | "update" | "delete" | "login" | "approve" | "reject" | "deliver";
+export type AuditAction = "create" | "update" | "delete" | "login" | "approve" | "reject" | "deliver" | "submit";
 
 export interface AuditOptions {
   action: AuditAction;

@@ -43,6 +43,13 @@
       "when": 1777022279440,
       "tag": "0005_oval_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777024286955,
+      "tag": "0006_gorgeous_post",
+      "breakpoints": true
     }
   ]
 }
