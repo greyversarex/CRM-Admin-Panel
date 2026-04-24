@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -772,8 +772,8 @@ export default function Settings() {
                           const open = auditExpanded.has(row.id);
                           const diffCount = row.diff?.length ?? 0;
                           return (
-                            <>
-                              <TableRow key={row.id} className="hover:bg-accent/20 cursor-pointer" onClick={() => toggleAuditRow(row.id)}>
+                            <Fragment key={row.id}>
+                              <TableRow className="hover:bg-accent/20 cursor-pointer" onClick={() => toggleAuditRow(row.id)}>
                                 <TableCell className="text-xs text-muted-foreground">{open ? "▾" : "▸"}</TableCell>
                                 <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{fmtDate(row.createdAt)}</TableCell>
                                 <TableCell className="text-xs">
