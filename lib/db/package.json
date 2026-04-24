@@ -11,7 +11,9 @@
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config ./drizzle.config.ts",
     "migrate": "tsx src/migrate.ts",
+    "db:migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
