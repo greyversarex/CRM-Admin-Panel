@@ -82,7 +82,13 @@ export NODE_ENV=production
 NODE_OPTIONS="--max-old-space-size=3072" pnpm --filter @workspace/crm-panel run build
 
 echo "▶ Запускаем / перезапускаем PM2 (с подхватом новых env)..."
-pm2 startOrReload "$APP_DIR/deploy/pm2.config.js" --env production --update-env
+# pm2 reload не всегда подхватывает изменения .env (известный баг с кэшем daemon).
+# Если процесс уже есть — удаляем и стартуем заново, гарантируя свежий env.
+if pm2 describe tajikmusic-api >/dev/null 2>&1; then
+  echo "  • найден старый процесс — удаляем и стартуем заново для гарантии свежего env"
+  pm2 delete tajikmusic-api
+fi
+pm2 start "$APP_DIR/deploy/pm2.config.js" --env production
 
 echo "▶ Сохраняем список процессов PM2 (автозапуск)..."
 pm2 save
