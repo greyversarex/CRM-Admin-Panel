@@ -38,7 +38,7 @@ interface PreviewResult {
   matchedRows: number;
   unmatchedRows: number;
   sample: PreviewSampleRow[];
-  summary: { totalRevenue: number; currency: string; period: string | null; dsp: string };
+  summary: { totalRevenue: number; currency: string; period: string | null; dspName: string };
   warnings: string[];
   existingTransactionsForPeriod: number;
 }
@@ -46,7 +46,7 @@ interface PreviewResult {
 interface CommitResult {
   importId: number;
   inserted: number;
-  skippedDuplicates: number;
+  skipped: number;
   unmatched: number;
   transactions: number;
   totalRevenue: number;
@@ -182,8 +182,8 @@ export default function FinanceImport() {
           description: `Import #${data.importId}: ${data.inserted} строк, ${data.unmatched} unmatched. Новых записей не добавлено.`,
         });
       } else {
-        const skippedNote = data.skippedDuplicates > 0
-          ? `, ${data.skippedDuplicates} skipped (dedup)`
+        const skippedNote = data.skipped > 0
+          ? `, ${data.skipped} skipped (dedup)`
           : "";
         toast({
           title: "Импорт завершён",
@@ -368,7 +368,7 @@ export default function FinanceImport() {
                     className="mt-0.5"
                   />
                   <Label htmlFor="force-correction" className="text-xs leading-relaxed cursor-pointer text-amber-200">
-                    Я понимаю, что за период {preview.summary.period ?? period} ({preview.summary.dsp}) уже есть{" "}
+                    Я понимаю, что за период {preview.summary.period ?? period} ({preview.summary.dspName}) уже есть{" "}
                     <strong>{preview.existingTransactionsForPeriod} transactions</strong>, и этот импорт ДОБАВИТ ещё
                     (correction-import). Используйте только для дозагрузки новых треков, не для коррекции существующих сумм.
                   </Label>

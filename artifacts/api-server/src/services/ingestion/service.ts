@@ -23,7 +23,7 @@ export interface PreviewResult {
     totalRevenue: number;
     currency: string;
     period: string | null;
-    dsp: SupportedDsp;
+    dspName: SupportedDsp;
   };
   warnings: string[];
   /** Сколько transactions(type='dsp_revenue') УЖЕ существует за этот dsp+period.
@@ -35,7 +35,7 @@ export interface PreviewResult {
 export interface CommitResult {
   importId: number;
   inserted: number;        // строк РЕАЛЬНО добавлено в usage_reports (после dedup)
-  skippedDuplicates: number; // строк отброшено dedup-ключом (platform,period,track,country)
+  skipped: number;         // строк отброшено dedup-ключом (platform,period,track,country)
   unmatched: number;       // строк ушло в ingestion_unmatched
   transactions: number;    // агрегатов добавлено в transactions
   totalRevenue: number;    // сумма revenue только из РЕАЛЬНО вставленных usage-строк
@@ -117,7 +117,7 @@ export async function previewImport(filePath: string, dspRaw: string): Promise<P
       totalRevenue: Math.round(totalRevenue * 10000) / 10000,
       currency: parsed.detectedCurrency ?? "USD",
       period: parsed.detectedPeriod,
-      dsp,
+      dspName: dsp,
     },
     warnings,
     existingTransactionsForPeriod,
@@ -164,7 +164,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   const asDuplicate = async (existing: typeof ingestionImportsTable.$inferSelect): Promise<CommitResult> => ({
     importId: existing.id,
     inserted: existing.insertedRows,
-    skippedDuplicates: 0,
+    skipped: 0,
     unmatched: existing.unmatchedRows,
     transactions: 0,
     totalRevenue: parseFloat(existing.totalRevenue),
@@ -232,7 +232,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   }
 
   let inserted = 0;
-  let skippedDuplicates = 0;
+  let skipped = 0;
   let unmatched = 0;
   let transactionsCreated = 0;
   let importId = 0;
@@ -346,7 +346,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     for (const p of pendingUsage) {
       const remaining = insertedKeyCount.get(p.key) ?? 0;
       if (remaining <= 0) {
-        skippedDuplicates += 1;
+        skipped += 1;
         continue;
       }
       insertedKeyCount.set(p.key, remaining - 1);
@@ -367,7 +367,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     for (let i = 0; i < unmatchedRows.length; i += CHUNK) {
       await tx.insert(ingestionUnmatchedTable).values(unmatchedRows.slice(i, i + CHUNK));
     }
-    inserted = pendingUsage.length - skippedDuplicates;
+    inserted = pendingUsage.length - skipped;
     unmatched = unmatchedRows.length;
 
     // Транзакции — агрегаты per (release, currency). Только ненулевые.
@@ -426,7 +426,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   return {
     importId,
     inserted,
-    skippedDuplicates,
+    skipped,
     unmatched,
     transactions: transactionsCreated,
     totalRevenue: Math.round(actualInsertedRevenue * 10000) / 10000,
