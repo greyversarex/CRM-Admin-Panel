@@ -1,0 +1,61 @@
+root@ubuntu:/var/www/tajikmusic# fallocate -l 4G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h   # проверить что swap появился
+Setting up swapspace version 1, size = 4 GiB (4294963200 bytes)
+no label, UUID=eeb6535c-19a3-4faf-98a3-351eb596c571
+               total        used        free      shared  buff/cache   available
+Mem:           961Mi       441Mi       521Mi        27Mi       172Mi       520Mi
+Swap:          4.0Gi          0B       4.0Gi
+root@ubuntu:/var/www/tajikmusic# cd /var/www/tajikmusic && bash deploy/2_deploy.sh
+▶ Обновляем код из репозитория...
+remote: Enumerating objects: 27, done.
+remote: Counting objects: 100% (27/27), done.
+remote: Compressing objects: 100% (7/7), done.
+remote: Total 17 (delta 10), reused 17 (delta 10), pack-reused 0 (from 0)
+Unpacking objects: 100% (17/17), 73.79 KiB | 740.00 KiB/s, done.
+From https://github.com/greyversarex/CRM-Admin-Panel
+ * branch            main       -> FETCH_HEAD
+   e11821f..1dbbfc7  main       -> origin/main
+HEAD is now at 1dbbfc7 Simplify build configuration by removing manual code splitting
+▶ Создаём папки...
+▶ Устанавливаем зависимости (frozen-lockfile)...
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+└─ Done in 29ms
+Done in 5.5s using pnpm v10.33.0
+▶ Применяем миграции БД (drizzle migrate)...
+
+> @workspace/db@0.0.0 migrate /var/www/tajikmusic/lib/db
+> tsx src/migrate.ts
+
+[migrate] FAILED: error: password authentication failed for user "tajikmusic_user"
+    at /var/www/tajikmusic/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async main (/var/www/tajikmusic/lib/db/src/migrate.ts:44:3) {
+  length: 111,
+  severity: 'FATAL',
+  code: '28P01',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'auth.c',
+  line: '331',
+  routine: 'auth_failed'
+}
+/var/www/tajikmusic/lib/db:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/db@0.0.0 migrate: `tsx src/migrate.ts`
+Exit status 1
+root@ubuntu:/var/www/tajikmusic#
