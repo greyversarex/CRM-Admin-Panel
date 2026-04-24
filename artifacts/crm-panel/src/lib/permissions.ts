@@ -1,19 +1,26 @@
 import type { Role } from "./auth";
 
 /** Which roles can access each route */
+//
+// Label-MVP (UI-упрощение под музыкальную дистрибуцию):
+//   role=label видит ТОЛЬКО: /, /releases, /artists, /analytics, /royalties (=Earnings),
+//   /splits, /payouts, /support, /profile.
+//   Удалены: /labels, /publishing, /videos, /finance, /finance/import.
+//   /finance остался для admin/manager/artist (artist — historic), label заходит в Earnings
+//   через /royalties — там уже есть выручка по релизам/DSP.
 export const ROUTE_ROLES: Record<string, Role[]> = {
   "/":               ["admin", "manager", "label", "artist"],
   "/analytics":      ["admin", "manager", "label", "artist"],
   "/distribution":   ["admin"],
   "/releases":       ["admin", "manager", "label", "artist"],
   "/artists":        ["admin", "manager", "label", "artist"],
-  "/labels":         ["admin", "manager", "label"],
-  "/videos":         ["admin", "manager", "label", "artist"],
+  "/labels":         ["admin", "manager"],
+  "/videos":         ["admin", "manager", "artist"],
   "/users":          ["admin", "manager"],
-  "/publishing":     ["admin", "manager", "label"],
+  "/publishing":     ["admin", "manager"],
   "/crm":            ["admin"],
   "/royalties":      ["admin", "manager", "label", "artist"],
-  "/finance":        ["admin", "manager", "label", "artist"],
+  "/finance":        ["admin", "manager", "artist"],
   "/finance/import": ["admin", "manager"],
   "/splits":         ["admin", "manager", "label", "artist"],
   "/payouts":        ["admin", "manager", "label", "artist"],

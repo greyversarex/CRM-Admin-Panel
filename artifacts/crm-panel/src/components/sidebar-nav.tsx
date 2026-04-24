@@ -36,6 +36,11 @@ type NavItem = {
   badge?: string;
   badgeColor?: string;
   iconColor?: string;
+  /**
+   * Per-role override of the displayed translation key.
+   * Used e.g. для роли `label`: пункт /royalties показывается как "Earnings".
+   */
+  nameKeyByRole?: Partial<Record<"admin" | "manager" | "label" | "artist", string>>;
 };
 
 type NavGroup = {
@@ -82,7 +87,11 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "financials",
     items: [
-      { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400" },
+      {
+        nameKey: "royalties", href: "/royalties", icon: Coins, iconColor: "text-green-400",
+        // MVP-упрощение: для лейбла /royalties — это и есть единый раздел "Доходы".
+        nameKeyByRole: { label: "earnings" },
+      },
       { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
       { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
       { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
@@ -169,6 +178,9 @@ export function SidebarNav() {
                 const isActive =
                   location === item.href ||
                   (item.href !== "/" && location.startsWith(item.href));
+                const labelKey =
+                  (user && item.nameKeyByRole?.[user.role]) ?? item.nameKey;
+                const labelText = nav[labelKey] ?? labelKey;
 
                 const iconEl = (
                   <span
@@ -198,7 +210,7 @@ export function SidebarNav() {
                 return (
                   <Link key={item.href} href={item.href}>
                     <span
-                      title={collapsed ? (nav[item.nameKey] ?? item.nameKey) : undefined}
+                      title={collapsed ? labelText : undefined}
                       className={cn(
                         "nav-item group relative flex items-center rounded-lg cursor-pointer transition-all duration-150",
                         collapsed ? "px-0 py-0 justify-center" : "px-2 py-[6px]",
@@ -217,7 +229,7 @@ export function SidebarNav() {
                               isActive ? "text-white" : "text-white/75 group-hover:text-white"
                             )}
                           >
-                            {nav[item.nameKey] ?? item.nameKey}
+                            {labelText}
                           </span>
 
                           {item.badge && (

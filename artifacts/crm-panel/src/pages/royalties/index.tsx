@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import {
   useGetRoyaltySummary,
   useListRoyaltyStatements,
@@ -68,6 +69,8 @@ function pct(curr: number, prev: number) {
 
 export default function Royalties() {
   const { user } = useAuth();
+  const { t } = useLang();
+  const nav = t.nav as Record<string, string>;
   const queryClient = useQueryClient();
 
   // Build entity filter from current user role
@@ -163,7 +166,9 @@ export default function Royalties() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Роялти</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {user?.role === "label" ? nav.earnings : nav.royalties}
+            </h1>
             <p className="text-muted-foreground mt-1">
               Отчёты, выплаты и аналитика доходов
               {entityParams.entity_type ? "" : " по всему каталогу"}.
