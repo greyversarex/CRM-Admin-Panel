@@ -1,4 +1,4 @@
-CREATE TABLE "labels" (
+CREATE TABLE IF NOT EXISTS "labels" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"logo_url" text,
@@ -10,7 +10,7 @@ CREATE TABLE "labels" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "artists" (
+CREATE TABLE IF NOT EXISTS "artists" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE "artists" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "releases" (
+CREATE TABLE IF NOT EXISTS "releases" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"release_type" text DEFAULT 'single' NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE "releases" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tracks" (
+CREATE TABLE IF NOT EXISTS "tracks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"isrc" text,
@@ -67,7 +67,7 @@ CREATE TABLE "tracks" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"email" text NOT NULL,
@@ -92,7 +92,7 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
-CREATE TABLE "contacts" (
+CREATE TABLE IF NOT EXISTS "contacts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"type" text DEFAULT 'artist' NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE "contacts" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "crm_tasks" (
+CREATE TABLE IF NOT EXISTS "crm_tasks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"description" text,
@@ -122,7 +122,7 @@ CREATE TABLE "crm_tasks" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "transactions" (
+CREATE TABLE IF NOT EXISTS "transactions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"type" text NOT NULL,
 	"amount" numeric(12, 4) NOT NULL,
@@ -136,7 +136,7 @@ CREATE TABLE "transactions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "splits" (
+CREATE TABLE IF NOT EXISTS "splits" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"release_id" integer,
 	"track_id" integer,
@@ -145,7 +145,7 @@ CREATE TABLE "splits" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "payouts" (
+CREATE TABLE IF NOT EXISTS "payouts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"artist_id" integer,
 	"label_id" integer,
@@ -160,7 +160,7 @@ CREATE TABLE "payouts" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "publishing_works" (
+CREATE TABLE IF NOT EXISTS "publishing_works" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"iswc" text,
@@ -179,7 +179,7 @@ CREATE TABLE "publishing_works" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "usage_reports" (
+CREATE TABLE IF NOT EXISTS "usage_reports" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"artist_id" integer,
 	"release_id" integer,
@@ -192,7 +192,7 @@ CREATE TABLE "usage_reports" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "deliveries" (
+CREATE TABLE IF NOT EXISTS "deliveries" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"release_id" integer NOT NULL,
 	"target" text NOT NULL,
@@ -206,7 +206,7 @@ CREATE TABLE "deliveries" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "activity_log" (
+CREATE TABLE IF NOT EXISTS "activity_log" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"type" text NOT NULL,
 	"title" text NOT NULL,
@@ -217,7 +217,7 @@ CREATE TABLE "activity_log" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "integration_credentials" (
+CREATE TABLE IF NOT EXISTS "integration_credentials" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"integration_id" integer NOT NULL,
 	"field_key" text NOT NULL,
@@ -227,7 +227,7 @@ CREATE TABLE "integration_credentials" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "integration_sync_jobs" (
+CREATE TABLE IF NOT EXISTS "integration_sync_jobs" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"integration_id" integer NOT NULL,
 	"job_type" text NOT NULL,
@@ -239,7 +239,7 @@ CREATE TABLE "integration_sync_jobs" (
 	"error_message" text
 );
 --> statement-breakpoint
-CREATE TABLE "integrations" (
+CREATE TABLE IF NOT EXISTS "integrations" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"code" text NOT NULL,
 	"name" text NOT NULL,
@@ -255,13 +255,13 @@ CREATE TABLE "integrations" (
 	CONSTRAINT "integrations_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
-CREATE TABLE "session" (
+CREATE TABLE IF NOT EXISTS "session" (
 	"sid" varchar PRIMARY KEY NOT NULL,
 	"sess" json NOT NULL,
 	"expire" timestamp (6) NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "assets" (
+CREATE TABLE IF NOT EXISTS "assets" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"kind" text NOT NULL,
 	"storage_key" text NOT NULL,
@@ -281,88 +281,204 @@ CREATE TABLE "assets" (
 	CONSTRAINT "assets_storage_key_unique" UNIQUE("storage_key")
 );
 --> statement-breakpoint
-ALTER TABLE "labels" ADD CONSTRAINT "labels_parent_label_id_labels_id_fk" FOREIGN KEY ("parent_label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "artists" ADD CONSTRAINT "artists_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "releases" ADD CONSTRAINT "releases_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "releases" ADD CONSTRAINT "releases_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tracks" ADD CONSTRAINT "tracks_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "tracks" ADD CONSTRAINT "tracks_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "crm_tasks" ADD CONSTRAINT "crm_tasks_assigned_to_id_users_id_fk" FOREIGN KEY ("assigned_to_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "splits" ADD CONSTRAINT "splits_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "splits" ADD CONSTRAINT "splits_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payouts" ADD CONSTRAINT "payouts_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payouts" ADD CONSTRAINT "payouts_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "publishing_works" ADD CONSTRAINT "publishing_works_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "integration_credentials" ADD CONSTRAINT "integration_credentials_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "integration_sync_jobs" ADD CONSTRAINT "integration_sync_jobs_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "assets" ADD CONSTRAINT "assets_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "assets" ADD CONSTRAINT "assets_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "assets" ADD CONSTRAINT "assets_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "assets" ADD CONSTRAINT "assets_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "assets" ADD CONSTRAINT "assets_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "labels_parent_idx" ON "labels" USING btree ("parent_label_id");--> statement-breakpoint
-CREATE INDEX "labels_status_idx" ON "labels" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "artists_label_idx" ON "artists" USING btree ("label_id");--> statement-breakpoint
-CREATE INDEX "artists_slug_idx" ON "artists" USING btree ("slug");--> statement-breakpoint
-CREATE INDEX "artists_status_idx" ON "artists" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "releases_artist_idx" ON "releases" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "releases_label_idx" ON "releases" USING btree ("label_id");--> statement-breakpoint
-CREATE INDEX "releases_status_idx" ON "releases" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "releases_release_date_idx" ON "releases" USING btree ("release_date");--> statement-breakpoint
-CREATE INDEX "releases_upc_idx" ON "releases" USING btree ("upc");--> statement-breakpoint
-CREATE INDEX "tracks_release_idx" ON "tracks" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "tracks_artist_idx" ON "tracks" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "tracks_isrc_idx" ON "tracks" USING btree ("isrc");--> statement-breakpoint
-CREATE INDEX "users_role_idx" ON "users" USING btree ("role");--> statement-breakpoint
-CREATE INDEX "users_artist_idx" ON "users" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "users_label_idx" ON "users" USING btree ("label_id");--> statement-breakpoint
-CREATE INDEX "contacts_type_idx" ON "contacts" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "contacts_email_idx" ON "contacts" USING btree ("email");--> statement-breakpoint
-CREATE INDEX "crm_tasks_status_idx" ON "crm_tasks" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "crm_tasks_assignee_idx" ON "crm_tasks" USING btree ("assigned_to_id");--> statement-breakpoint
-CREATE INDEX "crm_tasks_related_idx" ON "crm_tasks" USING btree ("related_entity_type","related_entity_id");--> statement-breakpoint
-CREATE INDEX "transactions_period_idx" ON "transactions" USING btree ("period");--> statement-breakpoint
-CREATE INDEX "transactions_artist_idx" ON "transactions" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "transactions_label_idx" ON "transactions" USING btree ("label_id");--> statement-breakpoint
-CREATE INDEX "transactions_release_idx" ON "transactions" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "transactions_type_idx" ON "transactions" USING btree ("type");--> statement-breakpoint
-CREATE INDEX "transactions_period_artist_idx" ON "transactions" USING btree ("period","artist_id");--> statement-breakpoint
-CREATE INDEX "splits_release_idx" ON "splits" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "splits_track_idx" ON "splits" USING btree ("track_id");--> statement-breakpoint
-CREATE INDEX "payouts_artist_idx" ON "payouts" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "payouts_label_idx" ON "payouts" USING btree ("label_id");--> statement-breakpoint
-CREATE INDEX "payouts_status_idx" ON "payouts" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "publishing_works_track_idx" ON "publishing_works" USING btree ("track_id");--> statement-breakpoint
-CREATE INDEX "publishing_works_status_idx" ON "publishing_works" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "publishing_works_iswc_idx" ON "publishing_works" USING btree ("iswc");--> statement-breakpoint
-CREATE INDEX "usage_reports_period_idx" ON "usage_reports" USING btree ("period");--> statement-breakpoint
-CREATE INDEX "usage_reports_track_idx" ON "usage_reports" USING btree ("track_id");--> statement-breakpoint
-CREATE INDEX "usage_reports_release_idx" ON "usage_reports" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "usage_reports_artist_idx" ON "usage_reports" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "usage_reports_platform_idx" ON "usage_reports" USING btree ("platform");--> statement-breakpoint
-CREATE INDEX "usage_reports_period_track_idx" ON "usage_reports" USING btree ("period","track_id");--> statement-breakpoint
-CREATE INDEX "deliveries_release_idx" ON "deliveries" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "deliveries_status_idx" ON "deliveries" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "deliveries_target_idx" ON "deliveries" USING btree ("target");--> statement-breakpoint
-CREATE INDEX "activity_log_entity_idx" ON "activity_log" USING btree ("entity_type","entity_id");--> statement-breakpoint
-CREATE INDEX "activity_log_user_idx" ON "activity_log" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "activity_log_created_idx" ON "activity_log" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "creds_integration_idx" ON "integration_credentials" USING btree ("integration_id");--> statement-breakpoint
-CREATE INDEX "sync_jobs_integration_idx" ON "integration_sync_jobs" USING btree ("integration_id");--> statement-breakpoint
-CREATE INDEX "sync_jobs_started_idx" ON "integration_sync_jobs" USING btree ("started_at");--> statement-breakpoint
-CREATE INDEX "integrations_code_idx" ON "integrations" USING btree ("code");--> statement-breakpoint
-CREATE INDEX "IDX_session_expire" ON "session" USING btree ("expire");--> statement-breakpoint
-CREATE INDEX "assets_release_idx" ON "assets" USING btree ("release_id");--> statement-breakpoint
-CREATE INDEX "assets_track_idx" ON "assets" USING btree ("track_id");--> statement-breakpoint
-CREATE INDEX "assets_artist_idx" ON "assets" USING btree ("artist_id");--> statement-breakpoint
-CREATE INDEX "assets_sha256_idx" ON "assets" USING btree ("sha256");
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'labels_parent_label_id_labels_id_fk') THEN
+    ALTER TABLE "labels" ADD CONSTRAINT "labels_parent_label_id_labels_id_fk" FOREIGN KEY ("parent_label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artists_label_id_labels_id_fk') THEN
+    ALTER TABLE "artists" ADD CONSTRAINT "artists_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'releases_artist_id_artists_id_fk') THEN
+    ALTER TABLE "releases" ADD CONSTRAINT "releases_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'releases_label_id_labels_id_fk') THEN
+    ALTER TABLE "releases" ADD CONSTRAINT "releases_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tracks_release_id_releases_id_fk') THEN
+    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tracks_artist_id_artists_id_fk') THEN
+    ALTER TABLE "tracks" ADD CONSTRAINT "tracks_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_artist_id_artists_id_fk') THEN
+    ALTER TABLE "users" ADD CONSTRAINT "users_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_label_id_labels_id_fk') THEN
+    ALTER TABLE "users" ADD CONSTRAINT "users_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'crm_tasks_assigned_to_id_users_id_fk') THEN
+    ALTER TABLE "crm_tasks" ADD CONSTRAINT "crm_tasks_assigned_to_id_users_id_fk" FOREIGN KEY ("assigned_to_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_artist_id_artists_id_fk') THEN
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_label_id_labels_id_fk') THEN
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_release_id_releases_id_fk') THEN
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'splits_release_id_releases_id_fk') THEN
+    ALTER TABLE "splits" ADD CONSTRAINT "splits_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'splits_track_id_tracks_id_fk') THEN
+    ALTER TABLE "splits" ADD CONSTRAINT "splits_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payouts_artist_id_artists_id_fk') THEN
+    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payouts_label_id_labels_id_fk') THEN
+    ALTER TABLE "payouts" ADD CONSTRAINT "payouts_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE restrict ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'publishing_works_track_id_tracks_id_fk') THEN
+    ALTER TABLE "publishing_works" ADD CONSTRAINT "publishing_works_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_artist_id_artists_id_fk') THEN
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_release_id_releases_id_fk') THEN
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usage_reports_track_id_tracks_id_fk') THEN
+    ALTER TABLE "usage_reports" ADD CONSTRAINT "usage_reports_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deliveries_release_id_releases_id_fk') THEN
+    ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'activity_log_user_id_users_id_fk') THEN
+    ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'integration_credentials_integration_id_integrations_id_fk') THEN
+    ALTER TABLE "integration_credentials" ADD CONSTRAINT "integration_credentials_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'integration_sync_jobs_integration_id_integrations_id_fk') THEN
+    ALTER TABLE "integration_sync_jobs" ADD CONSTRAINT "integration_sync_jobs_integration_id_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_release_id_releases_id_fk') THEN
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_release_id_releases_id_fk" FOREIGN KEY ("release_id") REFERENCES "public"."releases"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_track_id_tracks_id_fk') THEN
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_track_id_tracks_id_fk" FOREIGN KEY ("track_id") REFERENCES "public"."tracks"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_artist_id_artists_id_fk') THEN
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_artist_id_artists_id_fk" FOREIGN KEY ("artist_id") REFERENCES "public"."artists"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_label_id_labels_id_fk') THEN
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_label_id_labels_id_fk" FOREIGN KEY ("label_id") REFERENCES "public"."labels"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'assets_uploaded_by_users_id_fk') THEN
+    ALTER TABLE "assets" ADD CONSTRAINT "assets_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+  END IF;
+END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "labels_parent_idx" ON "labels" USING btree ("parent_label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "labels_status_idx" ON "labels" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "artists_label_idx" ON "artists" USING btree ("label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "artists_slug_idx" ON "artists" USING btree ("slug");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "artists_status_idx" ON "artists" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "releases_artist_idx" ON "releases" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "releases_label_idx" ON "releases" USING btree ("label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "releases_status_idx" ON "releases" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "releases_release_date_idx" ON "releases" USING btree ("release_date");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "releases_upc_idx" ON "releases" USING btree ("upc");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "tracks_release_idx" ON "tracks" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "tracks_artist_idx" ON "tracks" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "tracks_isrc_idx" ON "tracks" USING btree ("isrc");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "users_role_idx" ON "users" USING btree ("role");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "users_artist_idx" ON "users" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "users_label_idx" ON "users" USING btree ("label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "contacts_type_idx" ON "contacts" USING btree ("type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "contacts_email_idx" ON "contacts" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "crm_tasks_status_idx" ON "crm_tasks" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "crm_tasks_assignee_idx" ON "crm_tasks" USING btree ("assigned_to_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "crm_tasks_related_idx" ON "crm_tasks" USING btree ("related_entity_type","related_entity_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_period_idx" ON "transactions" USING btree ("period");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_artist_idx" ON "transactions" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_label_idx" ON "transactions" USING btree ("label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_release_idx" ON "transactions" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_type_idx" ON "transactions" USING btree ("type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "transactions_period_artist_idx" ON "transactions" USING btree ("period","artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "splits_release_idx" ON "splits" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "splits_track_idx" ON "splits" USING btree ("track_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "payouts_artist_idx" ON "payouts" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "payouts_label_idx" ON "payouts" USING btree ("label_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "payouts_status_idx" ON "payouts" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "publishing_works_track_idx" ON "publishing_works" USING btree ("track_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "publishing_works_status_idx" ON "publishing_works" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "publishing_works_iswc_idx" ON "publishing_works" USING btree ("iswc");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_period_idx" ON "usage_reports" USING btree ("period");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_track_idx" ON "usage_reports" USING btree ("track_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_release_idx" ON "usage_reports" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_artist_idx" ON "usage_reports" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_platform_idx" ON "usage_reports" USING btree ("platform");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "usage_reports_period_track_idx" ON "usage_reports" USING btree ("period","track_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "deliveries_release_idx" ON "deliveries" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "deliveries_status_idx" ON "deliveries" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "deliveries_target_idx" ON "deliveries" USING btree ("target");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "activity_log_entity_idx" ON "activity_log" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "activity_log_user_idx" ON "activity_log" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "activity_log_created_idx" ON "activity_log" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "creds_integration_idx" ON "integration_credentials" USING btree ("integration_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "sync_jobs_integration_idx" ON "integration_sync_jobs" USING btree ("integration_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "sync_jobs_started_idx" ON "integration_sync_jobs" USING btree ("started_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "integrations_code_idx" ON "integrations" USING btree ("code");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" USING btree ("expire");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "assets_release_idx" ON "assets" USING btree ("release_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "assets_track_idx" ON "assets" USING btree ("track_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "assets_artist_idx" ON "assets" USING btree ("artist_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "assets_sha256_idx" ON "assets" USING btree ("sha256");
