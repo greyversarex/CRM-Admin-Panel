@@ -1,0 +1,152 @@
+root@ubuntu:/var/www/tajikmusic# # 1. Поставить новый пароль в PostgreSQL
+sudo -u postgres psql -c "ALTER USER tajikmusic_user WITH PASSWORD '4xg2S2irIYvyQRsYJZBTTUN1JeCO';"
+
+# 2. Проверить что коннект работает (должно вернуть "1")
+PGPASSWORD='4xg2S2irIYvyQRsYJZBTTUN1JeCO' psql -h localhost -U tajikmusic_user -d tajikmusic -c "SELECT 1;"
+
+# 3. Прописать новый DATABASE_URL в .env (заменит старую строку)
+sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://tajikmusic_user:4xg2S2irIYvyQRsYJZBTTUN1JeCO@localhost:5432/tajikmusic|' /var/www/tajikmusic/.env
+
+# 4. Сохранить пароль в /root/db_credentials.txt (для бэкапа)
+echo "DATABASE_URL=postgresql://tajikmusic_user:4xg2S2irIYvyQRsYJZBTTUN1JeCO@localhost:5432/tajikmusic" > /root/db_credentials.txt
+chmod 600 /root/db_credentials.txt
+
+# 5. Проверить что .env обновился
+grep DATABASE_URL /var/www/tajikmusic/.env
+
+# 6. Запустить деплой заново
+cd /var/www/tajikmusic && bash deploy/2_deploy.sh
+ALTER ROLE
+ ?column?
+----------
+        1
+(1 row)
+
+DATABASE_URL=postgresql://tajikmusic_user:4xg2S2irIYvyQRsYJZBTTUN1JeCO@localhost:5432/tajikmusic
+▶ Обновляем код из репозитория...
+From https://github.com/greyversarex/CRM-Admin-Panel
+ * branch            main       -> FETCH_HEAD
+HEAD is now at 1dbbfc7 Simplify build configuration by removing manual code splitting
+▶ Создаём папки...
+▶ Устанавливаем зависимости (frozen-lockfile)...
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+└─ Done in 32ms
+Done in 5.2s using pnpm v10.33.0
+▶ Применяем миграции БД (drizzle migrate)...
+
+> @workspace/db@0.0.0 migrate /var/www/tajikmusic/lib/db
+> tsx src/migrate.ts
+
+[migrate] Running drizzle migrator…
+[migrate] Done. Total applied migrations: 7
+▶ Собираем API-сервер...
+
+> @workspace/api-server@0.0.0 build /var/www/tajikmusic/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       3.6mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                   6.4mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 2568ms
+▶ Собираем фронтенд...
+
+> @workspace/crm-panel@0.0.0 build /var/www/tajikmusic/artifacts/crm-panel
+> vite build --config vite.config.ts
+
+vite v7.3.1 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/toggle-group.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/sheet.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 2509 modules transformed.
+dist/public/index.html                     0.74 kB │ gzip:   0.42 kB
+dist/public/assets/index-CcfUeoLj.css    168.04 kB │ gzip:  24.71 kB
+dist/public/assets/index-kiGy8snV.js   1,331.05 kB │ gzip: 363.48 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 26.56s
+▶ Запускаем / перезапускаем PM2 (с подхватом новых env)...
+[PM2] Applying action reloadProcessId on app [tajikmusic-api](ids: [ 0 ])
+[PM2] [tajikmusic-api](0) ✓
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ tajikmusic-api    │ default     │ 0.0.0   │ fork    │ 124324   │ 0s     │ 4    │ online    │ 0%       │ 24.8mb   │ root     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+▶ Сохраняем список процессов PM2 (автозапуск)...
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+bash: line 1: $: command not found
+▶ Проверяем и перезагружаем Nginx...
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+
+✅ Деплой завершён!
+   API:     http://127.0.0.1:3001
+   Фронт:   /var/www/tajikmusic/artifacts/crm-panel/dist/public (отдаётся через Nginx)
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ tajikmusic-api    │ default     │ 0.0.0   │ fork    │ 124324   │ 5s     │ 4    │ online    │ 33.3%    │ 150.2mb  │ root     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+root@ubuntu:/var/www/tajikmusic# pm2 logs
+[TAILING] Tailing last 15 lines for [all] processes (change the value with --lines option)
+/root/.pm2/pm2.log last 15 lines:
+PM2        | 2026-04-19T13:38:51: PM2 log: pid=54950 msg=process killed
+PM2        | 2026-04-19T13:38:51: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-19T13:38:51: PM2 log: App [tajikmusic-api:0] online
+PM2        | 2026-04-19T13:40:24: PM2 log: Process 0 in a stopped status, starting it
+PM2        | 2026-04-19T13:40:24: PM2 log: Stopping app:tajikmusic-api id:0
+PM2        | 2026-04-19T13:40:24: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-04-19T13:40:24: PM2 log: pid=67969 msg=process killed
+PM2        | 2026-04-19T13:40:24: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-19T13:40:24: PM2 log: App [tajikmusic-api:0] online
+PM2        | 2026-04-24T12:31:50: PM2 log: Process 0 in a stopped status, starting it
+PM2        | 2026-04-24T12:31:50: PM2 log: Stopping app:tajikmusic-api id:0
+PM2        | 2026-04-24T12:31:50: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-04-24T12:31:50: PM2 log: pid=68168 msg=process killed
+PM2        | 2026-04-24T12:31:50: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-04-24T12:31:50: PM2 log: App [tajikmusic-api:0] online
+
+/var/log/tajikmusic/api-out.log last 15 lines:
+0|tajikmus | untu","req":{"id":1755,"method":"GET","url":"/api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php"},"res":{"statusCode":404},"responseTime":21,"msg":"request completed"}
+0|tajikmus | 2026-04-24 12:31:57: {"level":30,"time":1777033917971,"pid":124324,"hostname":"ubuntu","port":3001,"msg":"Server listening"}
+0|tajikmus | 2026-04-24 12:31:58: {"level":50,"time":1777033918199,"pid":124324,"hostname":"ubuntu","err":{"type":"_DrizzleQueryError","message":"Failed query: update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"\nparams: queued,2026-04-24T12:31:58.035Z,processing,2026-04-24T12:26:57.980Z: password authentication failed for user \"tajikmusic_user\"","stack":"Error: Failed query: update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"\nparams: queued,2026-04-24T12:31:58.035Z,processing,2026-04-24T12:26:57.980Z\n    at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19\n    at resetStuckJobs (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:193:17)\n    at startDeliveryWorker (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:201:3)\ncaused by: error: password authentication failed for user \"tajikmusic_user\"\n    at file:///var/www/tajikmusic/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13\n    at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19\n    at resetStuckJobs (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:193:17)\n    at startDeliveryWorker (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:201:3)","query":"update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"","params":["queued","2026-04-24T12:31:58.035Z","processing","2026-04-24T12:26:57.980Z"]},"msg":"startDeliveryWorker failed"}
+0|tajikmus | 2026-04-24 12:31:59: [seed] Реестр интеграций: 0/29 записей готово
+
+/var/log/tajikmusic/api-error.log last 15 lines:
+0|tajikmus | 2026-04-24 12:31:59:     hint: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     position: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     internalPosition: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     internalQuery: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     where: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     schema: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     table: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     column: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     dataType: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     constraint: undefined,
+0|tajikmus | 2026-04-24 12:31:59:     file: 'auth.c',
+0|tajikmus | 2026-04-24 12:31:59:     line: '331',
+0|tajikmus | 2026-04-24 12:31:59:     routine: 'auth_failed'
+0|tajikmus | 2026-04-24 12:31:59:   }
+0|tajikmus | 2026-04-24 12:31:59: }
+
