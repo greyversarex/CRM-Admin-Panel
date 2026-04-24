@@ -58,6 +58,29 @@ interface ActivityRow {
   entityId: number | null;
 }
 
+interface AuditRow {
+  id: number;
+  userId: number | null;
+  userEmail: string | null;
+  userRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  diff: Array<{ field: string; old: unknown; new: unknown }> | null;
+  ip: string | null;
+  userAgent: string | null;
+  requestId: string | null;
+  createdAt: string;
+}
+
+interface AuditFacets {
+  entityTypes: string[];
+  actions: string[];
+  users: Array<{ id: number; name: string; email: string }>;
+}
+
 // ─── Mock data (clearly labelled "Demo") ────────────────────────────────────
 
 const API_KEYS = [
@@ -113,6 +136,16 @@ export default function Settings() {
   const [actLoading, setActLoading] = useState(true);
   const [actFilter, setActFilter] = useState("");
 
+  // Audit log (compliance journal — separate from activity_log)
+  const [audit, setAudit] = useState<AuditRow[] | null>(null);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditFacets, setAuditFacets] = useState<AuditFacets | null>(null);
+  const [auditEntityType, setAuditEntityType] = useState<string>("");
+  const [auditAction, setAuditAction] = useState<string>("");
+  const [auditUserId, setAuditUserId] = useState<string>("");
+  const [auditExpanded, setAuditExpanded] = useState<Set<number>>(new Set());
+
   const loadIntegrations = async () => {
     setIntLoading(true);
     try {
@@ -137,12 +170,62 @@ export default function Settings() {
     }
   };
 
+  const loadAudit = async () => {
+    setAuditLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (auditEntityType) params.set("entity_type", auditEntityType);
+      if (auditAction) params.set("action", auditAction);
+      if (auditUserId) params.set("user_id", auditUserId);
+      params.set("limit", "100");
+      const r = await api<{ data: AuditRow[]; pagination: { total: number } }>(`/api/audit?${params.toString()}`);
+      setAudit(r.data);
+      setAuditTotal(r.pagination.total);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось загрузить аудит-лог", description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const loadAuditFacets = async () => {
+    try {
+      const r = await api<AuditFacets>(`/api/audit/facets`);
+      setAuditFacets(r);
+    } catch {
+      /* facets are optional — UI degrades gracefully to free input */
+    }
+  };
+
   useEffect(() => {
     if (!isAdmin) return;
     loadIntegrations();
     loadActivity();
+    loadAudit();
+    loadAuditFacets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
+  // Refetch audit when filters change
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadAudit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditEntityType, auditAction, auditUserId]);
+
+  const toggleAuditRow = (id: number) => {
+    setAuditExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const fmtVal = (v: unknown): string => {
+    if (v === null || v === undefined) return "∅";
+    if (typeof v === "string") return v.length > 80 ? v.slice(0, 77) + "…" : v;
+    try { return JSON.stringify(v); } catch { return String(v); }
+  };
 
   const toggleEnabled = async (row: IntegrationRow, enabled: boolean) => {
     setIntBusy(row.code);
@@ -559,34 +642,181 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          {/* ================= AUDIT LOGS (live) ================= */}
-          <TabsContent value="audit" className="mt-4">
+          {/* ================= AUDIT LOGS (live, audit_log table) ================= */}
+          <TabsContent value="audit" className="mt-4 space-y-4">
+            <Card className="card-surface no-lift border-border/60">
+              <CardHeader className="flex flex-row items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <CardTitle>Audit Log</CardTitle>
+                  <CardDescription>
+                    Структурированный журнал изменений с before / after diff. Всего записей: {auditTotal}.
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={loadAudit} disabled={auditLoading} aria-label="Обновить аудит-лог">
+                  <RefreshCcw className={`mr-1.5 h-3.5 w-3.5 ${auditLoading ? "animate-spin" : ""}`} aria-hidden="true" /> Обновить
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <label htmlFor="audit-entity" className="text-xs text-muted-foreground uppercase tracking-wider">Сущность</label>
+                    <select
+                      id="audit-entity"
+                      value={auditEntityType}
+                      onChange={(e) => setAuditEntityType(e.target.value)}
+                      className="w-full h-9 px-3 text-sm rounded-md bg-background/50 border border-border"
+                    >
+                      <option value="">Все</option>
+                      {(auditFacets?.entityTypes ?? []).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="audit-action" className="text-xs text-muted-foreground uppercase tracking-wider">Действие</label>
+                    <select
+                      id="audit-action"
+                      value={auditAction}
+                      onChange={(e) => setAuditAction(e.target.value)}
+                      className="w-full h-9 px-3 text-sm rounded-md bg-background/50 border border-border"
+                    >
+                      <option value="">Все</option>
+                      {(auditFacets?.actions ?? []).map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="audit-user" className="text-xs text-muted-foreground uppercase tracking-wider">Пользователь</label>
+                    <select
+                      id="audit-user"
+                      value={auditUserId}
+                      onChange={(e) => setAuditUserId(e.target.value)}
+                      className="w-full h-9 px-3 text-sm rounded-md bg-background/50 border border-border"
+                    >
+                      <option value="">Все</option>
+                      {(auditFacets?.users ?? []).map((u) => (
+                        <option key={u.id} value={String(u.id)}>{u.name} ({u.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {auditLoading ? (
+                  <Skeleton className="h-48 w-full" />
+                ) : (audit?.length ?? 0) === 0 ? (
+                  <div className="p-6 text-sm text-muted-foreground text-center">Журнал пуст</div>
+                ) : (
+                  <div className="rounded-md border border-border/60 overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-background/30">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-8"></TableHead>
+                          <TableHead>Когда</TableHead>
+                          <TableHead>Кто</TableHead>
+                          <TableHead>Действие</TableHead>
+                          <TableHead>Сущность</TableHead>
+                          <TableHead>Изменения</TableHead>
+                          <TableHead>IP</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(audit ?? []).map((row) => {
+                          const open = auditExpanded.has(row.id);
+                          const diffCount = row.diff?.length ?? 0;
+                          return (
+                            <>
+                              <TableRow key={row.id} className="hover:bg-accent/20 cursor-pointer" onClick={() => toggleAuditRow(row.id)}>
+                                <TableCell className="text-xs text-muted-foreground">{open ? "▾" : "▸"}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{fmtDate(row.createdAt)}</TableCell>
+                                <TableCell className="text-xs">
+                                  {row.userEmail ?? <span className="text-muted-foreground">—</span>}
+                                  {row.userRole && <span className="ml-1 text-[10px] text-muted-foreground">({row.userRole})</span>}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-[10px] font-mono">
+                                    {row.action}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs font-mono">
+                                  {row.entityType}
+                                  {row.entityId !== null && <span className="text-muted-foreground">#{row.entityId}</span>}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {diffCount > 0
+                                    ? <span className="text-primary">{diffCount} {diffCount === 1 ? "поле" : "полей"}</span>
+                                    : <span className="text-muted-foreground">—</span>}
+                                </TableCell>
+                                <TableCell className="text-xs font-mono text-muted-foreground">{row.ip ?? "—"}</TableCell>
+                              </TableRow>
+                              {open && (
+                                <TableRow key={`${row.id}-diff`} className="bg-background/30 hover:bg-background/30">
+                                  <TableCell colSpan={7} className="p-4">
+                                    {diffCount === 0 ? (
+                                      <div className="text-xs text-muted-foreground">Нет полей с изменениями</div>
+                                    ) : (
+                                      <div className="space-y-1.5">
+                                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                                          Diff ({diffCount}):
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                          {row.diff!.map((d, i) => (
+                                            <div key={i} className="grid grid-cols-[160px_1fr_1fr] gap-2 text-xs font-mono items-start">
+                                              <div className="text-primary/80 truncate" title={d.field}>{d.field}</div>
+                                              <div className="text-rose-300/90 bg-rose-500/5 px-2 py-1 rounded border border-rose-500/20 break-all">
+                                                <span className="text-[10px] text-rose-400/60 mr-1">−</span>{fmtVal(d.old)}
+                                              </div>
+                                              <div className="text-emerald-300/90 bg-emerald-500/5 px-2 py-1 rounded border border-emerald-500/20 break-all">
+                                                <span className="text-[10px] text-emerald-400/60 mr-1">+</span>{fmtVal(d.new)}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {row.userAgent && (
+                                          <div className="pt-2 mt-2 border-t border-border/40 text-[10px] text-muted-foreground font-mono break-all">
+                                            UA: {row.userAgent}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Activity log (legacy / dashboard feed) — keep available below */}
             <Card className="card-surface no-lift border-border/60">
               <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <CardTitle>System Audit Logs</CardTitle>
-                  <CardDescription>Последние {activity?.length ?? 0} событий из activity_log</CardDescription>
+                  <CardTitle className="text-base">Activity feed (для дашборда)</CardTitle>
+                  <CardDescription>Человекочитаемые события для виджета «Recent activity»</CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <Input
                     value={actFilter}
                     onChange={(e) => setActFilter(e.target.value)}
-                    placeholder="Фильтр по описанию или типу..."
+                    placeholder="Фильтр..."
                     className="w-64 h-9 bg-background/50"
-                    aria-label="Фильтр журнала"
+                    aria-label="Фильтр activity"
                   />
-                  <Button variant="outline" size="sm" onClick={loadActivity} disabled={actLoading} aria-label="Обновить журнал">
+                  <Button variant="outline" size="sm" onClick={loadActivity} disabled={actLoading} aria-label="Обновить activity">
                     <RefreshCcw className={`mr-1.5 h-3.5 w-3.5 ${actLoading ? "animate-spin" : ""}`} aria-hidden="true" /> Обновить
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {actLoading ? (
-                  <div className="p-6"><Skeleton className="h-48 w-full" /></div>
+                  <div className="p-6"><Skeleton className="h-32 w-full" /></div>
                 ) : filteredActivity.length === 0 ? (
-                  <div className="p-6 text-sm text-muted-foreground text-center">
-                    {actFilter ? "Нет записей по фильтру" : "Журнал пуст"}
-                  </div>
+                  <div className="p-6 text-sm text-muted-foreground text-center">{actFilter ? "Нет записей по фильтру" : "Журнал пуст"}</div>
                 ) : (
                   <Table>
                     <TableHeader className="bg-background/30">
@@ -594,7 +824,6 @@ export default function Settings() {
                         <TableHead>Timestamp</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Title</TableHead>
-                        <TableHead>Description</TableHead>
                         <TableHead>Severity</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -606,7 +835,6 @@ export default function Settings() {
                             <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">{fmtDate(a.timestamp)}</TableCell>
                             <TableCell className="text-xs font-mono text-primary/80">{a.type}</TableCell>
                             <TableCell className="text-xs font-medium">{a.title}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{a.description}</TableCell>
                             <TableCell>
                               {sev === "info" && <Badge variant="outline" className="text-[10px] text-blue-400 bg-blue-500/10 border-blue-500/20">info</Badge>}
                               {sev === "warn" && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">warn</Badge>}

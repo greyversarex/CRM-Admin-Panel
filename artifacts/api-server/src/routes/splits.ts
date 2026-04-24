@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, splitsTable, releasesTable, tracksTable } from "@workspace/db";
 import { count, eq, desc, and, sql } from "drizzle-orm";
 import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, DeleteSplitParams } from "@workspace/api-zod";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -83,6 +84,7 @@ router.post("/splits", async (req, res): Promise<void> => {
     ...parsed.data,
     participants: parsed.data.participants as any,
   }).returning();
+  void auditMutation(req, { action: "create", entityType: "split", entityId: split.id, before: null, after: split });
   const enriched = await enrichSplit(split);
   res.status(201).json(enriched);
 });
@@ -123,6 +125,9 @@ router.put("/splits/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db.select().from(splitsTable).where(eq(splitsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Split not found" }); return; }
+
   const [split] = await db.update(splitsTable)
     .set({ ...parsed.data, participants: parsed.data.participants as any })
     .where(eq(splitsTable.id, params.data.id))
@@ -131,6 +136,7 @@ router.put("/splits/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Split not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "split", entityId: split.id, before: existing, after: split });
 
   const enriched = await enrichSplit(split);
   res.json(enriched);
@@ -148,6 +154,7 @@ router.delete("/splits/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Split not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "split", entityId: split.id, before: split, after: null });
 
   res.sendStatus(204);
 });

@@ -15,6 +15,13 @@
       "when": 1777014198102,
       "tag": "0001_account_lockout",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777014674585,
+      "tag": "0002_audit_log",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   RejectPayoutBody,
 } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -132,6 +133,7 @@ router.post("/finance/transactions", requireRole("admin", "manager"), async (req
     ...parsed.data,
     amount: parsed.data.amount.toString(),
   }).returning();
+  void auditMutation(req, { action: "create", entityType: "transaction", entityId: transaction.id, before: null, after: transaction });
   res.status(201).json({
     ...formatTransaction(transaction),
     artistName: null,
@@ -256,6 +258,7 @@ router.post("/payouts", async (req, res): Promise<void> => {
     ...parsed.data,
     amount: parsed.data.amount.toString(),
   }).returning();
+  void auditMutation(req, { action: "create", entityType: "payout", entityId: payout.id, before: null, after: payout });
   res.status(201).json({
     ...formatPayout(payout),
     artistName: null,
@@ -267,6 +270,9 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
 
+  const [existing] = await db.select().from(payoutsTable).where(eq(payoutsTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Payout not found" }); return; }
+
   const [payout] = await db.update(payoutsTable)
     .set({ status: "approved", processedAt: new Date() })
     .where(eq(payoutsTable.id, id))
@@ -276,6 +282,7 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
     res.status(404).json({ error: "Payout not found" });
     return;
   }
+  void auditMutation(req, { action: "approve", entityType: "payout", entityId: payout.id, before: existing, after: payout });
 
   res.json({
     ...formatPayout(payout),
@@ -294,6 +301,9 @@ router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req,
     return;
   }
 
+  const [existing] = await db.select().from(payoutsTable).where(eq(payoutsTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Payout not found" }); return; }
+
   const [payout] = await db.update(payoutsTable)
     .set({ status: "rejected", rejectionReason: parsed.data.reason, processedAt: new Date() })
     .where(eq(payoutsTable.id, id))
@@ -303,6 +313,7 @@ router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req,
     res.status(404).json({ error: "Payout not found" });
     return;
   }
+  void auditMutation(req, { action: "reject", entityType: "payout", entityId: payout.id, before: existing, after: payout });
 
   res.json({
     ...formatPayout(payout),

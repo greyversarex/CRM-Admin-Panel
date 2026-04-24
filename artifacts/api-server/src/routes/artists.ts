@@ -3,6 +3,7 @@ import { db, artistsTable, releasesTable, tracksTable, labelsTable } from "@work
 import { count, eq, ilike, and, desc } from "drizzle-orm";
 import { CreateArtistBody, UpdateArtistBody, GetArtistParams, UpdateArtistParams, DeleteArtistParams, GetArtistStatsParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -88,6 +89,7 @@ router.post("/artists", requireRole("admin", "manager"), async (req, res): Promi
 
   const slug = parsed.data.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const [artist] = await db.insert(artistsTable).values({ ...parsed.data, slug }).returning();
+  void auditMutation(req, { action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist });
 
   const [totalReleases] = await db.select({ count: count() }).from(releasesTable).where(eq(releasesTable.artistId, artist.id));
 
@@ -153,11 +155,15 @@ router.put("/artists/:id", requireRole("admin", "manager"), async (req, res): Pr
     return;
   }
 
+  const [existing] = await db.select().from(artistsTable).where(eq(artistsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Artist not found" }); return; }
+
   const [artist] = await db.update(artistsTable).set(parsed.data).where(eq(artistsTable.id, params.data.id)).returning();
   if (!artist) {
     res.status(404).json({ error: "Artist not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "artist", entityId: artist.id, before: existing, after: artist });
 
   const [totalReleases] = await db.select({ count: count() }).from(releasesTable).where(eq(releasesTable.artistId, artist.id));
 
@@ -182,6 +188,7 @@ router.delete("/artists/:id", requireRole("admin", "manager"), async (req, res):
     res.status(404).json({ error: "Artist not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "artist", entityId: artist.id, before: artist, after: null });
 
   res.sendStatus(204);
 });

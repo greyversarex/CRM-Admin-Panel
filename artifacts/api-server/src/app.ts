@@ -4,7 +4,7 @@ import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -145,7 +145,9 @@ const apiLimiter = rateLimit({
   max: isProduction ? 300 : 3000,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip ?? "unknown",
+  // express-rate-limit v8 требует ipKeyGenerator-helper, иначе IPv6-клиенты
+  // могли бы обходить лимит за счёт многих /64-адресов (схлопывает их в /64).
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? "unknown"),
   skip: (req) => req.path === "/healthz",
   message: { error: "Слишком много запросов. Подожди немного и попробуй снова." },
 });

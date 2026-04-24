@@ -61,6 +61,29 @@ Smoke-тесты (curl, проверены в dev):
 - Bad body (`{"enabled":"yes"}`) → 400 с описанием Zod-ошибки.
 - Manager: 4 неверных пароля → 401, 5-й → 429 (lockout), DB подтверждает `failed_login_attempts=5` и `locked_until > now()`. После сброса + правильного логина — 200 и счётчик 0.
 
+## Audit log (Task #3, апр-2026)
+
+Структурированный compliance-журнал изменений (§14 #1, §4.12 ТЗ) — отдельная таблица `audit_log`, параллельно существующему `activity_log` (который остался для дашборд-виджета «Recent activity»).
+
+**Схема** (`lib/db/src/schema/audit_log.ts`, миграция `0002_audit_log.sql`):
+- Поля: `id serial PK`, `user_id integer FK→users.id ON DELETE SET NULL`, `user_email text`, `user_role text` (роль на момент действия — для исторической точности), `action text` (`create|update|delete|login|approve|reject|deliver`), `entity_type text`, `entity_id integer NULL` (login не привязан к сущности), `before jsonb`, `after jsonb`, `diff jsonb` (массив `{field, old, new}` только изменённых полей), `ip text`, `user_agent text`, `request_id text`, `created_at timestamptz`.
+- Индексы: `(entity_type, entity_id, created_at)`, `(user_id, created_at)`, `(created_at)`, `(action)`.
+
+**Helper** (`artifacts/api-server/src/lib/audit.ts`):
+- `auditMutation(req, {action, entityType, entityId, before, after})` — fire-and-forget. Никогда не ждём перед `res.json()`. Ошибки записи логируются в pino, пользователь не страдает.
+- `computeDiff(before, after)` — shallow diff с `JSON.stringify` для вложенных объектов.
+- `sanitizeFields()` — строгий blocklist: `passwordHash, password, cipherText, secret, token, accessToken, refreshToken, apiKey, privateKey, failedLoginAttempts, lockedUntil`. Date → ISO для стабильного diff.
+
+**Интеграция в роуты**: `releases` (POST/PUT/PATCH status/DELETE), `tracks` (POST/PUT/DELETE), `artists` (POST/PUT/DELETE), `labels` (POST/PUT/DELETE), `finance` (POST /payouts, /approve, /reject), `splits` (POST/PUT/DELETE), `users` (POST/PUT/DELETE/PATCH /me). Везде где не было pre-fetch — добавлен `SELECT before UPDATE/DELETE` для diff.
+
+**API**: `GET /api/audit?entity_type=&entity_id=&user_id=&action=&from=&to=&limit=50&offset=0` (admin/manager only), `GET /api/audit/facets` (entityTypes/actions/users для фильтров UI).
+
+**UI**: вкладка «Audit Logs» в `pages/settings/index.tsx` — фильтры (сущность/действие/пользователь), таблица с expand-row для diff (red/green side-by-side, с user-agent внизу). Старый activity feed оставлен ниже отдельной карточкой как информация для дашборда.
+
+**Не путать**: `activity_log` пишет одну строку «человекочитаемого события» (например `release_status_changed`) — её читает виджет дашборда. `audit_log` — структурированный before/after для расследований/compliance. Релиз-роуты сейчас пишут в обе таблицы.
+
+**Bonus fix в этой же задаче**: `app.ts` rate-limit использовал `req.ip` напрямую → express-rate-limit v8 валидатор `ipKeyGenerator` падал при старте. Заменил на `ipKeyGenerator(req.ip ?? "unknown")` — теперь IPv6-клиенты не могут обходить лимит за счёт многих /64-адресов.
+
 ## Mock cleanup (Polish task #1, апр-2026)
 
 Перед фазой DDEX/Self-Signup убрали из CRM-панели мок-разделы и мок-данные с дашборда:

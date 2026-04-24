@@ -4,6 +4,7 @@ import { count, eq, desc, ilike, or, and } from "drizzle-orm";
 import { z } from "zod";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
 
 const adminOnly = requireRole("admin", "manager");
 
@@ -94,6 +95,7 @@ router.post("/users", adminOnly, async (req, res): Promise<void> => {
   }
 
   const [user] = await db.insert(usersTable).values(parsed.data).returning();
+  void auditMutation(req, { action: "create", entityType: "user", entityId: user.id, before: null, after: user });
   res.status(201).json(formatUser(user));
 });
 
@@ -108,6 +110,7 @@ router.patch("/users/me", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Нечего обновлять" });
     return;
   }
+  const [existingMe] = await db.select().from(usersTable).where(eq(usersTable.id, sessionUser.id));
   const [user] = await db.update(usersTable)
     .set(parsed.data)
     .where(eq(usersTable.id, sessionUser.id))
@@ -116,6 +119,7 @@ router.patch("/users/me", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "user", entityId: user.id, before: existingMe, after: user });
   // Keep session in sync if name changed (used for header / sidebar).
   if (parsed.data.name && req.session.user) {
     req.session.user.name = parsed.data.name;
@@ -152,11 +156,15 @@ router.put("/users/:id", adminOnly, async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "User not found" }); return; }
+
   const [user] = await db.update(usersTable).set(parsed.data).where(eq(usersTable.id, params.data.id)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "user", entityId: user.id, before: existing, after: user });
 
   res.json(formatUser(user));
 });
@@ -173,6 +181,7 @@ router.delete("/users/:id", adminOnly, async (req, res): Promise<void> => {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "user", entityId: user.id, before: user, after: null });
 
   res.sendStatus(204);
 });

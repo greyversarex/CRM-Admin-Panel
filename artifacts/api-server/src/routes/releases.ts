@@ -7,6 +7,7 @@ import {
   CreateTransferImportBody, SpotifySearchReleasesQueryParams,
 } from "@workspace/api-zod";
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -298,6 +299,7 @@ router.post("/releases", async (req, res): Promise<void> => {
     entityType: "release",
     entityId: release.id,
   });
+  void auditMutation(req, { action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
   const enriched = await enrichRelease(release);
   res.status(201).json(enriched);
@@ -361,6 +363,7 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Release not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
 
   const enriched = await enrichRelease(release);
   res.json(enriched);
@@ -382,6 +385,7 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Release not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "release", entityId: release.id, before: existing, after: null });
 
   res.sendStatus(204);
 });
@@ -398,6 +402,9 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
   const [release] = await db.update(releasesTable)
     .set({ status: parsed.data.status, statusNote: parsed.data.note ?? null })
@@ -416,6 +423,7 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
     entityType: "release",
     entityId: release.id,
   });
+  void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
 
   const enriched = await enrichRelease(release);
   res.json(enriched);
@@ -449,6 +457,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
     ...mockRelease,
     artistId: artists[0].id,
   }).returning();
+  void auditMutation(req, { action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
   const enriched = await enrichRelease(release);
   res.json(enriched);

@@ -3,6 +3,7 @@ import { db, tracksTable, artistsTable, releasesTable } from "@workspace/db";
 import { count, eq, desc, and, inArray } from "drizzle-orm";
 import { CreateTrackBody, UpdateTrackBody, GetTrackParams, UpdateTrackParams, DeleteTrackParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -102,6 +103,7 @@ router.post("/tracks", async (req, res): Promise<void> => {
   }
 
   const [track] = await db.insert(tracksTable).values(parsed.data).returning();
+  void auditMutation(req, { action: "create", entityType: "track", entityId: track.id, before: null, after: track });
   const enriched = await enrichTrack(track);
   res.status(201).json(enriched);
 });
@@ -159,6 +161,7 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Track not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "track", entityId: track.id, before: existing, after: track });
 
   const enriched = await enrichTrack(track);
   res.json(enriched);
@@ -180,6 +183,7 @@ router.delete("/tracks/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Track not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "track", entityId: track.id, before: existing, after: null });
 
   res.sendStatus(204);
 });

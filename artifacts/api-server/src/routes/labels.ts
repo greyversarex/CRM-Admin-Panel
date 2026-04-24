@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, labelsTable, artistsTable, releasesTable } from "@workspace/db";
 import { count, eq, desc } from "drizzle-orm";
 import { CreateLabelBody, UpdateLabelBody, GetLabelParams, UpdateLabelParams, DeleteLabelParams } from "@workspace/api-zod";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -54,6 +55,7 @@ router.post("/labels", async (req, res): Promise<void> => {
   }
 
   const [label] = await db.insert(labelsTable).values(parsed.data).returning();
+  void auditMutation(req, { action: "create", entityType: "label", entityId: label.id, before: null, after: label });
 
   res.status(201).json({
     ...label,
@@ -104,11 +106,15 @@ router.put("/labels/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db.select().from(labelsTable).where(eq(labelsTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Label not found" }); return; }
+
   const [label] = await db.update(labelsTable).set(parsed.data).where(eq(labelsTable.id, params.data.id)).returning();
   if (!label) {
     res.status(404).json({ error: "Label not found" });
     return;
   }
+  void auditMutation(req, { action: "update", entityType: "label", entityId: label.id, before: existing, after: label });
 
   res.json({
     ...label,
@@ -132,6 +138,7 @@ router.delete("/labels/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Label not found" });
     return;
   }
+  void auditMutation(req, { action: "delete", entityType: "label", entityId: label.id, before: label, after: null });
 
   res.sendStatus(204);
 });
