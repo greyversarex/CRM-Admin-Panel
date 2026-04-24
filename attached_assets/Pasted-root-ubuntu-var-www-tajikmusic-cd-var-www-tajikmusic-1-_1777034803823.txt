@@ -1,0 +1,67 @@
+root@ubuntu:/var/www/tajikmusic# cd /var/www/tajikmusic
+
+# 1. Удалить старый PM2-процесс (со стухшим env)
+pm2 delete tajikmusic-api
+
+# 2. Загрузить свежий .env в текущую shell
+set -a && . /var/www/tajikmusic/.env && set +a
+
+# 3. Стартануть заново — теперь подхватит новый DATABASE_URL
+pm2 start /var/www/tajikmusic/deploy/pm2.config.js --env production
+pm2 save
+
+# 4. Подождать 5 секунд и глянуть логи
+sleep 5
+pm2 logs tajikmusic-api --lines 20 --nostream
+[PM2] Applying action deleteProcessId on app [tajikmusic-api](ids: [ 0 ])
+[PM2] [tajikmusic-api](0) ✓
+┌────┬───────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name      │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+└────┴───────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[PM2][WARN] Applications tajikmusic-api not running, starting...
+[PM2] App [tajikmusic-api] launched (1 instances)
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ tajikmusic-api    │ default     │ 0.0.0   │ fork    │ 125313   │ 0s     │ 0    │ online    │ 0%       │ 16.1mb   │ root     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[PM2] Saving current process list...
+[PM2] Successfully saved in /root/.pm2/dump.pm2
+[TAILING] Tailing last 20 lines for [tajikmusic-api] process (change the value with --lines option)
+/var/log/tajikmusic/api-error.log last 20 lines:
+0|tajikmus | 2026-04-24 12:42:06:       at seedIntegrations (file:///var/www/tajikmusic/artifacts/api-server/src/services/integrations-seed.ts:59:7) {
+0|tajikmus | 2026-04-24 12:42:06:     length: 111,
+0|tajikmus | 2026-04-24 12:42:06:     severity: 'FATAL',
+0|tajikmus | 2026-04-24 12:42:06:     code: '28P01',
+0|tajikmus | 2026-04-24 12:42:06:     detail: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     hint: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     position: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     internalPosition: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     internalQuery: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     where: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     schema: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     table: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     column: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     dataType: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     constraint: undefined,
+0|tajikmus | 2026-04-24 12:42:06:     file: 'auth.c',
+0|tajikmus | 2026-04-24 12:42:06:     line: '331',
+0|tajikmus | 2026-04-24 12:42:06:     routine: 'auth_failed'
+0|tajikmus | 2026-04-24 12:42:06:   }
+0|tajikmus | 2026-04-24 12:42:06: }
+
+/var/log/tajikmusic/api-out.log last 20 lines:
+0|tajikmus | eived"}
+0|tajikmus | 2026-04-24 12:42:02: {"level":30,"time":1777034522841,"pid":125131,"hostname":"ubuntu","msg":"delivery worker stopped"}
+0|tajikmus | 2026-04-24 12:42:05: {"level":30,"time":1777034525585,"pid":125212,"hostname":"ubuntu","port":3001,"msg":"Server listening"}
+0|tajikmus | 2026-04-24 12:42:05: {"level":50,"time":1777034525725,"pid":125212,"hostname":"ubuntu","err":{"type":"_DrizzleQueryError","message":"Failed query: update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"\nparams: queued,2026-04-24T12:42:05.613Z,processing,2026-04-24T12:37:05.589Z: password authentication failed for user \"tajikmusic_user\"","stack":"Error: Failed query: update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"\nparams: queued,2026-04-24T12:42:05.613Z,processing,2026-04-24T12:37:05.589Z\n    at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19\n    at resetStuckJobs (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:193:17)\n    at startDeliveryWorker (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:201:3)\ncaused by: error: password authentication failed for user \"tajikmusic_user\"\n    at file:///var/www/tajikmusic/node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js:45:11\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:161:13\n    at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:71:12)\n    at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19\n    at resetStuckJobs (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:193:17)\n    at startDeliveryWorker (file:///var/www/tajikmusic/artifacts/api-server/src/workers/delivery-worker.ts:201:3)","query":"update \"deliveries\" set \"status\" = $1, \"updated_at\" = $2 where (\"deliveries\".\"status\" = $3 and \"deliveries\".\"updated_at\" <= $4) returning \"id\"","params":["queued","2026-04-24T12:42:05.613Z","processing","2026-04-24T12:37:05.589Z"]},"msg":"startDeliveryWorker failed"}
+0|tajikmus | 2026-04-24 12:42:06: [seed] Реестр интеграций: 0/29 записей готово
+0|tajikmus | 2026-04-24 12:42:11: {"level":30,"time":1777034531961,"pid":125212,"hostname":"ubuntu","req":{"id":1,"method":"GET","url":"/api/health"},"res":{"statusCode":401},"responseTime":26,"msg":"request completed"}
+0|tajikmus | 2026-04-24 12:43:19: {"level":30,"time":1777034599488,"pid":125212,"hostname":"ubuntu","req":{"id":2,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":401},"responseTime":9,"msg":"request completed"}
+0|tajikmus | 2026-04-24 12:46:24: {"level":30,"time":1777034784029,"pid":125212,"hostname":"ubuntu","signal":"SIGINT","msg":"shutdown signal received"}
+0|tajikmus | 2026-04-24 12:46:24: {"level":30,"time":1777034784030,"pid":125212,"hostname":"ubuntu","msg":"delivery worker stopped"}
+0|tajikmus | 2026-04-24 12:46:28: {"level":30,"time":1777034788185,"pid":125313,"hostname":"ubuntu","port":3001,"msg":"Server listening"}
+0|tajikmus | 2026-04-24 12:46:28: {"level":30,"time":1777034788425,"pid":125313,"hostname":"ubuntu","intervalMs":30000,"batch":10,"msg":"delivery worker started"}
+0|tajikmus | 2026-04-24 12:46:28: [seed] Реестр интеграций: 29/29 записей готово
+
+root@ubuntu:/var/www/tajikmusic#
