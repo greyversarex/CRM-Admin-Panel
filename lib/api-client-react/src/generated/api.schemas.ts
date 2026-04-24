@@ -919,30 +919,36 @@ export interface GeographyAnalytics {
   percentage: number;
 }
 
+export type DeliveryStatus =
+  (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
+
+export const DeliveryStatus = {
+  queued: "queued",
+  processing: "processing",
+  sent: "sent",
+  delivered: "delivered",
+  failed: "failed",
+  cancelled: "cancelled",
+} as const;
+
 export type DeliveryTarget =
   (typeof DeliveryTarget)[keyof typeof DeliveryTarget];
 
 export const DeliveryTarget = {
   spotify: "spotify",
-  apple: "apple",
-  yandex: "yandex",
-  vk: "vk",
-  tidal: "tidal",
+  apple_music: "apple_music",
+  youtube_music: "youtube_music",
+  yandex_music: "yandex_music",
+  vk_music: "vk_music",
+  tiktok: "tiktok",
+  deezer: "deezer",
+  amazon_music: "amazon_music",
   vevo: "vevo",
-  boom: "boom",
-  zvooq: "zvooq",
-  amazon: "amazon",
-} as const;
-
-export type DeliveryStatus =
-  (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
-
-export const DeliveryStatus = {
-  pending: "pending",
-  in_progress: "in_progress",
-  delivered: "delivered",
-  failed: "failed",
-  acknowledged: "acknowledged",
+  zvuk: "zvuk",
+  tidal: "tidal",
+  boomplay: "boomplay",
+  ok_music: "ok_music",
+  ddex_main: "ddex_main",
 } as const;
 
 export interface Delivery {
@@ -952,6 +958,9 @@ export interface Delivery {
   target: DeliveryTarget;
   status: DeliveryStatus;
   ddexVersion?: string | null;
+  attempts: number;
+  nextRetryAt?: string | null;
+  lastError?: string | null;
   packageUrl?: string | null;
   errorMessage?: string | null;
   acknowledgedAt?: string | null;
@@ -960,34 +969,22 @@ export interface Delivery {
   updatedAt: string;
 }
 
-export type CreateDeliveryBodyTargetsItem =
-  (typeof CreateDeliveryBodyTargetsItem)[keyof typeof CreateDeliveryBodyTargetsItem];
+export type DeliverReleaseBodyDdexVersion =
+  (typeof DeliverReleaseBodyDdexVersion)[keyof typeof DeliverReleaseBodyDdexVersion];
 
-export const CreateDeliveryBodyTargetsItem = {
-  spotify: "spotify",
-  apple: "apple",
-  yandex: "yandex",
-  vk: "vk",
-  tidal: "tidal",
-  vevo: "vevo",
-  boom: "boom",
-  zvooq: "zvooq",
-  amazon: "amazon",
+export const DeliverReleaseBodyDdexVersion = {
+  "43": "4.3",
 } as const;
 
-export type CreateDeliveryBodyDdexVersion =
-  (typeof CreateDeliveryBodyDdexVersion)[keyof typeof CreateDeliveryBodyDdexVersion];
+export interface DeliverReleaseBody {
+  /** @minItems 1 */
+  targets: DeliveryTarget[];
+  ddexVersion?: DeliverReleaseBodyDdexVersion;
+}
 
-export const CreateDeliveryBodyDdexVersion = {
-  "38": "3.8",
-  "40": "4.0",
-  "41": "4.1",
-} as const;
-
-export interface CreateDeliveryBody {
+export interface DeliverReleaseResponse {
   releaseId: number;
-  targets: CreateDeliveryBodyTargetsItem[];
-  ddexVersion?: CreateDeliveryBodyDdexVersion;
+  jobs: Delivery[];
 }
 
 export interface PaginatedDeliveries {
@@ -1355,22 +1352,12 @@ export type GetGeographyAnalyticsParams = {
 };
 
 export type ListDeliveriesParams = {
-  status?: ListDeliveriesStatus;
+  status?: DeliveryStatus;
+  target?: DeliveryTarget;
   release_id?: number;
   page?: number;
   limit?: number;
 };
-
-export type ListDeliveriesStatus =
-  (typeof ListDeliveriesStatus)[keyof typeof ListDeliveriesStatus];
-
-export const ListDeliveriesStatus = {
-  pending: "pending",
-  in_progress: "in_progress",
-  delivered: "delivered",
-  failed: "failed",
-  acknowledged: "acknowledged",
-} as const;
 
 export type ListAssetsParams = {
   release_id?: number;

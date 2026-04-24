@@ -10,9 +10,10 @@ export type DeliveryStatus =
   (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
 
 export const DeliveryStatus = {
-  pending: "pending",
-  in_progress: "in_progress",
+  queued: "queued",
+  processing: "processing",
+  sent: "sent",
   delivered: "delivered",
   failed: "failed",
-  acknowledged: "acknowledged",
+  cancelled: "cancelled",
 } as const;

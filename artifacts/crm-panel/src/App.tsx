@@ -74,7 +74,6 @@ function Router() {
       <ProtectedRoute path="/"               component={Dashboard} />
       <ProtectedRoute path="/analytics"      component={Analytics} />
       <ProtectedRoute path="/distribution"   component={Distribution} />
-      <ProtectedRoute path="/delivery"       component={Distribution} />
       <ProtectedRoute path="/releases"                  component={Releases} />
       <ProtectedRoute path="/releases/new"              component={CreateRelease} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />

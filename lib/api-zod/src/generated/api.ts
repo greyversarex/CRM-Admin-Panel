@@ -2081,7 +2081,25 @@ export const listDeliveriesQueryLimitDefault = 20;
 
 export const ListDeliveriesQueryParams = zod.object({
   status: zod
-    .enum(["pending", "in_progress", "delivered", "failed", "acknowledged"])
+    .enum(["queued", "processing", "sent", "delivered", "failed", "cancelled"])
+    .optional(),
+  target: zod
+    .enum([
+      "spotify",
+      "apple_music",
+      "youtube_music",
+      "yandex_music",
+      "vk_music",
+      "tiktok",
+      "deezer",
+      "amazon_music",
+      "vevo",
+      "zvuk",
+      "tidal",
+      "boomplay",
+      "ok_music",
+      "ddex_main",
+    ])
     .optional(),
   release_id: zod.coerce.number().optional(),
   page: zod.coerce.number().default(listDeliveriesQueryPageDefault),
@@ -2096,23 +2114,32 @@ export const ListDeliveriesResponse = zod.object({
       releaseName: zod.string(),
       target: zod.enum([
         "spotify",
-        "apple",
-        "yandex",
-        "vk",
-        "tidal",
+        "apple_music",
+        "youtube_music",
+        "yandex_music",
+        "vk_music",
+        "tiktok",
+        "deezer",
+        "amazon_music",
         "vevo",
-        "boom",
-        "zvooq",
-        "amazon",
+        "zvuk",
+        "tidal",
+        "boomplay",
+        "ok_music",
+        "ddex_main",
       ]),
       status: zod.enum([
-        "pending",
-        "in_progress",
+        "queued",
+        "processing",
+        "sent",
         "delivered",
         "failed",
-        "acknowledged",
+        "cancelled",
       ]),
       ddexVersion: zod.string().nullish(),
+      attempts: zod.number(),
+      nextRetryAt: zod.string().nullish(),
+      lastError: zod.string().nullish(),
       packageUrl: zod.string().nullish(),
       errorMessage: zod.string().nullish(),
       acknowledgedAt: zod.string().nullish(),
@@ -2130,32 +2157,7 @@ export const ListDeliveriesResponse = zod.object({
 });
 
 /**
- * @summary Create delivery request
- */
-export const createDeliveryBodyDdexVersionDefault = `4.0`;
-
-export const CreateDeliveryBody = zod.object({
-  releaseId: zod.number(),
-  targets: zod.array(
-    zod.enum([
-      "spotify",
-      "apple",
-      "yandex",
-      "vk",
-      "tidal",
-      "vevo",
-      "boom",
-      "zvooq",
-      "amazon",
-    ]),
-  ),
-  ddexVersion: zod
-    .enum(["3.8", "4.0", "4.1"])
-    .default(createDeliveryBodyDdexVersionDefault),
-});
-
-/**
- * @summary Get delivery by ID
+ * @summary Get delivery job by ID
  */
 export const GetDeliveryParams = zod.object({
   id: zod.coerce.number(),
@@ -2167,29 +2169,118 @@ export const GetDeliveryResponse = zod.object({
   releaseName: zod.string(),
   target: zod.enum([
     "spotify",
-    "apple",
-    "yandex",
-    "vk",
-    "tidal",
+    "apple_music",
+    "youtube_music",
+    "yandex_music",
+    "vk_music",
+    "tiktok",
+    "deezer",
+    "amazon_music",
     "vevo",
-    "boom",
-    "zvooq",
-    "amazon",
+    "zvuk",
+    "tidal",
+    "boomplay",
+    "ok_music",
+    "ddex_main",
   ]),
   status: zod.enum([
-    "pending",
-    "in_progress",
+    "queued",
+    "processing",
+    "sent",
     "delivered",
     "failed",
-    "acknowledged",
+    "cancelled",
   ]),
   ddexVersion: zod.string().nullish(),
+  attempts: zod.number(),
+  nextRetryAt: zod.string().nullish(),
+  lastError: zod.string().nullish(),
   packageUrl: zod.string().nullish(),
   errorMessage: zod.string().nullish(),
   acknowledgedAt: zod.string().nullish(),
   deliveredAt: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+});
+
+/**
+ * @summary Manually retry a failed delivery job
+ */
+export const RetryDeliveryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RetryDeliveryResponse = zod.object({
+  id: zod.number(),
+  releaseId: zod.number(),
+  releaseName: zod.string(),
+  target: zod.enum([
+    "spotify",
+    "apple_music",
+    "youtube_music",
+    "yandex_music",
+    "vk_music",
+    "tiktok",
+    "deezer",
+    "amazon_music",
+    "vevo",
+    "zvuk",
+    "tidal",
+    "boomplay",
+    "ok_music",
+    "ddex_main",
+  ]),
+  status: zod.enum([
+    "queued",
+    "processing",
+    "sent",
+    "delivered",
+    "failed",
+    "cancelled",
+  ]),
+  ddexVersion: zod.string().nullish(),
+  attempts: zod.number(),
+  nextRetryAt: zod.string().nullish(),
+  lastError: zod.string().nullish(),
+  packageUrl: zod.string().nullish(),
+  errorMessage: zod.string().nullish(),
+  acknowledgedAt: zod.string().nullish(),
+  deliveredAt: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Queue an approved release for delivery to one or more DSPs
+ */
+export const DeliverReleaseParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const deliverReleaseBodyDdexVersionDefault = `4.3`;
+
+export const DeliverReleaseBody = zod.object({
+  targets: zod
+    .array(
+      zod.enum([
+        "spotify",
+        "apple_music",
+        "youtube_music",
+        "yandex_music",
+        "vk_music",
+        "tiktok",
+        "deezer",
+        "amazon_music",
+        "vevo",
+        "zvuk",
+        "tidal",
+        "boomplay",
+        "ok_music",
+        "ddex_main",
+      ]),
+    )
+    .min(1),
+  ddexVersion: zod.enum(["4.3"]).default(deliverReleaseBodyDdexVersionDefault),
 });
 
 /**

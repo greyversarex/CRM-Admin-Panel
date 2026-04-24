@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { db, deliveriesTable, releasesTable } from "@workspace/db";
-import { count, eq, desc } from "drizzle-orm";
-import { CreateDeliveryBody, GetDeliveryParams } from "@workspace/api-zod";
+import { count, eq, desc, and, type SQL } from "drizzle-orm";
+import {
+  ListDeliveriesQueryParams,
+  GetDeliveryParams,
+  RetryDeliveryParams,
+} from "@workspace/api-zod";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -10,9 +15,13 @@ async function enrichDelivery(d: typeof deliveriesTable.$inferSelect) {
   const [release] = await db.select({ title: releasesTable.title }).from(releasesTable).where(eq(releasesTable.id, d.releaseId));
   if (release) releaseName = release.title;
 
+  // xmlPayload намеренно НЕ отдаём в API — это служебное поле воркера для дебага
+  // и потенциального retry без перегенерации. На фронт идут только метаданные.
+  const { xmlPayload: _omit, ...rest } = d;
   return {
-    ...d,
+    ...rest,
     releaseName,
+    nextRetryAt: d.nextRetryAt?.toISOString() ?? null,
     acknowledgedAt: d.acknowledgedAt?.toISOString() ?? null,
     deliveredAt: d.deliveredAt?.toISOString() ?? null,
     createdAt: d.createdAt.toISOString(),
@@ -20,65 +29,70 @@ async function enrichDelivery(d: typeof deliveriesTable.$inferSelect) {
   };
 }
 
-router.get("/delivery", async (req, res): Promise<void> => {
-  const page = parseInt(req.query.page as string ?? "1", 10) || 1;
-  const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
+router.get("/deliveries", async (req, res): Promise<void> => {
+  const parsed = ListDeliveriesQueryParams.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { status, target, release_id: releaseId, page = 1, limit = 20 } = parsed.data;
   const offset = (page - 1) * limit;
 
-  const deliveries = await db.select().from(deliveriesTable).limit(limit).offset(offset).orderBy(desc(deliveriesTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(deliveriesTable);
+  const filters: SQL[] = [];
+  if (status) filters.push(eq(deliveriesTable.status, status));
+  if (target) filters.push(eq(deliveriesTable.target, target));
+  if (releaseId !== undefined) filters.push(eq(deliveriesTable.releaseId, releaseId));
+  const where = filters.length ? and(...filters) : undefined;
 
-  const data = await Promise.all(deliveries.map(enrichDelivery));
+  const rows = await db.select().from(deliveriesTable)
+    .where(where)
+    .limit(limit).offset(offset)
+    .orderBy(desc(deliveriesTable.createdAt));
+  const [totalRow] = await db.select({ count: count() }).from(deliveriesTable).where(where);
 
+  const data = await Promise.all(rows.map(enrichDelivery));
   res.json({
     data,
-    pagination: {
-      page,
-      limit,
-      total: totalResult.count,
-      totalPages: Math.ceil(totalResult.count / limit),
-    },
+    pagination: { page, limit, total: totalRow.count, totalPages: Math.ceil(totalRow.count / limit) },
   });
 });
 
-router.post("/delivery", async (req, res): Promise<void> => {
-  const parsed = CreateDeliveryBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  // Create one delivery per target
-  const created = [];
-  for (const target of parsed.data.targets) {
-    const [delivery] = await db.insert(deliveriesTable).values({
-      releaseId: parsed.data.releaseId,
-      target,
-      status: "pending",
-      ddexVersion: parsed.data.ddexVersion ?? "4.0",
-    }).returning();
-    const enriched = await enrichDelivery(delivery);
-    created.push(enriched);
-  }
-
-  res.status(201).json(created[0]);
-});
-
-router.get("/delivery/:id", async (req, res): Promise<void> => {
+router.get("/deliveries/:id", async (req, res): Promise<void> => {
   const params = GetDeliveryParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
   const [delivery] = await db.select().from(deliveriesTable).where(eq(deliveriesTable.id, params.data.id));
-  if (!delivery) {
-    res.status(404).json({ error: "Delivery not found" });
+  if (!delivery) { res.status(404).json({ error: "Delivery not found" }); return; }
+
+  res.json(await enrichDelivery(delivery));
+});
+
+router.post("/deliveries/:id/retry", async (req, res): Promise<void> => {
+  const params = RetryDeliveryParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [existing] = await db.select().from(deliveriesTable).where(eq(deliveriesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Delivery not found" }); return; }
+  // Retry разрешён только для failed: иначе можно случайно сбросить queued/processing/sent
+  // и получить дубль доставки (контракт OpenAPI: "retry a failed delivery job").
+  if (existing.status !== "failed") {
+    res.status(409).json({ error: `Cannot retry delivery in status '${existing.status}' — only 'failed' allowed` });
     return;
   }
 
-  const enriched = await enrichDelivery(delivery);
-  res.json(enriched);
+  const [updated] = await db.update(deliveriesTable).set({
+    status: "queued",
+    attempts: 0,
+    nextRetryAt: new Date(),
+    lastError: null,
+  }).where(eq(deliveriesTable.id, params.data.id)).returning();
+
+  void auditMutation(req, {
+    action: "update",
+    entityType: "delivery",
+    entityId: updated.id,
+    before: existing,
+    after: updated,
+  });
+
+  res.json(await enrichDelivery(updated));
 });
 
 export default router;

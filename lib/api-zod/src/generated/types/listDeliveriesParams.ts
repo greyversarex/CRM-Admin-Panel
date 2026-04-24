@@ -5,10 +5,12 @@
  * Music Distribution CRM API
  * OpenAPI spec version: 0.1.0
  */
-import type { ListDeliveriesStatus } from "./listDeliveriesStatus";
+import type { DeliveryStatus } from "./deliveryStatus";
+import type { DeliveryTarget } from "./deliveryTarget";
 
 export type ListDeliveriesParams = {
-  status?: ListDeliveriesStatus;
+  status?: DeliveryStatus;
+  target?: DeliveryTarget;
   release_id?: number;
   page?: number;
   limit?: number;

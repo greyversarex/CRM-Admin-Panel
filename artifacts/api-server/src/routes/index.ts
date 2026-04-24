@@ -53,6 +53,8 @@ router.use("/publishing", adminOnly);
 router.use(publishingRouter);
 router.use("/analytics", adminOnly);  // currently mock org-wide aggregates
 router.use(analyticsRouter);
+// /deliveries/* + POST /releases/:id/deliver — admin/manager only.
+// Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
 router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
 router.use("/integrations", adminOnly);

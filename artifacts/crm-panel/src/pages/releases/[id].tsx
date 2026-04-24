@@ -1,9 +1,12 @@
 import { Layout } from "@/components/layout";
 import {
   useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
+  useDeliverRelease,
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
-  type Track,
+  getListDeliveriesQueryKey,
+  type Track, type DeliveryTarget,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
-  Calendar, Plus, Trash2,
+  Calendar, Plus, Trash2, Send,
 } from "lucide-react";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { useState } from "react";
@@ -28,6 +31,26 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
+
+// Соответствует enum DeliveryTarget в openapi.yaml + connectors/registry.ts.
+// label — что видит пользователь, code — что уходит в API.
+const DELIVER_TARGETS: Array<{ code: DeliveryTarget; label: string }> = [
+  { code: "spotify",       label: "Spotify" },
+  { code: "apple_music",   label: "Apple Music" },
+  { code: "youtube_music", label: "YouTube Music" },
+  { code: "yandex_music",  label: "Yandex Music" },
+  { code: "vk_music",      label: "VK Music" },
+  { code: "tiktok",        label: "TikTok" },
+  { code: "deezer",        label: "Deezer" },
+  { code: "amazon_music",  label: "Amazon Music" },
+  { code: "vevo",          label: "VEVO" },
+  { code: "zvuk",          label: "Zvuk" },
+  { code: "tidal",         label: "Tidal" },
+  { code: "boomplay",      label: "Boomplay" },
+  { code: "ok_music",      label: "OK Music" },
+];
+
+const CAN_DELIVER_STATUSES = new Set(["approved", "delivering", "live"]);
 const TAKEDOWN_REASONS = [
   "Other", "Legal/contractual obligations", "Incorrect metadata",
   "Wrong audio file", "Replacement release", "Artist request",
@@ -44,11 +67,14 @@ export default function ReleaseDetail() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
+  const { user } = useAuth();
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetReleaseQueryKey(id) });
     queryClient.invalidateQueries({ queryKey: getListReleasesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
   };
 
   if (isLoading) {
@@ -97,6 +123,19 @@ export default function ReleaseDetail() {
             </p>
           </div>
           <div className="flex gap-2">
+            {user && (user.role === "admin" || user.role === "manager") && CAN_DELIVER_STATUSES.has(release.status) && (
+              <Dialog open={deliverOpen} onOpenChange={setDeliverOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
+                    <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
+                  </Button>
+                </DialogTrigger>
+                <DeliverDialog
+                  releaseId={id}
+                  onClose={() => { setDeliverOpen(false); invalidateAll(); }}
+                />
+              </Dialog>
+            )}
             <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
@@ -493,6 +532,88 @@ function TakeDownDialog({ releaseId, onClose }: { releaseId: number; onClose: ()
           }}
         >
           Take Down
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+// ─── Deliver to DSPs dialog ───────────────────────────────────────────────
+// Создаёт по одной delivery-job на каждый выбранный target. Воркер заберёт
+// очередь на ближайшем тике (≤30 сек). Прогресс смотрим в /distribution.
+function DeliverDialog({ releaseId, onClose }: { releaseId: number; onClose: () => void }) {
+  const deliver = useDeliverRelease();
+  const [selected, setSelected] = useState<Set<DeliveryTarget>>(new Set());
+
+  const toggle = (code: DeliveryTarget) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  };
+  const selectAll = () => setSelected(new Set(DELIVER_TARGETS.map((t) => t.code)));
+  const clearAll = () => setSelected(new Set());
+
+  const submit = async () => {
+    const targets = Array.from(selected);
+    if (targets.length === 0) return;
+    try {
+      const res = await deliver.mutateAsync({ id: releaseId, data: { targets, ddexVersion: "4.3" } });
+      toast({
+        title: "Доставка поставлена в очередь",
+        description: `${res.jobs.length} job${res.jobs.length === 1 ? "" : "s"} → DDEX ERN 4.3. Прогресс — на /distribution.`,
+      });
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Ошибка отгрузки", description: msg, variant: "destructive" });
+    }
+  };
+
+  return (
+    <DialogContent className="bg-card border-border max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Deliver Release to DSPs</DialogTitle>
+        <DialogDescription>
+          На каждый выбранный DSP сгенерируется отдельный DDEX ERN 4.3 пакет
+          и поставится в очередь. Воркер обработает в течение 30 секунд.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex items-center justify-between text-xs">
+        <div className="text-muted-foreground">Выбрано: <span className="font-mono text-foreground">{selected.size}</span> / {DELIVER_TARGETS.length}</div>
+        <div className="flex gap-2">
+          <button type="button" onClick={selectAll} className="text-primary hover:underline">Выбрать все</button>
+          <span className="text-muted-foreground">·</span>
+          <button type="button" onClick={clearAll} className="text-muted-foreground hover:text-foreground">Очистить</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-1">
+        {DELIVER_TARGETS.map((t) => (
+          <label
+            key={t.code}
+            className="flex items-center gap-2 px-2.5 py-2 rounded border border-border bg-background/40 hover:bg-accent/40 cursor-pointer text-sm"
+          >
+            <Checkbox
+              checked={selected.has(t.code)}
+              onCheckedChange={() => toggle(t.code)}
+            />
+            <span className="flex-1">{t.label}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{t.code}</span>
+          </label>
+        ))}
+      </div>
+
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button
+          disabled={selected.size === 0 || deliver.isPending}
+          onClick={submit}
+        >
+          <Send className="mr-2 h-4 w-4" />
+          {deliver.isPending ? "Отправка…" : `Deliver (${selected.size})`}
         </Button>
       </DialogFooter>
     </DialogContent>

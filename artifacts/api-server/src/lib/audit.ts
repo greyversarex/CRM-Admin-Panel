@@ -50,6 +50,13 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     // (lockout механика — внутренняя), dspProfiles/socialLinks (могут содержать
     // токены/ссылки) — НЕ логируем.
   ]),
+  delivery: new Set([
+    "id", "releaseId", "target", "status", "ddexVersion", "attempts",
+    "nextRetryAt", "lastError", "packageUrl", "errorMessage",
+    "acknowledgedAt", "deliveredAt", "createdAt", "updatedAt",
+    // xmlPayload намеренно НЕ логируем — может быть очень большим (десятки KB)
+    // и содержит PII в виде имён артистов/треков, которых уже достаточно в release/track аудите
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если

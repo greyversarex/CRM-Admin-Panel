@@ -1,106 +1,171 @@
 import { Layout } from "@/components/layout";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
-import { useListDeliveries, useListReleases } from "@workspace/api-client-react";
 import {
-  Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock,
-  Send, Shield, FileCode2, Zap, Ban, CalendarClock, Filter,
-  ChevronRight, Download, MoreHorizontal, ExternalLink, FileAudio,
+  useListDeliveries, useListReleases, useUpdateReleaseStatus, useRetryDelivery,
+  getListDeliveriesQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
+  type Delivery, type Release,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock,
+  Send, Shield, FileCode2, Ban, CalendarClock,
+  Download, ExternalLink,
 } from "lucide-react";
-import { ModerationDialog, audioMatchesSpec, type ModerationRelease } from "@/components/moderation-dialog";
-import { cn } from "@/lib/utils";
+import { ModerationDialog, type ModerationRelease } from "@/components/moderation-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
-const DSP_LIST = [
-  { name: "Spotify", status: "connected", releases: 214, icon: "🟢" },
-  { name: "Apple Music", status: "connected", releases: 198, icon: "🟢" },
-  { name: "YouTube Music", status: "connected", releases: 186, icon: "🟢" },
-  { name: "Yandex Music", status: "connected", releases: 142, icon: "🟢" },
-  { name: "TikTok", status: "connected", releases: 201, icon: "🟢" },
-  { name: "VK Music", status: "connected", releases: 134, icon: "🟢" },
-  { name: "Deezer", status: "connected", releases: 167, icon: "🟢" },
-  { name: "Zvooq", status: "error", releases: 98, icon: "🔴" },
-  { name: "VEVO", status: "pending", releases: 42, icon: "🟡" },
-  { name: "Amazon Music", status: "connected", releases: 153, icon: "🟢" },
-];
+// ─── DSP справочник (label) ───────────────────────────────────────────────
+// Соответствует DeliveryTarget enum + connectors/registry.ts.
+const DSP_DIRECTORY: Record<string, string> = {
+  spotify: "Spotify",
+  apple_music: "Apple Music",
+  youtube_music: "YouTube Music",
+  yandex_music: "Yandex Music",
+  vk_music: "VK Music",
+  tiktok: "TikTok",
+  deezer: "Deezer",
+  amazon_music: "Amazon Music",
+  vevo: "VEVO",
+  zvuk: "Zvuk",
+  tidal: "Tidal",
+  boomplay: "Boomplay",
+  ok_music: "OK Music",
+};
+const DSP_CODES = Object.keys(DSP_DIRECTORY);
 
-// Audio specs приходят с бэка авто-определёнными (ffprobe / mediainfo) при загрузке файла
-const PENDING_MODERATION: ModerationRelease[] = [
-  {
-    id: 1, title: "Дилам мехохад", artist: "Давлатмандов Ш.", type: "Single",
-    submitted: "2026-04-13", issues: [], upc: "886448726301",
-    tracks: [
-      { id: 1, title: "Дилам мехохад", isrc: "TJM2026000001", duration: "03:24",
-        audio: { format: ".wav", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 36.2 } },
-    ],
-  },
-  {
-    id: 2, title: "Бахори нав", artist: "Зарина Саидова", type: "Album",
-    submitted: "2026-04-12", issues: ["Missing ISRC on track 3", "Cover artwork below 3000×3000"],
-    upc: "886448726302",
-    tracks: [
-      { id: 1, title: "Бахори нав",     isrc: "TJM2026000010", duration: "03:48",
-        audio: { format: ".wav",  sampleRateHz: 48000, bitDepth: 24, channels: 2, fileSizeMb: 78.4 } },
-      { id: 2, title: "Гулҳои сурх",   isrc: "TJM2026000011", duration: "04:12",
-        audio: { format: ".wav",  sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 44.7 } },
-      { id: 3, title: "Шаби тирамоҳ",  isrc: undefined,        duration: "03:55",
-        audio: { format: ".mp3",  sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 9.1 } },
-    ],
-  },
-  {
-    id: 3, title: "Ишки ман", artist: "Рустам Назаров", type: "EP",
-    submitted: "2026-04-12", issues: [], upc: "886448726303",
-    tracks: [
-      { id: 1, title: "Ишки ман",      isrc: "TJM2026000020", duration: "04:01", explicit: true,
-        audio: { format: ".flac", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 28.6 } },
-      { id: 2, title: "Дилбари ман",   isrc: "TJM2026000021", duration: "03:36",
-        audio: { format: ".flac", sampleRateHz: 44100, bitDepth: 16, channels: 2, fileSizeMb: 25.3 } },
-    ],
-  },
-];
+function dspLabel(code: string) {
+  return DSP_DIRECTORY[code] ?? code;
+}
 
-const DDEX_LOGS = [
-  { id: "D001", release: "Дилам мехохад", version: "ERN 4.3", target: "Spotify", status: "delivered", timestamp: "2026-04-10 14:32", size: "4.2 MB" },
-  { id: "D002", release: "Бахори нав", version: "ERN 4.3", target: "Apple Music", status: "delivered", timestamp: "2026-04-10 14:33", size: "18.7 MB" },
-  { id: "D003", release: "Дустони ман", version: "ERN 4.2", target: "Yandex Music", status: "failed", timestamp: "2026-04-09 09:15", size: "6.1 MB" },
-  { id: "D004", release: "Шаби нав", version: "ERN 4.3", target: "TikTok", status: "pending", timestamp: "2026-04-11 11:00", size: "3.8 MB" },
-  { id: "D005", release: "Модари азиз", version: "ERN 4.3", target: "Deezer", status: "delivered", timestamp: "2026-04-08 16:44", size: "8.9 MB" },
-];
+// API Release → форма ModerationRelease.
+// Полный список треков подгружается уже внутри модалки модерации (по releaseId).
+function toModerationRelease(r: Release): ModerationRelease {
+  return {
+    id: r.id,
+    title: r.title,
+    artist: r.artistName,
+    type: r.releaseType,
+    submitted: r.createdAt.slice(0, 10),
+    upc: r.upc ?? "",
+    coverUrl: r.coverUrl ?? undefined,
+    issues: [],
+    tracks: [], // QC по аудио показывается уже на странице релиза
+  };
+}
 
-const TAKEDOWNS = [
-  { title: "Old Release 2019", artist: "Various Artists", reason: "Label request", date: "2026-03-14", dsp: "All platforms" },
-  { title: "Unofficial Cover", artist: "Unknown", reason: "Copyright infringement", date: "2026-03-02", dsp: "Spotify, Apple Music" },
-];
-
-const SCHEDULED = [
-  { title: "Наврӯз 2026", artist: "Ансамбл Бахор", releaseDate: "2026-03-21", status: "approved", dsp: "All" },
-  { title: "Summer Hits EP", artist: "Зарина Саидова", releaseDate: "2026-06-01", status: "pending", dsp: "All" },
-  { title: "New Single", artist: "Камол Хасанов", releaseDate: "2026-05-15", status: "draft", dsp: "Spotify, Apple" },
-];
-
+function isToday(iso?: string | null) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const n = new Date();
+  return d.getUTCFullYear() === n.getUTCFullYear()
+    && d.getUTCMonth()    === n.getUTCMonth()
+    && d.getUTCDate()     === n.getUTCDate();
+}
 
 export default function Distribution() {
-  const [search, setSearch] = useState("");
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  // ─── data ───────────────────────────────────────────────────────────────
+  const pendingQ = useListReleases({ status: "pending_review", limit: 100 });
+  const approvedQ = useListReleases({ status: "approved", limit: 100 });
+  const takedownQ = useListReleases({ status: "takedown_requested", limit: 50 });
+  const deliveriesQ = useListDeliveries({ limit: 50 });
+
+  const updateStatus = useUpdateReleaseStatus();
+  const retryDelivery = useRetryDelivery();
+
+  const pending: ModerationRelease[] = useMemo(
+    () => (pendingQ.data?.data ?? []).map(toModerationRelease),
+    [pendingQ.data]
+  );
+  const deliveries: Delivery[] = deliveriesQ.data?.data ?? [];
+
+  // ─── KPI вычисления ─────────────────────────────────────────────────────
+  const kpi = useMemo(() => {
+    const deliveredToday = deliveries.filter(
+      (d) => (d.status === "sent" || d.status === "delivered") && isToday(d.deliveredAt ?? d.updatedAt)
+    ).length;
+    const failed = deliveries.filter((d) => d.status === "failed").length;
+    const connectedTargets = new Set(
+      deliveries.filter((d) => d.status === "sent" || d.status === "delivered").map((d) => d.target)
+    );
+    return {
+      pending: pendingQ.data?.pagination.total ?? pending.length,
+      deliveredToday,
+      failed,
+      connected: connectedTargets.size,
+    };
+  }, [deliveries, pendingQ.data, pending.length]);
+
+  // ─── DSP-карточки: агрегируем по target ─────────────────────────────────
+  const dspStats = useMemo(() => {
+    return DSP_CODES.map((code) => {
+      const rows = deliveries.filter((d) => d.target === code);
+      const sentCount = rows.filter((d) => d.status === "sent" || d.status === "delivered").length;
+      const lastStatus = rows[0]?.status; // /deliveries уже отсортирован по createdAt desc
+      let status: "connected" | "error" | "pending" | "idle";
+      if (rows.length === 0) status = "idle";
+      else if (lastStatus === "failed") status = "error";
+      else if (lastStatus === "queued" || lastStatus === "processing") status = "pending";
+      else status = "connected";
+      return { code, name: dspLabel(code), status, releases: sentCount };
+    });
+  }, [deliveries]);
+
+  // ─── moderation modal ───────────────────────────────────────────────────
   const [modRelease, setModRelease] = useState<ModerationRelease | null>(null);
   const [modOpen, setModOpen] = useState(false);
-  const [pending, setPending] = useState<ModerationRelease[]>(PENDING_MODERATION);
-  const { data: deliveries, isLoading } = useListDeliveries({ limit: 50 });
 
   const openRelease = (r: ModerationRelease) => { setModRelease(r); setModOpen(true); };
-  const handleApprove = (id: number) => setPending(p => p.filter(r => r.id !== id));
-  const handleReject  = (id: number, reasons: string[], comment: string) => {
-    // TODO: отправить на API: { releaseId: id, reasons, comment }
-    console.log("[moderation] reject", { id, reasons, comment });
-    setPending(p => p.filter(r => r.id !== id));
+
+  const invalidateReleases = () => {
+    qc.invalidateQueries({ queryKey: getListReleasesQueryKey({ status: "pending_review", limit: 100 }) });
+    qc.invalidateQueries({ queryKey: getListReleasesQueryKey({ status: "approved",       limit: 100 }) });
+    qc.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() });
+  };
+
+  const handleApprove = async (id: number) => {
+    try {
+      await updateStatus.mutateAsync({ id, data: { status: "approved", note: "Approved by moderator" } });
+      invalidateReleases();
+      toast({ title: "Релиз одобрен", description: "Готов к доставке. Откройте релиз → Deliver to DSPs." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Не удалось одобрить", description: msg, variant: "destructive" });
+    }
+  };
+
+  const handleReject = async (id: number, reasons: string[], comment: string) => {
+    const note = [reasons.join("; "), comment].filter(Boolean).join(" — ");
+    try {
+      await updateStatus.mutateAsync({ id, data: { status: "draft", note: note || "Rejected" } });
+      invalidateReleases();
+      toast({ variant: "destructive", title: "Релиз возвращён лейблу", description: note || "Без комментария" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Не удалось отклонить", description: msg, variant: "destructive" });
+    }
+  };
+
+  const handleRetry = async (delivery: Delivery) => {
+    try {
+      await retryDelivery.mutateAsync({ id: delivery.id });
+      qc.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
+      toast({ title: "Перезапущено", description: `${delivery.releaseName} → ${dspLabel(delivery.target)}` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Не удалось перезапустить", description: msg, variant: "destructive" });
+    }
   };
 
   return (
@@ -113,13 +178,13 @@ export default function Distribution() {
             <p className="text-[13px] text-muted-foreground mt-0.5">Release moderation, DDEX delivery, DSP status and takedowns.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" className="bg-card" onClick={() => deliveriesQ.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
             <Button variant="outline" className="bg-card">
               <Download className="mr-2 h-4 w-4" />
               Export Logs
-            </Button>
-            <Button>
-              <Send className="mr-2 h-4 w-4" />
-              New Delivery
             </Button>
           </div>
         </div>
@@ -127,39 +192,35 @@ export default function Distribution() {
         <div className="grid gap-3 md:grid-cols-4">
           <KpiCard
             label="Pending Moderation"
-            value={String(pending.length)}
+            value={pendingQ.isLoading ? "…" : String(kpi.pending)}
             icon={Clock}
             iconColor="text-amber-400"
             iconBg="bg-amber-500/12"
             iconBorder="border-amber-500/20"
-            trend={{ value: "-40%", up: true, label: "vs yesterday" }}
           />
           <KpiCard
             label="Delivered Today"
-            value="12"
+            value={deliveriesQ.isLoading ? "…" : String(kpi.deliveredToday)}
             icon={CheckCircle2}
             iconColor="text-emerald-400"
             iconBg="bg-emerald-500/12"
             iconBorder="border-emerald-500/20"
-            trend={{ value: "+20%", up: true, label: "vs avg" }}
           />
           <KpiCard
             label="Failed Deliveries"
-            value="1"
+            value={deliveriesQ.isLoading ? "…" : String(kpi.failed)}
             icon={XCircle}
             iconColor="text-rose-400"
             iconBg="bg-rose-500/12"
             iconBorder="border-rose-500/20"
-            trend={{ value: "-50%", up: true, label: "vs yesterday" }}
           />
           <KpiCard
             label="DSPs Connected"
-            value="9/10"
+            value={deliveriesQ.isLoading ? "…" : `${kpi.connected}/${DSP_CODES.length}`}
             icon={Shield}
             iconColor="text-primary"
             iconBg="bg-primary/12"
             iconBorder="border-primary/20"
-            trend={{ value: "1 pending", label: "VEVO" }}
           />
         </div>
 
@@ -168,11 +229,12 @@ export default function Distribution() {
             <TabsTrigger value="moderation" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Clock className="h-3.5 w-3.5" />
               Moderation
-                <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center bg-amber-500 text-white text-[10px]">{pending.length}</Badge>
+              <Badge className="ml-1 h-4 px-1.5 flex items-center justify-center bg-amber-500 text-white text-[10px]">{kpi.pending}</Badge>
             </TabsTrigger>
             <TabsTrigger value="ddex" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <FileCode2 className="h-3.5 w-3.5" />
               DDEX Logs
+              <Badge className="ml-1 h-4 px-1.5 flex items-center justify-center bg-muted text-foreground text-[10px]">{deliveries.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="dsp" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Send className="h-3.5 w-3.5" />
@@ -186,13 +248,9 @@ export default function Distribution() {
               <CalendarClock className="h-3.5 w-3.5" />
               Scheduled
             </TabsTrigger>
-            <TabsTrigger value="disputes" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5" />
-              Disputes
-              <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center bg-rose-500 text-white text-[10px]">2</Badge>
-            </TabsTrigger>
           </TabsList>
 
+          {/* ─── Moderation queue ──────────────────────────────────────── */}
           <TabsContent value="moderation" className="mt-4">
             <Card className="card-surface no-lift border-border/60">
               <CardHeader>
@@ -207,15 +265,16 @@ export default function Distribution() {
                       <TableHead>Type</TableHead>
                       <TableHead>UPC</TableHead>
                       <TableHead>Submitted</TableHead>
-                      <TableHead>Audio</TableHead>
-                      <TableHead>QC Check</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pending.length === 0 && (
+                    {pendingQ.isLoading && (
+                      <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                    )}
+                    {!pendingQ.isLoading && pending.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center h-24 text-muted-foreground text-sm">
+                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground text-sm">
                           Очередь модерации пуста — все релизы обработаны.
                         </TableCell>
                       </TableRow>
@@ -230,63 +289,18 @@ export default function Distribution() {
                           <div className="font-medium text-sm">{r.title}</div>
                           <div className="text-xs text-muted-foreground">{r.artist}</div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{r.type}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">{r.upc}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{r.type}</Badge></TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{r.upc || "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.submitted}</TableCell>
-                        <TableCell>
-                          {(() => {
-                            const failed = r.tracks.filter(t => !audioMatchesSpec(t.audio));
-                            const ok = failed.length === 0;
-                            return (
-                              <span className={cn(
-                                "inline-flex items-center gap-1 text-[11px] font-mono",
-                                ok ? "text-emerald-400" : "text-rose-400"
-                              )}>
-                                <FileAudio className="h-3.5 w-3.5" />
-                                {ok ? `${r.tracks.length} OK` : `${failed.length}/${r.tracks.length} fail`}
-                              </span>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const failed = r.tracks.filter(t => !audioMatchesSpec(t.audio));
-                            const total = r.issues.length + failed.length;
-                            return total === 0 ? (
-                              <span className="flex items-center gap-1 text-xs text-emerald-500">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-                              </span>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <span className="flex items-center gap-1 text-xs text-amber-500">
-                                    <AlertCircle className="h-3.5 w-3.5" />
-                                    {total} issue(s)
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-card border-border">
-                                  {failed.map(t => (
-                                    <p key={t.id} className="text-xs">Аудио «{t.title}» не соответствует требованиям</p>
-                                  ))}
-                                  {r.issues.map((iss, i) => <p key={i} className="text-xs">{iss}</p>)}
-                                </TooltipContent>
-                              </Tooltip>
-                            );
-                          })()}
-                        </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm" variant="outline"
-                              className="h-7 text-xs text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
-                              onClick={() => openRelease(r)}
-                            >
-                              <XCircle className="mr-1 h-3.5 w-3.5" /> Review
-                            </Button>
+                            <Link href={`/releases/${r.id}`}>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs">
+                                <ExternalLink className="mr-1 h-3.5 w-3.5" /> Open
+                              </Button>
+                            </Link>
                             <Button size="sm" className="h-7 text-xs" onClick={() => openRelease(r)}>
-                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Open
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Review
                             </Button>
                           </div>
                         </TableCell>
@@ -298,17 +312,17 @@ export default function Distribution() {
             </Card>
           </TabsContent>
 
+          {/* ─── DDEX Logs (live) ──────────────────────────────────────── */}
           <TabsContent value="ddex" className="mt-4">
             <Card className="bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">
               <CardHeader className="pb-3 border-b border-border/50">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>DDEX Delivery Logs</CardTitle>
-                    <CardDescription>Party ID: PA-DPIDA-2024053004-T</CardDescription>
+                    <CardDescription>Очередь и история доставок DDEX ERN 4.3</CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <Badge variant="outline" className="text-xs font-mono text-muted-foreground">ERN 4.3</Badge>
-                    <Badge variant="outline" className="text-xs font-mono text-muted-foreground">ERN 4.2</Badge>
                   </div>
                 </div>
               </CardHeader>
@@ -318,30 +332,58 @@ export default function Distribution() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead>ID</TableHead>
                       <TableHead>Release</TableHead>
-                      <TableHead>DDEX Version</TableHead>
+                      <TableHead>DDEX</TableHead>
                       <TableHead>Target DSP</TableHead>
-                      <TableHead>Package Size</TableHead>
-                      <TableHead>Timestamp</TableHead>
+                      <TableHead>Attempts</TableHead>
+                      <TableHead>Updated</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {DDEX_LOGS.map((log) => (
-                      <TableRow key={log.id} >
-                        <TableCell className="font-mono text-xs text-muted-foreground">{log.id}</TableCell>
-                        <TableCell className="font-medium text-sm">{log.release}</TableCell>
-                        <TableCell><Badge variant="outline" className="font-mono text-xs">{log.version}</Badge></TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{log.target}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{log.size}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">{log.timestamp}</TableCell>
+                    {deliveriesQ.isLoading && (
+                      <TableRow><TableCell colSpan={8}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                    )}
+                    {!deliveriesQ.isLoading && deliveries.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center h-24 text-muted-foreground text-sm">
+                          Доставок пока нет. Одобрите релиз и нажмите Deliver to DSPs на странице релиза.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {deliveries.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">D{String(d.id).padStart(4, "0")}</TableCell>
                         <TableCell>
-                          <StatusBadge status={log.status} />
+                          <Link href={`/releases/${d.releaseId}`}>
+                            <span className="font-medium text-sm hover:underline cursor-pointer">{d.releaseName}</span>
+                          </Link>
+                        </TableCell>
+                        <TableCell><Badge variant="outline" className="font-mono text-xs">ERN {d.ddexVersion ?? "4.3"}</Badge></TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{dspLabel(d.target)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{d.attempts}/5</TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{d.updatedAt.slice(0, 16).replace("T", " ")}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <StatusBadge status={d.status} />
+                            {d.lastError && (
+                              <span className="text-[10px] text-rose-400 max-w-[200px] truncate" title={d.lastError}>
+                                {d.lastError}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </Button>
+                          {d.status === "failed" && (
+                            <Button
+                              variant="ghost" size="icon" className="h-7 w-7"
+                              disabled={retryDelivery.isPending}
+                              onClick={() => handleRetry(d)}
+                              title="Retry delivery"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -351,61 +393,64 @@ export default function Distribution() {
             </Card>
           </TabsContent>
 
+          {/* ─── DSP Status (derived from deliveries) ─────────────────── */}
           <TabsContent value="dsp" className="mt-4">
             <div className="grid gap-3 md:grid-cols-2">
-              {DSP_LIST.map((dsp) => (
-                <Card key={dsp.name} className="bg-card/50 backdrop-blur border-border/50 hover:border-border transition-colors">
+              {dspStats.map((dsp) => (
+                <Card key={dsp.code} className="bg-card/50 backdrop-blur border-border/50 hover:border-border transition-colors">
                   <CardContent className="flex items-center gap-4 pt-4 pb-4">
-                    <span className="text-xl">{dsp.icon}</span>
                     <div className="flex-1">
                       <p className="font-medium text-sm">{dsp.name}</p>
-                      <p className="text-xs text-muted-foreground">{dsp.releases} releases delivered</p>
+                      <p className="text-xs text-muted-foreground">
+                        {dsp.releases} releases delivered · <span className="font-mono">{dsp.code}</span>
+                      </p>
                     </div>
                     <StatusBadge status={dsp.status} />
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
           </TabsContent>
 
+          {/* ─── Takedowns ─────────────────────────────────────────────── */}
           <TabsContent value="takedowns" className="mt-4">
             <Card className="card-surface no-lift border-border/60">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Takedowns</CardTitle>
-                  <CardDescription>Releases removed from distribution</CardDescription>
-                </div>
-                <Button size="sm" variant="outline" className="gap-1.5 text-rose-500 border-rose-500/30 hover:bg-rose-500/10">
-                  <Ban className="h-3.5 w-3.5" />
-                  New Takedown
-                </Button>
+              <CardHeader>
+                <CardTitle>Takedown Requests</CardTitle>
+                <CardDescription>Релизы со статусом takedown_requested</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Release</TableHead>
-                      <TableHead>Reason</TableHead>
-                      <TableHead>Platforms</TableHead>
+                      <TableHead>Artist</TableHead>
+                      <TableHead>UPC</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {TAKEDOWNS.map((t, i) => (
-                      <TableRow key={i} >
-                        <TableCell>
-                          <div className="font-medium text-sm">{t.title}</div>
-                          <div className="text-xs text-muted-foreground">{t.artist}</div>
+                    {takedownQ.isLoading && (
+                      <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                    )}
+                    {!takedownQ.isLoading && (takedownQ.data?.data ?? []).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground text-sm">
+                          Активных takedown-запросов нет.
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{t.reason}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{t.dsp}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{t.date}</TableCell>
+                      </TableRow>
+                    )}
+                    {(takedownQ.data?.data ?? []).map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium text-sm">{r.title}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.artistName}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{r.upc ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.updatedAt.slice(0, 10)}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="outline" className="h-7 text-xs">Restore</Button>
+                          <Link href={`/releases/${r.id}`}>
+                            <Button size="sm" variant="outline" className="h-7 text-xs">Open</Button>
+                          </Link>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -415,79 +460,47 @@ export default function Distribution() {
             </Card>
           </TabsContent>
 
+          {/* ─── Scheduled (approved) ─────────────────────────────────── */}
           <TabsContent value="scheduled" className="mt-4">
             <Card className="card-surface no-lift border-border/60">
               <CardHeader>
-                <CardTitle>Scheduled Releases</CardTitle>
-                <CardDescription>Approved releases waiting for their release date</CardDescription>
+                <CardTitle>Approved & Scheduled</CardTitle>
+                <CardDescription>Релизы в статусе approved — готовы к доставке</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader className="bg-background/30">
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Release</TableHead>
+                      <TableHead>Artist</TableHead>
                       <TableHead>Release Date</TableHead>
-                      <TableHead>Platforms</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {SCHEDULED.map((s, i) => (
-                      <TableRow key={i} >
-                        <TableCell>
-                          <div className="font-medium text-sm">{s.title}</div>
-                          <div className="text-xs text-muted-foreground">{s.artist}</div>
-                        </TableCell>
-                        <TableCell className="text-sm font-mono text-muted-foreground">{s.releaseDate}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{s.dsp}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={s.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="disputes" className="mt-4">
-            <Card className="card-surface no-lift border-border/60">
-              <CardHeader>
-                <CardTitle>Distribution Disputes</CardTitle>
-                <CardDescription>Споры с DSP по доставке, отказы и возвраты XML</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader className="bg-background/30">
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>ID</TableHead>
-                      <TableHead>Release / Track</TableHead>
-                      <TableHead>DSP</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Opened</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      { id: "DIS-401", release: "Шаби нав", artist: "Камол Хасанов", dsp: "Spotify", type: "Metadata mismatch", opened: "2026-04-09", status: "in_review" },
-                      { id: "DIS-402", release: "Ишки ман", artist: "Рустам Назаров", dsp: "TikTok", type: "Audio fingerprint conflict", opened: "2026-04-07", status: "open" },
-                      { id: "DIS-403", release: "Наврӯз 2024", artist: "Зарина Саидова", dsp: "Apple Music", type: "Cover art rejected (under 3000px)", opened: "2026-04-02", status: "resolved" },
-                    ].map((d) => (
-                      <TableRow key={d.id} className="hover:bg-accent/20">
-                        <TableCell className="font-mono text-xs text-muted-foreground">{d.id}</TableCell>
-                        <TableCell>
-                          <div className="text-sm font-medium">{d.release}</div>
-                          <div className="text-xs text-muted-foreground">{d.artist}</div>
+                    {approvedQ.isLoading && (
+                      <TableRow><TableCell colSpan={5}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                    )}
+                    {!approvedQ.isLoading && (approvedQ.data?.data ?? []).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground text-sm">
+                          Нет одобренных релизов в очереди.
                         </TableCell>
-                        <TableCell className="text-sm">{d.dsp}</TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs">{d.type}</Badge></TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{d.opened}</TableCell>
-                        <TableCell><StatusBadge status={d.status} /></TableCell>
+                      </TableRow>
+                    )}
+                    {(approvedQ.data?.data ?? []).map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium text-sm">{r.title}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.artistName}</TableCell>
+                        <TableCell className="text-sm font-mono text-muted-foreground">{r.releaseDate ?? "—"}</TableCell>
+                        <TableCell><StatusBadge status={r.status} /></TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="h-7 text-xs">View Thread</Button>
+                          <Link href={`/releases/${r.id}`}>
+                            <Button size="sm" className="h-7 text-xs">
+                              <Send className="mr-1 h-3.5 w-3.5" /> Deliver
+                            </Button>
+                          </Link>
                         </TableCell>
                       </TableRow>
                     ))}

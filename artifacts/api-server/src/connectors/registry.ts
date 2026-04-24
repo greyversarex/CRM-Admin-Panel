@@ -31,6 +31,10 @@ register(spotifyConnector);
   "deezer",
   "tidal",
   "amazon_music",
+  "apple_music",
+  "youtube_music",
+  "tiktok",
+  "vevo",
 ].forEach((code) => register(createDdexSftpConnector(code)));
 
 export function getConnector(code: string): IConnector | undefined {

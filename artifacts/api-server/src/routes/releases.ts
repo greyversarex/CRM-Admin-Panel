@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable } from "@workspace/db";
 import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
   DeleteReleaseParams, UpdateReleaseStatusParams, UpdateReleaseStatusBody, ImportReleaseByUpcBody,
   CreateTransferImportBody, SpotifySearchReleasesQueryParams,
+  DeliverReleaseParams, DeliverReleaseBody,
 } from "@workspace/api-zod";
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
@@ -416,6 +417,69 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
 
   const enriched = await enrichRelease(release);
   res.json(enriched);
+});
+
+// POST /releases/:id/deliver — поставить релиз в очередь на отгрузку в DSP.
+// Требования: admin/manager + релиз прошёл модерацию (approved/delivering/live).
+// Тело: { targets: ['spotify','vk_music',...], ddexVersion: '4.3' }
+// Ответ: { releaseId, jobs: [Delivery,...] } — по одному job'у на target.
+router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const params = DeliverReleaseParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const body = DeliverReleaseBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!release) { res.status(404).json({ error: "Release not found" }); return; }
+
+  const DELIVERABLE = new Set(["approved", "delivering", "live"]);
+  if (!DELIVERABLE.has(release.status)) {
+    res.status(409).json({
+      error: `Release must be approved before delivery. Current status: '${release.status}'.`,
+    });
+    return;
+  }
+
+  // De-dup: ['spotify','spotify','vk_music'] → ['spotify','vk_music']
+  const uniqueTargets = Array.from(new Set(body.data.targets));
+
+  const created: typeof deliveriesTable.$inferSelect[] = [];
+  for (const target of uniqueTargets) {
+    const [job] = await db.insert(deliveriesTable).values({
+      releaseId: release.id,
+      target,
+      status: "queued",
+      ddexVersion: body.data.ddexVersion ?? "4.3",
+      nextRetryAt: new Date(), // воркер заберёт на ближайшем тике
+    }).returning();
+    created.push(job);
+    void auditMutation(req, {
+      action: "create",
+      entityType: "delivery",
+      entityId: job.id,
+      before: null,
+      after: job,
+    });
+  }
+
+  // Перевод релиза в 'delivering' если был 'approved' (визуально показать прогресс)
+  if (release.status === "approved") {
+    await db.update(releasesTable).set({ status: "delivering" }).where(eq(releasesTable.id, release.id));
+  }
+
+  res.status(201).json({
+    releaseId: release.id,
+    jobs: created.map((j) => ({
+      ...j,
+      releaseName: release.title,
+      nextRetryAt: j.nextRetryAt?.toISOString() ?? null,
+      acknowledgedAt: j.acknowledgedAt?.toISOString() ?? null,
+      deliveredAt: j.deliveredAt?.toISOString() ?? null,
+      createdAt: j.createdAt.toISOString(),
+      updatedAt: j.updatedAt.toISOString(),
+      xmlPayload: undefined, // не светим в API
+    })),
+  });
 });
 
 router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {

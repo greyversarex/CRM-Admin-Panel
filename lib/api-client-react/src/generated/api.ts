@@ -29,7 +29,6 @@ import type {
   CreateArtistBody,
   CreateContactBody,
   CreateCrmTaskBody,
-  CreateDeliveryBody,
   CreateLabelBody,
   CreatePayoutBody,
   CreatePublishingWorkBody,
@@ -41,6 +40,8 @@ import type {
   CreateUserBody,
   CrmTask,
   DashboardSummary,
+  DeliverReleaseBody,
+  DeliverReleaseResponse,
   Delivery,
   GeographyAnalytics,
   GetGeographyAnalyticsParams,
@@ -6312,8 +6313,8 @@ export const getListDeliveriesUrl = (params?: ListDeliveriesParams) => {
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/api/delivery?${stringifiedParams}`
-    : `/api/delivery`;
+    ? `/api/deliveries?${stringifiedParams}`
+    : `/api/deliveries`;
 };
 
 export const listDeliveries = async (
@@ -6327,7 +6328,7 @@ export const listDeliveries = async (
 };
 
 export const getListDeliveriesQueryKey = (params?: ListDeliveriesParams) => {
-  return [`/api/delivery`, ...(params ? [params] : [])] as const;
+  return [`/api/deliveries`, ...(params ? [params] : [])] as const;
 };
 
 export const getListDeliveriesQueryOptions = <
@@ -6392,96 +6393,10 @@ export function useListDeliveries<
 }
 
 /**
- * @summary Create delivery request
- */
-export const getCreateDeliveryUrl = () => {
-  return `/api/delivery`;
-};
-
-export const createDelivery = async (
-  createDeliveryBody: CreateDeliveryBody,
-  options?: RequestInit,
-): Promise<Delivery> => {
-  return customFetch<Delivery>(getCreateDeliveryUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createDeliveryBody),
-  });
-};
-
-export const getCreateDeliveryMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createDelivery>>,
-    TError,
-    { data: BodyType<CreateDeliveryBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createDelivery>>,
-  TError,
-  { data: BodyType<CreateDeliveryBody> },
-  TContext
-> => {
-  const mutationKey = ["createDelivery"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createDelivery>>,
-    { data: BodyType<CreateDeliveryBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return createDelivery(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateDeliveryMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createDelivery>>
->;
-export type CreateDeliveryMutationBody = BodyType<CreateDeliveryBody>;
-export type CreateDeliveryMutationError = ErrorType<unknown>;
-
-/**
- * @summary Create delivery request
- */
-export const useCreateDelivery = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createDelivery>>,
-    TError,
-    { data: BodyType<CreateDeliveryBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createDelivery>>,
-  TError,
-  { data: BodyType<CreateDeliveryBody> },
-  TContext
-> => {
-  return useMutation(getCreateDeliveryMutationOptions(options));
-};
-
-/**
- * @summary Get delivery by ID
+ * @summary Get delivery job by ID
  */
 export const getGetDeliveryUrl = (id: number) => {
-  return `/api/delivery/${id}`;
+  return `/api/deliveries/${id}`;
 };
 
 export const getDelivery = async (
@@ -6495,7 +6410,7 @@ export const getDelivery = async (
 };
 
 export const getGetDeliveryQueryKey = (id: number) => {
-  return [`/api/delivery/${id}`] as const;
+  return [`/api/deliveries/${id}`] as const;
 };
 
 export const getGetDeliveryQueryOptions = <
@@ -6538,7 +6453,7 @@ export type GetDeliveryQueryResult = NonNullable<
 export type GetDeliveryQueryError = ErrorType<unknown>;
 
 /**
- * @summary Get delivery by ID
+ * @summary Get delivery job by ID
  */
 
 export function useGetDelivery<
@@ -6563,6 +6478,177 @@ export function useGetDelivery<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Manually retry a failed delivery job
+ */
+export const getRetryDeliveryUrl = (id: number) => {
+  return `/api/deliveries/${id}/retry`;
+};
+
+export const retryDelivery = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Delivery> => {
+  return customFetch<Delivery>(getRetryDeliveryUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRetryDeliveryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryDelivery>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryDelivery>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["retryDelivery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryDelivery>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return retryDelivery(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryDeliveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryDelivery>>
+>;
+
+export type RetryDeliveryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Manually retry a failed delivery job
+ */
+export const useRetryDelivery = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryDelivery>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryDelivery>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRetryDeliveryMutationOptions(options));
+};
+
+/**
+ * @summary Queue an approved release for delivery to one or more DSPs
+ */
+export const getDeliverReleaseUrl = (id: number) => {
+  return `/api/releases/${id}/deliver`;
+};
+
+export const deliverRelease = async (
+  id: number,
+  deliverReleaseBody: DeliverReleaseBody,
+  options?: RequestInit,
+): Promise<DeliverReleaseResponse> => {
+  return customFetch<DeliverReleaseResponse>(getDeliverReleaseUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(deliverReleaseBody),
+  });
+};
+
+export const getDeliverReleaseMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deliverRelease>>,
+    TError,
+    { id: number; data: BodyType<DeliverReleaseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deliverRelease>>,
+  TError,
+  { id: number; data: BodyType<DeliverReleaseBody> },
+  TContext
+> => {
+  const mutationKey = ["deliverRelease"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deliverRelease>>,
+    { id: number; data: BodyType<DeliverReleaseBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return deliverRelease(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeliverReleaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deliverRelease>>
+>;
+export type DeliverReleaseMutationBody = BodyType<DeliverReleaseBody>;
+export type DeliverReleaseMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Queue an approved release for delivery to one or more DSPs
+ */
+export const useDeliverRelease = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deliverRelease>>,
+    TError,
+    { id: number; data: BodyType<DeliverReleaseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deliverRelease>>,
+  TError,
+  { id: number; data: BodyType<DeliverReleaseBody> },
+  TContext
+> => {
+  return useMutation(getDeliverReleaseMutationOptions(options));
+};
 
 /**
  * @summary List assets the caller can see

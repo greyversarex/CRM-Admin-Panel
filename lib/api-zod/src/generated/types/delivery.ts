@@ -15,6 +15,9 @@ export interface Delivery {
   target: DeliveryTarget;
   status: DeliveryStatus;
   ddexVersion?: string | null;
+  attempts: number;
+  nextRetryAt?: string | null;
+  lastError?: string | null;
   packageUrl?: string | null;
   errorMessage?: string | null;
   acknowledgedAt?: string | null;

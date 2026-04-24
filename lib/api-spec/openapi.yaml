@@ -1567,7 +1567,7 @@ paths:
                   $ref: "#/components/schemas/GeographyAnalytics"
 
   # ==================== DELIVERY ====================
-  /delivery:
+  /deliveries:
     get:
       operationId: listDeliveries
       tags: [delivery]
@@ -1576,8 +1576,11 @@ paths:
         - name: status
           in: query
           schema:
-            type: string
-            enum: [pending, in_progress, delivered, failed, acknowledged]
+            $ref: "#/components/schemas/DeliveryStatus"
+        - name: target
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeliveryTarget"
         - name: release_id
           in: query
           schema:
@@ -1599,29 +1602,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedDeliveries"
-    post:
-      operationId: createDelivery
-      tags: [delivery]
-      summary: Create delivery request
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateDeliveryBody"
-      responses:
-        "201":
-          description: Delivery created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Delivery"
 
-  /delivery/{id}:
+  /deliveries/{id}:
     get:
       operationId: getDelivery
       tags: [delivery]
-      summary: Get delivery by ID
+      summary: Get delivery job by ID
       parameters:
         - name: id
           in: path
@@ -1635,6 +1621,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Delivery"
+
+  /deliveries/{id}/retry:
+    post:
+      operationId: retryDelivery
+      tags: [delivery]
+      summary: Manually retry a failed delivery job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+
+  /releases/{id}/deliver:
+    post:
+      operationId: deliverRelease
+      tags: [delivery]
+      summary: Queue an approved release for delivery to one or more DSPs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliverReleaseBody"
+      responses:
+        "201":
+          description: Delivery jobs queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliverReleaseResponse"
 
   # ==================== ASSETS ====================
   /assets:
@@ -3197,6 +3227,15 @@ components:
       required: [country, countryCode, streams, revenue, percentage]
 
     # ==================== DELIVERY ====================
+    DeliveryStatus:
+      type: string
+      enum: [queued, processing, sent, delivered, failed, cancelled]
+    DeliveryTarget:
+      type: string
+      # Соответствует кодам в connectors/registry.ts (плюс 4 ещё не реализованных)
+      enum: [spotify, apple_music, youtube_music, yandex_music, vk_music, tiktok,
+             deezer, amazon_music, vevo, zvuk, tidal, boomplay, ok_music, ddex_main]
+
     Delivery:
       type: object
       properties:
@@ -3207,12 +3246,18 @@ components:
         releaseName:
           type: string
         target:
-          type: string
-          enum: [spotify, apple, yandex, vk, tidal, vevo, boom, zvooq, amazon]
+          $ref: "#/components/schemas/DeliveryTarget"
         status:
-          type: string
-          enum: [pending, in_progress, delivered, failed, acknowledged]
+          $ref: "#/components/schemas/DeliveryStatus"
         ddexVersion:
+          type: string
+          nullable: true
+        attempts:
+          type: integer
+        nextRetryAt:
+          type: string
+          nullable: true
+        lastError:
           type: string
           nullable: true
         packageUrl:
@@ -3231,23 +3276,32 @@ components:
           type: string
         updatedAt:
           type: string
-      required: [id, releaseId, releaseName, target, status, createdAt, updatedAt]
+      required: [id, releaseId, releaseName, target, status, attempts, createdAt, updatedAt]
 
-    CreateDeliveryBody:
+    DeliverReleaseBody:
+      type: object
+      properties:
+        targets:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/DeliveryTarget"
+        ddexVersion:
+          type: string
+          enum: ["4.3"]
+          default: "4.3"
+      required: [targets]
+
+    DeliverReleaseResponse:
       type: object
       properties:
         releaseId:
           type: integer
-        targets:
+        jobs:
           type: array
           items:
-            type: string
-            enum: [spotify, apple, yandex, vk, tidal, vevo, boom, zvooq, amazon]
-        ddexVersion:
-          type: string
-          enum: ["3.8", "4.0", "4.1"]
-          default: "4.0"
-      required: [releaseId, targets]
+            $ref: "#/components/schemas/Delivery"
+      required: [releaseId, jobs]
 
     PaginatedDeliveries:
       type: object
