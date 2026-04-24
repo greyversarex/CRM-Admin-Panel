@@ -50,14 +50,18 @@ export default function Signup() {
           message:   message   || null,
         }),
       });
-      const j = await res.json().catch(() => ({} as any));
+      const j: unknown = await res.json().catch(() => ({}));
+      const obj = (j && typeof j === "object") ? (j as Record<string, unknown>) : {};
       if (!res.ok) {
-        setError(j.error || `Ошибка ${res.status}`);
+        const errMsg = typeof obj.error === "string" ? obj.error : `Ошибка ${res.status}`;
+        setError(errMsg);
         return;
       }
-      setSubmitted({ requestId: j.requestId });
-    } catch (err: any) {
-      setError(err?.message ?? "Ошибка сети");
+      const reqId = typeof obj.requestId === "number" ? obj.requestId : 0;
+      setSubmitted({ requestId: reqId });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Ошибка сети";
+      setError(msg);
     } finally {
       setLoading(false);
     }

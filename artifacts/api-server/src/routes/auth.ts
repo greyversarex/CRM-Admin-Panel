@@ -5,6 +5,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { SessionUser, AuthRole } from "../lib/auth";
 import { requireAuth } from "../lib/auth";
+import { maskBankInfoFor } from "../lib/kycUtils";
 
 const router = Router();
 
@@ -41,11 +42,23 @@ const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minutes
 function buildProfilePayload(u: typeof usersTable.$inferSelect) {
   // Explicit allow-list: failedLoginAttempts and lockedUntil are server-internal
   // and must NOT be part of any /auth response.
+  // Bank fields: единая masking-политика — artist/label получают masked
+  // версию (****1234) даже в /auth/me. Полные значения для редактирования
+  // вводятся через PATCH /users/me/bank-info; admin/manager видят raw.
+  const role = u.role as AuthRole;
+  const masked = maskBankInfoFor({
+    bankName: u.bankName,
+    bankAccountNumber: u.bankAccountNumber,
+    bankSwift: u.bankSwift,
+    bankIban: u.bankIban,
+    bankHolderName: u.bankHolderName,
+    bankCountry: u.bankCountry,
+  }, role === "admin" || role === "manager" ? role : (role === "label" ? "label" : "artist"));
   return {
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.role as AuthRole,
+    role,
     artistId: u.artistId,
     labelId: u.labelId,
     avatarUrl: u.avatarUrl,
@@ -59,17 +72,9 @@ function buildProfilePayload(u: typeof usersTable.$inferSelect) {
     dspProfiles: u.dspProfiles ?? {},
     socialLinks: u.socialLinks ?? {},
     // ─── KYC / Bank / Tax (Task #6) ───────────────────────────────────────
-    // Сам юзер должен видеть свой статус и реквизиты для редактирования.
-    // Account number/IBAN отдаются как есть (это его собственные данные —
-    // он сам их вводил), но в /users/{id} для других ролей маскируются.
     kycStatus: u.kycStatus,
     kycCompletedAt: u.kycCompletedAt?.toISOString() ?? null,
-    bankName: u.bankName,
-    bankAccountNumber: u.bankAccountNumber,
-    bankSwift: u.bankSwift,
-    bankIban: u.bankIban,
-    bankHolderName: u.bankHolderName,
-    bankCountry: u.bankCountry,
+    ...masked,
     taxId: u.taxId,
     taxCountry: u.taxCountry,
     taxFormType: u.taxFormType,
