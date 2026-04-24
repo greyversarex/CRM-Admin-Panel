@@ -25,13 +25,8 @@ import Payouts from "@/pages/payouts";
 import Publishing from "@/pages/publishing";
 import Analytics from "@/pages/analytics";
 import Distribution from "@/pages/distribution";
-import Rights from "@/pages/rights";
-import Communications from "@/pages/communications";
-import Marketing from "@/pages/marketing";
-import Automation from "@/pages/automation";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
-import Integrations from "@/pages/integrations";
 import ProfilePage from "@/pages/profile";
 import SupportPage from "@/pages/support";
 
@@ -90,17 +85,12 @@ function Router() {
       <ProtectedRoute path="/videos"         component={Videos} />
       <ProtectedRoute path="/users"          component={Users} />
       <ProtectedRoute path="/publishing"     component={Publishing} />
-      <ProtectedRoute path="/rights"         component={Rights} />
       <ProtectedRoute path="/crm"            component={CRM} />
-      <ProtectedRoute path="/communications" component={Communications} />
-      <ProtectedRoute path="/marketing"      component={Marketing} />
       <ProtectedRoute path="/royalties"      component={Royalties} />
       <ProtectedRoute path="/finance"        component={Finance} />
       <ProtectedRoute path="/splits"         component={Splits} />
       <ProtectedRoute path="/payouts"        component={Payouts} />
-      <ProtectedRoute path="/automation"     component={Automation} />
       <ProtectedRoute path="/settings"       component={Settings} />
-      <ProtectedRoute path="/integrations"   component={Integrations} />
       <ProtectedRoute path="/profile"        component={ProfilePage} />
       <ProtectedRoute path="/support"        component={SupportPage} />
 

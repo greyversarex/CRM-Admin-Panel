@@ -14,18 +14,13 @@ import {
   Building2,
   Clapperboard,
   BookMarked,
-  ShieldCheck,
   Users2,
-  MessageSquare,
-  Megaphone,
   Banknote,
   PieChart,
   Wallet,
   Coins,
   UserCog,
-  Zap,
   Settings2,
-  PlugZap,
   LogOut,
   Music2,
   CircleUser,
@@ -59,7 +54,7 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "distribution_group",
     items: [
-      { nameKey: "distribution", href: "/distribution", icon: Radio, badge: "3", badgeColor: "bg-amber-500", iconColor: "text-amber-400" },
+      { nameKey: "distribution", href: "/distribution", icon: Radio, iconColor: "text-amber-400" },
     ],
   },
   {
@@ -80,11 +75,8 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "operations",
     items: [
-      { nameKey: "publishing",     href: "/publishing",     icon: BookMarked,   iconColor: "text-cyan-400" },
-      { nameKey: "rights",         href: "/rights",         icon: ShieldCheck,  iconColor: "text-cyan-400" },
-      { nameKey: "crm",            href: "/crm",            icon: Users2,       iconColor: "text-cyan-400" },
-      { nameKey: "communications", href: "/communications", icon: MessageSquare,iconColor: "text-cyan-400" },
-      { nameKey: "marketing",      href: "/marketing",      icon: Megaphone,    iconColor: "text-cyan-400" },
+      { nameKey: "publishing", href: "/publishing", icon: BookMarked, iconColor: "text-cyan-400" },
+      { nameKey: "crm",        href: "/crm",        icon: Users2,     iconColor: "text-cyan-400" },
     ],
   },
   {
@@ -106,9 +98,7 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "system",
     items: [
-      { nameKey: "automation",   href: "/automation",   icon: Zap,      iconColor: "text-slate-400" },
-      { nameKey: "integrations", href: "/integrations", icon: PlugZap,  iconColor: "text-amber-400" },
-      { nameKey: "settings",     href: "/settings",     icon: Settings2,iconColor: "text-slate-400" },
+      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
     ],
   },
 ];

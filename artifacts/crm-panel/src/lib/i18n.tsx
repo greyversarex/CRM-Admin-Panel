@@ -19,10 +19,7 @@ const translations = {
       users: "Users",
       operations: "Operations",
       publishing: "Publishing",
-      rights: "Rights Management",
       crm: "CRM",
-      communications: "Communications",
-      marketing: "Marketing",
       financials: "Financials",
       royalties: "Royalties",
       finance: "Finance",
@@ -32,8 +29,6 @@ const translations = {
       profile: "Profile",
       support: "Support",
       system: "System",
-      automation: "Automation",
-      integrations: "API Integrations",
       settings: "Settings",
     },
     header: {
@@ -73,25 +68,9 @@ const translations = {
       title: "Distribution",
       subtitle: "Release moderation, DDEX delivery, DSP status and takedowns.",
     },
-    rights: {
-      title: "Rights Management",
-      subtitle: "DSP deals, Content ID, disputes and territorial rights.",
-    },
     crm: {
       title: "CRM",
       subtitle: "Contacts, tasks, notes, and communication history.",
-    },
-    communications: {
-      title: "Communications",
-      subtitle: "Email campaigns, push notifications, and messaging channels.",
-    },
-    marketing: {
-      title: "Marketing",
-      subtitle: "Pre-save campaigns, smart links, editorial pitches and promo assets.",
-    },
-    automation: {
-      title: "Automation",
-      subtitle: "Workflow rules, fraud detection, and content moderation automation.",
     },
     videos: {
       title: "Video Distribution",
@@ -137,10 +116,7 @@ const translations = {
       users: "Пользователи",
       operations: "Операции",
       publishing: "Паблишинг",
-      rights: "Управление правами",
       crm: "CRM",
-      communications: "Коммуникации",
-      marketing: "Маркетинг",
       financials: "Финансы",
       royalties: "Роялти",
       finance: "Финансы",
@@ -150,8 +126,6 @@ const translations = {
       profile: "Профиль",
       support: "Поддержка",
       system: "Система",
-      automation: "Автоматизация",
-      integrations: "Интеграции API",
       settings: "Настройки",
     },
     header: {
@@ -191,25 +165,9 @@ const translations = {
       title: "Дистрибуция",
       subtitle: "Модерация релизов, доставка DDEX, статус DSP и отзывы.",
     },
-    rights: {
-      title: "Управление правами",
-      subtitle: "Договоры с DSP, Content ID, споры и территориальные права.",
-    },
     crm: {
       title: "CRM",
       subtitle: "Контакты, задачи, заметки и история коммуникаций.",
-    },
-    communications: {
-      title: "Коммуникации",
-      subtitle: "Email-кампании, пуш-уведомления и каналы связи.",
-    },
-    marketing: {
-      title: "Маркетинг",
-      subtitle: "Пресейвы, умные ссылки, редакционные питчи и промо-материалы.",
-    },
-    automation: {
-      title: "Автоматизация",
-      subtitle: "Рабочие процессы, обнаружение фрода и модерация контента.",
     },
     videos: {
       title: "Видеодистрибуция",

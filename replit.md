@@ -45,6 +45,19 @@ Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trus
 - `express-rate-limit` на `POST /auth/login`: 10 попыток/5 мин (prod) или 100 (dev), `skipSuccessfulRequests:true` чтобы успешный логин не жрал лимит. IP читается через `trust proxy=1` за nginx.
 - На проде API должен слушать только за nginx (UFW в `1_setup.sh` блокирует все порты кроме SSH/Nginx) — иначе rate-limit обходится через прямые запросы с подменой `X-Forwarded-For`.
 
+## Mock cleanup (Polish task #1, апр-2026)
+
+Перед фазой DDEX/Self-Signup убрали из CRM-панели мок-разделы и мок-данные с дашборда:
+
+- **Удалённые страницы** (были чистые моки, не подвязаны к API): `pages/marketing/`, `pages/communications/`, `pages/automation/`, `pages/rights/`, `pages/integrations/`. Соответствующие импорты, `<ProtectedRoute>` и записи в `permissions.ts ROUTE_ROLES` тоже удалены. **Внимание**: настоящий API-функционал по интеграциям DSP остался — он живёт в `pages/settings/index.tsx` под `/api/integrations` (это таблица `integrations` из `lib/db/src/schema/integrations.ts`, 29 записей реестра). Удалена только дубликат-страница `/integrations` с моками.
+- **`components/sidebar-nav.tsx`** — убраны 5 пунктов навигации, fake badge "3" с `/distribution`, неиспользуемые иконки (`Megaphone`, `MessageSquare`, `ShieldCheck`, `Zap`, `PlugZap`).
+- **`lib/i18n.tsx`** — убраны nav-ключи и `subtitle`-блоки (`marketing`, `communications`, `automation`, `rights`, `integrations`) в EN и RU словарях.
+- **`pages/dashboard.tsx`** переписан: удалены константы `DATA_ADMIN`/`DATA_LABEL`/`DATA_ARTIST` и все мок-фолбэки `?? roleData.xxx`. KPI-карточек 4 (Revenue / Artists / Releases / Active Deliveries) — все тянутся из `useGetDashboardSummary`. Графики (`AreaChart` revenue, `BarChart` releases-by-status, top artists, recent activity) — на реальных хуках (`useGetDashboardRevenueByMonth`, `useGetDashboardReleasesByStatus`, `useGetDashboardTopArtists`, `useGetDashboardRecentActivity`). Если данных нет — показывается `<EmptyChart>` плейсхолдер. Убраны мок-секции Geo/UGC/Social и Label-only trends/labelTracks/playlists.
+- **`components/dashboard-sections.tsx`** очищен: удалены `GeoStreamsCard`, `WorldStreamsMap`, `UgcOverviewCard`, `SocialViewsCard` (все на моках из удалённого `data/dashboard-extras.ts`). Оставлены 6 секций для admin/manager — все на `useQuery` к реальным `/api/dashboard/*` эндпоинтам: `TopDspCard`, `TopTerritoriesCard`, `LatestReleasesGridCard`, `TopTracksCard`, `RoyaltySummaryCard`, `ArtistsStatsTableCard`.
+- **Удалён файл** `data/dashboard-extras.ts` (вся фабрика моков). Папка `data/` пуста — её можно удалить целиком при следующей чистке.
+- **Orphan dependency**: `react-simple-maps` теперь не используется (был только в `WorldStreamsMap`). Можно убрать из `artifacts/crm-panel/package.json` отдельным проходом.
+- **`/distribution` и `/videos`** оставлены как есть (полные моки) — они будут переписаны на реальный API в задачах DDEX ERN 4.3 и Videos соответственно.
+
 ## CRM page (контакты + задачи)
 
 `pages/crm/index.tsx` полностью на реальном API:
