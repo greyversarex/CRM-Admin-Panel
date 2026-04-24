@@ -41,9 +41,25 @@ Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trus
 
 ## Security baseline
 
-- `helmet()` подключён в `app.ts` — отдаёт X-Frame-Options=SAMEORIGIN, X-Content-Type-Options=nosniff, HSTS, Referrer-Policy и пр. CSP/COEP отключены (SPA тянет ассеты из многих источников; CSP сделаем отдельным заходом).
-- `express-rate-limit` на `POST /auth/login`: 10 попыток/5 мин (prod) или 100 (dev), `skipSuccessfulRequests:true` чтобы успешный логин не жрал лимит. IP читается через `trust proxy=1` за nginx.
-- На проде API должен слушать только за nginx (UFW в `1_setup.sh` блокирует все порты кроме SSH/Nginx) — иначе rate-limit обходится через прямые запросы с подменой `X-Forwarded-For`.
+Полный набор P0-защит для прод-релиза (Task #2 апр-2026):
+
+- **Helmet** — X-Frame-Options=SAMEORIGIN, X-Content-Type-Options=nosniff, HSTS, Referrer-Policy и пр.
+- **CSP** — включён в `helmet({ contentSecurityPolicy })` **только в `NODE_ENV=production`**. Директивы: `default-src 'self'`, `img-src 'self' data: blob: https:`, `style-src 'self' 'unsafe-inline'` (shadcn/Tailwind инжектят inline `<style>`), `script-src 'self'`, `frame-ancestors 'self'`, `object-src 'none'`. В dev отключён, чтобы не ломать Vite HMR-WebSocket и Replit-баннеры.
+- **CORS whitelist** — `WEB_ORIGINS` env (CSV доменов). В dev fallback на `https://${REPLIT_DEV_DOMAIN}` + `http://localhost:5173`. Запрос с чужого Origin отклоняется как `403 {error: "CORS: origin not allowed"}` (есть error-handler middleware в `app.ts`, который мапит throw из cors() в чистый JSON-ответ).
+- **Глобальный rate-limit на `/api`** — 300 req/60s в prod, 3000 в dev. Ключ — `req.ip` (через `trust proxy=1`). Проверки `/health` исключены из лимита.
+- **Login limiter** — 10 попыток/5 мин на IP (prod) / 100 (dev) на `POST /auth/login`, `skipSuccessfulRequests:true`.
+- **Change-password limiter** — 5 попыток/15 мин на IP (prod) / 100 (dev) на `POST /auth/change-password`.
+- **Per-account lockout** (защита от distributed brute-force, который IP-лимит не ловит): таблица `users` имеет `failed_login_attempts integer DEFAULT 0` + `locked_until timestamptz`. После 5 неудач подряд → блокировка на 15 мин (HTTP 429 + сообщение «Аккаунт временно заблокирован, попробуй через X мин»). Успешный логин ИЛИ смена пароля обнуляют счётчик. Lockout-чек выполняется ДО bcrypt-сравнения (не жжём CPU и не отдаём сессию атакующему, узнавшему пароль внутри окна). Поля `failed_login_attempts` / `locked_until` исключены из всех API-ответов (`buildProfilePayload` в `routes/auth.ts` whitelisted; `formatUser` в `routes/users.ts` явно destructures их прочь вместе с `passwordHash`).
+- **Integrations API защищён двойным guard'ом**: `routes/index.ts` ставит `requireRole("admin","manager")` на префикс `/integrations`, а `routes/integrations.ts` повторяет `router.use(requireRole("admin","manager"))` внутри файла (defence-in-depth — если префикс пропадёт при рефакторинге, доступ остаётся закрыт). Все мутирующие эндпоинты валидируют тело через Zod (`RegisterBody`, `CredentialsBody`, `EnableBody`, `TestBody`, `JobsQuery`), параметр `:code` ограничен `^[a-z0-9-]+$`.
+- **На проде API должен слушать только за nginx** (UFW в `deploy/1_setup.sh` блокирует все порты кроме SSH/Nginx) — иначе rate-limit обходится через прямые запросы с подменой `X-Forwarded-For`.
+
+Smoke-тесты (curl, проверены в dev):
+- Чужой Origin → 403 `{"error":"CORS: origin not allowed"}`.
+- Replit dev origin → 200/401, заголовок `Access-Control-Allow-Origin` присутствует.
+- Артист на `/api/integrations` → 403 `{"error":"Forbidden: insufficient role"}`.
+- Bad `:code` (`/integrations/BAD_CODE/enable`) → 400 с описанием Zod-ошибки.
+- Bad body (`{"enabled":"yes"}`) → 400 с описанием Zod-ошибки.
+- Manager: 4 неверных пароля → 401, 5-й → 429 (lockout), DB подтверждает `failed_login_attempts=5` и `locked_until > now()`. После сброса + правильного логина — 200 и счётчик 0.
 
 ## Mock cleanup (Polish task #1, апр-2026)
 

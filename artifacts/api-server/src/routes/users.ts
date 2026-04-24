@@ -40,8 +40,16 @@ const UpdateMyProfileBody = z.object({
 }).strict();
 
 function formatUser(u: typeof usersTable.$inferSelect) {
-  // Strip the password hash so it never leaks via /users responses.
-  const { passwordHash: _omit, ...rest } = u;
+  // Strip server-internal fields so they never leak via /users responses:
+  //  - passwordHash             — secret
+  //  - failedLoginAttempts      — internal lockout counter
+  //  - lockedUntil              — internal lockout window
+  const {
+    passwordHash: _hash,
+    failedLoginAttempts: _attempts,
+    lockedUntil: _locked,
+    ...rest
+  } = u;
   return {
     ...rest,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,

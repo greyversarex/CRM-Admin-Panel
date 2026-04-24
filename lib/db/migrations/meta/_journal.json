@@ -8,6 +8,13 @@
       "when": 1777012872125,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777014198102,
+      "tag": "0001_account_lockout",
+      "breakpoints": true
     }
   ]
 }

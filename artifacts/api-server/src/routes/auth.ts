@@ -10,6 +10,11 @@ const router = Router();
 
 // Brute-force guard: 10 login attempts per 5 min per IP. In dev (Replit
 // preview iframe) the limit is relaxed so the demo buttons remain usable.
+//
+// IP-rate-limit alone is not enough — a botnet can rotate addresses, and we
+// also want to defend a single account against a slow distributed brute-force.
+// Per-account lockout (failed_login_attempts + locked_until in `users`) handles
+// that case; this limiter just throttles obvious noise.
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: process.env.NODE_ENV === "production" ? 10 : 100,
@@ -29,7 +34,13 @@ const changePwdLimiter = rateLimit({
   message: { error: "Слишком много попыток смены пароля. Подожди немного." },
 });
 
+// Account-lockout policy.
+const LOCKOUT_THRESHOLD = 5;            // bad attempts before lockout
+const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minutes
+
 function buildProfilePayload(u: typeof usersTable.$inferSelect) {
+  // Explicit allow-list: failedLoginAttempts and lockedUntil are server-internal
+  // and must NOT be part of any /auth response.
   return {
     id: u.id,
     name: u.name,
@@ -61,12 +72,42 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (!user || !user.passwordHash) {
+    // Same response as bad password — do not leak whether email exists.
     res.status(401).json({ error: "Неверный email или пароль" });
+    return;
+  }
+
+  // Account lockout check: if locked_until is in the future, refuse the login
+  // BEFORE bcrypt-comparing, so we don't burn CPU on attackers and we don't
+  // accidentally grant a session to someone who learned the password during the lockout window.
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+    res.status(429).json({
+      error: `Аккаунт временно заблокирован после нескольких неверных попыток. Попробуй через ${minutesLeft} мин.`,
+    });
     return;
   }
 
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) {
+    // Bad password: increment counter and, if threshold reached, set lockout window.
+    const nextAttempts = (user.failedLoginAttempts ?? 0) + 1;
+    const willLock = nextAttempts >= LOCKOUT_THRESHOLD;
+    const newLockedUntil = willLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : user.lockedUntil;
+    await db
+      .update(usersTable)
+      .set({
+        failedLoginAttempts: nextAttempts,
+        lockedUntil: newLockedUntil,
+      })
+      .where(eq(usersTable.id, user.id));
+
+    if (willLock) {
+      res.status(429).json({
+        error: `Аккаунт временно заблокирован после нескольких неверных попыток. Попробуй через ${Math.ceil(LOCKOUT_DURATION_MS / 60_000)} мин.`,
+      });
+      return;
+    }
     res.status(401).json({ error: "Неверный email или пароль" });
     return;
   }
@@ -76,7 +117,15 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
+  // Success — reset the lockout counter and update last_login_at.
+  await db
+    .update(usersTable)
+    .set({
+      lastLoginAt: new Date(),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    })
+    .where(eq(usersTable.id, user.id));
 
   const sessionUser: SessionUser = {
     id: user.id,
@@ -174,7 +223,13 @@ router.post("/auth/change-password", requireAuth, changePwdLimiter, async (req, 
     return;
   }
   const newHash = await bcrypt.hash(newPassword, 10);
-  await db.update(usersTable).set({ passwordHash: newHash }).where(eq(usersTable.id, user.id));
+  // Reset the lockout counter alongside the password change — a successful
+  // password change implies the user (or admin via reset flow) has control,
+  // and we don't want a stale counter blocking the next login.
+  await db
+    .update(usersTable)
+    .set({ passwordHash: newHash, failedLoginAttempts: 0, lockedUntil: null })
+    .where(eq(usersTable.id, user.id));
   res.json({ ok: true });
 });
 
