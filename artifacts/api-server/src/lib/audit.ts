@@ -57,6 +57,11 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     // xmlPayload намеренно НЕ логируем — может быть очень большим (десятки KB)
     // и содержит PII в виде имён артистов/треков, которых уже достаточно в release/track аудите
   ]),
+  ingestion: new Set([
+    "id", "dsp", "period", "filename", "uploadedBy", "totalRows",
+    "insertedRows", "unmatchedRows", "totalRevenue", "currency",
+    "idempotencyKey", "createdAt",
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если

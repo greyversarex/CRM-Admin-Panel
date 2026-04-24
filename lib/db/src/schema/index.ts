@@ -16,3 +16,4 @@ export * from "./audit_log";
 export * from "./integrations";
 export * from "./sessions";
 export * from "./assets";
+export * from "./ingestion";

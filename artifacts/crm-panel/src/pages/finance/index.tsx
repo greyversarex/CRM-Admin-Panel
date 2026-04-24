@@ -1,16 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
-import { useListTransactions, useListBalances, getListTransactionsQueryKey, useCreateTransaction } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useListTransactions, useListBalances, getListTransactionsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet } from "lucide-react";
+
+interface ImportRow {
+  id: number;
+  dsp: string;
+  period: string;
+  filename: string;
+  insertedRows: number;
+  unmatchedRows: number;
+  totalRevenue: number;
+  currency: string;
+  createdAt: string;
+}
+
+const DSP_LABELS: Record<string, string> = {
+  spotify: "Spotify",
+  apple_music: "Apple Music",
+  youtube_music: "YouTube Music",
+  tiktok: "TikTok",
+};
 
 const TYPE_COLORS: Record<string, string> = {
   dsp_revenue: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -32,9 +50,28 @@ export default function Finance() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const queryClient = useQueryClient();
+  const [imports, setImports] = useState<ImportRow[]>([]);
+  const [importsLoading, setImportsLoading] = useState(true);
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
+
+  useEffect(() => {
+    if (!isAdminLike) { setImportsLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/finance/imports?limit=10", { credentials: "same-origin" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setImports(data);
+      } catch {
+        if (!cancelled) setImports([]);
+      } finally {
+        if (!cancelled) setImportsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdminLike]);
   const isArtist    = user?.role === "artist";
   const isLabel     = user?.role === "label";
 
@@ -149,58 +186,47 @@ export default function Finance() {
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">Загрузка отчётов от платформ → автоматический парсинг → раскладка по артистам/трекам</CardDescription>
               </div>
-              <Button>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload CSV / TSV
-              </Button>
+              <Link href="/finance/import">
+                <Button data-testid="button-open-import">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Загрузить CSV
+                </Button>
+              </Link>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="border-b border-dashed border-border/50 p-4 bg-background/30">
-              <div className="flex items-center justify-center gap-2 py-6 rounded-md border-2 border-dashed border-border bg-card/30 hover:border-primary/40 transition-colors cursor-pointer">
-                <Upload className="h-5 w-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Drag & drop CSV/TSV files here, or <span className="text-primary underline">browse</span>
-                </p>
-                <span className="text-xs text-muted-foreground/60 ml-3 font-mono">
-                  Supported: Spotify, Apple Music, Yandex, VK, TikTok, YouTube · max 50 MB
-                </span>
-              </div>
-            </div>
             <Table>
               <TableHeader className="bg-background/30">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>File</TableHead>
+                  <TableHead>Date</TableHead>
                   <TableHead>DSP</TableHead>
                   <TableHead>Period</TableHead>
-                  <TableHead>Rows</TableHead>
-                  <TableHead className="text-right">Gross Revenue</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>File</TableHead>
+                  <TableHead className="text-right">Inserted</TableHead>
+                  <TableHead className="text-right">Unmatched</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[
-                  { file: "spotify_2026_03.csv", dsp: "Spotify", period: "Mar 2026", rows: 14842, gross: "$8,420.18", status: "processed", uploaded: "2026-04-08" },
-                  { file: "apple_music_2026_03.tsv", dsp: "Apple Music", period: "Mar 2026", rows: 9214, gross: "$6,180.42", status: "processed", uploaded: "2026-04-08" },
-                  { file: "yandex_music_2026_03.csv", dsp: "Yandex Music", period: "Mar 2026", rows: 22418, gross: "$3,142.80", status: "processed", uploaded: "2026-04-09" },
-                  { file: "tiktok_2026_03.csv", dsp: "TikTok", period: "Mar 2026", rows: 1842, gross: "$420.10", status: "review", uploaded: "2026-04-10" },
-                  { file: "youtube_cms_2026_03.csv", dsp: "YouTube", period: "Mar 2026", rows: 6418, gross: "$2,840.60", status: "processing", uploaded: "2026-04-11" },
-                ].map((r, i) => (
-                  <TableRow key={i} className="hover:bg-accent/20">
-                    <TableCell className="font-mono text-xs">{r.file}</TableCell>
-                    <TableCell className="text-sm">{r.dsp}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.period}</TableCell>
-                    <TableCell className="text-sm tabular-nums">{r.rows.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-sm font-medium text-emerald-400 tabular-nums">{r.gross}</TableCell>
-                    <TableCell>
-                      {r.status === "processed" && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20"><CheckCircle2 className="h-2.5 w-2.5 mr-1" /> Processed</Badge>}
-                      {r.status === "processing" && <Badge variant="outline" className="text-[10px] text-blue-400 bg-blue-500/10 border-blue-500/20"><Clock className="h-2.5 w-2.5 mr-1" /> Processing</Badge>}
-                      {r.status === "review" && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20"><AlertTriangle className="h-2.5 w-2.5 mr-1" /> Needs Review</Badge>}
+                {importsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                  ))
+                ) : imports.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      Импортов ещё нет. Нажмите «Загрузить CSV» чтобы добавить первый отчёт DSP.
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs">View</Button>
-                    </TableCell>
+                  </TableRow>
+                ) : imports.map(r => (
+                  <TableRow key={r.id} className="hover:bg-accent/20" data-testid={`row-import-${r.id}`}>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm">{DSP_LABELS[r.dsp] ?? r.dsp}</TableCell>
+                    <TableCell className="text-xs font-mono">{r.period}</TableCell>
+                    <TableCell className="text-xs font-mono truncate max-w-[200px]">{r.filename}</TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-emerald-400">+{r.insertedRows.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-amber-400">{r.unmatchedRows.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-sm font-medium tabular-nums">{r.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {r.currency}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

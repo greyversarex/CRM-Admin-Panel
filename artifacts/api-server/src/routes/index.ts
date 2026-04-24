@@ -17,6 +17,7 @@ import deliveryRouter from "./delivery";
 import integrationsRouter from "./integrations";
 import assetsRouter from "./assets";
 import auditRouter from "./audit";
+import ingestionRouter from "./ingestion";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -46,6 +47,10 @@ router.use("/contacts", adminOnly);
 router.use("/crm", adminOnly);
 router.use(crmRouter);
 router.use(financeRouter);            // scoped per-route inside
+// CSV-импорт DSP-отчётов — admin/manager only (вся монетарная мутация).
+router.use("/finance/ingest", adminOnly);
+router.use("/finance/imports", adminOnly);
+router.use(ingestionRouter);
 router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id forced from session)
 router.use("/splits", adminOnly);
 router.use(splitsRouter);

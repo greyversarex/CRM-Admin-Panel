@@ -108,6 +108,17 @@ Smoke-тесты (curl, проверены в dev):
 - Все icon-only кнопки имеют `aria-label`; экшены раскрываются по `group-hover` **и** `group-focus-within` (доступны с клавиатуры). Anchor-кнопки сделаны через `<Button asChild>`, чтобы не было невалидного `<a><button>`.
 - Вкладку «Заметки» из старого мока убрал — таблицы для заметок нет, есть только поле `notes` на контакте.
 
+## Revenue Ingestion (Task #5, апр-2026)
+
+CSV-импорт DSP-отчётов от Spotify/Apple Music/YouTube Music/TikTok → парсинг → preview/commit → запись в `transactions` + `usage_reports`.
+
+- **DB:** `ingestion_imports` (журнал загрузок, UNIQUE на `idempotency_key` = sha256(file)+":"+dsp+":"+period — защита от двойного импорта) + `ingestion_unmatched` (строки CSV, ISRC которых не найден в `tracks` — ручной разбор админом). Оба `id serial` (сохраняем pattern всех 20 таблиц). FKs: `uploaded_by → users.id` SET NULL, `import_id → ingestion_imports.id` CASCADE. Migration `0004_eager_black_crow.sql`.
+- **Парсеры:** `artifacts/api-server/src/services/ingestion/{spotify,apple,youtube,tiktok}.ts` — каждый делает `csv-parse/sync` и возвращает унифицированный `ParsedRow[]`. Apple авто-детектит TSV по `\t` в первой строке. Хедеры ищутся по нескольким алиасам — DSP меняют названия колонок в зависимости от версии отчёта. `utils.ts` — общие helpers: `normIsrc` (cleanup + либеральная regex `^[A-Z]{2}[A-Z0-9]{8,18}$` — стандарт ISO 3901 — 12 chars, но реальные seed/DSP-данные часто 13), `normCountry` (ISO-2, агрегаты WORLD/WW/ZZ → null), `parseNumber` (терпит запятые, скобки=отрицательное, символы валюты), `normPeriod` (YYYY-MM из 5+ форматов), `dominantValue` (mode по массиву).
+- **Service** (`services/ingestion/service.ts`): `previewImport` — парсит, матчит ISRC → `tracks`, возвращает 10-row sample + counts + warnings БЕЗ записи в БД. `commitImport` — одной `db.transaction`: вставляет `ingestion_imports` (UNIQUE catches race), раскладывает matched-строки в `usage_reports` (artistId/releaseId/trackId/platform/period/streams/revenue/countryCode), unmatched в `ingestion_unmatched`, агрегирует доход per `(release, period)` в `transactions(type='dsp_revenue', platform=dsp, period)`. Вставка чанками по 500 строк. Idempotency check ДО парсинга — повторный POST того же файла вернёт `{importId, duplicate: true}` с HTTP 200, без побочных эффектов.
+- **Routes** (`routes/ingestion.ts`): `POST /api/finance/ingest/preview`, `POST /api/finance/ingest/commit` (multipart, multer.memoryStorage 50MB), `GET /api/finance/imports?limit=N`. Все три замаунчены под `adminOnly = requireRole("admin","manager")` в `routes/index.ts`. Артист/лейбл получают 403. Audit-log пишется ТОЛЬКО при non-duplicate commit, `idempotencyKey` редактится в `[redacted-hash]` чтобы не светить sha256.
+- **UI** (`pages/finance/import.tsx`): drag-drop dropzone + DSP-select + period (auto из preview) → preview-карточка с counts (total/valid/matched/unmatched/revenue), 10-row sample-таблицей и warnings → Commit. Список последних 20 импортов внизу. Обновлена `pages/finance/index.tsx` — убрана хардкод-таблица 5 моков, заменена на real `GET /finance/imports?limit=10` + кнопка-link «Загрузить CSV». Маршрут `/finance/import` в `App.tsx` + `/finance/import: ["admin","manager"]` в `permissions.ts`.
+- **Test fixtures** (`artifacts/api-server/test-fixtures/ingestion/`): `spotify.csv`, `apple_music.csv` (TSV), `youtube_music.csv`, `tiktok.csv` — каждый с реальными seeded ISRC + 1 unmatched (`TJSND9999...`) для проверки fallback-пути. Smoke-test (curl multipart) подтвердил: matched/unmatched counts корректны, idempotency duplicate=true работает, artist→403, audit-log пишется.
+
 ## Asset storage & uploads (Task #1)
 
 Хранилище — **Replit Object Storage** (через `@google-cloud/storage` + sidecar token). В проде заменим на Yandex Object Storage по тем же контрактам.
@@ -160,7 +171,7 @@ Self-service эндпоинты (НЕ требуют admin):
 - `pnpm --filter @workspace/db run seed` — seed the database with sample data
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
-## Database Schema (18 business tables + `session`)
+## Database Schema (20 business tables + `session`)
 
 All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint with an explicit `ON DELETE` strategy, and hot read paths are indexed. Schema is migrations-based (`lib/db/migrations/` + `lib/db/src/migrate.ts` runner) — `drizzle-kit push` is dev-only.
 
@@ -180,6 +191,8 @@ All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint 
 - `activity_log` — system activity (user_id SET NULL — logs survive user deletion); idx on (entity_type+entity_id)/user/created
 - `assets` — uploaded files in object storage (release/track/artist/label/uploaded_by all SET NULL); idx on release/track/artist/sha256
 - `integrations`, `integration_credentials`, `integration_sync_jobs` — DSP/delivery connectors registry with AES-256-GCM encrypted creds (CASCADE FK from creds/jobs to integrations)
+- `ingestion_imports` — журнал импортов CSV (uploaded_by → users SET NULL); UNIQUE на `idempotency_key`; idx (dsp,period)/created
+- `ingestion_unmatched` — строки CSV с ISRC, не найденным в tracks (import_id CASCADE); idx import/raw_isrc/resolved
 
 Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` → review/edit `lib/db/migrations/0NNN_<name>.sql` to make it idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`, FK constraints wrapped in `DO $$ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN ALTER TABLE ... ADD CONSTRAINT ... NOT VALID; ALTER TABLE ... VALIDATE CONSTRAINT ...; END IF; END $$;`) → commit → deploy runs `migrate` automatically. Idempotent SQL means the same migration is safe to run against pristine, previously-pushed, or already-migrated databases. `NOT VALID` + `VALIDATE` ensures FK creation never blocks on existing data — if `VALIDATE` fails because of orphan rows, the operator gets a clear error pointing to the offending constraint and can clean up before re-running. Test legacy/virgin scenarios with `lib/db/scripts/test-migrations.sh`.
 

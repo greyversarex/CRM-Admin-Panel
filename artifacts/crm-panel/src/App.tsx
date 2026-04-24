@@ -19,6 +19,7 @@ import Labels from "@/pages/labels";
 import Videos from "@/pages/videos";
 import CRM from "@/pages/crm";
 import Finance from "@/pages/finance";
+import FinanceImport from "@/pages/finance/import";
 import Royalties from "@/pages/royalties";
 import Splits from "@/pages/splits";
 import Payouts from "@/pages/payouts";
@@ -86,6 +87,7 @@ function Router() {
       <ProtectedRoute path="/publishing"     component={Publishing} />
       <ProtectedRoute path="/crm"            component={CRM} />
       <ProtectedRoute path="/royalties"      component={Royalties} />
+      <ProtectedRoute path="/finance/import" component={FinanceImport} />
       <ProtectedRoute path="/finance"        component={Finance} />
       <ProtectedRoute path="/splits"         component={Splits} />
       <ProtectedRoute path="/payouts"        component={Payouts} />
