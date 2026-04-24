@@ -1,9 +1,10 @@
-import { parse } from "csv-parse/sync";
 import type { ParsedRow, ParseResult } from "./types";
-import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue, MAX_PARSED_ROWS, TooManyRowsError } from "./utils";
+import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue } from "./utils";
+import { streamCsvRecords } from "./streaming";
 
 // iTunes/Apple Music Sales Report — TSV или CSV. У Apple исторически TSV
-// (\t-разделитель), но мы пытаемся auto-detect по первой строке.
+// (\t-разделитель), но csv-parse умеет auto-detect между несколькими
+// разделителями если передать массив.
 const COL_ISRC = ["ISRC", "Isrc"];
 const COL_TITLE = ["Title", "Item Title", "Song Title"];
 const COL_ARTIST = ["Artist / Show", "Artist", "Track Artist"];
@@ -20,20 +21,10 @@ function pick(row: Record<string, string>, candidates: string[]): string | undef
   return undefined;
 }
 
-export function parseApple(buffer: Buffer): ParseResult {
-  // Auto-detect разделителя по первой строке.
-  const firstLine = buffer.toString("utf8").split(/\r?\n/, 1)[0] ?? "";
-  const delimiter = firstLine.includes("\t") ? "\t" : ",";
-
-  const records = parse(buffer, {
-    columns: true,
-    delimiter,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-  }) as Record<string, string>[];
-  if (records.length > MAX_PARSED_ROWS) throw new TooManyRowsError(records.length);
+export async function parseApple(filePath: string): Promise<ParseResult> {
+  // Auto-detect разделителя из первой строки — csv-parse v5+ принимает
+  // delimiter как массив и сам выбирает доминирующий.
+  const records = await streamCsvRecords(filePath, [",", "\t"]);
 
   const rows: ParsedRow[] = [];
   let invalidRows = 0;

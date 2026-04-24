@@ -1,10 +1,10 @@
-import { parse } from "csv-parse/sync";
 import type { ParsedRow, ParseResult } from "./types";
-import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue, MAX_PARSED_ROWS, TooManyRowsError } from "./utils";
+import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue } from "./utils";
+import { streamCsvRecords } from "./streaming";
 
 // Spotify Distribution Statement (CSV).
-// Реальные хедеры могут отличаться (Spotify меняет их по версиям)
-// поэтому ищем по нескольким вариантам.
+// Реальные хедеры могут отличаться (Spotify меняет их по версиям) — ищем
+// по нескольким вариантам.
 const COL_ISRC = ["ISRC", "Isrc", "isrc"];
 const COL_TITLE = ["Track Title", "Track", "Title", "Song Title"];
 const COL_ARTIST = ["Artist Name", "Artist", "Track Artist"];
@@ -21,15 +21,8 @@ function pick(row: Record<string, string>, candidates: string[]): string | undef
   return undefined;
 }
 
-export function parseSpotify(buffer: Buffer): ParseResult {
-  const records = parse(buffer, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-  }) as Record<string, string>[];
-  if (records.length > MAX_PARSED_ROWS) throw new TooManyRowsError(records.length);
+export async function parseSpotify(filePath: string): Promise<ParseResult> {
+  const records = await streamCsvRecords(filePath);
 
   const rows: ParsedRow[] = [];
   let invalidRows = 0;

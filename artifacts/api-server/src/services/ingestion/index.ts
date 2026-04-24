@@ -10,12 +10,14 @@ export function isSupportedDsp(s: string): s is SupportedDsp {
   return (SUPPORTED_DSPS as readonly string[]).includes(s);
 }
 
-export function parseByDsp(dsp: SupportedDsp, buffer: Buffer): ParseResult {
+/** Парсит CSV/TSV-файл с диска для нужного DSP. Все парсеры — async streaming
+ * (см. ./streaming.ts). Не держим raw-буфер в RAM, только распарсенные records. */
+export async function parseByDsp(dsp: SupportedDsp, filePath: string): Promise<ParseResult> {
   switch (dsp) {
-    case "spotify":       return parseSpotify(buffer);
-    case "apple_music":   return parseApple(buffer);
-    case "youtube_music": return parseYouTube(buffer);
-    case "tiktok":        return parseTikTok(buffer);
+    case "spotify":       return parseSpotify(filePath);
+    case "apple_music":   return parseApple(filePath);
+    case "youtube_music": return parseYouTube(filePath);
+    case "tiktok":        return parseTikTok(filePath);
   }
 }
 

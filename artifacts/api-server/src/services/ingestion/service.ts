@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import {
   db,
   ingestionImportsTable,
@@ -11,6 +10,7 @@ import {
 import { eq, inArray, desc, and, sql } from "drizzle-orm";
 import { parseByDsp, isSupportedDsp, type SupportedDsp } from "./index";
 import type { ParsedRow } from "./types";
+import { hashFileStream } from "./streaming";
 
 export interface PreviewResult {
   totalRows: number;
@@ -47,18 +47,20 @@ export interface CommitResult {
   hadExistingTransactions: boolean;
 }
 
-export function computeIdempotencyKey(buffer: Buffer, dsp: string, period: string): string {
-  const h = createHash("sha256").update(buffer).digest("hex");
+/** SHA-256 файла с диска + dsp + period. Поток-хеш (не загружает целиком в RAM) —
+ * чтобы поддержать большие CSV. */
+export async function computeIdempotencyKey(filePath: string, dsp: string, period: string): Promise<string> {
+  const h = await hashFileStream(filePath);
   return `${h}:${dsp}:${period}`;
 }
 
-/** Парсит файл и возвращает превью без записи в БД. */
-export async function previewImport(buffer: Buffer, dspRaw: string): Promise<PreviewResult> {
+/** Парсит файл (streaming с диска) и возвращает превью без записи в БД. */
+export async function previewImport(filePath: string, dspRaw: string): Promise<PreviewResult> {
   if (!isSupportedDsp(dspRaw)) {
     throw new Error(`Unsupported DSP: ${dspRaw}`);
   }
   const dsp: SupportedDsp = dspRaw;
-  const parsed = parseByDsp(dsp, buffer);
+  const parsed = await parseByDsp(dsp, filePath);
 
   // Сматчим по ISRC чтобы показать в превью какие строки найдут трек.
   const isrcs = Array.from(new Set(parsed.rows.map((r) => r.isrc).filter((x): x is string => !!x)));
@@ -123,7 +125,7 @@ export async function previewImport(buffer: Buffer, dspRaw: string): Promise<Pre
 }
 
 export interface CommitInput {
-  buffer: Buffer;
+  filePath: string;     // путь к CSV/TSV на диске (multer.diskStorage)
   dsp: string;
   period: string;       // YYYY-MM
   filename: string;
@@ -132,6 +134,10 @@ export interface CommitInput {
    * commit бросит ExistingTransactionsError. Передайте force=true чтобы
    * сознательно сделать correction-import (UI должен показать чекбокс). */
   force?: boolean;
+  /** Опциональный client-provided idempotency key. Если передан — используется
+   * как-есть (длиной ≤200, валидируется в роуте). Если нет — вычисляется
+   * server-side как sha256(file)+":"+dsp+":"+period. */
+  idempotencyKey?: string;
 }
 
 /** Server-side guard: блокирует commit если за тот же dsp+period уже есть
@@ -152,7 +158,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     throw new Error(`Invalid period format ${input.period} — expected YYYY-MM`);
   }
 
-  const idempotencyKey = computeIdempotencyKey(input.buffer, dsp, input.period);
+  const idempotencyKey = input.idempotencyKey ?? await computeIdempotencyKey(input.filePath, dsp, input.period);
 
   // Helper: возвращает duplicate-ответ для уже существующего импорта.
   const asDuplicate = async (existing: typeof ingestionImportsTable.$inferSelect): Promise<CommitResult> => ({
@@ -173,7 +179,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   const [existing] = await db.select().from(ingestionImportsTable).where(eq(ingestionImportsTable.idempotencyKey, idempotencyKey));
   if (existing) return asDuplicate(existing);
 
-  const parsed = parseByDsp(dsp, input.buffer);
+  const parsed = await parseByDsp(dsp, input.filePath);
   const totalRevenue = parsed.rows.reduce((s, r) => s + r.revenue, 0);
   const currency = parsed.detectedCurrency ?? "USD";
 
@@ -401,12 +407,16 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
       })
       .where(eq(ingestionImportsTable.id, importId));
   });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Race с параллельным POST'ом того же файла: pg_unique_violation.
     // INSERT в ingestion_imports проиграл UNIQUE INDEX → весь tx откатился,
     // ничего не записано. Возвращаем duplicate-ответ.
     const PG_UNIQUE_VIOLATION = "23505";
-    if (err?.code === PG_UNIQUE_VIOLATION || err?.cause?.code === PG_UNIQUE_VIOLATION) {
+    const code = (err && typeof err === "object" && "code" in err) ? (err as { code?: unknown }).code : undefined;
+    const causeCode = (err && typeof err === "object" && "cause" in err && (err as { cause?: { code?: unknown } }).cause)
+      ? (err as { cause?: { code?: unknown } }).cause?.code
+      : undefined;
+    if (code === PG_UNIQUE_VIOLATION || causeCode === PG_UNIQUE_VIOLATION) {
       const [winner] = await db.select().from(ingestionImportsTable).where(eq(ingestionImportsTable.idempotencyKey, idempotencyKey));
       if (winner) return asDuplicate(winner);
     }

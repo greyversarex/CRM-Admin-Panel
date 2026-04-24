@@ -1,6 +1,6 @@
-import { parse } from "csv-parse/sync";
 import type { ParsedRow, ParseResult } from "./types";
-import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue, MAX_PARSED_ROWS, TooManyRowsError } from "./utils";
+import { normIsrc, normCountry, parseInteger, parseNumber, normPeriod, dominantValue } from "./utils";
+import { streamCsvRecords } from "./streaming";
 
 // YouTube Music Analytics Report — обычно CSV. ISRC в колонке "Asset ISRC"
 // или "ISRC".
@@ -20,15 +20,8 @@ function pick(row: Record<string, string>, candidates: string[]): string | undef
   return undefined;
 }
 
-export function parseYouTube(buffer: Buffer): ParseResult {
-  const records = parse(buffer, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-  }) as Record<string, string>[];
-  if (records.length > MAX_PARSED_ROWS) throw new TooManyRowsError(records.length);
+export async function parseYouTube(filePath: string): Promise<ParseResult> {
+  const records = await streamCsvRecords(filePath);
 
   const rows: ParsedRow[] = [];
   let invalidRows = 0;
