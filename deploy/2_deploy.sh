@@ -48,6 +48,20 @@ export PORT
 echo "▶ Создаём папки..."
 mkdir -p /var/log/tajikmusic
 
+# ── Проверяем память (билд фронта требует ~3 ГБ) ────────
+TOTAL_MEM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+TOTAL_SWAP_KB=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
+TOTAL_AVAIL_MB=$(( (TOTAL_MEM_KB + TOTAL_SWAP_KB) / 1024 ))
+if [ "$TOTAL_AVAIL_MB" -lt 3500 ]; then
+  echo ""
+  echo "⚠️  Доступно памяти (RAM + swap): ${TOTAL_AVAIL_MB} МБ. Билд фронта может упасть с Exit 137 (OOM Killed)."
+  echo "   Рекомендуем создать 4 ГБ swap-файл:"
+  echo "     sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile"
+  echo "     sudo mkswap /swapfile && sudo swapon /swapfile"
+  echo "     echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab"
+  echo ""
+fi
+
 echo "▶ Устанавливаем зависимости (frozen-lockfile)..."
 pnpm install --frozen-lockfile
 
@@ -60,12 +74,12 @@ if [ "${SEED:-0}" = "1" ]; then
 fi
 
 echo "▶ Собираем API-сервер..."
-pnpm --filter @workspace/api-server run build
+NODE_OPTIONS="--max-old-space-size=2048" pnpm --filter @workspace/api-server run build
 
 echo "▶ Собираем фронтенд..."
 export BASE_PATH="${BASE_PATH:-/}"
 export NODE_ENV=production
-pnpm --filter @workspace/crm-panel run build
+NODE_OPTIONS="--max-old-space-size=3072" pnpm --filter @workspace/crm-panel run build
 
 echo "▶ Запускаем / перезапускаем PM2 (с подхватом новых env)..."
 pm2 startOrReload "$APP_DIR/deploy/pm2.config.js" --env production --update-env

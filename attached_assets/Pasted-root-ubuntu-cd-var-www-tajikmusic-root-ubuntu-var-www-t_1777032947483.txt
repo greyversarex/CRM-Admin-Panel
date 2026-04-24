@@ -1,0 +1,498 @@
+root@ubuntu:~# cd /var/www/tajikmusic
+root@ubuntu:/var/www/tajikmusic# bash deploy/2_deploy.sh
+▶ Обновляем код из репозитория...
+remote: Enumerating objects: 1005, done.
+remote: Counting objects: 100% (634/634), done.
+remote: Compressing objects: 100% (197/197), done.
+remote: Total 1005 (delta 433), reused 601 (delta 420), pack-reused 371 (from 1)
+Receiving objects: 100% (1005/1005), 36.71 MiB | 24.30 MiB/s, done.
+Resolving deltas: 100% (600/600), completed with 58 local objects.
+From https://github.com/greyversarex/CRM-Admin-Panel
+ * branch            main       -> FETCH_HEAD
+   e731b29..e11821f  main       -> origin/main
+Updating e731b29..e11821f
+Fast-forward
+ .dockerignore                                      |   20 +
+ .gitignore                                         |    6 +
+ .replit                                            |    6 +-
+ Dockerfile                                         |   47 +
+ README.md                                          |   57 +
+ artifacts/api-server/package.json                  |   19 +-
+ artifacts/api-server/src/app.ts                    |  142 +-
+ artifacts/api-server/src/connectors/registry.ts    |    4 +
+ artifacts/api-server/src/index.ts                  |   24 +-
+ artifacts/api-server/src/lib/audit.ts              |  232 ++
+ artifacts/api-server/src/lib/auth.ts               |  107 +
+ artifacts/api-server/src/lib/kycUtils.ts           |   73 +
+ artifacts/api-server/src/lib/mail.ts               |   77 +
+ artifacts/api-server/src/lib/objectAcl.ts          |  137 +
+ artifacts/api-server/src/lib/objectStorage.ts      |  323 ++
+ artifacts/api-server/src/routes/analytics.ts       |  236 +-
+ artifacts/api-server/src/routes/artists.ts         |   64 +-
+ artifacts/api-server/src/routes/assets.ts          |  442 +++
+ artifacts/api-server/src/routes/audit.ts           |   99 +
+ artifacts/api-server/src/routes/auth.ts            |  264 ++
+ artifacts/api-server/src/routes/dashboard.ts       |  521 ++-
+ artifacts/api-server/src/routes/delivery.ts        |  115 +-
+ artifacts/api-server/src/routes/finance.ts         |  178 +-
+ artifacts/api-server/src/routes/index.ts           |   56 +-
+ artifacts/api-server/src/routes/ingestion.ts       |  178 +
+ artifacts/api-server/src/routes/integrations.ts    |  110 +-
+ artifacts/api-server/src/routes/kyc.ts             |  426 +++
+ artifacts/api-server/src/routes/labels.ts          |    7 +
+ artifacts/api-server/src/routes/publishing.ts      |   33 +
+ artifacts/api-server/src/routes/releases.ts        |  368 +-
+ artifacts/api-server/src/routes/royalties.ts       |  352 ++
+ artifacts/api-server/src/routes/signup.ts          |  315 ++
+ artifacts/api-server/src/routes/splits.ts          |   30 +-
+ artifacts/api-server/src/routes/tracks.ts          |   80 +-
+ artifacts/api-server/src/routes/users.ts           |  215 +-
+ .../api-server/src/services/ingestion/apple.ts     |   61 +
+ .../api-server/src/services/ingestion/index.ts     |   24 +
+ .../api-server/src/services/ingestion/service.ts   |  457 +++
+ .../api-server/src/services/ingestion/spotify.ts   |   55 +
+ .../api-server/src/services/ingestion/streaming.ts |   66 +
+ .../api-server/src/services/ingestion/tiktok.ts    |   54 +
+ .../api-server/src/services/ingestion/types.ts     |   38 +
+ .../api-server/src/services/ingestion/utils.ts     |  113 +
+ .../api-server/src/services/ingestion/youtube.ts   |   54 +
+ .../api-server/src/workers/delivery-worker.ts      |  221 ++
+ .../test-fixtures/ingestion/apple_music.csv        |    6 +
+ .../api-server/test-fixtures/ingestion/spotify.csv |    7 +
+ .../api-server/test-fixtures/ingestion/tiktok.csv  |    5 +
+ .../test-fixtures/ingestion/youtube_music.csv      |    6 +
+ artifacts/crm-panel/.replit-artifact/artifact.toml |    4 +-
+ artifacts/crm-panel/package.json                   |    6 +
+ artifacts/crm-panel/public/maps/world-110m.json    |    1 +
+ artifacts/crm-panel/public/opengraph.jpg           |  Bin 54414 -> 54239 bytes
+ artifacts/crm-panel/src/App.tsx                    |   43 +-
+ .../crm-panel/src/components/asset-uploader.tsx    |  236 ++
+ .../src/components/dashboard-sections.tsx          |  586 ++-
+ artifacts/crm-panel/src/components/layout.tsx      |  118 +-
+ .../crm-panel/src/components/moderation-dialog.tsx |  563 +++
+ artifacts/crm-panel/src/components/sidebar-nav.tsx |   35 +-
+ artifacts/crm-panel/src/data/dashboard-extras.ts   |  218 --
+ artifacts/crm-panel/src/lib/auth.tsx               |  195 +-
+ artifacts/crm-panel/src/lib/i18n.tsx               |   50 +-
+ artifacts/crm-panel/src/lib/permissions.ts         |   30 +-
+ artifacts/crm-panel/src/pages/admin/kyc.tsx        |  382 ++
+ artifacts/crm-panel/src/pages/admin/signups.tsx    |  358 ++
+ artifacts/crm-panel/src/pages/analytics/index.tsx  |  794 ++--
+ artifacts/crm-panel/src/pages/artists/index.tsx    |   38 +-
+ artifacts/crm-panel/src/pages/automation/index.tsx |  277 --
+ artifacts/crm-panel/src/pages/catalog.tsx          |  263 +-
+ .../crm-panel/src/pages/communications/index.tsx   |  259 --
+ artifacts/crm-panel/src/pages/crm/index.tsx        |  830 +++-
+ artifacts/crm-panel/src/pages/dashboard.tsx        |  416 +-
+ .../crm-panel/src/pages/distribution/index.tsx     |  518 ++-
+ artifacts/crm-panel/src/pages/finance/import.tsx   |  453 +++
+ artifacts/crm-panel/src/pages/finance/index.tsx    |  157 +-
+ .../crm-panel/src/pages/integrations/index.tsx     |  768 ----
+ artifacts/crm-panel/src/pages/labels/index.tsx     |   32 +-
+ artifacts/crm-panel/src/pages/login.tsx            |   26 +-
+ artifacts/crm-panel/src/pages/marketing/index.tsx  |  278 --
+ artifacts/crm-panel/src/pages/payouts/index.tsx    |   40 +-
+ artifacts/crm-panel/src/pages/profile/index.tsx    | 1231 ++++++
+ artifacts/crm-panel/src/pages/publishing/index.tsx |  733 +++-
+ artifacts/crm-panel/src/pages/releases/[id].tsx    |  624 +++
+ artifacts/crm-panel/src/pages/releases/index.tsx   |  520 ++-
+ artifacts/crm-panel/src/pages/releases/new.tsx     |  210 +
+ .../src/pages/releases/transfer/index.tsx          |  138 +
+ .../crm-panel/src/pages/releases/transfer/new.tsx  |  237 ++
+ artifacts/crm-panel/src/pages/rights/index.tsx     |  259 --
+ artifacts/crm-panel/src/pages/royalties/index.tsx  |  762 ++++
+ artifacts/crm-panel/src/pages/settings/index.tsx   |  998 ++++-
+ artifacts/crm-panel/src/pages/signup.tsx           |  240 ++
+ artifacts/crm-panel/src/pages/splits/index.tsx     |   52 +-
+ artifacts/crm-panel/src/pages/support/inbox.tsx    |  538 +++
+ artifacts/crm-panel/src/pages/support/index.tsx    |  340 ++
+ artifacts/crm-panel/src/pages/users/index.tsx      |  485 ++-
+ artifacts/crm-panel/src/pages/videos/index.tsx     |   34 +-
+ ...kind-passport-main-passport-a_1777009114472.txt |   29 +
+ ...asted--product--1776974163485_1776974163485.txt |  119 +
+ ...-3-What-Why-DDE-1777009077383_1777009077383.txt |   37 +
+ ...Deploy-What-Why--177700906940_1777009069408.txt |   38 +
+ ...ELEASE-Tajik-Music-Dashboards_1776960501943.txt |  141 +
+ ...on-KYC-What-Why--177700910638_1777009106388.txt |   35 +
+ ...Why-WAV-FLAC-MP3-JPG-PNG-1777_1777009063775.txt |   33 +
+ ...eo-What-Why-videos--177700908_1777009085626.txt |   33 +
+ attached_assets/image_1776887195048.png            |  Bin 0 -> 176304 bytes
+ attached_assets/image_1776955863894.png            |  Bin 0 -> 13957039 bytes
+ attached_assets/image_1776959361002.png            |  Bin 0 -> 179782 bytes
+ attached_assets/image_1776959575266.png            |  Bin 0 -> 7231 bytes
+ attached_assets/image_1776959713577.png            |  Bin 0 -> 175666 bytes
+ attached_assets/image_1776960036428.png            |  Bin 0 -> 11532 bytes
+ attached_assets/image_1776960567014.png            |  Bin 0 -> 8171396 bytes
+ attached_assets/image_1776960596608.png            |  Bin 0 -> 8171396 bytes
+ attached_assets/image_1776960624346.png            |  Bin 0 -> 912220 bytes
+ attached_assets/image_1776960642073.png            |  Bin 0 -> 3891808 bytes
+ attached_assets/image_1776960693498.png            |  Bin 0 -> 4075676 bytes
+ attached_assets/image_1776960707622.png            |  Bin 0 -> 1113392 bytes
+ attached_assets/image_1776960740874.png            |  Bin 0 -> 1113392 bytes
+ attached_assets/image_1776960760113.png            |  Bin 0 -> 8171396 bytes
+ attached_assets/image_1776960776810.png            |  Bin 0 -> 343262 bytes
+ attached_assets/image_1776960787743.png            |  Bin 0 -> 292522 bytes
+ attached_assets/image_1776960803312.png            |  Bin 0 -> 475579 bytes
+ attached_assets/image_1776960824436.png            |  Bin 0 -> 494506 bytes
+ attached_assets/image_1776960844259.png            |  Bin 0 -> 414876 bytes
+ attached_assets/image_1776960867107.png            |  Bin 0 -> 414876 bytes
+ attached_assets/image_1776960873646.png            |  Bin 0 -> 1969449 bytes
+ attached_assets/image_1776960898610.png            |  Bin 0 -> 1272404 bytes
+ attached_assets/image_1776967337196.png            |  Bin 0 -> 8905 bytes
+ attached_assets/image_1776967379837.png            |  Bin 0 -> 9362 bytes
+ attached_assets/image_1776969732797.png            |  Bin 0 -> 11778 bytes
+ attached_assets/image_1776970253458.png            |  Bin 0 -> 30821 bytes
+ attached_assets/image_1776970279122.png            |  Bin 0 -> 98735 bytes
+ attached_assets/image_1776970288028.png            |  Bin 0 -> 107451 bytes
+ attached_assets/image_1776970296881.png            |  Bin 0 -> 106861 bytes
+ attached_assets/image_1776970352677.png            |  Bin 0 -> 80204 bytes
+ attached_assets/image_1776970360938.png            |  Bin 0 -> 128072 bytes
+ attached_assets/image_1776973429496.png            |  Bin 0 -> 33141 bytes
+ attached_assets/image_1777031389668.png            |  Bin 0 -> 32830 bytes
+ attached_assets/image_1777031404719.png            |  Bin 0 -> 43692 bytes
+ attached_assets/image_1777031419129.png            |  Bin 0 -> 62279 bytes
+ attached_assets/image_1777031934449.png            |  Bin 0 -> 13857 bytes
+ attached_assets/image_1777031979376.png            |  Bin 0 -> 25809 bytes
+ ...75\320\260_2026-04-10_111514_1776887255163.png" |  Bin 0 -> 330132 bytes
+ ...75\320\260_2026-04-10_111542_1776887289507.png" |  Bin 0 -> 223769 bytes
+ ...75\320\260_2026-04-10_111646_1776887314771.png" |  Bin 0 -> 347107 bytes
+ ...7_CRM_Admin_Panel_Dashboard_1776891064760.xlsx" |  Bin 0 -> 55667 bytes
+ ...7_CRM_Admin_Panel_Dashboard_1777009190891.xlsx" |  Bin 0 -> 55667 bytes
+ deploy/.env.example                                |   24 +-
+ deploy/1_setup.sh                                  |    0
+ deploy/2_deploy.sh                                 |   71 +-
+ deploy/README.md                                   |  174 +-
+ deploy/nginx.docker.conf                           |   43 +
+ deploy/pm2.config.js                               |    4 +-
+ docker-compose.yml                                 |   59 +
+ lib/api-client-react/src/generated/api.schemas.ts  |  474 ++-
+ lib/api-client-react/src/generated/api.ts          | 3071 +++++++++++----
+ lib/api-spec/openapi.yaml                          |  759 +++-
+ lib/api-zod/src/generated/api.ts                   |  545 ++-
+ lib/api-zod/src/generated/types/asset.ts           |   26 +
+ lib/api-zod/src/generated/types/assetKind.ts       |   16 +
+ .../src/generated/types/assetWithDownload.ts       |   13 +
+ .../src/generated/types/confirmAssetBody.ts        |   28 +
+ .../src/generated/types/confirmAssetBodyKind.ts    |   17 +
+ .../src/generated/types/createDeliveryBody.ts      |   15 -
+ .../types/createDeliveryBodyDdexVersion.ts         |   16 -
+ .../types/createDeliveryBodyTargetsItem.ts         |   22 -
+ .../generated/types/createTransferImportBody.ts    |   15 +
+ .../src/generated/types/deliverReleaseBody.ts      |   15 +
+ .../types/deliverReleaseBodyDdexVersion.ts         |   14 +
+ .../src/generated/types/deliverReleaseResponse.ts  |   13 +
+ lib/api-zod/src/generated/types/delivery.ts        |    3 +
+ lib/api-zod/src/generated/types/deliveryStatus.ts  |    7 +-
+ lib/api-zod/src/generated/types/deliveryTarget.ts  |   19 +-
+ .../generated/types/getRoyaltySummaryEntityType.ts |   15 +
+ .../src/generated/types/getRoyaltySummaryParams.ts |   13 +
+ lib/api-zod/src/generated/types/index.ts           |   46 +-
+ lib/api-zod/src/generated/types/integration.ts     |   23 +
+ .../src/generated/types/integrationAuthType.ts     |   19 +
+ .../src/generated/types/integrationCategory.ts     |   22 +
+ .../src/generated/types/integrationStatus.ts       |   17 +
+ .../src/generated/types/integrationsList.ts        |   12 +
+ lib/api-zod/src/generated/types/listAssetsKind.ts  |   17 +
+ .../src/generated/types/listAssetsParams.ts        |   14 +
+ .../src/generated/types/listDeliveriesParams.ts    |   14 +-
+ .../src/generated/types/listDeliveriesStatus.ts    |   18 -
+ .../generated/types/listIntegrationsCategory.ts    |   22 +
+ .../src/generated/types/listIntegrationsParams.ts  |   12 +
+ .../generated/types/listRoyaltyByDspEntityType.ts  |   15 +
+ .../src/generated/types/listRoyaltyByDspParams.ts  |   14 +
+ .../types/listRoyaltyByReleaseEntityType.ts        |   15 +
+ .../generated/types/listRoyaltyByReleaseParams.ts  |   14 +
+ .../types/listRoyaltyStatementsEntityType.ts       |   15 +
+ .../generated/types/listRoyaltyStatementsParams.ts |   14 +
+ .../src/generated/types/presignAssetBody.ts        |   26 +
+ .../src/generated/types/presignAssetBodyKind.ts    |   17 +
+ .../src/generated/types/presignAssetResponse.ts    |   14 +
+ lib/api-zod/src/generated/types/releaseCounts.ts   |   19 +
+ lib/api-zod/src/generated/types/royaltyByDsp.ts    |   17 +
+ .../src/generated/types/royaltyByRelease.ts        |   20 +
+ .../src/generated/types/royaltyStatement.ts        |   23 +
+ .../src/generated/types/royaltyStatementStatus.ts  |   16 +
+ lib/api-zod/src/generated/types/royaltySummary.ts  |   23 +
+ .../src/generated/types/royaltySummaryPoint.ts     |   13 +
+ .../src/generated/types/spotifyReleaseResult.ts    |   17 +
+ .../generated/types/spotifySearchReleasesParams.ts |   11 +
+ .../src/generated/types/spotifySearchResult.ts     |   15 +
+ lib/api-zod/src/generated/types/transferImport.ts  |   20 +
+ .../src/generated/types/transferImportItem.ts      |   17 +
+ .../src/generated/types/transferImportStatus.ts    |   16 +
+ lib/db/drizzle.config.ts                           |    8 +-
+ lib/db/migrations/0000_init.sql                    |  571 +++
+ lib/db/migrations/0001_account_lockout.sql         |    2 +
+ lib/db/migrations/0002_audit_log.sql               |   32 +
+ lib/db/migrations/0003_mute_steve_rogers.sql       |   11 +
+ lib/db/migrations/0004_eager_black_crow.sql        |   39 +
+ lib/db/migrations/0005_oval_multiple_man.sql       |    6 +
+ lib/db/migrations/0006_gorgeous_post.sql           |   56 +
+ lib/db/migrations/meta/0000_snapshot.json          | 2968 ++++++++++++++
+ lib/db/migrations/meta/0001_snapshot.json          | 2981 ++++++++++++++
+ lib/db/migrations/meta/0002_snapshot.json          | 3172 +++++++++++++++
+ lib/db/migrations/meta/0003_snapshot.json          | 3218 ++++++++++++++++
+ lib/db/migrations/meta/0004_snapshot.json          | 3531 +++++++++++++++++
+ lib/db/migrations/meta/0005_snapshot.json          | 3620 +++++++++++++++++
+ lib/db/migrations/meta/0006_snapshot.json          | 4047 ++++++++++++++++++++
+ lib/db/migrations/meta/_journal.json               |   55 +
+ lib/db/package.json                                |    6 +
+ lib/db/scripts/test-migrations.sh                  |  105 +
+ lib/db/src/migrate.ts                              |   62 +
+ lib/db/src/schema/activity_log.ts                  |   12 +-
+ lib/db/src/schema/analytics.ts                     |   31 +-
+ lib/db/src/schema/artists.ts                       |   11 +-
+ lib/db/src/schema/assets.ts                        |   39 +
+ lib/db/src/schema/audit_log.ts                     |   46 +
+ lib/db/src/schema/contacts.ts                      |    7 +-
+ lib/db/src/schema/crm_tasks.ts                     |   13 +-
+ lib/db/src/schema/deliveries.ts                    |   34 +-
+ lib/db/src/schema/index.ts                         |    6 +
+ lib/db/src/schema/ingestion.ts                     |   57 +
+ lib/db/src/schema/kyc_documents.ts                 |   36 +
+ lib/db/src/schema/labels.ts                        |    9 +-
+ lib/db/src/schema/payouts.ts                       |   15 +-
+ lib/db/src/schema/publishing_works.ts              |   12 +-
+ lib/db/src/schema/releases.ts                      |   17 +-
+ lib/db/src/schema/sessions.ts                      |   14 +
+ lib/db/src/schema/signup_requests.ts               |   41 +
+ lib/db/src/schema/splits.ts                        |   14 +-
+ lib/db/src/schema/tracks.ts                        |   16 +-
+ lib/db/src/schema/transactions.ts                  |   29 +-
+ lib/db/src/schema/users.ts                         |   81 +-
+ lib/db/src/seed.ts                                 |   11 +-
+ pnpm-lock.yaml                                     | 1152 ++++++
+ replit.md                                          |  201 +-
+ scripts/post-merge.sh                              |    6 +-
+ 252 files changed, 49681 insertions(+), 5187 deletions(-)
+ create mode 100644 .dockerignore
+ create mode 100644 Dockerfile
+ create mode 100644 README.md
+ create mode 100644 artifacts/api-server/src/lib/audit.ts
+ create mode 100644 artifacts/api-server/src/lib/auth.ts
+ create mode 100644 artifacts/api-server/src/lib/kycUtils.ts
+ create mode 100644 artifacts/api-server/src/lib/mail.ts
+ create mode 100644 artifacts/api-server/src/lib/objectAcl.ts
+ create mode 100644 artifacts/api-server/src/lib/objectStorage.ts
+ create mode 100644 artifacts/api-server/src/routes/assets.ts
+ create mode 100644 artifacts/api-server/src/routes/audit.ts
+ create mode 100644 artifacts/api-server/src/routes/auth.ts
+ create mode 100644 artifacts/api-server/src/routes/ingestion.ts
+ create mode 100644 artifacts/api-server/src/routes/kyc.ts
+ create mode 100644 artifacts/api-server/src/routes/royalties.ts
+ create mode 100644 artifacts/api-server/src/routes/signup.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/apple.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/index.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/service.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/spotify.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/streaming.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/tiktok.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/types.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/utils.ts
+ create mode 100644 artifacts/api-server/src/services/ingestion/youtube.ts
+ create mode 100644 artifacts/api-server/src/workers/delivery-worker.ts
+ create mode 100644 artifacts/api-server/test-fixtures/ingestion/apple_music.csv
+ create mode 100644 artifacts/api-server/test-fixtures/ingestion/spotify.csv
+ create mode 100644 artifacts/api-server/test-fixtures/ingestion/tiktok.csv
+ create mode 100644 artifacts/api-server/test-fixtures/ingestion/youtube_music.csv
+ create mode 100644 artifacts/crm-panel/public/maps/world-110m.json
+ create mode 100644 artifacts/crm-panel/src/components/asset-uploader.tsx
+ create mode 100644 artifacts/crm-panel/src/components/moderation-dialog.tsx
+ delete mode 100644 artifacts/crm-panel/src/data/dashboard-extras.ts
+ create mode 100644 artifacts/crm-panel/src/pages/admin/kyc.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/admin/signups.tsx
+ delete mode 100644 artifacts/crm-panel/src/pages/automation/index.tsx
+ delete mode 100644 artifacts/crm-panel/src/pages/communications/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/finance/import.tsx
+ delete mode 100644 artifacts/crm-panel/src/pages/integrations/index.tsx
+ delete mode 100644 artifacts/crm-panel/src/pages/marketing/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/profile/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/releases/[id].tsx
+ create mode 100644 artifacts/crm-panel/src/pages/releases/new.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/releases/transfer/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/releases/transfer/new.tsx
+ delete mode 100644 artifacts/crm-panel/src/pages/rights/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/royalties/index.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/signup.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/support/inbox.tsx
+ create mode 100644 artifacts/crm-panel/src/pages/support/index.tsx
+ create mode 100644 attached_assets/Pasted--kyc-documents-id-user-id-kind-passport-main-passport-a_1777009114472.txt
+ create mode 100644 attached_assets/Pasted--product--1776974163485_1776974163485.txt
+ create mode 100644 attached_assets/Pasted-DDEX-Delivery-ERN-4-3-What-Why-DDE-1777009077383_1777009077383.txt
+ create mode 100644 attached_assets/Pasted-Polish-Cleanup-Production-Deploy-What-Why--177700906940_1777009069408.txt
+ create mode 100644 attached_assets/Pasted-Releases-Profiles-CREATE-RELEASE-Tajik-Music-Dashboards_1776960501943.txt
+ create mode 100644 attached_assets/Pasted-Self-Signup-Plans-Commission-KYC-What-Why--177700910638_1777009106388.txt
+ create mode 100644 attached_assets/Pasted-Storage-File-Uploads-What-Why-WAV-FLAC-MP3-JPG-PNG-1777_1777009063775.txt
+ create mode 100644 attached_assets/Pasted-Videos-Section-YouTube-Vimeo-What-Why-videos--177700908_1777009085626.txt
+ create mode 100644 attached_assets/image_1776887195048.png
+ create mode 100644 attached_assets/image_1776955863894.png
+ create mode 100644 attached_assets/image_1776959361002.png
+ create mode 100644 attached_assets/image_1776959575266.png
+ create mode 100644 attached_assets/image_1776959713577.png
+ create mode 100644 attached_assets/image_1776960036428.png
+ create mode 100644 attached_assets/image_1776960567014.png
+ create mode 100644 attached_assets/image_1776960596608.png
+ create mode 100644 attached_assets/image_1776960624346.png
+ create mode 100644 attached_assets/image_1776960642073.png
+ create mode 100644 attached_assets/image_1776960693498.png
+ create mode 100644 attached_assets/image_1776960707622.png
+ create mode 100644 attached_assets/image_1776960740874.png
+ create mode 100644 attached_assets/image_1776960760113.png
+ create mode 100644 attached_assets/image_1776960776810.png
+ create mode 100644 attached_assets/image_1776960787743.png
+ create mode 100644 attached_assets/image_1776960803312.png
+ create mode 100644 attached_assets/image_1776960824436.png
+ create mode 100644 attached_assets/image_1776960844259.png
+ create mode 100644 attached_assets/image_1776960867107.png
+ create mode 100644 attached_assets/image_1776960873646.png
+ create mode 100644 attached_assets/image_1776960898610.png
+ create mode 100644 attached_assets/image_1776967337196.png
+ create mode 100644 attached_assets/image_1776967379837.png
+ create mode 100644 attached_assets/image_1776969732797.png
+ create mode 100644 attached_assets/image_1776970253458.png
+ create mode 100644 attached_assets/image_1776970279122.png
+ create mode 100644 attached_assets/image_1776970288028.png
+ create mode 100644 attached_assets/image_1776970296881.png
+ create mode 100644 attached_assets/image_1776970352677.png
+ create mode 100644 attached_assets/image_1776970360938.png
+ create mode 100644 attached_assets/image_1776973429496.png
+ create mode 100644 attached_assets/image_1777031389668.png
+ create mode 100644 attached_assets/image_1777031404719.png
+ create mode 100644 attached_assets/image_1777031419129.png
+ create mode 100644 attached_assets/image_1777031934449.png
+ create mode 100644 attached_assets/image_1777031979376.png
+ create mode 100644 "attached_assets/\320\241\320\275\320\270\320\274\320\276\320\272_\321\215\320\272\321\200\320\260\320\275\320\260_2026-04-10_111514_1776887255163.png"
+ create mode 100644 "attached_assets/\320\241\320\275\320\270\320\274\320\276\320\272_\321\215\320\272\321\200\320\260\320\275\320\260_2026-04-10_111542_1776887289507.png"
+ create mode 100644 "attached_assets/\320\241\320\275\320\270\320\274\320\276\320\272_\321\215\320\272\321\200\320\260\320\275\320\260_2026-04-10_111646_1776887314771.png"
+ create mode 100644 "attached_assets/\320\242\320\227_CRM_Admin_Panel_Dashboard_1776891064760.xlsx"
+ create mode 100644 "attached_assets/\320\242\320\227_CRM_Admin_Panel_Dashboard_1777009190891.xlsx"
+ mode change 100644 => 100755 deploy/1_setup.sh
+ mode change 100644 => 100755 deploy/2_deploy.sh
+ create mode 100644 deploy/nginx.docker.conf
+ create mode 100644 docker-compose.yml
+ create mode 100644 lib/api-zod/src/generated/types/asset.ts
+ create mode 100644 lib/api-zod/src/generated/types/assetKind.ts
+ create mode 100644 lib/api-zod/src/generated/types/assetWithDownload.ts
+ create mode 100644 lib/api-zod/src/generated/types/confirmAssetBody.ts
+ create mode 100644 lib/api-zod/src/generated/types/confirmAssetBodyKind.ts
+ delete mode 100644 lib/api-zod/src/generated/types/createDeliveryBody.ts
+ delete mode 100644 lib/api-zod/src/generated/types/createDeliveryBodyDdexVersion.ts
+ delete mode 100644 lib/api-zod/src/generated/types/createDeliveryBodyTargetsItem.ts
+ create mode 100644 lib/api-zod/src/generated/types/createTransferImportBody.ts
+ create mode 100644 lib/api-zod/src/generated/types/deliverReleaseBody.ts
+ create mode 100644 lib/api-zod/src/generated/types/deliverReleaseBodyDdexVersion.ts
+ create mode 100644 lib/api-zod/src/generated/types/deliverReleaseResponse.ts
+ create mode 100644 lib/api-zod/src/generated/types/getRoyaltySummaryEntityType.ts
+ create mode 100644 lib/api-zod/src/generated/types/getRoyaltySummaryParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/integration.ts
+ create mode 100644 lib/api-zod/src/generated/types/integrationAuthType.ts
+ create mode 100644 lib/api-zod/src/generated/types/integrationCategory.ts
+ create mode 100644 lib/api-zod/src/generated/types/integrationStatus.ts
+ create mode 100644 lib/api-zod/src/generated/types/integrationsList.ts
+ create mode 100644 lib/api-zod/src/generated/types/listAssetsKind.ts
+ create mode 100644 lib/api-zod/src/generated/types/listAssetsParams.ts
+ delete mode 100644 lib/api-zod/src/generated/types/listDeliveriesStatus.ts
+ create mode 100644 lib/api-zod/src/generated/types/listIntegrationsCategory.ts
+ create mode 100644 lib/api-zod/src/generated/types/listIntegrationsParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyByDspEntityType.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyByDspParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyByReleaseEntityType.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyByReleaseParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyStatementsEntityType.ts
+ create mode 100644 lib/api-zod/src/generated/types/listRoyaltyStatementsParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/presignAssetBody.ts
+ create mode 100644 lib/api-zod/src/generated/types/presignAssetBodyKind.ts
+ create mode 100644 lib/api-zod/src/generated/types/presignAssetResponse.ts
+ create mode 100644 lib/api-zod/src/generated/types/releaseCounts.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltyByDsp.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltyByRelease.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltyStatement.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltyStatementStatus.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltySummary.ts
+ create mode 100644 lib/api-zod/src/generated/types/royaltySummaryPoint.ts
+ create mode 100644 lib/api-zod/src/generated/types/spotifyReleaseResult.ts
+ create mode 100644 lib/api-zod/src/generated/types/spotifySearchReleasesParams.ts
+ create mode 100644 lib/api-zod/src/generated/types/spotifySearchResult.ts
+ create mode 100644 lib/api-zod/src/generated/types/transferImport.ts
+ create mode 100644 lib/api-zod/src/generated/types/transferImportItem.ts
+ create mode 100644 lib/api-zod/src/generated/types/transferImportStatus.ts
+ create mode 100644 lib/db/migrations/0000_init.sql
+ create mode 100644 lib/db/migrations/0001_account_lockout.sql
+ create mode 100644 lib/db/migrations/0002_audit_log.sql
+ create mode 100644 lib/db/migrations/0003_mute_steve_rogers.sql
+ create mode 100644 lib/db/migrations/0004_eager_black_crow.sql
+ create mode 100644 lib/db/migrations/0005_oval_multiple_man.sql
+ create mode 100644 lib/db/migrations/0006_gorgeous_post.sql
+ create mode 100644 lib/db/migrations/meta/0000_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0001_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0002_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0003_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0004_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0005_snapshot.json
+ create mode 100644 lib/db/migrations/meta/0006_snapshot.json
+ create mode 100644 lib/db/migrations/meta/_journal.json
+ create mode 100755 lib/db/scripts/test-migrations.sh
+ create mode 100644 lib/db/src/migrate.ts
+ create mode 100644 lib/db/src/schema/assets.ts
+ create mode 100644 lib/db/src/schema/audit_log.ts
+ create mode 100644 lib/db/src/schema/ingestion.ts
+ create mode 100644 lib/db/src/schema/kyc_documents.ts
+ create mode 100644 lib/db/src/schema/sessions.ts
+ create mode 100644 lib/db/src/schema/signup_requests.ts
+▶ Создаём папки...
+▶ Устанавливаем зависимости...
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Packages: +136
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+   ╭──────────────────────────────────────────╮
+   │                                          │
+   │   Update available! 10.33.0 → 10.33.2.   │
+   │   Changelog: https://pnpm.io/v/10.33.2   │
+   │     To update, run: pnpm add -g pnpm     │
+   │                                          │
+   ╰──────────────────────────────────────────╯
+
+Progress: resolved 136, reused 0, downloaded 136, added 136, done
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_use…
+└─ Done in 40ms
+Done in 11.5s using pnpm v10.33.0
+▶ Собираем API-сервер...
+
+> @workspace/api-server@0.0.0 build /var/www/tajikmusic/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       3.6mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                   6.4mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 2471ms
+▶ Собираем фронтенд...
+
+> @workspace/crm-panel@0.0.0 build /var/www/tajikmusic/artifacts/crm-panel
+> vite build --config vite.config.ts
+
+vite v7.3.1 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/toggle-group.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/sheet.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 2509 modules transformed.
+Killed
+/var/www/tajikmusic/artifacts/crm-panel:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/crm-panel@0.0.0 build: `vite build --config vite.config.ts`
+Exit status 137
+root@ubuntu:/var/www/tajikmusic#

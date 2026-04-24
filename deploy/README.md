@@ -7,6 +7,24 @@
 | A. Ubuntu + pm2     | Таймвеб, любой VPS/выделенный сервер с Ubuntu 22+/Debian 12  |
 | B. Docker Compose   | AWS EC2, Hetzner, любой хостинг с Docker; локальный прод-тест |
 
+## Минимальные требования к серверу
+
+- **CPU:** 2 vCPU (рекомендуется)
+- **RAM:** 2 ГБ + **обязательно 4 ГБ swap** (без swap билд фронта падает с `Exit 137 / OOM Killed`)
+- **Диск:** 20 ГБ
+- **OS:** Ubuntu 22.04 / 24.04 или Debian 12
+
+### Создать 4 ГБ swap-файл (один раз на новом сервере)
+
+```bash
+fallocate -l 4G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h   # проверить, что swap активен
+```
+
 ---
 
 ## Вариант A — Ubuntu + pm2 + nginx
@@ -45,9 +63,9 @@ SEED=1 bash /tmp/setup/deploy/2_deploy.sh
 Это:
 - клонирует репо в `/var/www/tajikmusic`
 - ставит зависимости (`pnpm install --frozen-lockfile`)
-- накатывает схему БД (`drizzle-kit push`)
+- накатывает миграции БД (`pnpm --filter @workspace/db run migrate` — drizzle migrations)
 - сидит начальные данные (только при `SEED=1`)
-- собирает API и фронт
+- собирает API и фронт (с лимитом памяти Node ~3 ГБ для vite, чтобы не падало с OOM на VPS)
 - запускает pm2
 
 ### 4. Nginx
