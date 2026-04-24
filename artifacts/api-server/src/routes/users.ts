@@ -93,9 +93,7 @@ router.get("/users", adminOnly, async (req, res): Promise<void> => {
   const [totalResult] = await db.select({ count: count() }).from(usersTable).where(where);
 
   res.json({
-    // Не передаём formatUser напрямую — Array.prototype.map передаёт второй
-    // аргумент `index: number`, который попадает в viewerRole и приводит к
-    // случайной маскировке банковских полей даже в admin-list ответе.
+    // viewerRole hardcoded "admin": endpoint защищён adminOnly.
     data: users.map((u) => formatUser(u, "admin")),
     pagination: {
       page,
@@ -139,7 +137,14 @@ router.patch("/users/me/bank-info", requireAuth, async (req, res): Promise<void>
   const data = parsed.data;
   if (Object.keys(data).length === 0) { res.status(400).json({ error: "Нечего обновлять" }); return; }
 
-  // Лёгкая валидация (если поля переданы и не null)
+  if (typeof data.bankAccountNumber === "string" && data.bankAccountNumber.includes("*")) {
+    res.status(400).json({ error: "Похоже, отправлено маскированное значение — введите номер счёта заново" });
+    return;
+  }
+  if (typeof data.bankIban === "string" && data.bankIban.includes("*")) {
+    res.status(400).json({ error: "Похоже, отправлено маскированное значение IBAN — введите заново" });
+    return;
+  }
   if (data.bankIban && !isValidIban(data.bankIban)) {
     res.status(400).json({ error: "Невалидный IBAN" }); return;
   }

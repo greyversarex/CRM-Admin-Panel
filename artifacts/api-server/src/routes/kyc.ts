@@ -224,10 +224,7 @@ router.get("/users/me/kyc-documents", async (req, res): Promise<void> => {
   res.json({ data: docs.map(serializeDoc) });
 });
 
-// ─── User: delete own pending doc ─────────────────────────────────────────
-// Compliance §4.4: после того как юзер нажал «Отправить на проверку»
-// (kyc_status=pending или approved), удалять документы запрещено — иначе
-// возможен bypass: загрузить → submit → удалить → ждать approve с 0 доков.
+// User: delete own pending doc (заблокировано после submit)
 router.delete("/users/me/kyc-documents/:id", async (req, res): Promise<void> => {
   const sessionUser = req.session.user!;
   const id = parseInt(String(req.params.id), 10);
@@ -239,7 +236,6 @@ router.delete("/users/me/kyc-documents/:id", async (req, res): Promise<void> => 
     res.status(409).json({ error: "Нельзя удалять одобренные/отклонённые документы" });
     return;
   }
-  // Дополнительный compliance-чек: нельзя удалять доки после submit.
   const [me] = await db.select({ kycStatus: usersTable.kycStatus })
     .from(usersTable).where(eq(usersTable.id, sessionUser.id));
   if (me && (me.kycStatus === "pending" || me.kycStatus === "approved")) {
@@ -379,12 +375,7 @@ router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), asy
   if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
-  // Compliance §4.4 minimum-evidence checks ДО глобального approve:
-  //   1. Должен быть хотя бы один загруженный документ.
-  //   2. Не должно быть pending-документов (admin обязан их сначала
-  //      approve/reject индивидуально — иначе апрув без ревью).
-  //   3. Не должно быть rejected-документов (нужно явное решение —
-  //      либо юзер перезагружает, либо global reject).
+  // Min-evidence: ≥1 doc, no pending, no rejected.
   const allDocs = await db.select({ status: kycDocumentsTable.status })
     .from(kycDocumentsTable).where(eq(kycDocumentsTable.userId, userId));
   if (allDocs.length === 0) {

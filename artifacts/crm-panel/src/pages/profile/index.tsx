@@ -1014,34 +1014,41 @@ function BankTab() {
   useEffect(() => {
     if (!user) return;
     setBankName(user.bankName ?? "");
-    setAccountNumber(user.bankAccountNumber ?? "");
     setSwift(user.bankSwift ?? "");
-    setIban(user.bankIban ?? "");
     setHolder(user.bankHolderName ?? "");
     setCountry(user.bankCountry ?? "");
+    setAccountNumber("");
+    setIban("");
   }, [user]);
+
+  const hasExistingAccount = Boolean(user?.bankAccountNumber);
+  const hasExistingIban    = Boolean(user?.bankIban);
 
   async function handleSave() {
     setSaving(true);
     try {
+      const body: Record<string, string | null> = {
+        bankName: bankName || null,
+        bankSwift: swift || null,
+        bankHolderName: holder || null,
+        bankCountry: country || null,
+      };
+      if (accountNumber.trim()) body.bankAccountNumber = accountNumber.trim();
+      if (iban.trim())          body.bankIban          = iban.trim();
       const res = await fetch("/api/users/me/bank-info", {
         method: "PATCH", credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          bankName: bankName || null,
-          bankAccountNumber: accountNumber || null,
-          bankSwift: swift || null,
-          bankIban: iban || null,
-          bankHolderName: holder || null,
-          bankCountry: country || null,
-        }),
+        body: JSON.stringify(body),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       toast({ title: "Банковские реквизиты сохранены" });
+      setAccountNumber("");
+      setIban("");
       await refresh();
-    } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Ошибка сохранения";
+      toast({ title: "Ошибка", description: msg, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1068,10 +1075,20 @@ function BankTab() {
             <Input value={holder} onChange={(e) => setHolder(e.target.value)} className="bg-background/50" />
           </Field>
           <Field label="Номер счёта">
-            <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="bg-background/50 font-mono" />
+            <Input
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder={hasExistingAccount ? "Сохранён — введите заново для изменения" : ""}
+              className="bg-background/50 font-mono"
+            />
           </Field>
           <Field label="IBAN (если применимо)">
-            <Input value={iban} onChange={(e) => setIban(e.target.value)} className="bg-background/50 font-mono" />
+            <Input
+              value={iban}
+              onChange={(e) => setIban(e.target.value)}
+              placeholder={hasExistingIban ? "Сохранён — введите заново для изменения" : ""}
+              className="bg-background/50 font-mono"
+            />
           </Field>
           <Field label="SWIFT / BIC">
             <Input value={swift} onChange={(e) => setSwift(e.target.value)} className="bg-background/50 font-mono" />

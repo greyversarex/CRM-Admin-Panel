@@ -171,60 +171,71 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
     return;
   }
 
-  const role = parsed.data.role ?? request.entityType;  // 'artist' | 'label'
+  const role = parsed.data.role ?? request.entityType;
   const tempPassword = generateTempPassword(12);
   const passwordHash = await bcrypt.hash(tempPassword, 10);
+  const reviewer = req.session.user!;
 
-  // Транзакционно создаём artist|label + user. Drizzle не имеет встроенных
-  // транзакций для http-pool в текущей конфигурации — но ошибки на каждом шаге
-  // ловим вручную (создание artist/label идемпотентно по name+country, а user
-  // защищён уникальностью email).
   let createdArtistId: number | null = null;
   let createdLabelId: number | null = null;
+  let user: typeof usersTable.$inferSelect;
+  let updatedRequest: typeof signupRequestsTable.$inferSelect;
 
-  if (role === "label") {
-    const [lab] = await db.insert(labelsTable).values({
-      name: request.legalName || request.name,
-      country: request.country,
-      status: "active",
-    }).returning();
-    createdLabelId = lab.id;
-  } else {
-    // artist: optional привязка к существующему лейблу
-    const [art] = await db.insert(artistsTable).values({
-      name: request.name,
-      slug: request.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `artist-${Date.now()}`,
-      country: request.country,
-      labelId: parsed.data.labelId ?? null,
-      status: "active",
-    }).returning();
-    createdArtistId = art.id;
-    if (parsed.data.labelId) createdLabelId = parsed.data.labelId;
+  try {
+    const result = await db.transaction(async (tx) => {
+      let aId: number | null = null;
+      let lId: number | null = null;
+      if (role === "label") {
+        const [lab] = await tx.insert(labelsTable).values({
+          name: request.legalName || request.name,
+          country: request.country,
+          status: "active",
+        }).returning();
+        lId = lab.id;
+      } else {
+        const [art] = await tx.insert(artistsTable).values({
+          name: request.name,
+          slug: request.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `artist-${Date.now()}`,
+          country: request.country,
+          labelId: parsed.data.labelId ?? null,
+          status: "active",
+        }).returning();
+        aId = art.id;
+        if (parsed.data.labelId) lId = parsed.data.labelId;
+      }
+      const [u] = await tx.insert(usersTable).values({
+        name: request.name,
+        email: request.email,
+        role,
+        status: "active",
+        passwordHash,
+        phone: request.phone,
+        country: request.country,
+        artistId: aId,
+        labelId: lId,
+        kycStatus: "not_started",
+      }).returning();
+      const [r] = await tx.update(signupRequestsTable)
+        .set({
+          status: "approved",
+          reviewedBy: reviewer.id,
+          reviewedAt: new Date(),
+          createdUserId: u.id,
+        })
+        .where(eq(signupRequestsTable.id, id))
+        .returning();
+      return { aId, lId, u, r };
+    });
+    createdArtistId = result.aId;
+    createdLabelId  = result.lId;
+    user            = result.u;
+    updatedRequest  = result.r;
+  } catch (err) {
+    logger.error({ err, requestId: id }, "[signup] approve transaction failed");
+    res.status(500).json({ error: "Не удалось одобрить заявку — изменения откачены" });
+    return;
   }
-
-  const reviewer = req.session.user!;
-  const [user] = await db.insert(usersTable).values({
-    name: request.name,
-    email: request.email,
-    role,
-    status: "active",
-    passwordHash,
-    phone: request.phone,
-    country: request.country,
-    artistId: createdArtistId,
-    labelId: createdLabelId,
-    kycStatus: "not_started",
-  }).returning();
-
-  const [updatedRequest] = await db.update(signupRequestsTable)
-    .set({
-      status: "approved",
-      reviewedBy: reviewer.id,
-      reviewedAt: new Date(),
-      createdUserId: user.id,
-    })
-    .where(eq(signupRequestsTable.id, id))
-    .returning();
+  void createdArtistId; void createdLabelId;
 
   void auditMutation(req, {
     action: "approve", entityType: "signup_request", entityId: id,

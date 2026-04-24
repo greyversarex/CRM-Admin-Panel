@@ -40,11 +40,8 @@ const LOCKOUT_THRESHOLD = 5;            // bad attempts before lockout
 const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minutes
 
 function buildProfilePayload(u: typeof usersTable.$inferSelect) {
-  // Explicit allow-list: failedLoginAttempts and lockedUntil are server-internal
-  // and must NOT be part of any /auth response.
-  // Bank fields: единая masking-политика — artist/label получают masked
-  // версию (****1234) даже в /auth/me. Полные значения для редактирования
-  // вводятся через PATCH /users/me/bank-info; admin/manager видят raw.
+  // Allow-list: failedLoginAttempts/lockedUntil internal-only.
+  // Bank: admin/manager raw, artist/label masked (PATCH /users/me/bank-info для edit).
   const role = u.role as AuthRole;
   const masked = maskBankInfoFor({
     bankName: u.bankName,
