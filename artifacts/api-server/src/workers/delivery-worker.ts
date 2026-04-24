@@ -12,7 +12,7 @@ import { db, deliveriesTable, releasesTable, tracksTable, artistsTable, assetsTa
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getConnector } from "../connectors/registry";
-import { createDdexSftpConnector } from "../connectors/ddex-sftp";
+import { createDdexSftpConnector, generateDdexErn } from "../connectors/ddex-sftp";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import type { DeliveryPayload } from "../connectors/base";
 
@@ -101,6 +101,10 @@ async function processOne(jobId: number): Promise<void> {
   await auditTransition(before, claimed, "worker");
 
   const attempts = claimed.attempts + 1;
+  // xml поднимаем во внешний scope, чтобы сохранить его и в успехе, и в failed
+  // (для дебага без перегенерации). Партийный ID — заглушка для тестового режима;
+  // в проде должен браться из integration.config.partyId.
+  let xmlPayload: string | null = null;
   try {
     const payload = await buildPayload(claimed.releaseId);
     if (!payload) throw new Error(`Release ${claimed.releaseId} not found`);
@@ -114,20 +118,25 @@ async function processOne(jobId: number): Promise<void> {
     const integration = await getIntegrationByCode(claimed.target);
     if (integration) credentials = await loadCredentials(integration.id);
 
+    // Генерируем ERN ДО вызова коннектора, чтобы xml_payload был доступен в БД
+    // даже если доставка упадёт. Connector.deliverRelease возвращает только xmlSize,
+    // поэтому источник истины для XML — этот вызов.
+    const partyId = (integration?.config as Record<string, string> | undefined)?.partyId ?? `PADPIDA-${claimed.target.toUpperCase()}`;
+    xmlPayload = generateDdexErn(payload, partyId);
+
     const result = await connector.deliverRelease!({ credentials, config: {} }, payload);
 
     if (result.ok) {
-      const xml = (result.data?.["xml"] as string | undefined) ?? null;
       const [sent] = await db.update(deliveriesTable).set({
         status: "sent",
         attempts,
         lastError: null,
         nextRetryAt: null,
-        xmlPayload: xml,
-        deliveredAt: new Date(), // оптимистично; партнёр позже подтвердит → 'delivered'
+        xmlPayload,
+        deliveredAt: new Date(), // transport timestamp; partner ack позже → 'delivered'
       }).where(eq(deliveriesTable.id, jobId)).returning();
       await auditTransition(claimed, sent, "worker");
-      logger.info({ jobId, target: claimed.target, releaseId: claimed.releaseId, attempts }, "delivery sent");
+      logger.info({ jobId, target: claimed.target, releaseId: claimed.releaseId, attempts, xmlBytes: xmlPayload.length }, "delivery sent");
     } else {
       throw new Error(result.message ?? "Connector returned ok=false");
     }
@@ -141,6 +150,7 @@ async function processOne(jobId: number): Promise<void> {
       attempts,
       lastError: msg.slice(0, 1000),
       nextRetryAt: next,
+      xmlPayload, // null если упали до generateDdexErn, иначе сгенерированный ERN
     }).where(eq(deliveriesTable.id, jobId)).returning();
     await auditTransition(claimed, failed, "worker");
     logger.warn({ jobId, target: claimed.target, attempts, err: msg, nextRetryAt: next }, "delivery failed");
