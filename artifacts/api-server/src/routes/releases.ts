@@ -432,16 +432,30 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!release) { res.status(404).json({ error: "Release not found" }); return; }
 
-  const DELIVERABLE = new Set(["approved", "delivering", "live"]);
-  if (!DELIVERABLE.has(release.status)) {
+  // Спец постановки: только approved релизы можно ставить в очередь.
+  // Это страхует от двойной постановки одного и того же таргета пока релиз
+  // уже находится в 'delivering' (предыдущий запуск ещё в обработке).
+  if (release.status !== "approved") {
     res.status(409).json({
       error: `Release must be approved before delivery. Current status: '${release.status}'.`,
     });
     return;
   }
 
-  // De-dup: ['spotify','spotify','vk_music'] → ['spotify','vk_music']
-  const uniqueTargets = Array.from(new Set(body.data.targets));
+  // De-dup внутри запроса: ['spotify','spotify','vk_music'] → ['spotify','vk_music']
+  const requestedTargets = Array.from(new Set(body.data.targets));
+
+  // De-dup против БД: если для этого релиза уже существует non-failed/non-cancelled
+  // delivery на target — не создаём дубль. (failed/cancelled можно повторить.)
+  const existing = await db.select({ target: deliveriesTable.target, status: deliveriesTable.status })
+    .from(deliveriesTable)
+    .where(eq(deliveriesTable.releaseId, release.id));
+  const blockedTargets = new Set(
+    existing
+      .filter((d) => d.status !== "failed" && d.status !== "cancelled")
+      .map((d) => d.target),
+  );
+  const uniqueTargets = requestedTargets.filter((t) => !blockedTargets.has(t));
 
   const created: typeof deliveriesTable.$inferSelect[] = [];
   for (const target of uniqueTargets) {
@@ -462,8 +476,8 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
     });
   }
 
-  // Перевод релиза в 'delivering' если был 'approved' (визуально показать прогресс)
-  if (release.status === "approved") {
+  // Перевод релиза в 'delivering' если хотя бы один job создан (визуально показать прогресс)
+  if (created.length > 0) {
     await db.update(releasesTable).set({ status: "delivering" }).where(eq(releasesTable.id, release.id));
   }
 

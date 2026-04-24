@@ -1585,6 +1585,18 @@ paths:
           in: query
           schema:
             type: integer
+        - name: date_from
+          in: query
+          description: ISO date — include deliveries created/updated on or after this date.
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          description: ISO date — include deliveries created/updated on or before this date (inclusive).
+          schema:
+            type: string
+            format: date
         - name: page
           in: query
           schema:
@@ -1640,6 +1652,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Delivery"
+
+  /integrations:
+    get:
+      operationId: listIntegrations
+      tags: [delivery]
+      summary: List configured integrations (DSPs, delivery, social, analytics)
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [dsp, delivery, publishing, social, analytics, payments, storage, video, other]
+      responses:
+        "200":
+          description: List of integrations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationsList"
 
   /releases/{id}/deliver:
     post:
@@ -3313,6 +3344,36 @@ components:
         pagination:
           $ref: "#/components/schemas/Pagination"
       required: [data, pagination]
+
+    Integration:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        category:
+          type: string
+          enum: [dsp, delivery, publishing, social, analytics, payments, storage, video, other]
+        authType:
+          type: string
+          enum: [api_key, oauth2, basic, bearer, sftp, none]
+        enabled: { type: boolean }
+        status:
+          type: string
+          enum: [disconnected, connected, pending, error]
+        lastSyncAt: { type: string, nullable: true }
+        lastError: { type: string, nullable: true }
+        hasCredentials: { type: boolean }
+      required: [id, code, name, category, authType, enabled, status, hasCredentials]
+
+    IntegrationsList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Integration"
+      required: [data]
 
     # ==================== ASSETS ====================
     Asset:

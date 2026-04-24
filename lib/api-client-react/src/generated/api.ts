@@ -49,11 +49,13 @@ import type {
   GetStreamAnalyticsParams,
   HealthStatus,
   ImportByUpcBody,
+  IntegrationsList,
   Label,
   ListArtistsParams,
   ListAssetsParams,
   ListContactsParams,
   ListDeliveriesParams,
+  ListIntegrationsParams,
   ListLabelsParams,
   ListPayoutsParams,
   ListPublishingWorksParams,
@@ -6562,6 +6564,103 @@ export const useRetryDelivery = <
 > => {
   return useMutation(getRetryDeliveryMutationOptions(options));
 };
+
+/**
+ * @summary List configured integrations (DSPs, delivery, social, analytics)
+ */
+export const getListIntegrationsUrl = (params?: ListIntegrationsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/integrations?${stringifiedParams}`
+    : `/api/integrations`;
+};
+
+export const listIntegrations = async (
+  params?: ListIntegrationsParams,
+  options?: RequestInit,
+): Promise<IntegrationsList> => {
+  return customFetch<IntegrationsList>(getListIntegrationsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListIntegrationsQueryKey = (
+  params?: ListIntegrationsParams,
+) => {
+  return [`/api/integrations`, ...(params ? [params] : [])] as const;
+};
+
+export const getListIntegrationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listIntegrations>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListIntegrationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listIntegrations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListIntegrationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listIntegrations>>
+  > = ({ signal }) => listIntegrations(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listIntegrations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListIntegrationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listIntegrations>>
+>;
+export type ListIntegrationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List configured integrations (DSPs, delivery, social, analytics)
+ */
+
+export function useListIntegrations<
+  TData = Awaited<ReturnType<typeof listIntegrations>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListIntegrationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listIntegrations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListIntegrationsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Queue an approved release for delivery to one or more DSPs

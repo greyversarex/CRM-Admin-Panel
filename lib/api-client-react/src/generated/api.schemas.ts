@@ -992,6 +992,60 @@ export interface PaginatedDeliveries {
   pagination: Pagination;
 }
 
+export type IntegrationCategory =
+  (typeof IntegrationCategory)[keyof typeof IntegrationCategory];
+
+export const IntegrationCategory = {
+  dsp: "dsp",
+  delivery: "delivery",
+  publishing: "publishing",
+  social: "social",
+  analytics: "analytics",
+  payments: "payments",
+  storage: "storage",
+  video: "video",
+  other: "other",
+} as const;
+
+export type IntegrationAuthType =
+  (typeof IntegrationAuthType)[keyof typeof IntegrationAuthType];
+
+export const IntegrationAuthType = {
+  api_key: "api_key",
+  oauth2: "oauth2",
+  basic: "basic",
+  bearer: "bearer",
+  sftp: "sftp",
+  none: "none",
+} as const;
+
+export type IntegrationStatus =
+  (typeof IntegrationStatus)[keyof typeof IntegrationStatus];
+
+export const IntegrationStatus = {
+  disconnected: "disconnected",
+  connected: "connected",
+  pending: "pending",
+  error: "error",
+} as const;
+
+export interface Integration {
+  id: number;
+  code: string;
+  name: string;
+  category: IntegrationCategory;
+  authType: IntegrationAuthType;
+  enabled: boolean;
+  status: IntegrationStatus;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  hasCredentials: boolean;
+}
+
+export interface IntegrationsList {
+  data: Integration[];
+}
+
 export type AssetKind = (typeof AssetKind)[keyof typeof AssetKind];
 
 export const AssetKind = {
@@ -1355,9 +1409,36 @@ export type ListDeliveriesParams = {
   status?: DeliveryStatus;
   target?: DeliveryTarget;
   release_id?: number;
+  /**
+   * ISO date — include deliveries created/updated on or after this date.
+   */
+  date_from?: string;
+  /**
+   * ISO date — include deliveries created/updated on or before this date (inclusive).
+   */
+  date_to?: string;
   page?: number;
   limit?: number;
 };
+
+export type ListIntegrationsParams = {
+  category?: ListIntegrationsCategory;
+};
+
+export type ListIntegrationsCategory =
+  (typeof ListIntegrationsCategory)[keyof typeof ListIntegrationsCategory];
+
+export const ListIntegrationsCategory = {
+  dsp: "dsp",
+  delivery: "delivery",
+  publishing: "publishing",
+  social: "social",
+  analytics: "analytics",
+  payments: "payments",
+  storage: "storage",
+  video: "video",
+  other: "other",
+} as const;
 
 export type ListAssetsParams = {
   release_id?: number;

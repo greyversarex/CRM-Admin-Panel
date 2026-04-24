@@ -8,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import {
-  useListDeliveries, useListReleases, useUpdateReleaseStatus, useRetryDelivery,
+  useListDeliveries, useListReleases, useUpdateReleaseStatus, useRetryDelivery, useListIntegrations,
   getListDeliveriesQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
-  type Delivery, type Release,
+  type Delivery, type Release, type Integration,
+  type ListDeliveriesParams,
 } from "@workspace/api-client-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock,
@@ -75,11 +78,29 @@ export default function Distribution() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
+  // ─── filters (только для DDEX Logs) ─────────────────────────────────────
+  const [fStatus, setFStatus] = useState<string>("all");
+  const [fTarget, setFTarget] = useState<string>("all");
+  const [fFrom, setFFrom] = useState<string>("");
+  const [fTo, setFTo]     = useState<string>("");
+
+  const deliveryParams: ListDeliveriesParams = useMemo(() => {
+    const p: ListDeliveriesParams = { limit: 50 };
+    if (fStatus !== "all") p.status = fStatus as ListDeliveriesParams["status"];
+    if (fTarget !== "all") p.target = fTarget as ListDeliveriesParams["target"];
+    if (fFrom) p.date_from = fFrom;
+    if (fTo)   p.date_to   = fTo;
+    return p;
+  }, [fStatus, fTarget, fFrom, fTo]);
+
   // ─── data ───────────────────────────────────────────────────────────────
   const pendingQ = useListReleases({ status: "pending_review", limit: 100 });
   const approvedQ = useListReleases({ status: "approved", limit: 100 });
   const takedownQ = useListReleases({ status: "takedown_requested", limit: 50 });
-  const deliveriesQ = useListDeliveries({ limit: 50 });
+  const deliveriesQ = useListDeliveries(deliveryParams);
+  // Без фильтра — для DSP cards и KPI Today/Connected (фильтры применяются только к таблице)
+  const allDeliveriesQ = useListDeliveries({ limit: 200 });
+  const integrationsQ = useListIntegrations({ category: "dsp" });
 
   const updateStatus = useUpdateReleaseStatus();
   const retryDelivery = useRetryDelivery();
@@ -89,38 +110,44 @@ export default function Distribution() {
     [pendingQ.data]
   );
   const deliveries: Delivery[] = deliveriesQ.data?.data ?? [];
+  const allDeliveries: Delivery[] = allDeliveriesQ.data?.data ?? [];
+  const integrations: Integration[] = integrationsQ.data?.data ?? [];
 
-  // ─── KPI вычисления ─────────────────────────────────────────────────────
+  // ─── KPI вычисления (по всему датасету, без фильтров) ───────────────────
   const kpi = useMemo(() => {
-    const deliveredToday = deliveries.filter(
+    const deliveredToday = allDeliveries.filter(
       (d) => (d.status === "sent" || d.status === "delivered") && isToday(d.deliveredAt ?? d.updatedAt)
     ).length;
-    const failed = deliveries.filter((d) => d.status === "failed").length;
-    const connectedTargets = new Set(
-      deliveries.filter((d) => d.status === "sent" || d.status === "delivered").map((d) => d.target)
-    );
+    const failed = allDeliveries.filter((d) => d.status === "failed").length;
+    const connectedDsps = integrations.filter((i) => i.status === "connected").length;
     return {
       pending: pendingQ.data?.pagination.total ?? pending.length,
       deliveredToday,
       failed,
-      connected: connectedTargets.size,
+      connected: connectedDsps,
     };
-  }, [deliveries, pendingQ.data, pending.length]);
+  }, [allDeliveries, integrations, pendingQ.data, pending.length]);
 
-  // ─── DSP-карточки: агрегируем по target ─────────────────────────────────
+  // ─── DSP-карточки: статус из integrations + счётчик доставок ────────────
+  // Источник истины для status — таблица integrations (connected/pending/error/disconnected).
+  // Если интеграция ещё не зарегистрирована (нет в БД) — показываем как 'disconnected'.
   const dspStats = useMemo(() => {
+    const intByCode = new Map(integrations.map((i) => [i.code, i]));
     return DSP_CODES.map((code) => {
-      const rows = deliveries.filter((d) => d.target === code);
+      const integ = intByCode.get(code);
+      const rows = allDeliveries.filter((d) => d.target === code);
+      const activeCount = rows.filter((d) => d.status === "queued" || d.status === "processing").length;
       const sentCount = rows.filter((d) => d.status === "sent" || d.status === "delivered").length;
-      const lastStatus = rows[0]?.status; // /deliveries уже отсортирован по createdAt desc
-      let status: "connected" | "error" | "pending" | "idle";
-      if (rows.length === 0) status = "idle";
-      else if (lastStatus === "failed") status = "error";
-      else if (lastStatus === "queued" || lastStatus === "processing") status = "pending";
-      else status = "connected";
-      return { code, name: dspLabel(code), status, releases: sentCount };
+      return {
+        code,
+        name: integ?.name ?? dspLabel(code),
+        status: (integ?.status ?? "disconnected") as "connected" | "disconnected" | "pending" | "error",
+        active: activeCount,
+        sent: sentCount,
+        lastError: integ?.lastError ?? null,
+      };
     });
-  }, [deliveries]);
+  }, [allDeliveries, integrations]);
 
   // ─── moderation modal ───────────────────────────────────────────────────
   const [modRelease, setModRelease] = useState<ModerationRelease | null>(null);
@@ -316,12 +343,53 @@ export default function Distribution() {
           <TabsContent value="ddex" className="mt-4">
             <Card className="bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">
               <CardHeader className="pb-3 border-b border-border/50">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <CardTitle>DDEX Delivery Logs</CardTitle>
                     <CardDescription>Очередь и история доставок DDEX ERN 4.3</CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-end flex-wrap">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase text-muted-foreground tracking-wide">Status</label>
+                      <Select value={fStatus} onValueChange={setFStatus}>
+                        <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All statuses</SelectItem>
+                          <SelectItem value="queued">queued</SelectItem>
+                          <SelectItem value="processing">processing</SelectItem>
+                          <SelectItem value="sent">sent</SelectItem>
+                          <SelectItem value="delivered">delivered</SelectItem>
+                          <SelectItem value="failed">failed</SelectItem>
+                          <SelectItem value="cancelled">cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase text-muted-foreground tracking-wide">DSP</label>
+                      <Select value={fTarget} onValueChange={setFTarget}>
+                        <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All DSPs</SelectItem>
+                          {DSP_CODES.map((c) => (
+                            <SelectItem key={c} value={c}>{dspLabel(c)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase text-muted-foreground tracking-wide">From</label>
+                      <Input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} className="h-8 w-[140px] text-xs" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase text-muted-foreground tracking-wide">To</label>
+                      <Input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className="h-8 w-[140px] text-xs" />
+                    </div>
+                    {(fStatus !== "all" || fTarget !== "all" || fFrom || fTo) && (
+                      <Button size="sm" variant="ghost" className="h-8 text-xs"
+                        onClick={() => { setFStatus("all"); setFTarget("all"); setFFrom(""); setFTo(""); }}>
+                        Clear
+                      </Button>
+                    )}
                     <Badge variant="outline" className="text-xs font-mono text-muted-foreground">ERN 4.3</Badge>
                   </div>
                 </div>
@@ -393,17 +461,20 @@ export default function Distribution() {
             </Card>
           </TabsContent>
 
-          {/* ─── DSP Status (derived from deliveries) ─────────────────── */}
+          {/* ─── DSP Status (live из integrations + счётчики из deliveries) ─ */}
           <TabsContent value="dsp" className="mt-4">
             <div className="grid gap-3 md:grid-cols-2">
               {dspStats.map((dsp) => (
                 <Card key={dsp.code} className="bg-card/50 backdrop-blur border-border/50 hover:border-border transition-colors">
                   <CardContent className="flex items-center gap-4 pt-4 pb-4">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{dsp.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {dsp.releases} releases delivered · <span className="font-mono">{dsp.code}</span>
+                        {dsp.sent} delivered · {dsp.active} active · <span className="font-mono">{dsp.code}</span>
                       </p>
+                      {dsp.lastError && (
+                        <p className="text-[11px] text-rose-400 mt-1 truncate" title={dsp.lastError}>{dsp.lastError}</p>
+                      )}
                     </div>
                     <StatusBadge status={dsp.status} />
                   </CardContent>

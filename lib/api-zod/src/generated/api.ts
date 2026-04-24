@@ -2102,6 +2102,18 @@ export const ListDeliveriesQueryParams = zod.object({
     ])
     .optional(),
   release_id: zod.coerce.number().optional(),
+  date_from: zod
+    .date()
+    .optional()
+    .describe(
+      "ISO date — include deliveries created\/updated on or after this date.",
+    ),
+  date_to: zod
+    .date()
+    .optional()
+    .describe(
+      "ISO date — include deliveries created\/updated on or before this date (inclusive).",
+    ),
   page: zod.coerce.number().default(listDeliveriesQueryPageDefault),
   limit: zod.coerce.number().default(listDeliveriesQueryLimitDefault),
 });
@@ -2248,6 +2260,59 @@ export const RetryDeliveryResponse = zod.object({
   deliveredAt: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+});
+
+/**
+ * @summary List configured integrations (DSPs, delivery, social, analytics)
+ */
+export const ListIntegrationsQueryParams = zod.object({
+  category: zod
+    .enum([
+      "dsp",
+      "delivery",
+      "publishing",
+      "social",
+      "analytics",
+      "payments",
+      "storage",
+      "video",
+      "other",
+    ])
+    .optional(),
+});
+
+export const ListIntegrationsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      code: zod.string(),
+      name: zod.string(),
+      category: zod.enum([
+        "dsp",
+        "delivery",
+        "publishing",
+        "social",
+        "analytics",
+        "payments",
+        "storage",
+        "video",
+        "other",
+      ]),
+      authType: zod.enum([
+        "api_key",
+        "oauth2",
+        "basic",
+        "bearer",
+        "sftp",
+        "none",
+      ]),
+      enabled: zod.boolean(),
+      status: zod.enum(["disconnected", "connected", "pending", "error"]),
+      lastSyncAt: zod.string().nullish(),
+      lastError: zod.string().nullish(),
+      hasCredentials: zod.boolean(),
+    }),
+  ),
 });
 
 /**

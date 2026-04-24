@@ -8,13 +8,41 @@
  *
  * Запускается из index.ts после app.listen.
  */
-import { db, deliveriesTable, releasesTable, tracksTable, artistsTable, assetsTable } from "@workspace/db";
+import { db, deliveriesTable, releasesTable, tracksTable, artistsTable, assetsTable, auditLogTable } from "@workspace/db";
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getConnector } from "../connectors/registry";
 import { createDdexSftpConnector } from "../connectors/ddex-sftp";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import type { DeliveryPayload } from "../connectors/base";
+
+type DeliveryRow = typeof deliveriesTable.$inferSelect;
+
+/**
+ * Лог авто-перехода доставки (queued→processing→sent/failed) воркером.
+ * Делается напрямую через INSERT (не через auditMutation, у нас нет HTTP req'а).
+ */
+async function auditTransition(
+  before: DeliveryRow,
+  after: DeliveryRow,
+  source: "worker",
+): Promise<void> {
+  try {
+    await db.insert(auditLogTable).values({
+      userId: null, // системный переход, не пользователь
+      action: "update",
+      entityType: "delivery",
+      entityId: after.id,
+      diff: {
+        source,
+        from: { status: before.status, attempts: before.attempts, lastError: before.lastError },
+        to:   { status: after.status,  attempts: after.attempts,  lastError: after.lastError  },
+      },
+    });
+  } catch (err) {
+    logger.warn({ err, jobId: after.id }, "audit transition failed");
+  }
+}
 
 const TICK_MS = 30_000;
 const BATCH_SIZE = 10;
@@ -60,12 +88,17 @@ async function buildPayload(releaseId: number): Promise<DeliveryPayload | null> 
 }
 
 async function processOne(jobId: number): Promise<void> {
+  // Сначала читаем состояние ДО — для audit diff queued→processing.
+  const [before] = await db.select().from(deliveriesTable).where(eq(deliveriesTable.id, jobId));
+  if (!before) return;
+
   // Atomic claim: queued → processing. Если кто-то уже забрал — выходим.
   const [claimed] = await db.update(deliveriesTable)
     .set({ status: "processing" })
     .where(and(eq(deliveriesTable.id, jobId), eq(deliveriesTable.status, "queued")))
     .returning();
   if (!claimed) return;
+  await auditTransition(before, claimed, "worker");
 
   const attempts = claimed.attempts + 1;
   try {
@@ -85,14 +118,15 @@ async function processOne(jobId: number): Promise<void> {
 
     if (result.ok) {
       const xml = (result.data?.["xml"] as string | undefined) ?? null;
-      await db.update(deliveriesTable).set({
+      const [sent] = await db.update(deliveriesTable).set({
         status: "sent",
         attempts,
         lastError: null,
         nextRetryAt: null,
         xmlPayload: xml,
         deliveredAt: new Date(), // оптимистично; партнёр позже подтвердит → 'delivered'
-      }).where(eq(deliveriesTable.id, jobId));
+      }).where(eq(deliveriesTable.id, jobId)).returning();
+      await auditTransition(claimed, sent, "worker");
       logger.info({ jobId, target: claimed.target, releaseId: claimed.releaseId, attempts }, "delivery sent");
     } else {
       throw new Error(result.message ?? "Connector returned ok=false");
@@ -102,12 +136,13 @@ async function processOne(jobId: number): Promise<void> {
     const next = attempts < MAX_ATTEMPTS
       ? new Date(Date.now() + Math.pow(2, attempts) * 60_000) // 2,4,8,16 мин
       : null;
-    await db.update(deliveriesTable).set({
+    const [failed] = await db.update(deliveriesTable).set({
       status: "failed",
       attempts,
       lastError: msg.slice(0, 1000),
       nextRetryAt: next,
-    }).where(eq(deliveriesTable.id, jobId));
+    }).where(eq(deliveriesTable.id, jobId)).returning();
+    await auditTransition(claimed, failed, "worker");
     logger.warn({ jobId, target: claimed.target, attempts, err: msg, nextRetryAt: next }, "delivery failed");
   }
 }

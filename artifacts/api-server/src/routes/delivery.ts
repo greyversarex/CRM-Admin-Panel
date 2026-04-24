@@ -1,14 +1,22 @@
 import { Router } from "express";
 import { db, deliveriesTable, releasesTable } from "@workspace/db";
-import { count, eq, desc, and, type SQL } from "drizzle-orm";
+import { count, eq, desc, and, gte, lte, type SQL } from "drizzle-orm";
 import {
   ListDeliveriesQueryParams,
   GetDeliveryParams,
   RetryDeliveryParams,
 } from "@workspace/api-zod";
+import { z } from "zod";
 import { auditMutation } from "../lib/audit";
 
 const router = Router();
+
+// Route-local schema: orval генерирует date_from/date_to как `zod.date()`
+// (требует Date-инстанс), но из URL приходят строки. Парсим как YYYY-MM-DD ISO.
+const ListDeliveriesQuery = ListDeliveriesQueryParams.extend({
+  date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD").optional(),
+  date_to:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD").optional(),
+});
 
 async function enrichDelivery(d: typeof deliveriesTable.$inferSelect) {
   let releaseName = "Unknown";
@@ -30,15 +38,18 @@ async function enrichDelivery(d: typeof deliveriesTable.$inferSelect) {
 }
 
 router.get("/deliveries", async (req, res): Promise<void> => {
-  const parsed = ListDeliveriesQueryParams.safeParse(req.query);
+  const parsed = ListDeliveriesQuery.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { status, target, release_id: releaseId, page = 1, limit = 20 } = parsed.data;
+  const { status, target, release_id: releaseId, date_from, date_to, page = 1, limit = 20 } = parsed.data;
   const offset = (page - 1) * limit;
 
   const filters: SQL[] = [];
   if (status) filters.push(eq(deliveriesTable.status, status));
   if (target) filters.push(eq(deliveriesTable.target, target));
   if (releaseId !== undefined) filters.push(eq(deliveriesTable.releaseId, releaseId));
+  // Диапазон по createdAt (inclusive). date_to + 1 день — чтобы захватить весь день.
+  if (date_from) filters.push(gte(deliveriesTable.createdAt, new Date(`${date_from}T00:00:00.000Z`)));
+  if (date_to)   filters.push(lte(deliveriesTable.createdAt, new Date(`${date_to}T23:59:59.999Z`)));
   const where = filters.length ? and(...filters) : undefined;
 
   const rows = await db.select().from(deliveriesTable)

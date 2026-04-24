@@ -69,8 +69,10 @@ function badRequest(res: import("express").Response, error: z.ZodError): void {
   res.status(400).json({ error: error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ") });
 }
 
-router.get("/integrations", async (_req, res): Promise<void> => {
-  const data = await listIntegrations();
+router.get("/integrations", async (req, res): Promise<void> => {
+  const all = await listIntegrations();
+  const cat = typeof req.query.category === "string" ? req.query.category : undefined;
+  const data = cat ? all.filter((i) => i.category === cat) : all;
   res.json({ data });
 });
 

@@ -12,6 +12,14 @@ export type ListDeliveriesParams = {
   status?: DeliveryStatus;
   target?: DeliveryTarget;
   release_id?: number;
+  /**
+   * ISO date — include deliveries created/updated on or after this date.
+   */
+  date_from?: Date;
+  /**
+   * ISO date — include deliveries created/updated on or before this date (inclusive).
+   */
+  date_to?: Date;
   page?: number;
   limit?: number;
 };
