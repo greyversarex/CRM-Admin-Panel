@@ -1,4 +1,5 @@
-import { pgTable, text, serial, integer, timestamp, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { artistsTable } from "./artists";
@@ -24,6 +25,15 @@ export const usageReportsTable = pgTable("usage_reports", {
   index("usage_reports_artist_idx").on(t.artistId),
   index("usage_reports_platform_idx").on(t.platform),
   index("usage_reports_period_track_idx").on(t.period, t.trackId),
+  // Dedup-ключ для INSERT ON CONFLICT DO NOTHING при ingestion. countryCode
+  // может быть NULL (агрегат WORLD/WW) — заворачиваем в COALESCE чтобы NULL
+  // тоже учитывался в уникальности (иначе Postgres трактует NULL≠NULL).
+  uniqueIndex("usage_reports_dedup_uniq").on(
+    t.platform,
+    t.period,
+    t.trackId,
+    sql`coalesce(${t.countryCode}, '_')`,
+  ),
 ]);
 
 export const insertUsageReportSchema = createInsertSchema(usageReportsTable).omit({ id: true, createdAt: true });

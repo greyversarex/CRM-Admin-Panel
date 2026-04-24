@@ -171,7 +171,13 @@ Self-service эндпоинты (НЕ требуют admin):
 - `pnpm --filter @workspace/db run seed` — seed the database with sample data
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
-## Database Schema (20 business tables + `session`)
+## Database Schema (22 business tables + `session`)
+
+**Task #5 additions (migrations 0004 + 0005, auto-generated):**
+- `ingestion_imports` (id serial, dsp, period, filename, totalRows, insertedRows, unmatchedRows, totalRevenue, currency, idempotencyKey UNIQUE, createdAt) — каждая успешная заливка CSV.
+- `ingestion_unmatched` (id serial, FK → ingestion_imports CASCADE, rawIsrc, rawTitle, rawArtist, country, period, streams, revenue, currency, resolved, createdAt) — строки CSV без сматчиния по ISRC.
+- `usage_reports`: добавлен UNIQUE INDEX `usage_reports_dedup_uniq` на (platform, period, track_id, COALESCE(country_code,'_')) для DB-level dedup при ON CONFLICT DO NOTHING.
+- `transactions`: добавлены `source TEXT NOT NULL DEFAULT 'manual'` (значения: manual/ingestion/system) и `import_id INTEGER REFERENCES ingestion_imports(id) ON DELETE SET NULL` для трассировки проводок к импорту-родителю.
 
 All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint with an explicit `ON DELETE` strategy, and hot read paths are indexed. Schema is migrations-based (`lib/db/migrations/` + `lib/db/src/migrate.ts` runner) — `drizzle-kit push` is dev-only.
 

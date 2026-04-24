@@ -46,6 +46,7 @@ interface PreviewResult {
 interface CommitResult {
   importId: number;
   inserted: number;
+  skippedDuplicates: number;
   unmatched: number;
   transactions: number;
   totalRevenue: number;
@@ -181,9 +182,12 @@ export default function FinanceImport() {
           description: `Import #${data.importId}: ${data.inserted} строк, ${data.unmatched} unmatched. Новых записей не добавлено.`,
         });
       } else {
+        const skippedNote = data.skippedDuplicates > 0
+          ? `, ${data.skippedDuplicates} skipped (dedup)`
+          : "";
         toast({
           title: "Импорт завершён",
-          description: `+${data.inserted} usage_reports, +${data.transactions} transactions, ${data.unmatched} unmatched. Доход: ${data.totalRevenue.toLocaleString()} ${data.currency}`,
+          description: `+${data.inserted} usage_reports${skippedNote}, +${data.transactions} transactions, ${data.unmatched} unmatched. Доход: ${data.totalRevenue.toLocaleString()} ${data.currency}`,
         });
       }
       resetWizard();

@@ -34,10 +34,11 @@ export interface PreviewResult {
 
 export interface CommitResult {
   importId: number;
-  inserted: number;        // строк добавлено в usage_reports
+  inserted: number;        // строк РЕАЛЬНО добавлено в usage_reports (после dedup)
+  skippedDuplicates: number; // строк отброшено dedup-ключом (platform,period,track,country)
   unmatched: number;       // строк ушло в ingestion_unmatched
   transactions: number;    // агрегатов добавлено в transactions
-  totalRevenue: number;
+  totalRevenue: number;    // сумма revenue только из РЕАЛЬНО вставленных usage-строк
   currency: string;
   period: string;
   duplicate: boolean;      // true → этот файл (по idempotencyKey) уже был загружен
@@ -157,6 +158,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   const asDuplicate = async (existing: typeof ingestionImportsTable.$inferSelect): Promise<CommitResult> => ({
     importId: existing.id,
     inserted: existing.insertedRows,
+    skippedDuplicates: 0,
     unmatched: existing.unmatchedRows,
     transactions: 0,
     totalRevenue: parseFloat(existing.totalRevenue),
@@ -224,9 +226,11 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   }
 
   let inserted = 0;
+  let skippedDuplicates = 0;
   let unmatched = 0;
   let transactionsCreated = 0;
   let importId = 0;
+  let actualInsertedRevenue = 0;
 
   try {
   await db.transaction(async (tx) => {
@@ -247,9 +251,21 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     importId = imp.id;
 
     // Раскладываем строки на usage_reports / unmatched.
-    // Группируем доход по (release, period) для агрегата в transactions.
-    const releaseRevenue = new Map<number, { artistId: number | null; labelId: number | null; revenue: number; currency: string }>();
-    const matchedUsage: typeof usageReportsTable.$inferInsert[] = [];
+    // Хеш-ключ usage-строки нужен чтобы после INSERT...RETURNING понять,
+    // какие именно строки реально вставились (DB сделала dedup) — и только
+    // их доход учесть в transactions. Иначе при повторном импорте за тот же
+    // период доход задвоится в transactions, даже если usage_reports защищён.
+    type UsageRow = typeof usageReportsTable.$inferInsert;
+    interface PendingUsage {
+      key: string;             // dedup-key (platform|period|track|country)
+      row: UsageRow;
+      revenue: number;
+      currency: string;
+      artistId: number | null;
+      labelId: number | null;
+      releaseId: number | null;
+    }
+    const pendingUsage: PendingUsage[] = [];
     const unmatchedRows: typeof ingestionUnmatchedTable.$inferInsert[] = [];
 
     for (const row of parsed.rows) {
@@ -269,42 +285,89 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
         });
         continue;
       }
-      matchedUsage.push({
-        artistId: match.artistId,
-        releaseId: match.releaseId,
-        trackId: match.trackId,
-        platform: dsp,
-        period: input.period,
-        streams: row.streams,
-        revenue: row.revenue.toFixed(4),
-        countryCode: row.countryCode,
-      });
-      if (match.releaseId) {
-        const acc = releaseRevenue.get(match.releaseId) ?? {
+      const key = `${dsp}|${input.period}|${match.trackId}|${row.countryCode ?? "_"}`;
+      pendingUsage.push({
+        key,
+        row: {
           artistId: match.artistId,
-          labelId: match.labelId,
-          revenue: 0,
-          currency: row.currency,
-        };
-        acc.revenue += row.revenue;
-        releaseRevenue.set(match.releaseId, acc);
+          releaseId: match.releaseId,
+          trackId: match.trackId,
+          platform: dsp,
+          period: input.period,
+          streams: row.streams,
+          revenue: row.revenue.toFixed(4),
+          countryCode: row.countryCode,
+        },
+        revenue: row.revenue,
+        currency: row.currency,
+        artistId: match.artistId,
+        labelId: match.labelId,
+        releaseId: match.releaseId,
+      });
+    }
+
+    // Вставляем usage_reports чанками с ON CONFLICT DO NOTHING.
+    // .returning() даёт ID только тех строк, которые РЕАЛЬНО вставились
+    // (Postgres не возвращает skipped-by-conflict). КРИТИЧНО: считаем КРАТНОСТЬ
+    // returned-ключей (Map, не Set) — иначе если в одном CSV 2 строки с одним
+    // dedup-key, БД вставит ОДНУ, а мы засчитаем обе в transactions → двойной
+    // учёт дохода. Map<key, count> + decrement в проходе по pendingUsage.
+    const CHUNK = 500;
+    const insertedKeyCount = new Map<string, number>();
+    for (let i = 0; i < pendingUsage.length; i += CHUNK) {
+      const chunk = pendingUsage.slice(i, i + CHUNK);
+      const inserted = await tx
+        .insert(usageReportsTable)
+        .values(chunk.map((p) => p.row))
+        .onConflictDoNothing()
+        .returning({
+          trackId: usageReportsTable.trackId,
+          countryCode: usageReportsTable.countryCode,
+          platform: usageReportsTable.platform,
+          period: usageReportsTable.period,
+        });
+      for (const r of inserted) {
+        const k = `${r.platform}|${r.period}|${r.trackId}|${r.countryCode ?? "_"}`;
+        insertedKeyCount.set(k, (insertedKeyCount.get(k) ?? 0) + 1);
       }
     }
 
-    // Вставляем чанками по 500 строк (чтобы pg-параметров не переполнить).
-    const CHUNK = 500;
-    for (let i = 0; i < matchedUsage.length; i += CHUNK) {
-      await tx.insert(usageReportsTable).values(matchedUsage.slice(i, i + CHUNK));
+    // Считаем агрегаты в transactions ТОЛЬКО для реально-вставленных usage-строк.
+    // Группируем по (releaseId, currency) — нельзя суммировать USD+EUR в один transaction.
+    // Декрементируем счётчик: если ключ ещё «доступен» (count > 0) — это реально
+    // вставленная строка, иначе — внутрифайловый дубль (skipped).
+    const releaseRevenue = new Map<string, { releaseId: number; artistId: number | null; labelId: number | null; revenue: number; currency: string }>();
+    for (const p of pendingUsage) {
+      const remaining = insertedKeyCount.get(p.key) ?? 0;
+      if (remaining <= 0) {
+        skippedDuplicates += 1;
+        continue;
+      }
+      insertedKeyCount.set(p.key, remaining - 1);
+      actualInsertedRevenue += p.revenue;
+      if (!p.releaseId) continue;
+      const groupKey = `${p.releaseId}|${p.currency}`;
+      const acc = releaseRevenue.get(groupKey) ?? {
+        releaseId: p.releaseId,
+        artistId: p.artistId,
+        labelId: p.labelId,
+        revenue: 0,
+        currency: p.currency,
+      };
+      acc.revenue += p.revenue;
+      releaseRevenue.set(groupKey, acc);
     }
+
     for (let i = 0; i < unmatchedRows.length; i += CHUNK) {
       await tx.insert(ingestionUnmatchedTable).values(unmatchedRows.slice(i, i + CHUNK));
     }
-    inserted = matchedUsage.length;
+    inserted = pendingUsage.length - skippedDuplicates;
     unmatched = unmatchedRows.length;
 
-    // Транзакции — агрегаты per release. Только для ненулевых (включая отрицательные).
+    // Транзакции — агрегаты per (release, currency). Только ненулевые.
+    // source='ingestion' + import_id для трассировки и фильтрации в /finance.
     const txRows: typeof transactionsTable.$inferInsert[] = [];
-    for (const [releaseId, acc] of releaseRevenue) {
+    for (const acc of releaseRevenue.values()) {
       if (acc.revenue === 0) continue;
       txRows.push({
         type: "dsp_revenue",
@@ -312,10 +375,12 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
         currency: acc.currency,
         artistId: acc.artistId,
         labelId: acc.labelId,
-        releaseId,
+        releaseId: acc.releaseId,
         platform: dsp,
         description: `Import #${importId} (${input.filename})`,
         period: input.period,
+        source: "ingestion",
+        importId,
       });
     }
     if (txRows.length > 0) {
@@ -326,8 +391,14 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     }
 
     // Обновляем итоги в родительской записи импорта.
+    // totalRevenue = сумма реально вставленных строк (после dedup) — отражает
+    // фактический финансовый эффект импорта, а не «сырой» парсинг файла.
     await tx.update(ingestionImportsTable)
-      .set({ insertedRows: inserted, unmatchedRows: unmatched })
+      .set({
+        insertedRows: inserted,
+        unmatchedRows: unmatched,
+        totalRevenue: actualInsertedRevenue.toFixed(4),
+      })
       .where(eq(ingestionImportsTable.id, importId));
   });
   } catch (err: any) {
@@ -345,9 +416,10 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   return {
     importId,
     inserted,
+    skippedDuplicates,
     unmatched,
     transactions: transactionsCreated,
-    totalRevenue: Math.round(totalRevenue * 10000) / 10000,
+    totalRevenue: Math.round(actualInsertedRevenue * 10000) / 10000,
     currency,
     period: input.period,
     duplicate: false,

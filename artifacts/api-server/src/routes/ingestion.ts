@@ -14,6 +14,35 @@ const upload = multer({
   limits: { fileSize: MAX_BYTES, files: 1 },
 });
 
+/** Обёртка над `upload.single` чтобы multer-ошибки (LIMIT_FILE_SIZE и др.) НЕ
+ * проваливались в глобальный error-handler Express, а попадали в наш доменный
+ * маппер 4xx. Multer-middleware вызывает `next(err)` ДО входа в async-handler,
+ * поэтому try/catch внутри handler'а не помогает. */
+function uploadSingle(field: string): import("express").RequestHandler {
+  const middleware = upload.single(field);
+  return (req, res, next) => {
+    middleware(req, res, (err: any) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          res.status(413).json({
+            error: `Файл превышает лимит ${MAX_BYTES / 1024 / 1024}МБ`,
+            code: "file_too_large",
+          });
+          return;
+        }
+        if (err instanceof multer.MulterError) {
+          res.status(400).json({ error: err.message, code: err.code });
+          return;
+        }
+        // Сторонние ошибки multer (например LIMIT_UNEXPECTED_FILE) — 400.
+        res.status(400).json({ error: err?.message ?? "Upload failed" });
+        return;
+      }
+      next();
+    });
+  };
+}
+
 /** Маппинг доменных ошибок ingestion-сервиса в HTTP-коды.
  * Возвращает true если ошибка обработана (response отправлен), иначе false. */
 function handleIngestionError(err: any, res: import("express").Response): boolean {
@@ -31,18 +60,10 @@ function handleIngestionError(err: any, res: import("express").Response): boolea
     });
     return true;
   }
-  if (err instanceof multer.MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: `Файл превышает лимит ${MAX_BYTES / 1024 / 1024}МБ`, code: "file_too_large" });
-      return true;
-    }
-    res.status(400).json({ error: err.message, code: err.code });
-    return true;
-  }
   return false;
 }
 
-router.post("/finance/ingest/preview", upload.single("file"), async (req, res): Promise<void> => {
+router.post("/finance/ingest/preview", uploadSingle("file"), async (req, res): Promise<void> => {
   try {
     if (!req.file) { res.status(400).json({ error: "Missing file (multipart field 'file')" }); return; }
     const dsp = String(req.body.dsp ?? "");
@@ -57,7 +78,7 @@ router.post("/finance/ingest/preview", upload.single("file"), async (req, res): 
   }
 });
 
-router.post("/finance/ingest/commit", upload.single("file"), async (req, res): Promise<void> => {
+router.post("/finance/ingest/commit", uploadSingle("file"), async (req, res): Promise<void> => {
   try {
     if (!req.file) { res.status(400).json({ error: "Missing file (multipart field 'file')" }); return; }
     const dsp = String(req.body.dsp ?? "");
