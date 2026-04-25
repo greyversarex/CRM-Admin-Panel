@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet } from "lucide-react";
+import { PeriodSummaryCard } from "@/components/period-summary-card";
 
 interface ImportRow {
   id: number;
@@ -121,6 +122,11 @@ export default function Finance() {
             <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
         </div>
+
+        <PeriodSummaryCard
+          artistId={isArtist ? user?.artistId ?? undefined : undefined}
+          labelId={isLabel ? user?.labelId ?? undefined : undefined}
+        />
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-card/50 backdrop-blur border-border/50">
