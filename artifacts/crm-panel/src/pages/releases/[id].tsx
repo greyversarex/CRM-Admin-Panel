@@ -18,6 +18,7 @@ import {
   Calendar, Plus, Trash2, Send,
 } from "lucide-react";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
+import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -216,10 +217,18 @@ export default function ReleaseDetail() {
 
         {/* Tracks */}
         <Card className="bg-card/50 backdrop-blur border-border/50">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
             </CardTitle>
+            <BulkTracksDialog
+              releaseId={id}
+              artistId={release.artistId}
+              defaultLanguage={release.language || "Tajik"}
+              defaultGenre={release.genre || "Pop"}
+              startTrackNumber={(release.tracks?.length ?? 0) + 1}
+              onUploaded={invalidateAll}
+            />
           </CardHeader>
           <CardContent className="space-y-4">
             {(release.tracks ?? []).length === 0 ? (
