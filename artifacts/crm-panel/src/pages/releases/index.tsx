@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   Search, Download, Plus, Image as ImageIcon, MoreHorizontal,
   FileEdit, Send, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight,
-  ArrowUpRight,
+  ArrowUpRight, Upload,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -105,6 +105,10 @@ export default function Releases() {
             <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")}>
               <ArrowUpRight className="mr-2 h-4 w-4" />
               Transfer Track
+            </Button>
+            <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")}>
+              <Upload className="mr-2 h-4 w-4" />
+              Загрузить CSV
             </Button>
             <Button onClick={() => setLocation("/releases/new")} className="bg-primary">
               <Plus className="mr-2 h-4 w-4" />

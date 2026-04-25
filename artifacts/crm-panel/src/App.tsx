@@ -15,6 +15,7 @@ import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
 import ReleaseDetail from "@/pages/releases/[id]";
 import CreateRelease from "@/pages/releases/new";
+import BulkUploadReleases from "@/pages/releases/bulk";
 import TransferTrack from "@/pages/releases/transfer";
 import NewImport from "@/pages/releases/transfer/new";
 import Artists from "@/pages/artists";
@@ -87,6 +88,7 @@ function Router() {
       <ProtectedRoute path="/distribution"   component={Distribution} />
       <ProtectedRoute path="/releases"                  component={Releases} />
       <ProtectedRoute path="/releases/new"              component={CreateRelease} />
+      <ProtectedRoute path="/releases/bulk"             component={BulkUploadReleases} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
       <ProtectedRoute path="/releases/:id"              component={ReleaseDetail} />
