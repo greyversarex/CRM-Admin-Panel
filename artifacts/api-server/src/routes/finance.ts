@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
 
 const router = Router();
 
@@ -314,6 +315,12 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
   }
   void auditMutation(req, { action: "approve", entityType: "payout", entityId: payout.id, before: existing, after: payout });
 
+  // Уведомляем получателя о том, что выплата одобрена.
+  const approveTitle = `💸 Выплата на ${payout.amount} ${payout.currency} одобрена`;
+  const approveBody = "Средства будут переведены в ближайшее время.";
+  if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+  if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+
   res.json({
     ...formatPayout(payout),
     artistName: null,
@@ -344,6 +351,12 @@ router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req,
     return;
   }
   void auditMutation(req, { action: "reject", entityType: "payout", entityId: payout.id, before: existing, after: payout });
+
+  // Уведомляем получателя об отклонении выплаты.
+  const rejectTitle = `🚫 Выплата на ${payout.amount} ${payout.currency} отклонена`;
+  const rejectBody = parsed.data.reason ? `Причина: ${parsed.data.reason}` : "";
+  if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_rejected", title: rejectTitle, body: rejectBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+  if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_rejected", title: rejectTitle, body: rejectBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
 
   res.json({
     ...formatPayout(payout),

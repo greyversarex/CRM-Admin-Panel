@@ -20,6 +20,7 @@ import auditRouter from "./audit";
 import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
 import kycRouter from "./kyc";
+import notificationsRouter from "./notifications";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -76,5 +77,6 @@ router.use(assetsRouter);                // scoped per-route inside (cover/audio
 router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
+router.use(notificationsRouter);         // /notifications — scoped to current user inside
 
 export default router;

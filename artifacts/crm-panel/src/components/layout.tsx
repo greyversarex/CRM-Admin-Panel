@@ -1,7 +1,8 @@
 import { SidebarNav } from "./sidebar-nav";
 import { WaveBackground } from "./wave-background";
+import { NotificationsPopover } from "./notifications-popover";
 import {
-  Bell, Search, Globe, ChevronDown,
+  Search, Globe, ChevronDown,
   User as UserIcon, CreditCard, Repeat, Moon, LogOut,
 } from "lucide-react";
 import { Input } from "./ui/input";
@@ -88,10 +89,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="w-px h-5 bg-border/60 mx-1" />
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground relative rounded-lg">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary shadow-sm shadow-primary/50" />
-            </Button>
+            <NotificationsPopover />
 
             <div className="flex items-center gap-2.5 pl-2 ml-1 border-l border-border/60">
               <div className="hidden md:block text-right">

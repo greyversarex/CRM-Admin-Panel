@@ -1143,6 +1143,28 @@ export interface ConfirmAssetBody {
   attach?: boolean;
 }
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string | null;
+  entityId?: number | null;
+  link?: string | null;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedNotifications {
+  data: Notification[];
+  pagination: Pagination;
+}
+
+export interface UnreadNotificationCount {
+  count: number;
+}
+
 export type ListArtistsParams = {
   search?: string;
   genre?: string;
@@ -1365,6 +1387,16 @@ export const ListPayoutsStatus = {
   paid: "paid",
   rejected: "rejected",
 } as const;
+
+export type ListNotificationsParams = {
+  unread_only?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+export type MarkAllNotificationsRead200 = {
+  updated: number;
+};
 
 export type ListPublishingWorksParams = {
   search?: string;

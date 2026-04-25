@@ -1405,6 +1405,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/Payout"
 
+  # ==================== NOTIFICATIONS ====================
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for the current user
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated notification list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedNotifications"
+
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      tags: [notifications]
+      summary: Get count of unread notifications
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadNotificationCount"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+                required: [updated]
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a single notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
   # ==================== PUBLISHING ====================
   /publishing/works:
     get:
@@ -3441,3 +3518,35 @@ components:
           description: If true, also writes the resulting URL to release.coverUrl / track.audioUrl.
           default: true
       required: [storageKey, objectPath, kind, filename, mimeType]
+
+    Notification:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        entityType: { type: string, nullable: true }
+        entityId: { type: integer, nullable: true }
+        link: { type: string, nullable: true }
+        readAt: { type: string, nullable: true }
+        createdAt: { type: string }
+      required: [id, userId, type, title, body, createdAt]
+
+    PaginatedNotifications:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    UnreadNotificationCount:
+      type: object
+      properties:
+        count: { type: integer }
+      required: [count]

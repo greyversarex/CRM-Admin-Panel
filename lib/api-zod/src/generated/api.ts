@@ -1829,6 +1829,75 @@ export const RejectPayoutResponse = zod.object({
 });
 
 /**
+ * @summary List notifications for the current user
+ */
+export const listNotificationsQueryPageDefault = 1;
+export const listNotificationsQueryLimitDefault = 20;
+
+export const ListNotificationsQueryParams = zod.object({
+  unread_only: zod.coerce.boolean().optional(),
+  page: zod.coerce.number().default(listNotificationsQueryPageDefault),
+  limit: zod.coerce.number().default(listNotificationsQueryLimitDefault),
+});
+
+export const ListNotificationsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      type: zod.string(),
+      title: zod.string(),
+      body: zod.string(),
+      entityType: zod.string().nullish(),
+      entityId: zod.number().nullish(),
+      link: zod.string().nullish(),
+      readAt: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  pagination: zod.object({
+    page: zod.number(),
+    limit: zod.number(),
+    total: zod.number(),
+    totalPages: zod.number(),
+  }),
+});
+
+/**
+ * @summary Get count of unread notifications
+ */
+export const GetUnreadNotificationCountResponse = zod.object({
+  count: zod.number(),
+});
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const MarkAllNotificationsReadResponse = zod.object({
+  updated: zod.number(),
+});
+
+/**
+ * @summary Mark a single notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MarkNotificationReadResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  type: zod.string(),
+  title: zod.string(),
+  body: zod.string(),
+  entityType: zod.string().nullish(),
+  entityId: zod.number().nullish(),
+  link: zod.string().nullish(),
+  readAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
  * @summary List publishing works
  */
 export const listPublishingWorksQueryPageDefault = 1;

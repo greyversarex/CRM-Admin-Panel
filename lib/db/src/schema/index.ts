@@ -18,4 +18,5 @@ export * from "./sessions";
 export * from "./assets";
 export * from "./ingestion";
 export * from "./signup_requests";
+export * from "./notifications";
 export * from "./kyc_documents";

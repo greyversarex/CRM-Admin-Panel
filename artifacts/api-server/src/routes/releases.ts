@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
 
 const router = Router();
 
@@ -414,6 +415,36 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
 
   // Task #3: пишем только в audit_log, в activity_log больше не дублируем.
   void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  // Уведомляем артиста и (если есть) лейбл о смене статуса релиза.
+  const statusEmoji: Record<string, string> = {
+    approved: "✅", rejected: "❌", submitted: "📤", live: "🎵",
+    takedown: "⚠️", draft: "📝", delivering: "📦",
+  };
+  const statusLabel: Record<string, string> = {
+    approved: "одобрен", rejected: "отклонён", submitted: "отправлен на модерацию",
+    live: "вышел в эфир", takedown: "снят с публикации", draft: "возвращён в черновик", delivering: "отправляется на платформы",
+  };
+  const statusTitle = `${statusEmoji[parsed.data.status] ?? "🔔"} Релиз «${release.title}» ${statusLabel[parsed.data.status] ?? parsed.data.status}`;
+  const body = parsed.data.note ? `Примечание: ${parsed.data.note}` : "";
+  void notifyByArtistId(release.artistId, {
+    type: `release_${parsed.data.status}`,
+    title: statusTitle,
+    body,
+    entityType: "release",
+    entityId: release.id,
+    link: `/releases/${release.id}`,
+  });
+  if (release.labelId) {
+    void notifyByLabelId(release.labelId, {
+      type: `release_${parsed.data.status}`,
+      title: statusTitle,
+      body,
+      entityType: "release",
+      entityId: release.id,
+      link: `/releases/${release.id}`,
+    });
+  }
 
   const enriched = await enrichRelease(release);
   res.json(enriched);
