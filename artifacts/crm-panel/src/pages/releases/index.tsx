@@ -1,5 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
+import { exportCatalogCsv, type ExportProgress } from "@/lib/export-catalog";
 import { useListReleases, useGetReleaseCounts } from "@workspace/api-client-react";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -56,6 +58,35 @@ export default function Releases() {
   const [pageSize, setPageSize] = useState(20);
   const [, setLocation] = useLocation();
 
+  const [exporting, setExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<ExportProgress["phase"]>("releases");
+  const [exportLoaded, setExportLoaded] = useState(0);
+
+  const onExportCatalog = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportPhase("releases");
+    setExportLoaded(0);
+    try {
+      const res = await exportCatalogCsv((p) => {
+        setExportPhase(p.phase);
+        setExportLoaded(p.loaded);
+      });
+      toast({
+        title: "Каталог выгружен",
+        description: `Релизов: ${res.releaseCount}, треков: ${res.trackCount}, строк в файле: ${res.rowCount}.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Не удалось выгрузить каталог",
+        description: e?.message ?? "Неизвестная ошибка",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const isArtist = user?.role === "artist";
   const isLabel  = user?.role === "label";
 
@@ -105,6 +136,21 @@ export default function Releases() {
             <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")}>
               <ArrowUpRight className="mr-2 h-4 w-4" />
               Transfer Track
+            </Button>
+            <Button
+              variant="outline"
+              className="bg-card"
+              onClick={onExportCatalog}
+              disabled={exporting}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exporting
+                ? exportPhase === "releases"
+                  ? `Релизы… ${exportLoaded}`
+                  : exportPhase === "tracks"
+                    ? `Треки… ${exportLoaded}`
+                    : "Готовлю файл…"
+                : "Экспорт CSV"}
             </Button>
             <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")}>
               <Upload className="mr-2 h-4 w-4" />
