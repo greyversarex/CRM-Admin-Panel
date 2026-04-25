@@ -150,6 +150,7 @@ export * from "./spotifySearchResult";
 export * from "./statusCount";
 export * from "./streamAnalytics";
 export * from "./streamAnalyticsByDayItem";
+export * from "./submitReleaseForReview409";
 export * from "./topArtist";
 export * from "./track";
 export * from "./transaction";

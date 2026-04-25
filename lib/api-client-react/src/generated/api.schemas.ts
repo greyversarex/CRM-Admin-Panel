@@ -95,6 +95,7 @@ export const ReleaseStatus = {
   draft: "draft",
   pending_review: "pending_review",
   approved: "approved",
+  rejected: "rejected",
   delivering: "delivering",
   delivered: "delivered",
   live: "live",
@@ -108,6 +109,10 @@ export interface Release {
   title: string;
   releaseType: ReleaseReleaseType;
   status: ReleaseStatus;
+  /** Комментарий модератора к статусу (например, причина отказа).
+Заполняется при rejected/takedown_requested, очищается при resubmit.
+ */
+  statusNote?: string | null;
   upc?: string | null;
   artistId: number;
   artistName: string;
@@ -269,6 +274,7 @@ export const UpdateReleaseStatusBodyStatus = {
   draft: "draft",
   pending_review: "pending_review",
   approved: "approved",
+  rejected: "rejected",
   delivering: "delivering",
   delivered: "delivered",
   live: "live",
@@ -1196,6 +1202,7 @@ export const ListReleasesStatus = {
   draft: "draft",
   pending_review: "pending_review",
   approved: "approved",
+  rejected: "rejected",
   delivering: "delivering",
   delivered: "delivered",
   live: "live",
@@ -1213,6 +1220,11 @@ export const ListReleasesReleaseType = {
   ep: "ep",
   compilation: "compilation",
 } as const;
+
+export type SubmitReleaseForReview409 = {
+  error?: string;
+  missing?: string[];
+};
 
 export type SpotifySearchReleasesParams = {
   query: string;

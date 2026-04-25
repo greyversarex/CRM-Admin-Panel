@@ -4,6 +4,7 @@ import { count, eq, desc, and, inArray } from "drizzle-orm";
 import { CreateTrackBody, UpdateTrackBody, GetTrackParams, UpdateTrackParams, DeleteTrackParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { releaseEditableReason } from "./releases";
 
 const router = Router();
 
@@ -17,6 +18,19 @@ async function trackInScope(scope: ReturnType<typeof getDataScope>, t: { artistI
     return !!a && a.labelId === scope.labelId;
   }
   return false;
+}
+
+// Если у трека есть родительский релиз — нельзя править трек, если релиз
+// в «закрытом» статусе (всё, кроме draft/rejected). Admin/manager — обходят.
+async function releaseLockReasonForTrack(
+  scope: ReturnType<typeof getDataScope>,
+  releaseId: number | null | undefined,
+): Promise<string | null> {
+  if (scope.fullAccess) return null;
+  if (releaseId == null) return null;
+  const [rel] = await db.select({ status: releasesTable.status }).from(releasesTable).where(eq(releasesTable.id, releaseId));
+  if (!rel) return null;
+  return releaseEditableReason(scope, rel.status);
 }
 
 async function enrichTrack(t: typeof tracksTable.$inferSelect) {
@@ -90,8 +104,9 @@ router.post("/tracks", async (req, res): Promise<void> => {
   // Validate referential ownership: releaseId (if present) must be in scope and
   // must belong to the same artistId being assigned.
   if (parsed.data.releaseId != null) {
-    const [rel] = await db.select({ artistId: releasesTable.artistId, labelId: releasesTable.labelId })
-      .from(releasesTable).where(eq(releasesTable.id, parsed.data.releaseId));
+    const [rel] = await db.select({
+      artistId: releasesTable.artistId, labelId: releasesTable.labelId, status: releasesTable.status,
+    }).from(releasesTable).where(eq(releasesTable.id, parsed.data.releaseId));
     if (!rel) { res.status(400).json({ error: "Release not found" }); return; }
     if (rel.artistId !== parsed.data.artistId) {
       res.status(403).json({ error: "Release does not belong to artist" }); return;
@@ -99,6 +114,9 @@ router.post("/tracks", async (req, res): Promise<void> => {
     if (!scope.fullAccess) {
       if (scope.role === "artist" && rel.artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
       if (scope.role === "label"  && rel.labelId  !== scope.labelId)  { res.status(403).json({ error: "Forbidden" }); return; }
+      // Релиз в закрытом статусе — добавлять треки нельзя.
+      const lockReason = releaseEditableReason(scope, rel.status);
+      if (lockReason) { res.status(409).json({ error: lockReason }); return; }
     }
   }
 
@@ -145,6 +163,10 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   if (!(await trackInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
+  // Релиз в закрытом статусе — править треки нельзя.
+  const lockReason = await releaseLockReasonForTrack(scope, existing.releaseId);
+  if (lockReason) { res.status(409).json({ error: lockReason }); return; }
+
   // Non-privileged users cannot reassign ownership (artistId/releaseId).
   if (!scope.fullAccess) {
     const body = parsed.data as Record<string, unknown>;
@@ -176,7 +198,12 @@ router.delete("/tracks/:id", async (req, res): Promise<void> => {
 
   const [existing] = await db.select().from(tracksTable).where(eq(tracksTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Track not found" }); return; }
-  if (!(await trackInScope(getDataScope(req), existing))) { res.status(403).json({ error: "Forbidden" }); return; }
+  const scope = getDataScope(req);
+  if (!(await trackInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Релиз в закрытом статусе — удалять треки нельзя.
+  const lockReason = await releaseLockReasonForTrack(scope, existing.releaseId);
+  if (lockReason) { res.status(409).json({ error: lockReason }); return; }
 
   const [track] = await db.delete(tracksTable).where(eq(tracksTable.id, params.data.id)).returning();
   if (!track) {

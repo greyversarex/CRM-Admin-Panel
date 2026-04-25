@@ -173,11 +173,20 @@ export default function Distribution() {
   };
 
   const handleReject = async (id: number, reasons: string[], comment: string) => {
+    // Backend требует непустой note при status='rejected'. Объединяем причины и
+    // свободный комментарий — moderation-dialog уже не пускает пустоту, но
+    // подстрахуемся fallback-ом, чтобы не получить 400.
     const note = [reasons.join("; "), comment].filter(Boolean).join(" — ");
+    if (!note.trim()) {
+      toast({ title: "Нужна причина отказа", description: "Выберите причину или напишите комментарий.", variant: "destructive" });
+      return;
+    }
     try {
-      await updateStatus.mutateAsync({ id, data: { status: "draft", note: note || "Rejected" } });
+      // status='rejected' (не 'draft') — артист увидит баннер с причиной и кнопку
+      // повторной отправки. Драфт же выглядит как «свежий релиз без статуса».
+      await updateStatus.mutateAsync({ id, data: { status: "rejected", note } });
       invalidateReleases();
-      toast({ variant: "destructive", title: "Релиз возвращён лейблу", description: note || "Без комментария" });
+      toast({ variant: "destructive", title: "Релиз отклонён", description: note });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({ title: "Не удалось отклонить", description: msg, variant: "destructive" });

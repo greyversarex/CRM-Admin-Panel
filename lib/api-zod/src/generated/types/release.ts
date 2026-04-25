@@ -13,6 +13,10 @@ export interface Release {
   title: string;
   releaseType: ReleaseReleaseType;
   status: ReleaseStatus;
+  /** Комментарий модератора к статусу (например, причина отказа).
+Заполняется при rejected/takedown_requested, очищается при resubmit.
+ */
+  statusNote?: string | null;
   upc?: string | null;
   artistId: number;
   artistName: string;

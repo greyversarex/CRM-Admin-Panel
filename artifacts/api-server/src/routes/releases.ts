@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
-import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
+import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 
 const router = Router();
 
@@ -20,6 +20,18 @@ function releaseInScope(scope: ReturnType<typeof getDataScope>, r: { artistId: n
   if (scope.role === "artist") return scope.artistId != null && r.artistId === scope.artistId;
   if (scope.role === "label")  return scope.labelId  != null && r.labelId  === scope.labelId;
   return false;
+}
+
+// Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
+// Admin/manager обходят это правило (полный доступ).
+// Возвращает null если можно править, иначе строку-причину для 409.
+export function releaseEditableReason(
+  scope: ReturnType<typeof getDataScope>,
+  status: string,
+): string | null {
+  if (scope.fullAccess) return null;
+  if (status === "draft" || status === "rejected") return null;
+  return `Release in status '${status}' is locked for editing. Wait for moderator decision or take down to edit.`;
 }
 
 // ─── In-memory transfer import storage (mock) ──────────────────────────────
@@ -344,6 +356,11 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
 
+  // Non-privileged users cannot edit a release that is past 'draft' / 'rejected'.
+  // Admin/manager bypass via scope.fullAccess.
+  const lockReason = releaseEditableReason(scope, existing.status);
+  if (lockReason) { res.status(409).json({ error: lockReason }); return; }
+
   // Non-privileged users cannot reassign ownership (artistId/labelId).
   if (!scope.fullAccess) {
     const body = parsed.data as Record<string, unknown>;
@@ -387,6 +404,93 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// POST /releases/:id/submit — артист или лейбл (или admin/manager) отправляет релиз
+// на модерацию. Допустимо только из статусов 'draft' или 'rejected'.
+// Перед отправкой проверяем, что релиз заполнен (обложка, дата, треки + аудио).
+router.post("/releases/:id/submit", async (req, res): Promise<void> => {
+  const params = UpdateReleaseStatusParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Допустимые исходные статусы. Из live/delivering/approved/etc нельзя «пере-отправить».
+  if (existing.status !== "draft" && existing.status !== "rejected") {
+    res.status(409).json({
+      error: `Release in status '${existing.status}' cannot be submitted for review. Only 'draft' or 'rejected' releases are submittable.`,
+    });
+    return;
+  }
+
+  // ─── Readiness validation ──────────────────────────────────────────────
+  // Минимальный набор полей, без которого модератору нечего проверять.
+  // Whitespace-only тоже отклоняем — чтобы артист не подсовывал «   » в genre.
+  const nonBlank = (s: string | null | undefined): boolean => !!(s && s.trim().length > 0);
+  const missing: string[] = [];
+  if (!nonBlank(existing.title))       missing.push("title");
+  if (!nonBlank(existing.coverUrl))    missing.push("coverUrl");
+  if (!nonBlank(existing.releaseDate)) missing.push("releaseDate");
+  if (!nonBlank(existing.genre))       missing.push("genre");
+
+  const tracks = await db.select().from(tracksTable).where(eq(tracksTable.releaseId, existing.id));
+  if (tracks.length === 0) {
+    missing.push("tracks");
+  } else {
+    const tracksWithoutAudio = tracks.filter((t) => !nonBlank(t.audioUrl)).length;
+    if (tracksWithoutAudio > 0) missing.push(`audio (${tracksWithoutAudio} of ${tracks.length} tracks)`);
+  }
+
+  if (missing.length > 0) {
+    res.status(409).json({
+      error: "Release is not ready for submission. Required fields are missing.",
+      missing,
+    });
+    return;
+  }
+
+  // ─── Atomic update ─────────────────────────────────────────────────────
+  // Условный UPDATE: применяется только если status всё ещё draft|rejected.
+  // Это защищает от гонки: два параллельных submit'а — один пройдёт, второй
+  // получит 0 строк и 409. statusNote сбрасываем (старая причина отказа неактуальна).
+  const updated = await db.update(releasesTable)
+    .set({ status: "pending_review", statusNote: null })
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      inArray(releasesTable.status, ["draft", "rejected"]),
+    ))
+    .returning();
+
+  const release = updated[0];
+  if (!release) {
+    // Кто-то успел сменить статус между нашим SELECT и UPDATE.
+    res.status(409).json({
+      error: "Release status changed concurrently. Reload and try again.",
+    });
+    return;
+  }
+
+  // Audit: action='submit' — отдельный action для отчётов «кто и когда отправил».
+  void auditMutation(req, { action: "submit", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  // Уведомляем модераторов (admin + manager). Артист сам в курсе — кнопку нажал он же.
+  const sessionUser = req.session?.user;
+  const submitterName = sessionUser?.name ?? sessionUser?.email ?? "артист";
+  void notifyAdmins({
+    type: "release_pending_review",
+    title: `📤 Новый релиз на модерацию: «${release.title}»`,
+    body: `Отправил: ${submitterName}. Откройте очередь модерации, чтобы проверить.`,
+    entityType: "release",
+    entityId: release.id,
+    link: `/distribution`,
+  });
+
+  const enriched = await enrichRelease(release);
+  res.json(enriched);
+});
+
 router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = UpdateReleaseStatusParams.safeParse(req.params);
   if (!params.success) {
@@ -397,6 +501,12 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
   const parsed = UpdateReleaseStatusBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // При отказе модератора комментарий обязателен — артист должен понимать причину.
+  if (parsed.data.status === "rejected" && !parsed.data.note?.trim()) {
+    res.status(400).json({ error: "Rejection reason (note) is required when status='rejected'." });
     return;
   }
 
@@ -413,17 +523,21 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
     return;
   }
 
-  // Task #3: пишем только в audit_log, в activity_log больше не дублируем.
-  void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
+  // Audit: на одобрении/отказе используем отдельные actions для отчётов.
+  const auditAction: "approve" | "reject" | "update" =
+    parsed.data.status === "approved" ? "approve" :
+    parsed.data.status === "rejected" ? "reject" : "update";
+  void auditMutation(req, { action: auditAction, entityType: "release", entityId: release.id, before: existing, after: release });
 
   // Уведомляем артиста и (если есть) лейбл о смене статуса релиза.
   const statusEmoji: Record<string, string> = {
-    approved: "✅", rejected: "❌", submitted: "📤", live: "🎵",
-    takedown: "⚠️", draft: "📝", delivering: "📦",
+    approved: "✅", rejected: "❌", pending_review: "📤", live: "🎵",
+    takedown_requested: "⚠️", draft: "📝", delivering: "📦", removed: "🚫",
   };
   const statusLabel: Record<string, string> = {
-    approved: "одобрен", rejected: "отклонён", submitted: "отправлен на модерацию",
-    live: "вышел в эфир", takedown: "снят с публикации", draft: "возвращён в черновик", delivering: "отправляется на платформы",
+    approved: "одобрен", rejected: "отклонён модератором", pending_review: "отправлен на модерацию",
+    live: "вышел в эфир", takedown_requested: "снят с публикации", draft: "возвращён в черновик",
+    delivering: "отправляется на платформы", removed: "удалён",
   };
   const statusTitle = `${statusEmoji[parsed.data.status] ?? "🔔"} Релиз «${release.title}» ${statusLabel[parsed.data.status] ?? parsed.data.status}`;
   const body = parsed.data.note ? `Примечание: ${parsed.data.note}` : "";

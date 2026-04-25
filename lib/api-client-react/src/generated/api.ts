@@ -103,6 +103,7 @@ import type {
   SpotifySearchResult,
   StatusCount,
   StreamAnalytics,
+  SubmitReleaseForReview409,
   TopArtist,
   Track,
   Transaction,
@@ -1971,6 +1972,91 @@ export const useDeleteRelease = <
   TContext
 > => {
   return useMutation(getDeleteReleaseMutationOptions(options));
+};
+
+/**
+ * @summary Artist/label submits a draft (or previously-rejected) release for moderation
+ */
+export const getSubmitReleaseForReviewUrl = (id: number) => {
+  return `/api/releases/${id}/submit`;
+};
+
+export const submitReleaseForReview = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Release> => {
+  return customFetch<Release>(getSubmitReleaseForReviewUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSubmitReleaseForReviewMutationOptions = <
+  TError = ErrorType<void | SubmitReleaseForReview409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitReleaseForReview>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitReleaseForReview>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["submitReleaseForReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitReleaseForReview>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return submitReleaseForReview(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitReleaseForReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitReleaseForReview>>
+>;
+
+export type SubmitReleaseForReviewMutationError =
+  ErrorType<void | SubmitReleaseForReview409>;
+
+/**
+ * @summary Artist/label submits a draft (or previously-rejected) release for moderation
+ */
+export const useSubmitReleaseForReview = <
+  TError = ErrorType<void | SubmitReleaseForReview409>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitReleaseForReview>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitReleaseForReview>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSubmitReleaseForReviewMutationOptions(options));
 };
 
 /**

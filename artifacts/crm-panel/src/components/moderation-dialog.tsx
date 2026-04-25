@@ -524,11 +524,18 @@ export function ModerationDialog({
             />
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            {reasons.size === 0 && !comment.trim() && (
+              <p className="text-xs text-muted-foreground sm:mr-auto">
+                Выберите хотя бы одну причину или напишите комментарий — без этого вернуть нельзя.
+              </p>
+            )}
             <Button variant="outline" onClick={() => setFailOpen(false)}>Cancel</Button>
             <Button
               variant="destructive"
-              disabled={reasons.size === 0 && (!otherReasons || !comment.trim())}
+              // Backend требует непустой `note` при отказе. Достаточно либо чекнутой
+              // причины, либо текста в комментарии — что соберётся в note на отправке.
+              disabled={reasons.size === 0 && !comment.trim()}
               onClick={handleSubmitReject}
             >
               Review & Send

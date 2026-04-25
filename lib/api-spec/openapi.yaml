@@ -372,7 +372,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
         - name: artist_id
           in: query
           schema:
@@ -475,6 +475,42 @@ paths:
       responses:
         "204":
           description: Release deleted
+
+  /releases/{id}/submit:
+    post:
+      operationId: submitReleaseForReview
+      tags: [releases]
+      summary: Artist/label submits a draft (or previously-rejected) release for moderation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Release submitted for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+        "403":
+          description: Forbidden — release not in caller scope
+        "404":
+          description: Release not found
+        "409":
+          description: Release is not in a submittable status, or is missing required fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  missing:
+                    type: array
+                    items:
+                      type: string
 
   /releases/{id}/status:
     patch:
@@ -2184,7 +2220,13 @@ components:
           enum: [single, album, ep, compilation]
         status:
           type: string
-          enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+        statusNote:
+          type: string
+          nullable: true
+          description: |
+            Комментарий модератора к статусу (например, причина отказа).
+            Заполняется при rejected/takedown_requested, очищается при resubmit.
         upc:
           type: string
           nullable: true
@@ -2289,7 +2331,7 @@ components:
       properties:
         status:
           type: string
-          enum: [draft, pending_review, approved, delivering, delivered, live, error, takedown_requested, removed]
+          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
         note:
           type: string
           nullable: true

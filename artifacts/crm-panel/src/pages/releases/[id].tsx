@@ -1,7 +1,7 @@
 import { Layout } from "@/components/layout";
 import {
   useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
-  useDeliverRelease,
+  useDeliverRelease, useSubmitReleaseForReview,
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
   getListDeliveriesQueryKey,
   type Track, type DeliveryTarget,
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
-  Calendar, Plus, Trash2, Send,
+  Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
 } from "lucide-react";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
@@ -55,6 +55,11 @@ const DELIVER_TARGETS: Array<{ code: DeliveryTarget; label: string }> = [
 // поэтому кнопку показываем строго на approved. Re-deliver на delivering/live — отдельная
 // фича (требует takedown→approve flow), сюда не входит.
 const CAN_DELIVER_STATUSES = new Set(["approved"]);
+// Источник истины: backend разрешает редактировать только в этих статусах.
+// Должно совпадать с releaseEditableReason() в artifacts/api-server/src/routes/releases.ts.
+const EDITABLE_STATUSES = new Set(["draft", "rejected"]);
+// Только из этих двух статусов можно отправить релиз на модерацию.
+const SUBMITTABLE_STATUSES = new Set(["draft", "rejected"]);
 const TAKEDOWN_REASONS = [
   "Other", "Legal/contractual obligations", "Incorrect metadata",
   "Wrong audio file", "Replacement release", "Artist request",
@@ -75,6 +80,7 @@ export default function ReleaseDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
   const { user } = useAuth();
 
   const invalidateAll = () => {
@@ -129,7 +135,22 @@ export default function ReleaseDetail() {
               Review your release for any issues before submitting to our review team for a final guideline check.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Send to Moderation: только из draft/rejected, доступно владельцу */}
+            {SUBMITTABLE_STATUSES.has(release.status) && (
+              <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95">
+                    <ShieldCheck className="mr-2 h-4 w-4" /> Send to Moderation
+                  </Button>
+                </DialogTrigger>
+                <SubmitForReviewDialog
+                  releaseId={id}
+                  release={release}
+                  onClose={() => { setSubmitOpen(false); invalidateAll(); }}
+                />
+              </Dialog>
+            )}
             {user && (user.role === "admin" || user.role === "manager") && CAN_DELIVER_STATUSES.has(release.status) && (
               <Dialog open={deliverOpen} onOpenChange={setDeliverOpen}>
                 <DialogTrigger asChild>
@@ -143,31 +164,102 @@ export default function ReleaseDetail() {
                 />
               </Dialog>
             )}
-            <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
-                  <XCircle className="mr-2 h-4 w-4" /> Take Down
-                </Button>
-              </DialogTrigger>
-              <TakeDownDialog
-                releaseId={id}
-                onClose={() => { setTakedownOpen(false); invalidateAll(); }}
-              />
-            </Dialog>
-            <Dialog open={editOpen} onOpenChange={setEditOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-primary">
-                  <Edit3 className="mr-2 h-4 w-4" /> Edit Release
-                </Button>
-              </DialogTrigger>
-              <EditReleaseDialog
-                releaseId={id}
-                title={release.title}
-                onClose={() => { setEditOpen(false); invalidateAll(); }}
-              />
-            </Dialog>
+            {/* Take Down: только когда релиз уже опубликован/в процессе доставки */}
+            {(release.status === "live" || release.status === "delivering" || release.status === "delivered") && (
+              <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
+                    <XCircle className="mr-2 h-4 w-4" /> Take Down
+                  </Button>
+                </DialogTrigger>
+                <TakeDownDialog
+                  releaseId={id}
+                  onClose={() => { setTakedownOpen(false); invalidateAll(); }}
+                />
+              </Dialog>
+            )}
+            {/* Edit Release: только когда статус editable. В остальных — disabled с подсказкой. */}
+            {EDITABLE_STATUSES.has(release.status) ? (
+              <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="bg-card">
+                    <Edit3 className="mr-2 h-4 w-4" /> Edit Release
+                  </Button>
+                </DialogTrigger>
+                <EditReleaseDialog
+                  releaseId={id}
+                  title={release.title}
+                  onClose={() => { setEditOpen(false); invalidateAll(); }}
+                />
+              </Dialog>
+            ) : (
+              <Button
+                variant="outline"
+                disabled
+                className="bg-card opacity-60 cursor-not-allowed"
+                title="Релиз заблокирован для редактирования. Дождитесь решения модератора или запросите takedown."
+              >
+                <Lock className="mr-2 h-4 w-4" /> Edit Locked
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* ── Контекстные баннеры по статусу ─────────────────────────────── */}
+        {release.status === "pending_review" && (
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <Clock className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-amber-300">Релиз на модерации</div>
+                <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                  Модератор проверяет ваш релиз — обычно это занимает 1–2 рабочих дня.
+                  В это время редактирование закрыто. Как только проверка пройдёт,
+                  вы получите уведомление об одобрении или возврате с комментариями.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {release.status === "rejected" && (
+          <Card className="border-rose-500/40 bg-rose-500/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <XCircle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-rose-300">Релиз отклонён модератором</div>
+                {release.statusNote ? (
+                  <div className="mt-2 p-3 rounded-md bg-rose-950/40 border border-rose-500/20">
+                    <div className="text-[11px] uppercase tracking-wider text-rose-400/80 mb-1">Причина</div>
+                    <p className="text-sm text-rose-100/90 whitespace-pre-wrap">{release.statusNote}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-rose-200/80 mt-1">Модератор не оставил комментариев.</p>
+                )}
+                <p className="text-xs text-rose-200/70 mt-2">
+                  Внесите правки и нажмите «Send to Moderation», чтобы отправить релиз на повторную проверку.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {release.status === "approved" && (
+          <Card className="border-emerald-500/30 bg-emerald-500/5">
+            <CardContent className="p-4 flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold text-sm text-emerald-300">Релиз одобрен</div>
+                <p className="text-xs text-emerald-200/80 mt-1">
+                  Релиз прошёл модерацию и готов к доставке на платформы.
+                  {user?.role === "admin" || user?.role === "manager"
+                    ? " Нажмите «Deliver to DSPs», чтобы поставить в очередь."
+                    : " Дистрибьютор поставит его в очередь на отгрузку в DSP."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Status */}
         <Card className="bg-card/50 backdrop-blur border-border/50">
@@ -488,6 +580,115 @@ function EditReleaseDialog({ releaseId, title, onClose }: { releaseId: number; t
           }}
         >
           Edit Release
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+// ─── Submit for Review dialog ─────────────────────────────────────────────
+// Чек-лист готовности зеркалит серверную проверку в POST /releases/:id/submit.
+// Если всё ок — кнопка активна; если нет — пользователь сразу видит, что чинить.
+function SubmitForReviewDialog({
+  releaseId, release, onClose,
+}: {
+  releaseId: number;
+  release: { title: string; coverUrl?: string | null; releaseDate?: string | null; genre?: string | null;
+    tracks?: Array<{ id: number; title: string; audioUrl?: string | null }>; status: string };
+  onClose: () => void;
+}) {
+  const submit = useSubmitReleaseForReview();
+  const [confirmed, setConfirmed] = useState(false);
+
+  const tracks = release.tracks ?? [];
+  const tracksWithoutAudio = tracks.filter((t) => !t.audioUrl);
+
+  // Список тех же требований, что проверяет backend.
+  const checks: Array<{ ok: boolean; label: string }> = [
+    { ok: !!release.title?.trim(),                        label: "Название релиза" },
+    { ok: !!release.coverUrl,                             label: "Обложка загружена" },
+    { ok: !!release.releaseDate,                          label: "Указана дата релиза" },
+    { ok: !!release.genre,                                label: "Указан жанр" },
+    { ok: tracks.length > 0,                              label: `Хотя бы один трек (сейчас: ${tracks.length})` },
+    { ok: tracks.length > 0 && tracksWithoutAudio.length === 0,
+      label: tracksWithoutAudio.length === 0
+        ? "Аудио загружено для всех треков"
+        : `Аудио для всех треков (без аудио: ${tracksWithoutAudio.length})` },
+  ];
+  const allReady = checks.every((c) => c.ok);
+
+  const isResubmit = release.status === "rejected";
+
+  return (
+    <DialogContent className="bg-card border-border max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{isResubmit ? "Повторная отправка на модерацию" : "Отправить релиз на модерацию"}</DialogTitle>
+        <DialogDescription>
+          {isResubmit
+            ? `«${release.title}» был отклонён ранее. После повторной отправки релиз снова попадёт в очередь модератора.`
+            : `«${release.title}» будет передан модератору для проверки. Пока релиз на модерации, редактирование закрыто.`}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-2">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">Готовность к отправке</div>
+        <ul className="space-y-1.5 text-sm">
+          {checks.map((c) => (
+            <li key={c.label} className="flex items-start gap-2">
+              {c.ok
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                : <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />}
+              <span className={c.ok ? "text-foreground" : "text-rose-300"}>{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {!allReady && (
+        <div className="text-xs bg-rose-500/10 border border-rose-500/30 rounded p-3 text-rose-200">
+          Заполните все пункты и загрузите аудио, прежде чем отправлять релиз модератору.
+        </div>
+      )}
+
+      {allReady && (
+        <div className="text-xs bg-amber-500/10 border border-amber-500/30 rounded p-3 text-amber-300/90">
+          <span className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Внимание:</span>
+          После отправки релиз будет заблокирован для редактирования до решения модератора.
+        </div>
+      )}
+
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+        <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} disabled={!allReady} />
+        Подтверждаю отправку на модерацию
+      </label>
+
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onClose}>Отмена</Button>
+        <Button
+          disabled={!allReady || !confirmed || submit.isPending}
+          onClick={async () => {
+            try {
+              await submit.mutateAsync({ id: releaseId });
+              toast({
+                title: isResubmit ? "Отправлено на повторную модерацию" : "Отправлено на модерацию",
+                description: "Модератор получил уведомление. Вы узнаете о решении.",
+              });
+              onClose();
+            } catch (e) {
+              // 409 от backend — readiness разошлась с клиентским чек-листом (race condition).
+              const err = e as { response?: { data?: { error?: string; missing?: string[] } }; message?: string };
+              const data = err?.response?.data;
+              const missing = data?.missing?.length ? ` Не хватает: ${data.missing.join(", ")}.` : "";
+              toast({
+                title: "Не удалось отправить",
+                description: (data?.error ?? err?.message ?? "Неизвестная ошибка") + missing,
+                variant: "destructive",
+              });
+            }
+          }}
+        >
+          <ShieldCheck className="mr-2 h-4 w-4" />
+          {isResubmit ? "Отправить повторно" : "Отправить на модерацию"}
         </Button>
       </DialogFooter>
     </DialogContent>

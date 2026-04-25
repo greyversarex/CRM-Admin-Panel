@@ -12,9 +12,33 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getDataScope } from "../lib/auth";
+import { releaseEditableReason } from "./releases";
 
 const router = Router();
 const storage = new ObjectStorageService();
+
+// Если у ассета есть привязка к релизу (напрямую или через трек) — нельзя его
+// загружать/подтверждать/удалять, когда релиз в «закрытом» статусе. Admin/manager
+// обходят. Совпадает с правилами из releases.ts/tracks.ts.
+async function releaseLockReasonForAsset(
+  req: any,
+  releaseId: number | null | undefined,
+  trackId: number | null | undefined,
+): Promise<string | null> {
+  const scope = getDataScope(req);
+  if (scope.fullAccess) return null;
+  let parentReleaseId: number | null | undefined = releaseId ?? null;
+  if (!parentReleaseId && trackId) {
+    const [t] = await db.select({ releaseId: tracksTable.releaseId })
+      .from(tracksTable).where(eq(tracksTable.id, trackId));
+    parentReleaseId = t?.releaseId ?? null;
+  }
+  if (!parentReleaseId) return null;
+  const [rel] = await db.select({ status: releasesTable.status })
+    .from(releasesTable).where(eq(releasesTable.id, parentReleaseId));
+  if (!rel) return null;
+  return releaseEditableReason(scope, rel.status);
+}
 
 // Hard caps in bytes — see project settings (200 MB audio, 25 MB cover/image).
 const MAX_BYTES: Record<string, number> = {
@@ -123,6 +147,10 @@ router.post("/assets/presign", async (req, res): Promise<void> => {
   if (trackId && !(await assertTrackInScope(req, trackId))) {
     res.status(403).json({ error: "Forbidden: track not in scope" }); return;
   }
+  // Релиз в закрытом статусе — нельзя выдавать upload-ссылку (даже если ASCII-
+  // загрузка пройдёт мимо attach, мы не хотим начинать процесс).
+  const presignLock = await releaseLockReasonForAsset(req, releaseId ?? null, trackId ?? null);
+  if (presignLock) { res.status(409).json({ error: presignLock }); return; }
 
   try {
     const { uploadURL, objectPath, storageKey } = await storage.createUpload({
@@ -185,6 +213,12 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
       scopedArtistId = scope.artistId;
       scopedLabelId  = scope.labelId;
     }
+  }
+  // Релиз в закрытом статусе — нельзя attach новую обложку/аудио (это меняет
+  // содержимое релиза, который уже отдан модератору / в дистрибуции).
+  if (attach) {
+    const confirmLock = await releaseLockReasonForAsset(req, body.releaseId ?? null, body.trackId ?? null);
+    if (confirmLock) { res.status(409).json({ error: confirmLock }); return; }
   }
 
   // Confirm the file exists in GCS at the path we presigned, hash it, and
@@ -322,6 +356,11 @@ router.delete("/assets/:id", async (req, res): Promise<void> => {
   const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.id, params.data.id));
   if (!asset) { res.sendStatus(204); return; }
   if (!(await canAccessAsset(req, asset))) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  // Релиз в закрытом статусе — нельзя удалять привязанные ассеты (обложку/аудио),
+  // т.к. это де-факто меняет содержимое релиза, отданного модератору/DSP.
+  const deleteLock = await releaseLockReasonForAsset(req, asset.releaseId, asset.trackId);
+  if (deleteLock) { res.status(409).json({ error: deleteLock }); return; }
 
   // Detach from release/track first so we don't leave dangling URLs.
   if (asset.releaseId && asset.kind === "cover") {

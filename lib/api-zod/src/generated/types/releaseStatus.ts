@@ -12,6 +12,7 @@ export const ReleaseStatus = {
   draft: "draft",
   pending_review: "pending_review",
   approved: "approved",
+  rejected: "rejected",
   delivering: "delivering",
   delivered: "delivered",
   live: "live",

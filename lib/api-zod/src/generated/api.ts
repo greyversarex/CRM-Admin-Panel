@@ -184,6 +184,7 @@ export const GetArtistResponse = zod
               "draft",
               "pending_review",
               "approved",
+              "rejected",
               "delivering",
               "delivered",
               "live",
@@ -191,6 +192,12 @@ export const GetArtistResponse = zod
               "takedown_requested",
               "removed",
             ]),
+            statusNote: zod
+              .string()
+              .nullish()
+              .describe(
+                "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+              ),
             upc: zod.string().nullish(),
             artistId: zod.number(),
             artistName: zod.string(),
@@ -439,6 +446,7 @@ export const ListReleasesQueryParams = zod.object({
       "draft",
       "pending_review",
       "approved",
+      "rejected",
       "delivering",
       "delivered",
       "live",
@@ -464,6 +472,7 @@ export const ListReleasesResponse = zod.object({
         "draft",
         "pending_review",
         "approved",
+        "rejected",
         "delivering",
         "delivered",
         "live",
@@ -471,6 +480,12 @@ export const ListReleasesResponse = zod.object({
         "takedown_requested",
         "removed",
       ]),
+      statusNote: zod
+        .string()
+        .nullish()
+        .describe(
+          "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+        ),
       upc: zod.string().nullish(),
       artistId: zod.number(),
       artistName: zod.string(),
@@ -537,6 +552,7 @@ export const GetReleaseResponse = zod
       "draft",
       "pending_review",
       "approved",
+      "rejected",
       "delivering",
       "delivered",
       "live",
@@ -544,6 +560,12 @@ export const GetReleaseResponse = zod
       "takedown_requested",
       "removed",
     ]),
+    statusNote: zod
+      .string()
+      .nullish()
+      .describe(
+        "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+      ),
     upc: zod.string().nullish(),
     artistId: zod.number(),
     artistName: zod.string(),
@@ -626,6 +648,7 @@ export const UpdateReleaseResponse = zod.object({
     "draft",
     "pending_review",
     "approved",
+    "rejected",
     "delivering",
     "delivered",
     "live",
@@ -633,6 +656,12 @@ export const UpdateReleaseResponse = zod.object({
     "takedown_requested",
     "removed",
   ]),
+  statusNote: zod
+    .string()
+    .nullish()
+    .describe(
+      "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+    ),
   upc: zod.string().nullish(),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -659,6 +688,53 @@ export const DeleteReleaseParams = zod.object({
 });
 
 /**
+ * @summary Artist/label submits a draft (or previously-rejected) release for moderation
+ */
+export const SubmitReleaseForReviewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SubmitReleaseForReviewResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  releaseType: zod.enum(["single", "album", "ep", "compilation"]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "rejected",
+    "delivering",
+    "delivered",
+    "live",
+    "error",
+    "takedown_requested",
+    "removed",
+  ]),
+  statusNote: zod
+    .string()
+    .nullish()
+    .describe(
+      "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+    ),
+  upc: zod.string().nullish(),
+  artistId: zod.number(),
+  artistName: zod.string(),
+  labelId: zod.number().nullish(),
+  labelName: zod.string().nullish(),
+  coverUrl: zod.string().nullish(),
+  genre: zod.string().nullish(),
+  releaseDate: zod.string().nullish(),
+  language: zod.string().nullish(),
+  isExplicit: zod.boolean(),
+  territories: zod.array(zod.string()),
+  totalTracks: zod.number(),
+  pLine: zod.string().nullish(),
+  cLine: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
  * @summary Update release status
  */
 export const UpdateReleaseStatusParams = zod.object({
@@ -670,6 +746,7 @@ export const UpdateReleaseStatusBody = zod.object({
     "draft",
     "pending_review",
     "approved",
+    "rejected",
     "delivering",
     "delivered",
     "live",
@@ -688,6 +765,7 @@ export const UpdateReleaseStatusResponse = zod.object({
     "draft",
     "pending_review",
     "approved",
+    "rejected",
     "delivering",
     "delivered",
     "live",
@@ -695,6 +773,12 @@ export const UpdateReleaseStatusResponse = zod.object({
     "takedown_requested",
     "removed",
   ]),
+  statusNote: zod
+    .string()
+    .nullish()
+    .describe(
+      "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+    ),
   upc: zod.string().nullish(),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -733,6 +817,7 @@ export const ImportReleaseByUpcResponse = zod.object({
     "draft",
     "pending_review",
     "approved",
+    "rejected",
     "delivering",
     "delivered",
     "live",
@@ -740,6 +825,12 @@ export const ImportReleaseByUpcResponse = zod.object({
     "takedown_requested",
     "removed",
   ]),
+  statusNote: zod
+    .string()
+    .nullish()
+    .describe(
+      "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
+    ),
   upc: zod.string().nullish(),
   artistId: zod.number(),
   artistName: zod.string(),
