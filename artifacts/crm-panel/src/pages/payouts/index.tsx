@@ -20,7 +20,6 @@ export default function Payouts() {
   const isLabel     = user?.role === "label";
 
   const { data: payoutsData, isLoading } = useListPayouts({
-    search: searchQuery || undefined,
     limit: 50,
     ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
     ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),

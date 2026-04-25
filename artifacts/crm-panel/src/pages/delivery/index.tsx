@@ -14,7 +14,6 @@ export default function Delivery() {
   const [searchQuery, setSearchQuery] = useState("");
   
   const { data: deliveryData, isLoading } = useListDeliveries({ 
-    search: searchQuery || undefined,
     limit: 50 
   });
 

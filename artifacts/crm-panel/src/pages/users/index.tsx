@@ -223,7 +223,7 @@ export default function Users() {
                         <TableCell>
                           {u.status === "active" && <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Active</span>}
                           {u.status === "suspended" && <span className="text-xs text-rose-400 flex items-center gap-1"><Ban className="h-3 w-3" /> Suspended</span>}
-                          {u.status === "pending" && <span className="text-xs text-amber-400 flex items-center gap-1"><Clock className="h-3 w-3" /> Pending</span>}
+                          {(u.status as string) === "pending" && <span className="text-xs text-amber-400 flex items-center gap-1"><Clock className="h-3 w-3" /> Pending</span>}
                         </TableCell>
                         <TableCell>
                           {kyc === "verified" && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Verified</Badge>}

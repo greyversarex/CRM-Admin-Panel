@@ -64,7 +64,10 @@ export default function ReleaseDetail() {
   const id = Number(params.id);
   const [, setLocation] = useLocation();
   const { data: release, isLoading, error } = useGetRelease(id, {
-    query: { enabled: Number.isFinite(id) && id > 0, retry: false },
+    query: {
+      enabled: Number.isFinite(id) && id > 0,
+      retry: false,
+    } as never,
   });
   const queryClient = useQueryClient();
 
@@ -171,9 +174,6 @@ export default function ReleaseDetail() {
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Status</span>
               <StatusBadge status={release.status} className="text-xs" />
-              {release.statusNote && (
-                <span className="text-xs text-muted-foreground">— {release.statusNote}</span>
-              )}
             </div>
             <div className="text-xs text-muted-foreground">
               Updated {new Date(release.updatedAt).toLocaleString()}

@@ -61,7 +61,7 @@ export default function Releases() {
 
   const { data: releasesData, isLoading } = useListReleases({
     search: searchQuery || undefined,
-    status: TAB_TO_STATUS[statusFilter],
+    status: TAB_TO_STATUS[statusFilter] as never,
     page,
     limit: pageSize,
     ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
