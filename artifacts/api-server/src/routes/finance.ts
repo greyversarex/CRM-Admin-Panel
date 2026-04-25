@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
-import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
+import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 
 const router = Router();
 
@@ -290,6 +290,18 @@ router.post("/payouts", async (req, res): Promise<void> => {
     amount: parsed.data.amount.toString(),
   }).returning();
   void auditMutation(req, { action: "create", entityType: "payout", entityId: payout.id, before: null, after: payout });
+
+  // Уведомляем всех администраторов и менеджеров о новом запросе на выплату.
+  const requesterName = req.session.user!.name;
+  void notifyAdmins({
+    type: "payout_requested",
+    title: `💰 Новый запрос на выплату: ${payout.amount} ${payout.currency}`,
+    body: `От: ${requesterName}. Метод: ${payout.method ?? "—"}.`,
+    entityType: "payout",
+    entityId: payout.id,
+    link: "/payouts",
+  });
+
   res.status(201).json({
     ...formatPayout(payout),
     artistName: null,

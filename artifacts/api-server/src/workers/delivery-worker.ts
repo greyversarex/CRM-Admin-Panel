@@ -9,6 +9,7 @@
  * Запускается из index.ts после app.listen.
  */
 import { db, deliveriesTable, releasesTable, tracksTable, artistsTable, assetsTable, auditLogTable } from "@workspace/db";
+import { notifyByReleaseId } from "../services/notifications";
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getConnector } from "../connectors/registry";
@@ -137,6 +138,16 @@ async function processOne(jobId: number): Promise<void> {
       }).where(eq(deliveriesTable.id, jobId)).returning();
       await auditTransition(claimed, sent, "worker");
       logger.info({ jobId, target: claimed.target, releaseId: claimed.releaseId, attempts, xmlBytes: xmlPayload.length }, "delivery sent");
+
+      // Уведомляем артиста и лейбл об успешной отправке на платформу.
+      void notifyByReleaseId(claimed.releaseId, {
+        type: "delivery_sent",
+        title: `📦 Релиз отправлен на ${claimed.target}`,
+        body: `Доставка успешно завершена. Релиз появится на платформе в течение нескольких дней.`,
+        entityType: "release",
+        entityId: claimed.releaseId,
+        link: `/releases/${claimed.releaseId}`,
+      });
     } else {
       throw new Error(result.message ?? "Connector returned ok=false");
     }
@@ -154,6 +165,18 @@ async function processOne(jobId: number): Promise<void> {
     }).where(eq(deliveriesTable.id, jobId)).returning();
     await auditTransition(claimed, failed, "worker");
     logger.warn({ jobId, target: claimed.target, attempts, err: msg, nextRetryAt: next }, "delivery failed");
+
+    // Уведомляем только при окончательной ошибке (все попытки исчерпаны).
+    if (next === null) {
+      void notifyByReleaseId(claimed.releaseId, {
+        type: "delivery_failed",
+        title: `❌ Доставка на ${claimed.target} не удалась`,
+        body: `После ${attempts} попыток релиз не был доставлен. Ошибка: ${msg.slice(0, 200)}`,
+        entityType: "release",
+        entityId: claimed.releaseId,
+        link: `/releases/${claimed.releaseId}`,
+      });
+    }
   }
 }
 

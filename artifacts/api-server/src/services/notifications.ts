@@ -81,3 +81,48 @@ export async function notifyByLabelId(
   }));
   await db.insert(notificationsTable).values(rows);
 }
+
+/**
+ * Notify the artist (and optionally the label) linked to a release.
+ * Looks up artistId/labelId from the releases table.
+ */
+export async function notifyByReleaseId(
+  releaseId: number,
+  input: Omit<CreateNotificationInput, "userId">,
+): Promise<void> {
+  const { releasesTable } = await import("@workspace/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [release] = await db
+    .select({ artistId: releasesTable.artistId, labelId: releasesTable.labelId })
+    .from(releasesTable)
+    .where(eq(releasesTable.id, releaseId));
+  if (!release) return;
+  await notifyByArtistId(release.artistId, input);
+  if (release.labelId) await notifyByLabelId(release.labelId, input);
+}
+
+/**
+ * Notify all users with role admin or manager.
+ * Used for system-level events (new payout requests, etc.).
+ */
+export async function notifyAdmins(
+  input: Omit<CreateNotificationInput, "userId">,
+): Promise<void> {
+  const { usersTable } = await import("@workspace/db/schema");
+  const { inArray } = await import("drizzle-orm");
+  const admins = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(inArray(usersTable.role, ["admin", "manager"]));
+  if (admins.length === 0) return;
+  const rows: InsertNotification[] = admins.map((u) => ({
+    userId: u.id,
+    type: input.type,
+    title: input.title,
+    body: input.body ?? "",
+    entityType: input.entityType ?? null,
+    entityId: input.entityId ?? null,
+    link: input.link ?? null,
+  }));
+  await db.insert(notificationsTable).values(rows);
+}

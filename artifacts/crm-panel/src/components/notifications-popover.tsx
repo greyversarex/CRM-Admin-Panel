@@ -24,8 +24,13 @@ const TYPE_ICONS: Record<string, string> = {
   release_approved: "✅",
   release_rejected: "❌",
   release_submitted: "📤",
+  release_live: "🎵",
+  release_takedown: "⚠️",
   payout_approved: "💸",
   payout_rejected: "🚫",
+  payout_requested: "💰",
+  delivery_sent: "📦",
+  delivery_failed: "❌",
   general: "📣",
 };
 
