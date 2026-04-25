@@ -7,13 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Wallet, CheckCircle, XCircle, Plus } from "lucide-react";
+import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { exportPayoutsCsv } from "@/lib/export-payouts";
 
 export default function Payouts() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportLoaded, setExportLoaded] = useState(0);
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
   const isArtist    = user?.role === "artist";
@@ -24,6 +29,40 @@ export default function Payouts() {
     ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
     ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
   });
+
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportLoaded(0);
+    try {
+      const res = await exportPayoutsCsv(
+        {
+          ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+          ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
+          fromDate: fromDate || undefined,
+          toDate:   toDate   || undefined,
+        },
+        (p) => setExportLoaded(p.loaded),
+      );
+      const sums = Object.entries(res.totalAmountByCurrency)
+        .map(([cur, amt]) => `${amt.toFixed(2)} ${cur}`)
+        .join(", ");
+      toast({
+        title: "Выплаты выгружены",
+        description: res.count === 0
+          ? "За выбранный период заявок не найдено."
+          : `Записей: ${res.count}. Сумма: ${sums || "—"}.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Не удалось выгрузить выплаты",
+        description: e?.message ?? "Неизвестная ошибка",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const titleByRole = isAdminLike ? "Заявки на выплату" : "Мои выплаты";
   const subtitleByRole = isAdminLike
@@ -38,11 +77,33 @@ export default function Payouts() {
             <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
             <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
-          {!isAdminLike && (
-            <Button onClick={() => toast({ title: "Заявка на выплату", description: "Форма откроется после привязки банковских реквизитов в профиле." })}>
-              <Plus className="mr-2 h-4 w-4" /> Запросить выплату
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">с</span>
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-9 w-[140px] bg-background/50"
+              />
+              <span className="text-muted-foreground">по</span>
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-9 w-[140px] bg-background/50"
+              />
+            </div>
+            <Button variant="outline" onClick={onExport} disabled={exporting}>
+              <Download className="mr-2 h-4 w-4" />
+              {exporting ? `Выгрузка… ${exportLoaded}` : "Экспорт CSV"}
             </Button>
-          )}
+            {!isAdminLike && (
+              <Button onClick={() => toast({ title: "Заявка на выплату", description: "Форма откроется после привязки банковских реквизитов в профиле." })}>
+                <Plus className="mr-2 h-4 w-4" /> Запросить выплату
+              </Button>
+            )}
+          </div>
         </div>
 
         <Card className="flex-1 bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">
