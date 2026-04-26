@@ -41,6 +41,10 @@ export type ModerationRelease = {
   issues: string[];
   coverUrl?: string;
   tracks: ModerationTrack[];
+  /** Список статусов, доступных через PATCH /releases/:id/status.
+   *  Прокидывается напрямую из Release.allowedTransitions (бэкенд — источник истины).
+   *  Пустой массив — ни один переход не разрешён; действия не показываем. */
+  allowedTransitions: string[];
 };
 
 /** Эталонные требования платформы */
@@ -175,6 +179,12 @@ export function ModerationDialog({
   const tracks = release.tracks;
   const failedTracks = tracks.filter(t => !audioMatchesSpec(t.audio));
   const allOk = failedTracks.length === 0 && tracks.every(t => t.audio);
+
+  // Кнопки действий видны только если бэкенд разрешает соответствующий переход.
+  // Источник истины — Release.allowedTransitions из enrichRelease на бэкенде.
+  const canApprove = release.allowedTransitions.includes("approved");
+  const canReject  = release.allowedTransitions.includes("rejected");
+  const hasActions = canApprove || canReject;
 
   const toggleReason = (r: string) => {
     setReasons(prev => {
@@ -360,18 +370,27 @@ export function ModerationDialog({
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Закрыть</Button>
-            <Button
-              variant="outline"
-              className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
-              onClick={() => setFailOpen(true)}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              Fail & Return
-            </Button>
-            <Button onClick={handleApprove}>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Approve Release
-            </Button>
+            {!hasActions && (
+              <p className="text-xs text-muted-foreground self-center italic">
+                Переходы недоступны для этого статуса
+              </p>
+            )}
+            {canReject && (
+              <Button
+                variant="outline"
+                className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+                onClick={() => setFailOpen(true)}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Fail & Return
+              </Button>
+            )}
+            {canApprove && (
+              <Button onClick={handleApprove}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Approve Release
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

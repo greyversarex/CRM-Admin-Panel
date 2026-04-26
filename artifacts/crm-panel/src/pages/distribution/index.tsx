@@ -51,6 +51,8 @@ function dspLabel(code: string) {
 
 // API Release → форма ModerationRelease.
 // Полный список треков подгружается уже внутри модалки модерации (по releaseId).
+// allowedTransitions прокидываем без изменений — бэкенд является источником истины,
+// и диалог сам решает, показывать ли кнопки Approve/Reject.
 function toModerationRelease(r: Release): ModerationRelease {
   return {
     id: r.id,
@@ -61,7 +63,8 @@ function toModerationRelease(r: Release): ModerationRelease {
     upc: r.upc ?? "",
     coverUrl: r.coverUrl ?? undefined,
     issues: [],
-    tracks: [], // QC по аудио показывается уже на странице релиза
+    tracks: [],
+    allowedTransitions: r.allowedTransitions,
   };
 }
 
@@ -576,11 +579,14 @@ export default function Distribution() {
                         <TableCell className="text-sm font-mono text-muted-foreground">{r.releaseDate ?? "—"}</TableCell>
                         <TableCell><StatusBadge status={r.status} /></TableCell>
                         <TableCell className="text-right">
-                          <Link href={`/releases/${r.id}`}>
-                            <Button size="sm" className="h-7 text-xs">
-                              <Send className="mr-1 h-3.5 w-3.5" /> Deliver
-                            </Button>
-                          </Link>
+                          {/* canDeliver — флаг из бэкенда (status === "approved") */}
+                          {r.canDeliver && (
+                            <Link href={`/releases/${r.id}`}>
+                              <Button size="sm" className="h-7 text-xs">
+                                <Send className="mr-1 h-3.5 w-3.5" /> Deliver
+                              </Button>
+                            </Link>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
