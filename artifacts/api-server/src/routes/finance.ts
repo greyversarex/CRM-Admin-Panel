@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable, usersTable } from "@workspace/db";
-import { count, eq, desc, and } from "drizzle-orm";
+import { count, eq, desc, and, ne, inArray, sql } from "drizzle-orm";
 import {
   CreateTransactionBody,
   CreatePayoutRequestBody,
@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { PLATFORM_FEE_RATE, PAID_PAYOUT_STATUSES, PENDING_PAYOUT_STATUS } from "../lib/finance";
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 
 const router = Router();
@@ -143,7 +144,28 @@ router.post("/finance/transactions", requireRole("admin", "manager"), async (req
   });
 });
 
-// Balances
+// ─── Balances ────────────────────────────────────────────────────────────
+// Реальный расчёт (был fake Math.random).
+// Формула per entity (artist|label, currency=USD):
+//   gross           = Σ transactions.amount WHERE type != 'payout'
+//   net             = gross × (1 − PLATFORM_FEE_RATE)
+//   paidOut         = Σ payouts.amount WHERE status ∈ PAID_PAYOUT_STATUSES
+//   balance         = max(0, net − paidOut)        ← available для нового запроса payout
+//   pendingPayout   = Σ payouts.amount WHERE status='pending'
+//
+// Артистам возвращаем только свой artist-баланс; лейблам — только свой
+// label-баланс (индивидуальные артисты лейбла не раскрываются). Админ/менеджер
+// видит и тех, и других. Валюта пока зашита USD — multi-currency-balances
+// потребует отдельного аккумулятора per currency и слайдер на фронте.
+interface BalanceRow {
+  entityType: "artist" | "label";
+  entityId: number;
+  entityName: string;
+  balance: number;
+  currency: string;
+  pendingPayout: number;
+}
+
 router.get("/finance/balances", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   let artistIdFilter = req.query.artist_id !== undefined ? parseInt(req.query.artist_id as string, 10) : undefined;
@@ -155,33 +177,171 @@ router.get("/finance/balances", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid label_id" }); return;
   }
 
-  // Override scope for non-privileged roles.
+  // Скоуп: для не-привилегированных ролей принудительно подменяем фильтры
+  // на свой artistId/labelId; одновременно отключаем «чужие» секции в ответе.
+  let returnArtists = true;
+  let returnLabels = true;
   if (!scope.fullAccess) {
     if (scope.role === "artist") {
       if (scope.artistId == null) { res.json([]); return; }
       if (artistIdFilter !== undefined && artistIdFilter !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
       artistIdFilter = scope.artistId; labelIdFilter = undefined;
+      returnLabels = false;
     } else if (scope.role === "label") {
       if (scope.labelId == null) { res.json([]); return; }
       if (labelIdFilter !== undefined && labelIdFilter !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
       labelIdFilter = scope.labelId; artistIdFilter = undefined;
+      returnArtists = false;
     }
   }
 
-  const conditions: any[] = [eq(artistsTable.status, "active")];
-  if (artistIdFilter !== undefined) conditions.push(eq(artistsTable.id, artistIdFilter));
-  if (labelIdFilter  !== undefined) conditions.push(eq(artistsTable.labelId, labelIdFilter));
+  const balances: BalanceRow[] = [];
 
-  const artists = await db.select().from(artistsTable).where(and(...conditions));
+  // ─── Artist balances ───────────────────────────────────────────────────
+  if (returnArtists) {
+    const artistConds: any[] = [eq(artistsTable.status, "active")];
+    if (artistIdFilter !== undefined) artistConds.push(eq(artistsTable.id, artistIdFilter));
+    if (labelIdFilter  !== undefined) artistConds.push(eq(artistsTable.labelId, labelIdFilter));
 
-  const balances = artists.map(a => ({
-    entityType: "artist",
-    entityId: a.id,
-    entityName: a.name,
-    balance: parseFloat((Math.random() * 10000).toFixed(2)),
-    currency: "USD",
-    pendingPayout: parseFloat((Math.random() * 2000).toFixed(2)),
-  }));
+    const artists = await db.select({ id: artistsTable.id, name: artistsTable.name })
+      .from(artistsTable).where(and(...artistConds));
+
+    if (artists.length > 0) {
+      const ids = artists.map(a => a.id);
+
+      // Один SQL-запрос на агрегат — не тянем строки в JS-память.
+      const revRows = await db
+        .select({
+          artistId: transactionsTable.artistId,
+          gross: sql<string>`COALESCE(SUM(${transactionsTable.amount}), 0)::text`,
+        })
+        .from(transactionsTable)
+        .where(and(
+          inArray(transactionsTable.artistId, ids),
+          eq(transactionsTable.currency, "USD"),
+          ne(transactionsTable.type, "payout"),
+        ))
+        .groupBy(transactionsTable.artistId);
+      const grossMap = new Map(revRows.filter(r => r.artistId != null).map(r => [r.artistId!, parseFloat(r.gross)]));
+
+      const paidRows = await db
+        .select({
+          artistId: payoutsTable.artistId,
+          amount: sql<string>`COALESCE(SUM(${payoutsTable.amount}), 0)::text`,
+        })
+        .from(payoutsTable)
+        .where(and(
+          inArray(payoutsTable.artistId, ids),
+          eq(payoutsTable.currency, "USD"),
+          inArray(payoutsTable.status, [...PAID_PAYOUT_STATUSES]),
+        ))
+        .groupBy(payoutsTable.artistId);
+      const paidMap = new Map(paidRows.filter(r => r.artistId != null).map(r => [r.artistId!, parseFloat(r.amount)]));
+
+      const pendingRows = await db
+        .select({
+          artistId: payoutsTable.artistId,
+          amount: sql<string>`COALESCE(SUM(${payoutsTable.amount}), 0)::text`,
+        })
+        .from(payoutsTable)
+        .where(and(
+          inArray(payoutsTable.artistId, ids),
+          eq(payoutsTable.currency, "USD"),
+          eq(payoutsTable.status, PENDING_PAYOUT_STATUS),
+        ))
+        .groupBy(payoutsTable.artistId);
+      const pendingMap = new Map(pendingRows.filter(r => r.artistId != null).map(r => [r.artistId!, parseFloat(r.amount)]));
+
+      for (const a of artists) {
+        const gross = grossMap.get(a.id) ?? 0;
+        const net = gross * (1 - PLATFORM_FEE_RATE);
+        const paid = paidMap.get(a.id) ?? 0;
+        const pending = pendingMap.get(a.id) ?? 0;
+        balances.push({
+          entityType: "artist",
+          entityId: a.id,
+          entityName: a.name,
+          balance: Math.round(Math.max(0, net - paid) * 100) / 100,
+          currency: "USD",
+          pendingPayout: Math.round(pending * 100) / 100,
+        });
+      }
+    }
+  }
+
+  // ─── Label balances ────────────────────────────────────────────────────
+  // ВАЖНО: одна и та же транзакция учитывается и для artistId, и для labelId,
+  // если оба заполнены (см. ingestion/service.ts). Это интенционально: лейбл
+  // и артист видят свой собственный «pool of money», и payouts учитываются
+  // независимо (artist-payout не уменьшает label-баланс и наоборот).
+  if (returnLabels) {
+    const labelConds: any[] = [eq(labelsTable.status, "active")];
+    if (labelIdFilter !== undefined) labelConds.push(eq(labelsTable.id, labelIdFilter));
+
+    const labels = await db.select({ id: labelsTable.id, name: labelsTable.name })
+      .from(labelsTable).where(and(...labelConds));
+
+    if (labels.length > 0) {
+      const ids = labels.map(l => l.id);
+
+      const revRows = await db
+        .select({
+          labelId: transactionsTable.labelId,
+          gross: sql<string>`COALESCE(SUM(${transactionsTable.amount}), 0)::text`,
+        })
+        .from(transactionsTable)
+        .where(and(
+          inArray(transactionsTable.labelId, ids),
+          eq(transactionsTable.currency, "USD"),
+          ne(transactionsTable.type, "payout"),
+        ))
+        .groupBy(transactionsTable.labelId);
+      const grossMap = new Map(revRows.filter(r => r.labelId != null).map(r => [r.labelId!, parseFloat(r.gross)]));
+
+      const paidRows = await db
+        .select({
+          labelId: payoutsTable.labelId,
+          amount: sql<string>`COALESCE(SUM(${payoutsTable.amount}), 0)::text`,
+        })
+        .from(payoutsTable)
+        .where(and(
+          inArray(payoutsTable.labelId, ids),
+          eq(payoutsTable.currency, "USD"),
+          inArray(payoutsTable.status, [...PAID_PAYOUT_STATUSES]),
+        ))
+        .groupBy(payoutsTable.labelId);
+      const paidMap = new Map(paidRows.filter(r => r.labelId != null).map(r => [r.labelId!, parseFloat(r.amount)]));
+
+      const pendingRows = await db
+        .select({
+          labelId: payoutsTable.labelId,
+          amount: sql<string>`COALESCE(SUM(${payoutsTable.amount}), 0)::text`,
+        })
+        .from(payoutsTable)
+        .where(and(
+          inArray(payoutsTable.labelId, ids),
+          eq(payoutsTable.currency, "USD"),
+          eq(payoutsTable.status, PENDING_PAYOUT_STATUS),
+        ))
+        .groupBy(payoutsTable.labelId);
+      const pendingMap = new Map(pendingRows.filter(r => r.labelId != null).map(r => [r.labelId!, parseFloat(r.amount)]));
+
+      for (const l of labels) {
+        const gross = grossMap.get(l.id) ?? 0;
+        const net = gross * (1 - PLATFORM_FEE_RATE);
+        const paid = paidMap.get(l.id) ?? 0;
+        const pending = pendingMap.get(l.id) ?? 0;
+        balances.push({
+          entityType: "label",
+          entityId: l.id,
+          entityName: l.name,
+          balance: Math.round(Math.max(0, net - paid) * 100) / 100,
+          currency: "USD",
+          pendingPayout: Math.round(pending * 100) / 100,
+        });
+      }
+    }
+  }
 
   res.json(balances);
 });

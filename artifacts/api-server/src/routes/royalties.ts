@@ -4,10 +4,10 @@ import {
 } from "@workspace/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
 import { getDataScope } from "../lib/auth";
+import { PLATFORM_FEE_RATE as DEFAULT_FEE_RATE } from "../lib/finance";
 
 const router = Router();
 
-const DEFAULT_FEE_RATE = 0.15;
 const MIN_PAYOUT = 50;
 const ALLOW_SEED = process.env.NODE_ENV !== "production";
 
