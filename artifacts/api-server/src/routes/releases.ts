@@ -243,7 +243,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), async
     failedCount,
     items,
     createdById: sessionUser?.id ?? null,
-    createdByName: sessionUser?.name ?? sessionUser?.email ?? null,
+    createdByName: sessionUser?.name ?? null,
   }).returning();
 
   void auditMutation(req, {

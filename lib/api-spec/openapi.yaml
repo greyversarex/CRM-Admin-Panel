@@ -2419,6 +2419,12 @@ components:
           type: integer
         createdAt:
           type: string
+        createdById:
+          type: integer
+          nullable: true
+        createdByName:
+          type: string
+          nullable: true
         items:
           type: array
           items:

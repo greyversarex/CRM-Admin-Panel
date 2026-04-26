@@ -16,5 +16,7 @@ export interface TransferImport {
   importedCount: number;
   failedCount: number;
   createdAt: string;
+  createdById?: number | null;
+  createdByName?: string | null;
   items: TransferImportItem[];
 }

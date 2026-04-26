@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout";
 import { useListTransferImports } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronDown, CheckCircle2, AlertCircle, Plus, ArrowLeft, Music2 } from "lucide-react";
+import { ChevronLeft, ChevronDown, CheckCircle2, AlertCircle, Plus, ArrowLeft, Music2, User } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,8 +72,14 @@ export default function TransferTrack() {
                             )}
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground hidden sm:block">
-                          {new Date(imp.createdAt).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}
+                        <div className="hidden sm:flex flex-col items-end gap-1 text-xs text-muted-foreground">
+                          <span>{new Date(imp.createdAt).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</span>
+                          {imp.createdByName && (
+                            <span className="inline-flex items-center gap-1 text-[11px]">
+                              <User className="h-3 w-3" />
+                              {imp.createdByName}
+                            </span>
+                          )}
                         </div>
                         <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
                       </button>

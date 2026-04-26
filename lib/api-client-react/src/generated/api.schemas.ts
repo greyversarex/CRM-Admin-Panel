@@ -349,6 +349,9 @@ export interface TransferImportItem {
 
 export interface TransferImport {
   id: number;
+  /** added by hand pending orval re-run; kept in sync with openapi.yaml + DB schema */
+  createdById?: number | null;
+  createdByName?: string | null;
   status: TransferImportStatus;
   spotifyArtistId?: string | null;
   spotifyArtistName?: string | null;
