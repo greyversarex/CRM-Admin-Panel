@@ -491,6 +491,26 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
   res.json(enriched);
 });
 
+// State-machine допустимых переходов для админ/manager PATCH /releases/:id/status.
+// Submit (артист draft|rejected → pending_review) идёт через POST /releases/:id/submit.
+// Delivery (approved/error → delivering) ставит сам POST /releases/:id/deliver.
+// Здесь — только то, что вправе сделать модератор/менеджер вручную.
+export const RELEASE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  draft:              ["pending_review"],
+  pending_review:     ["approved", "rejected", "draft"],
+  // approved → delivering и error → delivering сюда НЕ входят: переход в
+  // 'delivering' возможен только через POST /releases/:id/deliver, который
+  // одновременно создаёт записи в deliveries (иначе статус был бы без job'ов).
+  approved:           ["rejected"],
+  rejected:           ["draft", "pending_review"],
+  delivering:         ["delivered", "error"],
+  delivered:          ["live", "error"],
+  live:               ["takedown_requested"],
+  error:              ["rejected", "draft"],
+  takedown_requested: ["removed", "live"],
+  removed:            [],
+};
+
 router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = UpdateReleaseStatusParams.safeParse(req.params);
   if (!params.success) {
@@ -513,13 +533,42 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
   const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
-  const [release] = await db.update(releasesTable)
+  // ─── Проверка перехода ────────────────────────────────────────────────
+  // Same-status явно отклоняем — иначе админ дважды нажмёт «Approve» и
+  // дважды отправит уведомление артисту/лейблу.
+  if (existing.status === parsed.data.status) {
+    res.status(409).json({
+      error: `Release is already in status '${existing.status}'.`,
+    });
+    return;
+  }
+  const allowed = RELEASE_STATUS_TRANSITIONS[existing.status] ?? [];
+  if (!allowed.includes(parsed.data.status)) {
+    res.status(409).json({
+      error: `Invalid status transition: '${existing.status}' → '${parsed.data.status}'.`,
+      from: existing.status,
+      to: parsed.data.status,
+      allowed,
+    });
+    return;
+  }
+
+  // Атомарный UPDATE с проверкой исходного статуса (оптимистичная блокировка):
+  // если параллельный запрос (например, submit или другой админ) успел сменить
+  // статус — наш UPDATE вернёт 0 строк и мы скажем клиенту перезагрузиться.
+  const updated = await db.update(releasesTable)
     .set({ status: parsed.data.status, statusNote: parsed.data.note ?? null })
-    .where(eq(releasesTable.id, params.data.id))
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      eq(releasesTable.status, existing.status),
+    ))
     .returning();
 
+  const release = updated[0];
   if (!release) {
-    res.status(404).json({ error: "Release not found" });
+    res.status(409).json({
+      error: "Release status changed concurrently. Reload and try again.",
+    });
     return;
   }
 
@@ -621,9 +670,15 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
     });
   }
 
-  // Перевод релиза в 'delivering' если хотя бы один job создан (визуально показать прогресс)
+  // Перевод релиза в 'delivering' если хотя бы один job создан.
+  // Optimistic guard: WHERE status='approved' защищает от гонки с PATCH —
+  // если пока мы создавали jobs, модератор успел отозвать в 'rejected', мы НЕ
+  // должны затирать его решение. Jobs создались — пусть отработают/отменятся
+  // отдельно (фоновый воркер увидит, что релиз больше не approved).
   if (created.length > 0) {
-    await db.update(releasesTable).set({ status: "delivering" }).where(eq(releasesTable.id, release.id));
+    await db.update(releasesTable)
+      .set({ status: "delivering" })
+      .where(and(eq(releasesTable.id, release.id), eq(releasesTable.status, "approved")));
   }
 
   res.status(201).json({
