@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, type TransferImportItem } from "@workspace/db";
 import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
@@ -34,36 +34,22 @@ export function releaseEditableReason(
   return `Release in status '${status}' is locked for editing. Wait for moderator decision or take down to edit.`;
 }
 
-// ─── In-memory transfer import storage (mock) ──────────────────────────────
-type TransferImportItem = {
-  upc: string; title: string; artist: string; label: string | null;
-  tracks: number; coverUrl: string | null; success: boolean;
-};
-type TransferImport = {
-  id: number; status: "in_progress" | "complete" | "error";
-  spotifyArtistId: string | null; spotifyArtistName: string | null;
-  importedCount: number; failedCount: number; createdAt: string;
-  items: TransferImportItem[];
-};
-const transferImports: TransferImport[] = [
-  { id: 6, status: "complete", spotifyArtistId: "0DIrXZNXxnYl3xrtoLvInd", spotifyArtistName: "Yosamin Davlatova",
-    importedCount: 2, failedCount: 0, createdAt: new Date(Date.now() - 1 * 86400_000).toISOString(),
-    items: [
-      { upc: "199502855390", title: "Bacha Amujon", artist: "Yosamin Davlatova", label: "Tajik Music", tracks: 1, coverUrl: null, success: true },
-      { upc: "859715954814", title: "Dilm",          artist: "Umedjoni Burhon",  label: "Tajik Music", tracks: 4, coverUrl: null, success: true },
-    ] },
-  { id: 5, status: "complete", spotifyArtistId: null, spotifyArtistName: "Sarvinoz Yusufi",
-    importedCount: 7, failedCount: 0, createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(), items: [] },
-  { id: 4, status: "error",    spotifyArtistId: null, spotifyArtistName: "Mixed batch",
-    importedCount: 0, failedCount: 18, createdAt: new Date(Date.now() - 5 * 86400_000).toISOString(), items: [] },
-  { id: 3, status: "complete", spotifyArtistId: null, spotifyArtistName: "Yasmina",
-    importedCount: 4, failedCount: 0, createdAt: new Date(Date.now() - 7 * 86400_000).toISOString(), items: [] },
-  { id: 2, status: "complete", spotifyArtistId: null, spotifyArtistName: "Marjon",
-    importedCount: 5, failedCount: 0, createdAt: new Date(Date.now() - 11 * 86400_000).toISOString(), items: [] },
-  { id: 1, status: "complete", spotifyArtistId: null, spotifyArtistName: "Initial sync",
-    importedCount: 3, failedCount: 0, createdAt: new Date(Date.now() - 14 * 86400_000).toISOString(), items: [] },
-];
-let nextImportId = 7;
+// ─── Transfer import storage ────────────────────────────────────────────────
+// Persistent (DB-backed) catalog-import jobs. Admin/manager only.
+function serializeTransferImport(row: typeof transferImportsTable.$inferSelect) {
+  return {
+    id: row.id,
+    status: row.status as "in_progress" | "complete" | "error",
+    spotifyArtistId: row.spotifyArtistId,
+    spotifyArtistName: row.spotifyArtistName,
+    importedCount: row.importedCount,
+    failedCount: row.failedCount,
+    createdAt: row.createdAt.toISOString(),
+    createdById: row.createdById,
+    createdByName: row.createdByName,
+    items: (row.items ?? []) as TransferImportItem[],
+  };
+}
 
 async function enrichRelease(r: typeof releasesTable.$inferSelect) {
   let artistName = "Unknown";
@@ -224,19 +210,21 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
   });
 });
 
-// ─── Transfer Imports (mock) ────────────────────────────────────────────────
+// ─── Transfer Imports ───────────────────────────────────────────────────────
 // Global catalog-import jobs (manual back-catalog ingestion). Admin/manager only.
-router.get("/releases/transfer-imports", requireRole("admin", "manager"), (_req, res): void => {
-  res.json([...transferImports].sort((a, b) => b.id - a.id));
+// Persistent in DB; every create writes an audit_log row (who, what, when).
+router.get("/releases/transfer-imports", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+  const rows = await db.select().from(transferImportsTable).orderBy(desc(transferImportsTable.id));
+  res.json(rows.map(serializeTransferImport));
 });
 
-router.post("/releases/transfer-imports", requireRole("admin", "manager"), (req, res): void => {
+router.post("/releases/transfer-imports", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = CreateTransferImportBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const items = parsed.data.items.map((i) => ({
+  const items: TransferImportItem[] = parsed.data.items.map((i) => ({
     upc: i.upc, title: i.title, artist: i.artist,
     label: i.label ?? parsed.data.labelName ?? null,
     tracks: i.tracks, coverUrl: i.coverUrl ?? null,
@@ -244,17 +232,29 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), (req,
   }));
   const importedCount = items.filter((i) => i.success).length;
   const failedCount = items.length - importedCount;
-  const job: TransferImport = {
-    id: nextImportId++,
-    status: failedCount > 0 && importedCount === 0 ? "error" : "complete",
+  const status = failedCount > 0 && importedCount === 0 ? "error" : "complete";
+  const sessionUser = req.session.user;
+
+  const [inserted] = await db.insert(transferImportsTable).values({
+    status,
     spotifyArtistId: parsed.data.spotifyArtistId ?? null,
     spotifyArtistName: parsed.data.spotifyArtistName ?? null,
-    importedCount, failedCount,
-    createdAt: new Date().toISOString(),
+    importedCount,
+    failedCount,
     items,
-  };
-  transferImports.unshift(job);
-  res.status(201).json(job);
+    createdById: sessionUser?.id ?? null,
+    createdByName: sessionUser?.name ?? sessionUser?.email ?? null,
+  }).returning();
+
+  void auditMutation(req, {
+    action: "create",
+    entityType: "transfer_import",
+    entityId: inserted.id,
+    before: null,
+    after: inserted,
+  });
+
+  res.status(201).json(serializeTransferImport(inserted));
 });
 
 router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager"), (req, res): void => {

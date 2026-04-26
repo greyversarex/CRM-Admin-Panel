@@ -95,6 +95,14 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
   user_kyc: new Set([
     "id", "kycStatus", "kycCompletedAt",
   ]),
+  // Transfer Track — массовый перенос каталога. Логируем job + summary.
+  // items[] содержит upc/title/artist/label — это именно то, что переносилось,
+  // т.е. сам смысл операции; PII там не выше, чем в release/track аудите.
+  transfer_import: new Set([
+    "id", "status", "spotifyArtistId", "spotifyArtistName",
+    "importedCount", "failedCount", "items",
+    "createdById", "createdByName", "createdAt",
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если

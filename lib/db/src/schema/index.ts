@@ -21,3 +21,4 @@ export * from "./signup_requests";
 export * from "./notifications";
 export * from "./kyc_documents";
 export * from "./support";
+export * from "./transfer_imports";
