@@ -209,4 +209,150 @@ router.get("/analytics/top-tracks", async (req, res): Promise<void> => {
   res.json(result);
 });
 
+// ─── /analytics/export — CSV всего отчёта за период ─────────────────────────
+
+function csvCell(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  // CSV/Formula injection mitigation (Excel/Sheets): значения, начинающиеся
+  // с =, +, -, @, табуляции или CR, могут быть выполнены как формулы при
+  // открытии файла. Префиксуем одиночной кавычкой ДО RFC 4180 escaping.
+  if (s.length > 0 && /^[=+\-@\t\r]/.test(s)) {
+    s = "'" + s;
+  }
+  // RFC 4180: оборачиваем в кавычки если содержит запятую, кавычку, перевод
+  // строки, либо ведущие/конечные пробелы. Внутренние кавычки удваиваются.
+  if (/[",\r\n]/.test(s) || s !== s.trim()) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+function csvRow(cells: unknown[]): string {
+  return cells.map(csvCell).join(",");
+}
+
+router.get("/analytics/export", async (req, res): Promise<void> => {
+  const period = (req.query.period as string) ?? "30d";
+  const days = periodToDays(period);
+  const start = startDateFor(days);
+  const startStr = start.toISOString().split("T")[0];
+
+  // Параллельно поднимаем все четыре среза.
+  const [streamsRows, platformRows, geoRows, topTrackRows] = await Promise.all([
+    db.select({
+        date:    usageReportsTable.period,
+        streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+        revenue: sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
+      })
+      .from(usageReportsTable)
+      .where(gte(usageReportsTable.period, startStr))
+      .groupBy(usageReportsTable.period)
+      .orderBy(usageReportsTable.period),
+    db.select({
+        platform: usageReportsTable.platform,
+        streams:  sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+        revenue:  sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
+      })
+      .from(usageReportsTable)
+      .where(gte(usageReportsTable.period, startStr))
+      .groupBy(usageReportsTable.platform)
+      .orderBy(desc(sql`sum(${usageReportsTable.streams})`)),
+    db.select({
+        country: usageReportsTable.countryCode,
+        streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+        revenue: sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
+      })
+      .from(usageReportsTable)
+      .where(and(
+        gte(usageReportsTable.period, startStr),
+        isNotNull(usageReportsTable.countryCode),
+      ))
+      .groupBy(usageReportsTable.countryCode)
+      .orderBy(desc(sql`sum(${usageReportsTable.streams})`)),
+    db.select({
+        trackId: usageReportsTable.trackId,
+        title:   tracksTable.title,
+        artist:  artistsTable.name,
+        streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+        revenue: sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
+      })
+      .from(usageReportsTable)
+      .leftJoin(tracksTable, eq(tracksTable.id, usageReportsTable.trackId))
+      .leftJoin(artistsTable, eq(artistsTable.id, usageReportsTable.artistId))
+      .where(gte(usageReportsTable.period, startStr))
+      .groupBy(usageReportsTable.trackId, tracksTable.title, artistsTable.name)
+      .orderBy(desc(sql`sum(${usageReportsTable.streams})`))
+      .limit(50),
+  ]);
+
+  const totalStreams = streamsRows.reduce((s, r) => s + Number(r.streams), 0);
+  const totalRevenue = streamsRows.reduce((s, r) => s + parseFloat(r.revenue), 0);
+  const platformTotal = platformRows.reduce((s, r) => s + Number(r.streams), 0) || 1;
+  const geoTotal = geoRows.reduce((s, r) => s + Number(r.streams), 0) || 1;
+
+  const lines: string[] = [];
+  lines.push(`# Tajik Music Distribution — Аналитика`);
+  lines.push(`# Период: ${period} (с ${startStr})`);
+  lines.push(`# Сгенерировано: ${new Date().toISOString()}`);
+  lines.push("");
+  lines.push("## Сводка");
+  lines.push(csvRow(["Метрика", "Значение"]));
+  lines.push(csvRow(["Стримов всего", totalStreams]));
+  lines.push(csvRow(["Доход всего (USD)", totalRevenue.toFixed(2)]));
+  lines.push(csvRow(["Платформ", platformRows.length]));
+  lines.push(csvRow(["Стран", geoRows.length]));
+  lines.push("");
+  lines.push("## Стримы по дням");
+  lines.push(csvRow(["Дата", "Стримы", "Доход (USD)"]));
+  for (const r of streamsRows) {
+    lines.push(csvRow([r.date, Number(r.streams), parseFloat(r.revenue).toFixed(2)]));
+  }
+  lines.push("");
+  lines.push("## По платформам");
+  lines.push(csvRow(["Платформа", "Стримы", "Доход (USD)", "Доля (%)"]));
+  for (const r of platformRows) {
+    const streams = Number(r.streams);
+    lines.push(csvRow([
+      r.platform, streams,
+      parseFloat(r.revenue).toFixed(2),
+      ((streams / platformTotal) * 100).toFixed(1),
+    ]));
+  }
+  lines.push("");
+  lines.push("## География");
+  lines.push(csvRow(["Код страны", "Страна", "Стримы", "Доход (USD)", "Доля (%)"]));
+  for (const r of geoRows) {
+    if (!r.country) continue;
+    const streams = Number(r.streams);
+    lines.push(csvRow([
+      r.country,
+      COUNTRY_NAMES[r.country] ?? r.country,
+      streams,
+      parseFloat(r.revenue).toFixed(2),
+      ((streams / geoTotal) * 100).toFixed(1),
+    ]));
+  }
+  lines.push("");
+  lines.push("## Топ треков");
+  lines.push(csvRow(["#", "Название", "Артист", "Стримы", "Доход (USD)"]));
+  topTrackRows.forEach((r, i) => {
+    lines.push(csvRow([
+      i + 1,
+      r.title ?? "(unknown)",
+      r.artist ?? "—",
+      Number(r.streams),
+      parseFloat(r.revenue).toFixed(2),
+    ]));
+  });
+  lines.push("");
+
+  // \uFEFF (BOM) → Excel/Numbers корректно подхватывают UTF-8 кириллицу.
+  const body = "\uFEFF" + lines.join("\r\n");
+  const today = new Date().toISOString().split("T")[0];
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="analytics-${period}-${today}.csv"`);
+  res.setHeader("Cache-Control", "no-store");
+  res.send(body);
+});
+
 export default router;

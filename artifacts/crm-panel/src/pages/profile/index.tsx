@@ -224,23 +224,57 @@ export default function ProfilePage() {
     }
   }
 
-  function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  async function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const f = input.files?.[0];
     if (!f) return;
-    if (!["image/jpeg", "image/png", "image/gif"].includes(f.type)) {
-      toast({ title: "Неверный формат", description: "Только JPG, PNG, GIF.", variant: "destructive" });
+    if (!["image/jpeg", "image/png", "image/gif", "image/webp"].includes(f.type)) {
+      toast({ title: "Неверный формат", description: "Только JPG, PNG, GIF, WEBP.", variant: "destructive" });
+      input.value = "";
       return;
     }
     if (f.size > 5 * 1024 * 1024) {
       toast({ title: "Файл слишком большой", description: "Максимум 5 MB.", variant: "destructive" });
+      input.value = "";
       return;
     }
-    const url = URL.createObjectURL(f);
-    setAvatarPreview(url);
-    toast({
-      title: "Аватар выбран",
-      description: "Загрузка на сервер появится в следующем обновлении (нужен файловый storage).",
-    });
+
+    // Локальное превью пока идёт загрузка.
+    const localUrl = URL.createObjectURL(f);
+    setAvatarPreview(localUrl);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/users/me/avatar", {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); msg = j.error || msg; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      const updated = await res.json();
+      // Cache-bust: добавляем ts чтобы <img> точно перезагрузил картинку.
+      const fresh = updated.avatarUrl ? `${updated.avatarUrl}?ts=${Date.now()}` : null;
+      setAvatarPreview(fresh);
+      // Синхронизируем глобальный AuthContext (хедер, сайдбар).
+      await refresh();
+      toast({ title: "Аватар обновлён" });
+    } catch (err: any) {
+      // Откат локального превью при ошибке.
+      setAvatarPreview(null);
+      toast({
+        title: "Не удалось загрузить аватар",
+        description: err?.message ?? "",
+        variant: "destructive",
+      });
+    } finally {
+      URL.revokeObjectURL(localUrl);
+      input.value = "";
+    }
   }
 
   if (isLoading || !user) {

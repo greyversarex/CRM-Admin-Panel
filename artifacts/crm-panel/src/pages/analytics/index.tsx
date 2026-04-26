@@ -172,7 +172,14 @@ export default function AnalyticsPage() {
                 <SelectItem value="1y">Последний год</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" className="bg-card" disabled title="Экспорт в CSV — в разработке">
+            <Button
+              variant="outline"
+              className="bg-card"
+              onClick={() => {
+                window.location.href = `/api/analytics/export?period=${encodeURIComponent(period)}`;
+              }}
+              title="Скачать CSV за выбранный период"
+            >
               <Download className="mr-2 h-4 w-4" aria-hidden="true" />
               {t.common.export}
             </Button>

@@ -1,4 +1,6 @@
 import { Router } from "express";
+import multer from "multer";
+import { randomUUID } from "crypto";
 import { db, usersTable } from "@workspace/db";
 import { count, eq, desc, ilike, or, and, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -6,10 +8,33 @@ import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, Delete
 import { requireAuth, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { isValidIban, isValidSwift, maskBankInfoFor } from "../lib/kycUtils";
+import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
 
 const adminOnly = requireRole("admin", "manager");
 
 const router = Router();
+
+// ─── Avatar upload (Profile) ──────────────────────────────────────────────
+// Юзер сам загружает картинку профиля. Файл уходит в GCS под
+// `${PRIVATE_OBJECT_DIR}/uploads/avatars/<uuid>`, в `users.avatarUrl`
+// сохраняется относительный путь /api/users/avatars/<uuid> (не публичный URL),
+// чтобы файл отдавался только авторизованным юзерам через GET-роут ниже.
+const avatarStorage = new ObjectStorageService();
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+const ALLOWED_AVATAR_MIME = /^image\/(png|jpe?g|gif|webp)$/i;
+const AVATAR_PATH_PREFIX = "/api/users/avatars/";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function avatarStorageRefs(objectId: string): { bucketName: string; objectName: string } {
+  const privateDir = avatarStorage.getPrivateObjectDir();
+  const storageKey = `${privateDir}/uploads/avatars/${objectId}`;
+  const path = storageKey.startsWith("/") ? storageKey.slice(1) : storageKey;
+  const [bucketName, ...rest] = path.split("/");
+  return { bucketName, objectName: rest.join("/") };
+}
 
 // Whitelist of fields a user is allowed to change on their own profile.
 // Notably absent: role, status, email, artistId, labelId, passwordHash.
@@ -273,6 +298,150 @@ router.put("/users/:id", adminOnly, async (req, res): Promise<void> => {
   void auditMutation(req, { action: "update", entityType: "user", entityId: user.id, before: existing, after: user });
 
   res.json(formatUser(user));
+});
+
+// ─── Avatar: GET (любой авторизованный) ──────────────────────────────────
+// Регистрируем ДО /users/:id, чтобы express не пытался парсить "avatars"
+// как числовой :id (он бы вернул 400 от Zod).
+router.get("/users/avatars/:objectId", requireAuth, async (req, res): Promise<void> => {
+  const objectId = String(req.params.objectId ?? "");
+  if (!UUID_RE.test(objectId)) { res.status(400).json({ error: "Invalid avatar id" }); return; }
+  try {
+    const { bucketName, objectName } = avatarStorageRefs(objectId);
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    const [exists] = await file.exists();
+    if (!exists) { res.status(404).json({ error: "Avatar not found" }); return; }
+    const [metadata] = await file.getMetadata();
+    res.setHeader("Content-Type", (metadata.contentType as string) || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    if (metadata.size) res.setHeader("Content-Length", String(metadata.size));
+    file.createReadStream()
+      .on("error", (err) => {
+        req.log?.error({ err }, "[avatar] stream error");
+        if (!res.headersSent) res.sendStatus(500);
+      })
+      .pipe(res);
+  } catch (err) {
+    req.log?.error({ err }, "[avatar] download failed");
+    res.status(500).json({ error: "Не удалось получить аватар" });
+  }
+});
+
+// ─── Avatar: POST upload ──────────────────────────────────────────────────
+router.post("/users/me/avatar", requireAuth, avatarUpload.single("file"), async (req, res): Promise<void> => {
+  const sessionUser = req.session.user!;
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: "Файл не передан" }); return; }
+  if (!ALLOWED_AVATAR_MIME.test(file.mimetype)) {
+    res.status(400).json({ error: "Только PNG, JPEG, GIF, WEBP" }); return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    res.status(413).json({ error: "Файл превышает 5 МБ" }); return;
+  }
+
+  const objectId = randomUUID();
+  const { bucketName, objectName } = avatarStorageRefs(objectId);
+  const newFileRef = objectStorageClient.bucket(bucketName).file(objectName);
+
+  // 1) Загружаем новый файл в GCS.
+  try {
+    await newFileRef.save(file.buffer, {
+      contentType: file.mimetype,
+      resumable: false,
+      metadata: { contentType: file.mimetype },
+    });
+  } catch (err) {
+    req.log?.error({ err }, "[avatar] upload failed");
+    res.status(500).json({ error: "Не удалось сохранить файл" });
+    return;
+  }
+
+  // 2) Обновляем БД. На любую ошибку/«пустой» результат — компенсация:
+  //    удаляем только что загруженный файл, чтобы не оставлять orphan.
+  const newUrl = `${AVATAR_PATH_PREFIX}${objectId}`;
+  let oldAvatarUrl: string | null = null;
+  let updated: typeof usersTable.$inferSelect | undefined;
+  try {
+    const [existingMe] = await db.select().from(usersTable).where(eq(usersTable.id, sessionUser.id));
+    if (!existingMe) {
+      throw new Error("USER_GONE");
+    }
+    oldAvatarUrl = existingMe.avatarUrl ?? null;
+    [updated] = await db.update(usersTable)
+      .set({ avatarUrl: newUrl })
+      .where(eq(usersTable.id, sessionUser.id))
+      .returning();
+    if (!updated) {
+      throw new Error("USER_GONE");
+    }
+  } catch (err) {
+    // Компенсация: удаляем свежезагруженный объект, БД-состояние не менялось.
+    try { await newFileRef.delete({ ignoreNotFound: true }); } catch (cleanupErr) {
+      req.log?.warn({ err: cleanupErr, objectId }, "[avatar] compensation cleanup failed");
+    }
+    const isUserGone = err instanceof Error && err.message === "USER_GONE";
+    if (isUserGone) {
+      req.log?.warn({ userId: sessionUser.id }, "[avatar] user vanished mid-upload");
+      res.status(404).json({ error: "User not found" });
+    } else {
+      req.log?.error({ err }, "[avatar] DB update failed");
+      res.status(500).json({ error: "Не удалось сохранить аватар" });
+    }
+    return;
+  }
+
+  // 3) Best-effort удаляем старый файл (только если он наш).
+  if (oldAvatarUrl && oldAvatarUrl.startsWith(AVATAR_PATH_PREFIX)) {
+    const oldId = oldAvatarUrl.slice(AVATAR_PATH_PREFIX.length);
+    if (UUID_RE.test(oldId) && oldId !== objectId) {
+      try {
+        const refs = avatarStorageRefs(oldId);
+        await objectStorageClient.bucket(refs.bucketName).file(refs.objectName).delete({ ignoreNotFound: true });
+      } catch (err) {
+        req.log?.warn({ err, oldId }, "[avatar] cleanup of previous avatar failed");
+      }
+    }
+  }
+
+  void auditMutation(req, {
+    action: "update", entityType: "user", entityId: sessionUser.id,
+    before: { id: sessionUser.id, avatarUrl: oldAvatarUrl },
+    after:  { id: updated.id,    avatarUrl: updated.avatarUrl },
+  });
+
+  res.status(201).json(formatUser(updated, sessionUser.role));
+});
+
+// ─── Avatar: DELETE ───────────────────────────────────────────────────────
+router.delete("/users/me/avatar", requireAuth, async (req, res): Promise<void> => {
+  const sessionUser = req.session.user!;
+  const [me] = await db.select().from(usersTable).where(eq(usersTable.id, sessionUser.id));
+  if (!me) { res.status(404).json({ error: "User not found" }); return; }
+  const oldUrl = me.avatarUrl;
+  const [updated] = await db.update(usersTable)
+    .set({ avatarUrl: null })
+    .where(eq(usersTable.id, sessionUser.id))
+    .returning();
+
+  if (oldUrl && oldUrl.startsWith(AVATAR_PATH_PREFIX)) {
+    const oldId = oldUrl.slice(AVATAR_PATH_PREFIX.length);
+    if (UUID_RE.test(oldId)) {
+      try {
+        const { bucketName, objectName } = avatarStorageRefs(oldId);
+        await objectStorageClient.bucket(bucketName).file(objectName).delete({ ignoreNotFound: true });
+      } catch (err) {
+        req.log?.warn({ err, oldId }, "[avatar] delete cleanup failed");
+      }
+    }
+  }
+
+  void auditMutation(req, {
+    action: "update", entityType: "user", entityId: sessionUser.id,
+    before: { id: sessionUser.id, avatarUrl: oldUrl },
+    after:  { id: updated.id,   avatarUrl: null },
+  });
+
+  res.json(formatUser(updated, sessionUser.role));
 });
 
 router.delete("/users/:id", adminOnly, async (req, res): Promise<void> => {
