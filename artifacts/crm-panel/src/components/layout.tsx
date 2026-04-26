@@ -27,9 +27,22 @@ import {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { lang, setLang, t } = useLang();
-  const { user, logout } = useAuth();
+  const { user, logout, impersonator, stopImpersonating } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [stopBusy, setStopBusy] = useState(false);
+
+  const handleStopImpersonating = async () => {
+    setStopBusy(true);
+    const r = await stopImpersonating();
+    setStopBusy(false);
+    if (r.ok) {
+      toast({ title: "Возврат в учётную запись администратора" });
+      navigate("/users");
+    } else {
+      toast({ variant: "destructive", title: "Не удалось вернуться", description: r.error });
+    }
+  };
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try { return localStorage.getItem("theme") !== "light"; } catch { return true; }
   });
@@ -50,6 +63,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden bg-background">
       <SidebarNav />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {impersonator && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="h-9 shrink-0 flex items-center justify-between gap-3 px-5 text-[12px] font-medium text-amber-50 bg-gradient-to-r from-amber-600/90 via-amber-500/90 to-amber-600/90 border-b border-amber-700/40 shadow-[inset_0_-1px_0_rgba(0,0,0,0.15)]"
+          >
+            <span className="truncate">
+              Вы вошли как <strong className="font-bold">{user?.name ?? "—"}</strong>{" "}
+              <span className="opacity-80">({user?.email})</span>
+              <span className="mx-2 opacity-60">·</span>
+              admin: <strong className="font-bold">{impersonator.name}</strong>{" "}
+              <span className="opacity-80">({impersonator.email})</span>
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2.5 text-[11px] font-semibold text-amber-50 hover:text-white hover:bg-amber-700/40"
+              onClick={handleStopImpersonating}
+              disabled={stopBusy}
+            >
+              <LogOut className="h-3 w-3 mr-1.5" />
+              Вернуться к админу
+            </Button>
+          </div>
+        )}
         <header className="h-[60px] flex items-center justify-between px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center flex-1 max-w-sm">
             <div className="relative w-full">

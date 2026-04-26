@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,532 +7,465 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Inbox, Search, Filter, AlertTriangle, Clock, CheckCircle2,
-  Timer, MessageSquare, UserCheck, Tag, ChevronRight, Send,
-  Lock, MoreHorizontal, ArrowUpRight,
+  Inbox, Search, AlertTriangle, Clock, CheckCircle2,
+  Timer, MessageSquare, UserCheck, ChevronRight, Send,
+  Lock, ArrowUpRight,
 } from "lucide-react";
+import {
+  useSupportTickets,
+  useTicketDetails,
+  useReplyToTicket,
+  useUpdateTicket,
+  useSupportAgents,
+  type SupportTicket,
+  type TicketMessage,
+  type TicketStatus,
+  type TicketPriority,
+  type TicketCategory,
+  CATEGORY_LABELS,
+} from "@/lib/support-api";
 
-type Status   = "open" | "in_progress" | "waiting" | "resolved" | "closed";
-type Priority = "low" | "medium" | "high" | "urgent";
-type Category = "Финансы" | "Дистрибуция" | "Каталог" | "Маркетинг" | "Аккаунт" | "Другое";
+// ─── Конфигурация значков статусов / приоритетов ───────────────────────────
 
-type Ticket = {
-  id: string;
-  subject: string;
-  category: Category;
-  status: Status;
-  priority: Priority;
-  customer:   { name: string; role: "Артист" | "Лейбл"; initials: string; email: string };
-  assignee:   string | null;
-  ageHours:   number;
-  lastReply:  string;
-  messages:   number;
-  slaHours:   number;
-  preview:    string;
-  thread:     { from: string; isAgent: boolean; at: string; text: string }[];
+const STATUS_CFG: Record<TicketStatus, { label: string; cls: string }> = {
+  open:        { label: "Открыт",      cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+  in_progress: { label: "В работе",    cls: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+  waiting:     { label: "Ждёт ответа", cls: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
+  resolved:    { label: "Решён",       cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+  closed:      { label: "Закрыт",      cls: "text-muted-foreground bg-muted/30 border-border/40" },
 };
 
-const TICKETS: Ticket[] = [
-  {
-    id: "TCK-2026-0048",
-    subject: "Не приходит роялти за март",
-    category: "Финансы",
-    status: "open",
-    priority: "high",
-    customer: { name: "Шабнам Сурайё", role: "Артист", initials: "ШС", email: "shabnam@artist.tj" },
-    assignee: null,
-    ageHours: 2,
-    lastReply: "2 часа назад",
-    messages: 1,
-    slaHours: 24,
-    preview: "Брат, в личном кабинете висит баланс, но на карту ничего не пришло. Заявка от 12 апреля...",
-    thread: [
-      { from: "Шабнам Сурайё", isAgent: false, at: "Сегодня 14:32", text: "Здравствуйте! Заявка на выплату от 12 апреля висит в статусе «Отправлено», но на карту ничего не пришло. Можно проверить?" },
-    ],
-  },
-  {
-    id: "TCK-2026-0047",
-    subject: "Релиз отклонён Spotify — wrong UPC",
-    category: "Дистрибуция",
-    status: "in_progress",
-    priority: "urgent",
-    customer: { name: "Sherlock Records", role: "Лейбл", initials: "SR", email: "ops@sherlock.tj" },
-    assignee: "Фарход Г.",
-    ageHours: 6,
-    lastReply: "1 час назад",
-    messages: 8,
-    slaHours: 8,
-    preview: "Spotify вернул ошибку UPC уже зарегистрирован. Нужна помощь со сменой identifier...",
-    thread: [
-      { from: "Sherlock Records", isAgent: false, at: "Сегодня 09:14", text: "Spotify вернул ошибку — UPC уже зарегистрирован за другим лейблом. Что делать?" },
-      { from: "Фарход Г.",        isAgent: true,  at: "Сегодня 10:02", text: "Принял, посмотрю DDEX-ответ и зарегистрирую новый UPC из нашего пула. Дам знать через час." },
-      { from: "Фарход Г.",        isAgent: true,  at: "Сегодня 13:21", text: "Новый UPC присвоен: 0859770892341. Перезалил пакет в Spotify, ждём подтверждения." },
-    ],
-  },
-  {
-    id: "TCK-2026-0046",
-    subject: "Изменить ISRC на треке",
-    category: "Каталог",
-    status: "waiting",
-    priority: "low",
-    customer: { name: "Ёсамин Давлатов", role: "Артист", initials: "ЁД", email: "yosamin@artist.tj" },
-    assignee: "Афруза А.",
-    ageHours: 28,
-    lastReply: "Вчера",
-    messages: 4,
-    slaHours: 48,
-    preview: "Запрашиваю замену ISRC на треке Subhi Bahor — старый код принадлежит другому правообладателю...",
-    thread: [
-      { from: "Ёсамин Давлатов", isAgent: false, at: "Вчера 11:00", text: "Нужна замена ISRC на Subhi Bahor — старый принадлежал старому лейблу." },
-      { from: "Афруза А.",       isAgent: true,  at: "Вчера 12:30", text: "Принято. Жду подтверждение от прав-отдела, ответим в течение 48 часов." },
-    ],
-  },
-  {
-    id: "TCK-2026-0045",
-    subject: "Не работает пресейв-ссылка",
-    category: "Маркетинг",
-    status: "open",
-    priority: "medium",
-    customer: { name: "Манижа Давлатзода", role: "Артист", initials: "МД", email: "manija@artist.tj" },
-    assignee: null,
-    ageHours: 4,
-    lastReply: "4 часа назад",
-    messages: 1,
-    slaHours: 24,
-    preview: "Линк presave.tajikmusic.tj/manija-new выдаёт 404. Релиз через 3 дня, нужно срочно...",
-    thread: [
-      { from: "Манижа Давлатзода", isAgent: false, at: "Сегодня 12:14", text: "Линк presave.tajikmusic.tj/manija-new выдаёт 404. Релиз через 3 дня — горит!" },
-    ],
-  },
-  {
-    id: "TCK-2026-0044",
-    subject: "Добавить нового участника в аккаунт",
-    category: "Аккаунт",
-    status: "resolved",
-    priority: "low",
-    customer: { name: "Sherlock Records", role: "Лейбл", initials: "SR", email: "ops@sherlock.tj" },
-    assignee: "Фарход Г.",
-    ageHours: 50,
-    lastReply: "Вчера",
-    messages: 3,
-    slaHours: 48,
-    preview: "Просьба пригласить менеджера ops2@sherlock.tj с правами Editor...",
-    thread: [
-      { from: "Sherlock Records", isAgent: false, at: "Позавчера 16:00", text: "Пригласите ops2@sherlock.tj с правами Editor." },
-      { from: "Фарход Г.",        isAgent: true,  at: "Позавчера 16:45", text: "Готово, отправил приглашение." },
-      { from: "Sherlock Records", isAgent: false, at: "Вчера 09:10", text: "Спасибо, всё ок!" },
-    ],
-  },
-  {
-    id: "TCK-2026-0043",
-    subject: "Splits не считаются после изменения",
-    category: "Финансы",
-    status: "in_progress",
-    priority: "high",
-    customer: { name: "Парвиз Назаров", role: "Артист", initials: "ПН", email: "parviz@artist.tj" },
-    assignee: "Фарход Г.",
-    ageHours: 12,
-    lastReply: "3 часа назад",
-    messages: 5,
-    slaHours: 24,
-    preview: "Изменил процент сплита с соавтором, новая раскладка не применилась к апрельским отчислениям...",
-    thread: [
-      { from: "Парвиз Назаров", isAgent: false, at: "Сегодня 04:00", text: "Изменил процент сплита, апрельская выплата идёт по старой раскладке." },
-      { from: "Фарход Г.",      isAgent: true,  at: "Сегодня 09:30", text: "Сплиты применяются с новых отчётных периодов. Текущий начислен по раскладке на момент закрытия периода — это норма." },
-    ],
-  },
-  {
-    id: "TCK-2026-0042",
-    subject: "Хочу подключить YouTube Content ID",
-    category: "Дистрибуция",
-    status: "open",
-    priority: "medium",
-    customer: { name: "Парвиз Назаров", role: "Артист", initials: "ПН", email: "parviz@artist.tj" },
-    assignee: null,
-    ageHours: 18,
-    lastReply: "18 часов назад",
-    messages: 1,
-    slaHours: 24,
-    preview: "Подскажи как подключить Content ID для всего каталога, читал в FAQ но не нашёл кнопку...",
-    thread: [
-      { from: "Парвиз Назаров", isAgent: false, at: "Вчера 22:00", text: "Где включить Content ID для всего каталога? В FAQ написано, но кнопки не нашёл." },
-    ],
-  },
-];
-
-const STATUS_META: Record<Status, { label: string; color: string }> = {
-  open:        { label: "Открыт",      color: "bg-rose-500/15 text-rose-300 border-rose-500/25" },
-  in_progress: { label: "В работе",    color: "bg-amber-500/15 text-amber-300 border-amber-500/25" },
-  waiting:     { label: "Ждём клиента", color: "bg-cyan-500/15 text-cyan-300 border-cyan-500/25" },
-  resolved:    { label: "Решён",       color: "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" },
-  closed:      { label: "Закрыт",      color: "bg-muted/40 text-muted-foreground border-border/40" },
+const PRIO_CFG: Record<TicketPriority, { label: string; cls: string; rowAccent?: string }> = {
+  urgent: { label: "Срочный", cls: "text-rose-300 bg-rose-500/15 border-rose-500/30", rowAccent: "border-l-rose-500" },
+  high:   { label: "Высокий", cls: "text-rose-300 bg-rose-500/10 border-rose-500/20", rowAccent: "border-l-rose-400/60" },
+  medium: { label: "Средний", cls: "text-amber-300 bg-amber-500/10 border-amber-500/20" },
+  low:    { label: "Низкий",  cls: "text-muted-foreground bg-muted/30 border-border/40" },
 };
 
-const PRIO_META: Record<Priority, { label: string; color: string; dot: string }> = {
-  urgent: { label: "Критично", color: "text-rose-300 border-rose-500/30 bg-rose-500/10",       dot: "bg-rose-400" },
-  high:   { label: "Высокий",  color: "text-orange-300 border-orange-500/30 bg-orange-500/10", dot: "bg-orange-400" },
-  medium: { label: "Средний",  color: "text-amber-300 border-amber-500/30 bg-amber-500/10",    dot: "bg-amber-400" },
-  low:    { label: "Низкий",   color: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10", dot: "bg-emerald-400" },
-};
-
-const AGENTS = ["Все исполнители", "Не назначено", "Фарход Г.", "Афруза А.", "Manager Bot"];
+// ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function SupportInbox() {
-  const { toast } = useToast();
-  const [search,    setSearch]    = useState("");
-  const [statusF,   setStatusF]   = useState<string>("all");
-  const [prioF,     setPrioF]     = useState<string>("all");
-  const [catF,      setCatF]      = useState<string>("all");
-  const [assigneeF, setAssigneeF] = useState<string>("Все исполнители");
-  const [active,    setActive]    = useState<Ticket | null>(null);
-  const [reply,     setReply]     = useState("");
-  const [internal,  setInternal]  = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("");
+  const [openTicketId, setOpenTicketId] = useState<number | null>(null);
 
-  const filtered = useMemo(() => TICKETS.filter(t => {
-    if (statusF !== "all" && t.status   !== statusF) return false;
-    if (prioF   !== "all" && t.priority !== prioF)   return false;
-    if (catF    !== "all" && t.category !== catF)    return false;
-    if (assigneeF === "Не назначено" && t.assignee !== null) return false;
-    if (assigneeF !== "Все исполнители" && assigneeF !== "Не назначено" && t.assignee !== assigneeF) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!t.subject.toLowerCase().includes(q) &&
-          !t.id.toLowerCase().includes(q) &&
-          !t.customer.name.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  }), [statusF, prioF, catF, assigneeF, search]);
+  const { data: ticketsData, isLoading } = useSupportTickets({
+    status: (statusFilter || undefined) as TicketStatus | undefined,
+    priority: (priorityFilter || undefined) as TicketPriority | undefined,
+    category: (categoryFilter || undefined) as TicketCategory | undefined,
+    assignee: assigneeFilter || undefined,
+  });
+  const tickets: SupportTicket[] = ticketsData?.data ?? [];
 
-  const stats = useMemo(() => ({
-    open:       TICKETS.filter(t => t.status === "open").length,
-    inProgress: TICKETS.filter(t => t.status === "in_progress").length,
-    waiting:    TICKETS.filter(t => t.status === "waiting").length,
-    resolved:   TICKETS.filter(t => t.status === "resolved").length,
-    sla:        TICKETS.filter(t => t.ageHours > t.slaHours && t.status !== "resolved" && t.status !== "closed").length,
-    unassigned: TICKETS.filter(t => t.assignee === null && t.status !== "resolved" && t.status !== "closed").length,
-  }), []);
+  // Локальный full-text фильтр по subject / requester / ticketRef.
+  const filteredTickets = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tickets;
+    return tickets.filter((t) =>
+      t.subject.toLowerCase().includes(q) ||
+      t.ticketRef.toLowerCase().includes(q) ||
+      (t.requester?.name.toLowerCase().includes(q) ?? false) ||
+      (t.requester?.email.toLowerCase().includes(q) ?? false)
+    );
+  }, [tickets, search]);
 
-  const slaPct = (t: Ticket) => Math.min(100, Math.round((t.ageHours / t.slaHours) * 100));
-
-  function handleReply() {
-    if (!reply.trim()) {
-      toast({ title: "Пустой ответ", variant: "destructive" });
-      return;
-    }
-    toast({
-      title: internal ? "Внутренняя заметка добавлена" : "Ответ отправлен",
-      description: `Тикет ${active?.id} обновлён.`,
-    });
-    setReply("");
-    setInternal(false);
-  }
+  // KPI на основе всего списка (а не отфильтрованного).
+  const kpi = useMemo(() => {
+    const open = tickets.filter((t) => t.status === "open").length;
+    const inProgress = tickets.filter((t) => t.status === "in_progress").length;
+    const waiting = tickets.filter((t) => t.status === "waiting").length;
+    const resolved24h = tickets.filter((t) => t.status === "resolved" && hoursSince(t.updatedAt) <= 24).length;
+    const urgent = tickets.filter((t) => (t.priority === "urgent" || t.priority === "high") && t.status !== "resolved" && t.status !== "closed").length;
+    return { open, inProgress, waiting, resolved24h, urgent };
+  }, [tickets]);
 
   return (
     <Layout>
-      <div className="flex-1 overflow-y-auto bg-background">
-        <div className="px-6 py-5 max-w-[1600px] mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <Inbox className="h-5 w-5 text-primary" />
-                <h1 className="text-xl font-semibold">Хелпдеск — входящие обращения</h1>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Обращения от лейблов и артистов · SLA 24/48 часов · автомаршрутизация по категории
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Tag className="mr-1.5 h-3.5 w-3.5" /> Категории и шаблоны
-              </Button>
-              <Button size="sm" variant="default">
-                <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" /> Отчёт по SLA
-              </Button>
-            </div>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="relative pl-4">
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
+            <h1 className="text-2xl font-bold tracking-tight">Инбокс поддержки</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">
+              Очередь тикетов от артистов и лейблов. Назначайте, отвечайте, меняйте статусы.
+            </p>
           </div>
+          <Button size="sm" variant="outline" onClick={() => setAssigneeFilter("me")}>
+            <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Мои тикеты
+          </Button>
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
-            <StatCard icon={AlertTriangle} label="SLA нарушено" value={stats.sla} tone="rose" />
-            <StatCard icon={UserCheck}    label="Не назначено" value={stats.unassigned} tone="amber" />
-            <StatCard icon={MessageSquare} label="Открыто" value={stats.open} tone="rose" />
-            <StatCard icon={Timer}        label="В работе" value={stats.inProgress} tone="amber" />
-            <StatCard icon={Clock}        label="Ждём клиента" value={stats.waiting} tone="cyan" />
-            <StatCard icon={CheckCircle2} label="Решено" value={stats.resolved} tone="emerald" />
-          </div>
+        {/* KPI */}
+        <div className="grid gap-3 md:grid-cols-5">
+          <KpiTile icon={Inbox}         label="Открытых"  value={kpi.open}        accent="text-amber-400 bg-amber-500/10 border-amber-500/20" />
+          <KpiTile icon={MessageSquare} label="В работе"  value={kpi.inProgress}  accent="text-blue-400 bg-blue-500/10 border-blue-500/20" />
+          <KpiTile icon={Clock}         label="Ждут ответа" value={kpi.waiting}   accent="text-violet-400 bg-violet-500/10 border-violet-500/20" />
+          <KpiTile icon={CheckCircle2}  label="Решено за 24ч" value={kpi.resolved24h} accent="text-emerald-400 bg-emerald-500/10 border-emerald-500/20" />
+          <KpiTile icon={AlertTriangle} label="Срочные / высокие" value={kpi.urgent} accent="text-rose-400 bg-rose-500/10 border-rose-500/20" />
+        </div>
 
-          {/* Filters */}
-          <Card className="card-surface no-lift border-border/60 mb-4">
-            <CardContent className="p-3 flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[220px]">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Поиск по ID, теме, клиенту…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-9 text-sm bg-background/40"
-                />
+        {/* Фильтры */}
+        <Card className="card-surface no-lift border-border/60">
+          <CardContent className="pt-4 pb-4 flex flex-wrap gap-2 items-center">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Поиск по теме, номеру, имени или email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9 bg-background/50 text-sm"
+              />
+            </div>
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} label="Все статусы"
+              options={[
+                { v: "open",        l: "Открыт" },
+                { v: "in_progress", l: "В работе" },
+                { v: "waiting",     l: "Ждёт ответа" },
+                { v: "resolved",    l: "Решён" },
+                { v: "closed",      l: "Закрыт" },
+              ]}
+            />
+            <FilterSelect value={priorityFilter} onChange={setPriorityFilter} label="Любой приоритет"
+              options={[
+                { v: "urgent", l: "Срочный" },
+                { v: "high",   l: "Высокий" },
+                { v: "medium", l: "Средний" },
+                { v: "low",    l: "Низкий" },
+              ]}
+            />
+            <FilterSelect value={categoryFilter} onChange={setCategoryFilter} label="Все категории"
+              options={Object.keys(CATEGORY_LABELS).map((k) => ({ v: k, l: CATEGORY_LABELS[k] }))}
+            />
+            <FilterSelect value={assigneeFilter} onChange={setAssigneeFilter} label="Все исполнители"
+              options={[
+                { v: "me",          l: "Мои" },
+                { v: "unassigned",  l: "Не назначено" },
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Список тикетов */}
+        <Card className="card-surface no-lift border-border/60">
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-5 space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
               </div>
-              <Select value={statusF} onValueChange={setStatusF}>
-                <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Статус" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
-                  <SelectItem value="open">Открыт</SelectItem>
-                  <SelectItem value="in_progress">В работе</SelectItem>
-                  <SelectItem value="waiting">Ждём клиента</SelectItem>
-                  <SelectItem value="resolved">Решён</SelectItem>
-                  <SelectItem value="closed">Закрыт</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={prioF} onValueChange={setPrioF}>
-                <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Приоритет" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все приоритеты</SelectItem>
-                  <SelectItem value="urgent">Критично</SelectItem>
-                  <SelectItem value="high">Высокий</SelectItem>
-                  <SelectItem value="medium">Средний</SelectItem>
-                  <SelectItem value="low">Низкий</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={catF} onValueChange={setCatF}>
-                <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Категория" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все категории</SelectItem>
-                  <SelectItem value="Финансы">Финансы</SelectItem>
-                  <SelectItem value="Дистрибуция">Дистрибуция</SelectItem>
-                  <SelectItem value="Каталог">Каталог</SelectItem>
-                  <SelectItem value="Маркетинг">Маркетинг</SelectItem>
-                  <SelectItem value="Аккаунт">Аккаунт</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={assigneeF} onValueChange={setAssigneeF}>
-                <SelectTrigger className="h-9 w-[170px] text-xs"><SelectValue placeholder="Исполнитель" /></SelectTrigger>
-                <SelectContent>
-                  {AGENTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => {
-                setStatusF("all"); setPrioF("all"); setCatF("all"); setAssigneeF("Все исполнители"); setSearch("");
-              }}>
-                <Filter className="mr-1.5 h-3.5 w-3.5" /> Сброс
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Ticket list */}
-          <Card className="card-surface no-lift border-border/60">
-            <CardContent className="p-0">
-              <div className="px-4 py-2.5 border-b border-border/40 flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
-                <span>Очередь обращений · {filtered.length} из {TICKETS.length}</span>
-                <span>SLA</span>
+            ) : filteredTickets.length === 0 ? (
+              <div className="p-10 text-center">
+                <Inbox className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {search || statusFilter || priorityFilter || categoryFilter || assigneeFilter
+                    ? "По фильтрам тикетов не найдено"
+                    : "Очередь пуста — все обращения обработаны"}
+                </p>
               </div>
-              {filtered.length === 0 ? (
-                <div className="py-12 text-center text-sm text-muted-foreground">
-                  Ничего не найдено по выбранным фильтрам.
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {filtered.map(t => {
-                    const sla = slaPct(t);
-                    const slaColor = sla >= 100 ? "bg-rose-500" : sla >= 75 ? "bg-amber-500" : "bg-emerald-500";
-                    return (
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {filteredTickets.map((t) => {
+                  const accent = PRIO_CFG[t.priority]?.rowAccent ?? "border-l-transparent";
+                  return (
+                    <li key={t.id}>
                       <button
-                        key={t.id}
                         type="button"
-                        onClick={() => setActive(t)}
-                        aria-label={`Открыть тикет ${t.id}: ${t.subject}`}
-                        className="w-full grid grid-cols-[auto_1fr_auto_auto_auto_auto_140px_auto] items-center gap-3 px-4 py-3 hover:bg-accent/15 transition-colors text-left focus:outline-none focus:bg-accent/25"
+                        onClick={() => setOpenTicketId(t.id)}
+                        className={`w-full flex items-center gap-4 px-5 py-3.5 hover:bg-accent/20 transition-colors text-left focus:outline-none focus:bg-accent/30 border-l-2 ${accent}`}
                       >
-                        <span className={`h-2 w-2 rounded-full ${PRIO_META[t.priority].dot} shrink-0`} />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[11px] font-mono text-muted-foreground/80">{t.id}</span>
-                            <Badge variant="outline" className="text-[10px] border-border/50">{t.category}</Badge>
-                            <Badge variant="outline" className={`text-[10px] ${STATUS_META[t.status].color}`}>{STATUS_META[t.status].label}</Badge>
-                            {t.assignee === null && (
-                              <Badge variant="outline" className="text-[10px] border-amber-500/30 bg-amber-500/10 text-amber-300">Не назначено</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm font-medium truncate">{t.subject}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">{t.preview}</p>
-                        </div>
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-9 w-9 shrink-0">
                           <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary text-[10px] font-bold">
-                            {t.customer.initials}
+                            {t.requester?.name.slice(0, 2).toUpperCase() ?? "??"}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="text-right min-w-[120px]">
-                          <p className="text-xs font-medium truncate">{t.customer.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{t.customer.role}</p>
-                        </div>
-                        <Badge variant="outline" className={`text-[10px] ${PRIO_META[t.priority].color}`}>
-                          {PRIO_META[t.priority].label}
-                        </Badge>
-                        <div className="text-[10px] text-muted-foreground text-right whitespace-nowrap">
-                          <MessageSquare className="inline h-3 w-3 mr-1 opacity-60" />{t.messages}
-                          <div className="mt-0.5">{t.lastReply}</div>
-                        </div>
-                        <div>
-                          <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
-                            <div className={`h-full ${slaColor} transition-all`} style={{ width: `${sla}%` }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono text-muted-foreground">{t.ticketRef}</span>
+                            <Badge variant="outline" className="text-[10px]">{CATEGORY_LABELS[t.category] ?? t.category}</Badge>
+                            <Badge variant="outline" className={`text-[10px] ${STATUS_CFG[t.status].cls}`}>{STATUS_CFG[t.status].label}</Badge>
+                            <Badge variant="outline" className={`text-[10px] ${PRIO_CFG[t.priority].cls}`}>{PRIO_CFG[t.priority].label}</Badge>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 text-right">
-                            {t.ageHours}ч / {t.slaHours}ч
+                          <p className="text-sm font-medium mt-0.5 truncate">{t.subject}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span>{t.requester?.name ?? "—"} · {t.requester?.email ?? ""}</span>
+                            <span>·</span>
+                            <span><MessageSquare className="h-3 w-3 inline mr-1" />{t.messageCount}</span>
+                            <span>·</span>
+                            <span><Timer className="h-3 w-3 inline mr-1" />{ageLabel(t.lastMessageAt)}</span>
+                            <span>·</span>
+                            <span>
+                              {t.assignee ? (
+                                <span className="text-foreground/80">→ {t.assignee.name}</span>
+                              ) : (
+                                <span className="text-amber-400">не назначено</span>
+                              )}
+                            </span>
                           </p>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       </button>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <InboxTicketDrawer ticketId={openTicketId} onClose={() => setOpenTicketId(null)} />
       </div>
-
-      {/* Detail drawer */}
-      <Sheet open={!!active} onOpenChange={(o) => !o && setActive(null)}>
-        <SheetContent className="w-full sm:max-w-[640px] overflow-y-auto">
-          {active && (
-            <>
-              <SheetHeader>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[11px] font-mono text-muted-foreground">{active.id}</span>
-                  <Badge variant="outline" className={`text-[10px] ${STATUS_META[active.status].color}`}>{STATUS_META[active.status].label}</Badge>
-                  <Badge variant="outline" className={`text-[10px] ${PRIO_META[active.priority].color}`}>{PRIO_META[active.priority].label}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{active.category}</Badge>
-                </div>
-                <SheetTitle className="text-base">{active.subject}</SheetTitle>
-                <SheetDescription className="flex items-center gap-2 text-xs">
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback className="bg-primary/20 text-primary text-[8px] font-bold">{active.customer.initials}</AvatarFallback>
-                  </Avatar>
-                  <span className="font-medium text-foreground">{active.customer.name}</span>
-                  <span>·</span>
-                  <span>{active.customer.role}</span>
-                  <span>·</span>
-                  <span>{active.customer.email}</span>
-                </SheetDescription>
-              </SheetHeader>
-
-              {/* Quick actions */}
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <Select defaultValue={active.assignee ?? "unassigned"}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Не назначено</SelectItem>
-                    <SelectItem value="Фарход Г.">Фарход Г.</SelectItem>
-                    <SelectItem value="Афруза А.">Афруза А.</SelectItem>
-                    <SelectItem value="Manager Bot">Manager Bot</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select defaultValue={active.priority}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="urgent">Критично</SelectItem>
-                    <SelectItem value="high">Высокий</SelectItem>
-                    <SelectItem value="medium">Средний</SelectItem>
-                    <SelectItem value="low">Низкий</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select defaultValue={active.status}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Открыт</SelectItem>
-                    <SelectItem value="in_progress">В работе</SelectItem>
-                    <SelectItem value="waiting">Ждём клиента</SelectItem>
-                    <SelectItem value="resolved">Решён</SelectItem>
-                    <SelectItem value="closed">Закрыт</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Conversation */}
-              <div className="mt-5 space-y-3">
-                {active.thread.map((m, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-lg p-3 border ${
-                      m.isAgent
-                        ? "bg-primary/5 border-primary/20 ml-6"
-                        : "bg-muted/20 border-border/50 mr-6"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-[11px] font-semibold ${m.isAgent ? "text-primary" : "text-foreground"}`}>
-                        {m.from}{m.isAgent && " · агент"}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{m.at}</span>
-                    </div>
-                    <p className="text-sm leading-relaxed">{m.text}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Reply box */}
-              <div className="mt-5 border-t border-border/40 pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold">{internal ? "Внутренняя заметка (клиент не видит)" : "Ответ клиенту"}</span>
-                  <Button
-                    variant="ghost" size="sm"
-                    className={`h-7 text-[11px] ${internal ? "text-amber-300" : "text-muted-foreground"}`}
-                    onClick={() => setInternal(!internal)}
-                  >
-                    <Lock className="mr-1 h-3 w-3" />
-                    {internal ? "Сделать публичным" : "Внутренняя заметка"}
-                  </Button>
-                </div>
-                <Textarea
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder={internal ? "Заметка для команды…" : "Ответ клиенту…"}
-                  rows={4}
-                  className={`text-sm ${internal ? "bg-amber-500/5 border-amber-500/30" : "bg-background/40"}`}
-                />
-                <div className="flex items-center justify-between mt-2">
-                  <Button variant="outline" size="sm" className="h-8 text-xs">
-                    <MoreHorizontal className="mr-1.5 h-3 w-3" /> Шаблон ответа
-                  </Button>
-                  <Button size="sm" onClick={handleReply}>
-                    <Send className="mr-1.5 h-3.5 w-3.5" />
-                    {internal ? "Сохранить заметку" : "Отправить"}
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
     </Layout>
   );
 }
 
-function StatCard({ icon: Icon, label, value, tone }: {
-  icon: React.ElementType; label: string; value: number;
-  tone: "rose" | "amber" | "cyan" | "emerald";
-}) {
-  const tones = {
-    rose:    "text-rose-300 bg-rose-500/10 border-rose-500/20",
-    amber:   "text-amber-300 bg-amber-500/10 border-amber-500/20",
-    cyan:    "text-cyan-300 bg-cyan-500/10 border-cyan-500/20",
-    emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
+// ─── Drawer (детали + ответ + изменения) ───────────────────────────────────
+
+function InboxTicketDrawer({ ticketId, onClose }: { ticketId: number | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const [reply, setReply] = useState("");
+  const [internal, setInternal] = useState(false);
+  const { data, isLoading } = useTicketDetails(ticketId);
+  const { data: agentsData } = useSupportAgents(ticketId !== null);
+  const replyMut = useReplyToTicket(ticketId);
+  const patchMut = useUpdateTicket(ticketId);
+
+  const ticket = data?.ticket ?? null;
+  const messages = data?.messages ?? [];
+  const agents = agentsData?.data ?? [];
+  const isClosed = ticket?.status === "closed";
+
+  const handlePatch = (patch: Parameters<typeof patchMut.mutate>[0]) => {
+    patchMut.mutate(patch, {
+      onError: (e: any) => toast({ variant: "destructive", title: "Не удалось обновить", description: e?.message }),
+    });
   };
+
+  return (
+    <Sheet open={ticketId !== null} onOpenChange={(o) => { if (!o) { onClose(); setReply(""); setInternal(false); } }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        {isLoading || !ticket ? (
+          <div className="space-y-3 mt-6">
+            <Skeleton className="h-7 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          <>
+            <SheetHeader className="space-y-2">
+              <div className="flex items-start gap-2 flex-wrap">
+                <span className="text-xs font-mono text-muted-foreground">{ticket.ticketRef}</span>
+                <Badge variant="outline" className="text-[10px]">{CATEGORY_LABELS[ticket.category] ?? ticket.category}</Badge>
+              </div>
+              <SheetTitle className="text-left text-lg">{ticket.subject}</SheetTitle>
+              <SheetDescription>
+                От: <span className="text-foreground/90">{ticket.requester?.name ?? "—"}</span>{" "}
+                <span className="opacity-70">({ticket.requester?.email})</span>
+                <span className="mx-1.5">·</span>
+                Создан {new Date(ticket.createdAt).toLocaleString("ru-RU")}
+              </SheetDescription>
+            </SheetHeader>
+
+            {/* Управление: статус / приоритет / исполнитель */}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Статус</Label>
+                <Select
+                  value={ticket.status}
+                  onValueChange={(v) => handlePatch({ status: v as TicketStatus })}
+                  disabled={patchMut.isPending}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_CFG) as TicketStatus[]).map((s) => (
+                      <SelectItem key={s} value={s} className="text-xs">{STATUS_CFG[s].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Приоритет</Label>
+                <Select
+                  value={ticket.priority}
+                  onValueChange={(v) => handlePatch({ priority: v as TicketPriority })}
+                  disabled={patchMut.isPending}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PRIO_CFG) as TicketPriority[]).map((p) => (
+                      <SelectItem key={p} value={p} className="text-xs">{PRIO_CFG[p].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Исполнитель</Label>
+                <Select
+                  value={ticket.assignee ? String(ticket.assignee.id) : "none"}
+                  onValueChange={(v) => handlePatch({ assigneeUserId: v === "none" ? null : Number(v) })}
+                  disabled={patchMut.isPending}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" className="text-xs">— не назначено —</SelectItem>
+                    {agents.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)} className="text-xs">{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Thread */}
+            <div className="mt-5 space-y-3">
+              {messages.map((m) => (
+                <MessageBubble key={m.id} message={m} />
+              ))}
+            </div>
+
+            {isClosed ? (
+              <div className="mt-5 p-3 rounded-md border border-border/60 bg-muted/20 flex items-center gap-2 text-xs text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" /> Тикет закрыт. Чтобы продолжить переписку — измените статус.
+              </div>
+            ) : (
+              <div className="mt-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium text-muted-foreground">Ответить</Label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={internal}
+                      onChange={(e) => setInternal(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    Внутренняя заметка (не видна клиенту)
+                  </label>
+                </div>
+                <textarea
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder={internal ? "Заметка для команды..." : "Ответ клиенту..."}
+                  className={`w-full min-h-[100px] px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 resize-none ${
+                    internal
+                      ? "bg-amber-500/5 border-amber-500/30 focus:ring-amber-500/40"
+                      : "bg-background/50 border-border focus:ring-primary/40"
+                  }`}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    disabled={!reply.trim() || replyMut.isPending}
+                    onClick={() => {
+                      replyMut.mutate(
+                        { body: reply.trim(), isInternal: internal },
+                        {
+                          onSuccess: () => {
+                            setReply("");
+                            setInternal(false);
+                            toast({ title: internal ? "Заметка добавлена" : "Ответ отправлен" });
+                          },
+                          onError: (e: any) => toast({ variant: "destructive", title: "Не удалось отправить", description: e?.message }),
+                        },
+                      );
+                    }}
+                  >
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                    {replyMut.isPending ? "Отправка..." : internal ? "Сохранить заметку" : "Отправить ответ"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MessageBubble({ message }: { message: TicketMessage }) {
+  const isStaff = message.author?.role === "admin" || message.author?.role === "manager";
+  const internalCls = message.isInternal
+    ? "bg-amber-500/8 border-amber-500/30"
+    : isStaff ? "bg-primary/5 border-primary/20" : "bg-muted/20 border-border/60";
+  return (
+    <div className={`p-3 rounded-lg border ${internalCls}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-[9px] bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold">
+              {message.author?.name.slice(0, 2).toUpperCase() ?? "??"}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-xs font-medium">{message.author?.name ?? "—"}</span>
+          {isStaff && <Badge variant="outline" className="text-[9px] text-primary bg-primary/10 border-primary/20">Поддержка</Badge>}
+          {message.isInternal && (
+            <Badge variant="outline" className="text-[9px] text-amber-400 bg-amber-500/10 border-amber-500/30">
+              <Lock className="h-2.5 w-2.5 mr-1" /> Internal
+            </Badge>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground">{new Date(message.createdAt).toLocaleString("ru-RU")}</span>
+      </div>
+      <p className="text-xs whitespace-pre-wrap leading-relaxed">{message.body}</p>
+    </div>
+  );
+}
+
+// ─── Mini-компоненты ───────────────────────────────────────────────────────
+
+function KpiTile({ icon: Icon, label, value, accent }: { icon: any; label: string; value: number; accent: string }) {
   return (
     <Card className="card-surface no-lift border-border/60">
-      <CardContent className="p-3 flex items-center gap-3">
-        <span className={`h-9 w-9 rounded-lg flex items-center justify-center border ${tones[tone]}`}>
+      <CardContent className="pt-4 pb-4 flex items-center gap-3">
+        <span className={`h-9 w-9 rounded-lg border flex items-center justify-center ${accent}`}>
           <Icon className="h-4 w-4" />
         </span>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold">{label}</p>
-          <p className="text-xl font-bold leading-tight">{value}</p>
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</p>
+          <p className="text-lg font-bold tabular-nums">{value}</p>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function FilterSelect({
+  value, onChange, label, options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  options: Array<{ v: string; l: string }>;
+}) {
+  return (
+    <Select value={value || "__all__"} onValueChange={(v) => onChange(v === "__all__" ? "" : v)}>
+      <SelectTrigger className="h-9 text-xs w-auto min-w-[140px] bg-background/50">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__all__" className="text-xs">{label}</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.v} value={o.v} className="text-xs">{o.l}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function hoursSince(iso: string): number {
+  return (Date.now() - new Date(iso).getTime()) / 3_600_000;
+}
+function ageLabel(iso: string): string {
+  const h = hoursSince(iso);
+  if (h < 1) return `${Math.max(1, Math.floor(h * 60))} мин`;
+  if (h < 24) return `${Math.floor(h)} ч`;
+  return `${Math.floor(h / 24)} д`;
 }

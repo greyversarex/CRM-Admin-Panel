@@ -22,6 +22,13 @@ export type SocialLinks = {
 
 export type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 
+export interface ImpersonatorRef {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+}
+
 export interface AuthUser {
   id: number;
   name: string;
@@ -58,8 +65,14 @@ export interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
+  /** Если admin зашёл от имени пользователя — здесь оригинальный admin. Иначе null. */
+  impersonator: ImpersonatorRef | null;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   loginAs: (role: Role) => Promise<{ ok: boolean; error?: string }>;
+  /** Admin → войти как пользователь по userId. Только для admin. */
+  impersonate: (userId: number) => Promise<{ ok: boolean; error?: string }>;
+  /** Вернуться обратно в admin-сессию. */
+  stopImpersonating: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   isLoading: boolean;
@@ -136,12 +149,18 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<{ ok: true; 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [impersonator, setImpersonator] = useState<ImpersonatorRef | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const r = await apiJson<{ user: any }>("/api/auth/me");
-    if (r.ok) setUser(deriveAuthUser(r.data.user));
-    else setUser(null);
+    const r = await apiJson<{ user: any; impersonator: ImpersonatorRef | null }>("/api/auth/me");
+    if (r.ok) {
+      setUser(deriveAuthUser(r.data.user));
+      setImpersonator(r.data.impersonator ?? null);
+    } else {
+      setUser(null);
+      setImpersonator(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -158,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (!r.ok) return { ok: false, error: r.error };
     setUser(deriveAuthUser(r.data.user));
+    setImpersonator(null); // login всегда сбрасывает impersonator
     return { ok: true };
   };
 
@@ -166,13 +186,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return login(creds.email, creds.password);
   };
 
+  const impersonate = async (userId: number) => {
+    const r = await apiJson<{ user: any; impersonator: ImpersonatorRef }>(
+      "/api/auth/impersonate",
+      { method: "POST", body: JSON.stringify({ userId }) },
+    );
+    if (!r.ok) return { ok: false, error: r.error };
+    setUser(deriveAuthUser(r.data.user));
+    setImpersonator(r.data.impersonator);
+    return { ok: true };
+  };
+
+  const stopImpersonating = async () => {
+    const r = await apiJson<{ user: any; impersonator: null }>(
+      "/api/auth/stop-impersonate",
+      { method: "POST" },
+    );
+    if (!r.ok) return { ok: false, error: r.error };
+    setUser(deriveAuthUser(r.data.user));
+    setImpersonator(null);
+    return { ok: true };
+  };
+
   const logout = async () => {
     await apiJson("/api/auth/logout", { method: "POST" });
     setUser(null);
+    setImpersonator(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginAs, logout, refresh, isLoading }}>
+    <AuthContext.Provider value={{ user, impersonator, login, loginAs, impersonate, stopImpersonating, logout, refresh, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

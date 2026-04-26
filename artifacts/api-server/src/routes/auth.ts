@@ -3,9 +3,10 @@ import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import type { SessionUser, AuthRole } from "../lib/auth";
+import type { SessionUser, AuthRole, ImpersonatorRef } from "../lib/auth";
 import { requireAuth } from "../lib/auth";
 import { maskBankInfoFor } from "../lib/kycUtils";
+import { auditMutation } from "../lib/audit";
 
 const router = Router();
 
@@ -223,7 +224,166 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     artistId: u.artistId,
     labelId: u.labelId,
   };
-  res.json({ user: buildProfilePayload(u) });
+  // impersonator surfaces в payload, чтобы UI мог показать баннер
+  // «Вы вошли как X (admin: Y)» и кнопку «Вернуться к админу».
+  res.json({
+    user: buildProfilePayload(u),
+    impersonator: req.session.impersonator ?? null,
+  });
+});
+
+// ─── Impersonation (admin → войти как пользователь) ────────────────────────
+//
+// Подменяет session.user на target и сохраняет оригинального admin'а в
+// session.impersonator. Все последующие запросы выполняются от имени target
+// (RBAC, scope, audit) — admin несёт полную ответственность за действия,
+// поэтому каждое начало/окончание импер. логируется в audit_log.
+//
+// Запреты:
+//  - доступно только admin
+//  - target не может быть admin (нельзя «брать» чужого админа)
+//  - вложенный импер. запрещён (если уже импер'ишь — сначала останови)
+
+router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> => {
+  const sessionUser = req.session.user!;
+
+  if (sessionUser.role !== "admin") {
+    res.status(403).json({ error: "Только администратор может входить от имени пользователя" });
+    return;
+  }
+  if (req.session.impersonator) {
+    res.status(400).json({ error: "Сначала вернись к своей учётной записи" });
+    return;
+  }
+
+  const targetId = Number(req.body?.userId);
+  if (!Number.isFinite(targetId) || targetId <= 0) {
+    res.status(400).json({ error: "userId обязателен" });
+    return;
+  }
+  if (targetId === sessionUser.id) {
+    res.status(400).json({ error: "Нельзя войти самим собой" });
+    return;
+  }
+
+  const [target] = await db.select().from(usersTable).where(eq(usersTable.id, targetId));
+  if (!target) {
+    res.status(404).json({ error: "Пользователь не найден" });
+    return;
+  }
+  if (target.role === "admin") {
+    res.status(403).json({ error: "Нельзя войти под другого администратора" });
+    return;
+  }
+  if (target.status !== "active") {
+    res.status(400).json({ error: "Пользователь неактивен или заблокирован" });
+    return;
+  }
+
+  const impersonator: ImpersonatorRef = {
+    id: sessionUser.id,
+    name: sessionUser.name,
+    email: sessionUser.email,
+    role: sessionUser.role,
+  };
+  const newSessionUser: SessionUser = {
+    id: target.id,
+    name: target.name,
+    email: target.email,
+    role: target.role as AuthRole,
+    artistId: target.artistId,
+    labelId: target.labelId,
+  };
+
+  // Аудит ДО смены сессии — чтобы IP/userAgent были привязаны к admin'у.
+  void auditMutation(req, {
+    action: "update",
+    entityType: "auth.impersonate.start",
+    entityId: target.id,
+    after: { adminId: impersonator.id, targetId: target.id, targetEmail: target.email },
+  });
+
+  // Регенерируем session ID (защита от session fixation на target's сессию).
+  req.session.regenerate((regenErr) => {
+    if (regenErr) {
+      req.log?.error({ err: regenErr }, "session.regenerate failed (impersonate)");
+      res.status(500).json({ error: "Не удалось переключить сессию" });
+      return;
+    }
+    req.session.user = newSessionUser;
+    req.session.impersonator = impersonator;
+    req.session.save((err) => {
+      if (err) {
+        req.log?.error({ err }, "session.save failed (impersonate)");
+        res.status(500).json({ error: "Не удалось переключить сессию" });
+        return;
+      }
+      res.json({
+        user: buildProfilePayload(target),
+        impersonator,
+      });
+    });
+  });
+});
+
+router.post("/auth/stop-impersonate", requireAuth, async (req, res): Promise<void> => {
+  const impersonator = req.session.impersonator;
+  if (!impersonator) {
+    res.status(400).json({ error: "Вы не находитесь в режиме impersonation" });
+    return;
+  }
+
+  const [adminUser] = await db.select().from(usersTable).where(eq(usersTable.id, impersonator.id));
+  if (!adminUser) {
+    // Admin удалили во время impersonation — единственный безопасный выход — destroy session.
+    req.session.destroy(() => {
+      res.status(401).json({ error: "Учётная запись администратора больше не существует" });
+    });
+    return;
+  }
+  if (adminUser.status !== "active" || adminUser.role !== "admin") {
+    req.session.destroy(() => {
+      res.status(401).json({ error: "Учётная запись администратора заблокирована" });
+    });
+    return;
+  }
+
+  void auditMutation(req, {
+    action: "update",
+    entityType: "auth.impersonate.stop",
+    entityId: req.session.user?.id ?? null,
+    after: { adminId: adminUser.id, targetId: req.session.user?.id ?? null },
+  });
+
+  const restored: SessionUser = {
+    id: adminUser.id,
+    name: adminUser.name,
+    email: adminUser.email,
+    role: adminUser.role as AuthRole,
+    artistId: adminUser.artistId,
+    labelId: adminUser.labelId,
+  };
+
+  req.session.regenerate((regenErr) => {
+    if (regenErr) {
+      req.log?.error({ err: regenErr }, "session.regenerate failed (stop-impersonate)");
+      res.status(500).json({ error: "Не удалось вернуть сессию" });
+      return;
+    }
+    req.session.user = restored;
+    // impersonator сбрасывается — после regenerate session пустая, мы кладём только user.
+    req.session.save((err) => {
+      if (err) {
+        req.log?.error({ err }, "session.save failed (stop-impersonate)");
+        res.status(500).json({ error: "Не удалось вернуть сессию" });
+        return;
+      }
+      res.json({
+        user: buildProfilePayload(adminUser),
+        impersonator: null,
+      });
+    });
+  });
 });
 
 router.post("/auth/change-password", requireAuth, changePwdLimiter, async (req, res): Promise<void> => {

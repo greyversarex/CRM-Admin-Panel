@@ -11,13 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users2, UserPlus, ShieldCheck, FileSignature, Activity, Ban,
   Search, CheckCircle2, XCircle, Clock, Eye, Mail, MapPin, Plus, Download,
-  MoreHorizontal,
+  MoreHorizontal, LogIn,
 } from "lucide-react";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
-import type { Role } from "@/lib/auth";
+import { useAuth, type Role } from "@/lib/auth";
 import { useListUsers, type User } from "@workspace/api-client-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 // Mock-only KYC/contract enrichment by user.id (until DB has these columns)
 const KYC_BY_USER: Record<number, "verified" | "pending" | "rejected" | "none"> = {
@@ -65,6 +66,22 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { user: currentUser, impersonator, impersonate } = useAuth();
+  const [, navigate] = useLocation();
+  const [imperBusyId, setImperBusyId] = useState<number | null>(null);
+
+  const handleImpersonate = async (target: User) => {
+    setImperBusyId(target.id);
+    const r = await impersonate(target.id);
+    setImperBusyId(null);
+    if (r.ok) {
+      toast({ title: `Вы вошли как ${target.name}`, description: target.email });
+      // Перенаправляем на дашборд — UI будет показан с правами target.
+      navigate("/");
+    } else {
+      toast({ variant: "destructive", title: "Не удалось войти", description: r.error });
+    }
+  };
 
   const { data: usersResp, isLoading } = useListUsers({
     role: roleFilter === "all" ? undefined : (roleFilter as any),
@@ -243,13 +260,25 @@ export default function Users() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={() => toast({ title: "View profile", description: u.email })}>
                                 <Eye className="h-3.5 w-3.5 mr-2" /> View profile
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => toast({ title: "Edit user", description: u.name })}>
                                 <UserPlus className="h-3.5 w-3.5 mr-2" /> Edit role / status
                               </DropdownMenuItem>
+                              {/* Импер. — только admin может, нельзя себе и нельзя другого admin. */}
+                              {currentUser?.role === "admin" && !impersonator && u.role !== "admin" && u.id !== currentUser.id && u.status === "active" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleImpersonate(u)}
+                                    disabled={imperBusyId === u.id}
+                                  >
+                                    <LogIn className="h-3.5 w-3.5 mr-2" /> Войти как
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                               <DropdownMenuSeparator />
                               {u.status !== "suspended" ? (
                                 <DropdownMenuItem

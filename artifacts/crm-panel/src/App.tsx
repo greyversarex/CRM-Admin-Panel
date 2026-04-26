@@ -21,7 +21,6 @@ import TransferTrack from "@/pages/releases/transfer";
 import NewImport from "@/pages/releases/transfer/new";
 import Artists from "@/pages/artists";
 import Labels from "@/pages/labels";
-import Videos from "@/pages/videos";
 import CRM from "@/pages/crm";
 import Finance from "@/pages/finance";
 import FinanceImport from "@/pages/finance/import";
@@ -96,7 +95,6 @@ function Router() {
       <ProtectedRoute path="/releases/:id"              component={ReleaseDetail} />
       <ProtectedRoute path="/artists"        component={Artists} />
       <ProtectedRoute path="/labels"         component={Labels} />
-      <ProtectedRoute path="/videos"         component={Videos} />
       <ProtectedRoute path="/users"          component={Users} />
       <ProtectedRoute path="/publishing"     component={Publishing} />
       <ProtectedRoute path="/crm"            component={CRM} />

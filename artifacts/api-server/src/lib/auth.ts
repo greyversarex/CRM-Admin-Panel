@@ -11,9 +11,23 @@ export interface SessionUser {
   labelId: number | null;
 }
 
+/**
+ * При impersonation (admin → войти как пользователь) `user` подменяется на target,
+ * а `impersonator` хранит исходного admin'а. Все запросы выполняются от имени
+ * target (scope, RBAC, audit). На /auth/stop-impersonate возвращаем session.user
+ * из impersonator.
+ */
+export interface ImpersonatorRef {
+  id: number;
+  name: string;
+  email: string;
+  role: AuthRole;
+}
+
 declare module "express-session" {
   interface SessionData {
     user?: SessionUser;
+    impersonator?: ImpersonatorRef;
   }
 }
 

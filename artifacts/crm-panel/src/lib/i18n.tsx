@@ -14,7 +14,6 @@ const translations = {
       releases: "Releases",
       artists: "Artists",
       labels: "Labels",
-      videos: "Videos",
       users_group: "Users",
       users: "Users",
       operations: "Operations",
@@ -75,10 +74,6 @@ const translations = {
       title: "CRM",
       subtitle: "Contacts, tasks, notes, and communication history.",
     },
-    videos: {
-      title: "Video Distribution",
-      subtitle: "YouTube, VEVO, art tracks, and Content ID video management.",
-    },
     common: {
       export: "Export",
       new: "New",
@@ -114,7 +109,6 @@ const translations = {
       releases: "Релизы",
       artists: "Исполнители",
       labels: "Лейблы",
-      videos: "Видео",
       users_group: "Пользователи",
       users: "Пользователи",
       operations: "Операции",
@@ -174,10 +168,6 @@ const translations = {
     crm: {
       title: "CRM",
       subtitle: "Контакты, задачи, заметки и история коммуникаций.",
-    },
-    videos: {
-      title: "Видеодистрибуция",
-      subtitle: "YouTube, VEVO, арт-треки и управление Content ID.",
     },
     common: {
       export: "Экспорт",

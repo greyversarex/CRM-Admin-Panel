@@ -1,7 +1,16 @@
 import { Layout } from "@/components/layout";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import SupportInbox from "./inbox";
+import {
+  useSupportTickets,
+  useCreateSupportTicket,
+  useTicketDetails,
+  useReplyToTicket,
+  type SupportTicket,
+  type TicketMessage,
+  CATEGORY_LABELS,
+} from "@/lib/support-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,19 +20,15 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Inbox, BookOpen, Mail, Search, Plus, MessageCircle,
-  Phone, Send, ChevronRight, HelpCircle,
+  Phone, Send, ChevronRight, HelpCircle, Lock,
 } from "lucide-react";
 
-const TICKETS = [
-  { id: "TCK-2026-0048", subject: "Не приходит роялти за март", category: "Финансы", status: "open",       priority: "high",   updated: "2 часа назад", messages: 4 },
-  { id: "TCK-2026-0046", subject: "Релиз отклонён Spotify",     category: "Дистрибуция", status: "in_progress", priority: "medium", updated: "5 часов назад", messages: 7 },
-  { id: "TCK-2026-0042", subject: "Изменить ISRC на треке",     category: "Каталог",  status: "resolved",   priority: "low",    updated: "Вчера",        messages: 3 },
-  { id: "TCK-2026-0038", subject: "Пресейв-ссылка не работает", category: "Маркетинг", status: "resolved",   priority: "medium", updated: "3 дня назад",  messages: 5 },
-];
-
+// FAQ — статический контент (не данные платформы, а копирайт-материал).
 const FAQ_CATEGORIES = [
   {
     title: "Релизы и каталог",
@@ -52,7 +57,7 @@ const FAQ_CATEGORIES = [
 
 export default function SupportPage() {
   const { user } = useAuth();
-  // Admin/manager get the helpdesk inbox; label/artist get the customer view.
+  // Admin/manager — staff inbox; label/artist — customer view.
   if (user && (user.role === "admin" || user.role === "manager")) {
     return <SupportInbox />;
   }
@@ -63,20 +68,44 @@ function SupportCustomer() {
   const { toast } = useToast();
   const [tab, setTab] = useState("tickets");
   const [search, setSearch] = useState("");
+  const [openTicketId, setOpenTicketId] = useState<number | null>(null);
 
   // New contact form
-  const [subject, setSubject]   = useState("");
+  const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("general");
-  const [message, setMessage]   = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [message, setMessage] = useState("");
+
+  const { data: ticketsData, isLoading: ticketsLoading } = useSupportTickets({});
+  const tickets: SupportTicket[] = ticketsData?.data ?? [];
+
+  const createTicket = useCreateSupportTicket();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!subject.trim() || !message.trim()) {
-      toast({ title: "Заполни все поля", variant: "destructive" });
+      toast({ title: "Заполни тему и сообщение", variant: "destructive" });
       return;
     }
-    toast({ title: "Запрос отправлен", description: "Ответим в течение 24 часов на email." });
-    setSubject(""); setMessage("");
+    createTicket.mutate(
+      { subject: subject.trim(), category, priority, body: message.trim() },
+      {
+        onSuccess: (resp) => {
+          toast({
+            title: "Тикет создан",
+            description: `Номер обращения: ${resp.ticket.ticketRef}`,
+          });
+          setSubject("");
+          setMessage("");
+          setCategory("general");
+          setPriority("medium");
+          setTab("tickets");
+        },
+        onError: (e: any) => {
+          toast({ variant: "destructive", title: "Не удалось создать тикет", description: e?.message });
+        },
+      },
+    );
   }
 
   const filteredFaq = search
@@ -103,13 +132,13 @@ function SupportCustomer() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex-wrap">
             <TabsTrigger value="tickets" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Inbox className="h-3.5 w-3.5" /> Тикеты
+              <Inbox className="h-3.5 w-3.5" /> Мои тикеты
             </TabsTrigger>
             <TabsTrigger value="help" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <BookOpen className="h-3.5 w-3.5" /> База знаний
             </TabsTrigger>
             <TabsTrigger value="contact" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Mail className="h-3.5 w-3.5" /> Связаться с поддержкой
+              <Mail className="h-3.5 w-3.5" /> Создать тикет
             </TabsTrigger>
           </TabsList>
 
@@ -119,45 +148,61 @@ function SupportCustomer() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Мои тикеты</CardTitle>
-                  <CardDescription>История запросов в поддержку</CardDescription>
+                  <CardDescription>История твоих обращений в поддержку</CardDescription>
                 </div>
                 <Button size="sm" onClick={() => setTab("contact")}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Новый тикет
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-border/40">
-                  {TICKETS.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => toast({ title: t.id, description: t.subject })}
-                      aria-label={`Открыть тикет ${t.id}: ${t.subject}`}
-                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors cursor-pointer text-left focus:outline-none focus:bg-accent/30"
-                    >
-                      <Avatar className="h-9 w-9">
-                        <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary text-[10px] font-bold">
-                          {t.id.slice(-2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-muted-foreground">{t.id}</span>
-                          <Badge variant="outline" className="text-[10px]">{t.category}</Badge>
+                {ticketsLoading ? (
+                  <div className="p-5 space-y-3">
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                  </div>
+                ) : tickets.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <Inbox className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">У тебя пока нет обращений</p>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setTab("contact")}>
+                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Создать первый тикет
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {tickets.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setOpenTicketId(t.id)}
+                        aria-label={`Открыть тикет ${t.ticketRef}: ${t.subject}`}
+                        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors cursor-pointer text-left focus:outline-none focus:bg-accent/30"
+                      >
+                        <Avatar className="h-9 w-9">
+                          <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary text-[10px] font-bold">
+                            {t.ticketRef.slice(-2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground">{t.ticketRef}</span>
+                            <Badge variant="outline" className="text-[10px]">{CATEGORY_LABELS[t.category] ?? t.category}</Badge>
+                          </div>
+                          <p className="text-sm font-medium mt-0.5 truncate">{t.subject}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
+                            <MessageCircle className="h-3 w-3" /> {t.messageCount} сообщений · {fmtRelative(t.lastMessageAt)}
+                          </p>
                         </div>
-                        <p className="text-sm font-medium mt-0.5 truncate">{t.subject}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
-                          <MessageCircle className="h-3 w-3" /> {t.messages} сообщений · обновлено {t.updated}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <StatusBadge status={t.status} />
-                        <PriorityBadge priority={t.priority} />
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  ))}
-                </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <StatusBadge status={t.status} />
+                          <PriorityBadge priority={t.priority} />
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -213,12 +258,12 @@ function SupportCustomer() {
             )}
           </TabsContent>
 
-          {/* CONTACT */}
+          {/* CONTACT — создать тикет */}
           <TabsContent value="contact" className="mt-4">
             <div className="grid gap-6 lg:grid-cols-3">
               <Card className="card-surface no-lift border-border/60 lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>Связаться с поддержкой</CardTitle>
+                  <CardTitle>Создать тикет</CardTitle>
                   <CardDescription>Опиши проблему — ответим в течение 24 часов</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -233,14 +278,35 @@ function SupportCustomer() {
                             <SelectItem value="finance">Финансы и выплаты</SelectItem>
                             <SelectItem value="distribution">Дистрибуция</SelectItem>
                             <SelectItem value="catalog">Каталог</SelectItem>
+                            <SelectItem value="marketing">Маркетинг</SelectItem>
+                            <SelectItem value="account">Аккаунт</SelectItem>
                             <SelectItem value="bug">Сообщить об ошибке</SelectItem>
+                            <SelectItem value="other">Другое</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">Тема</Label>
-                        <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Кратко опиши проблему" className="bg-background/50" />
+                        <Label className="text-xs font-medium text-muted-foreground">Приоритет</Label>
+                        <Select value={priority} onValueChange={setPriority}>
+                          <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Низкий</SelectItem>
+                            <SelectItem value="medium">Средний</SelectItem>
+                            <SelectItem value="high">Высокий</SelectItem>
+                            <SelectItem value="urgent">Срочный</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">Тема</Label>
+                      <Input
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder="Кратко опиши проблему"
+                        className="bg-background/50"
+                        maxLength={200}
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-muted-foreground">Сообщение</Label>
@@ -252,8 +318,9 @@ function SupportCustomer() {
                       />
                     </div>
                     <div className="flex justify-end">
-                      <Button type="submit">
-                        <Send className="mr-1.5 h-3.5 w-3.5" /> Отправить запрос
+                      <Button type="submit" disabled={createTicket.isPending}>
+                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                        {createTicket.isPending ? "Отправляем..." : "Отправить запрос"}
                       </Button>
                     </div>
                   </form>
@@ -314,16 +381,139 @@ function SupportCustomer() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <CustomerTicketDrawer
+          ticketId={openTicketId}
+          onClose={() => setOpenTicketId(null)}
+        />
       </div>
     </Layout>
   );
 }
 
+// ─── Customer ticket drawer ────────────────────────────────────────────────
+function CustomerTicketDrawer({ ticketId, onClose }: { ticketId: number | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const [reply, setReply] = useState("");
+  const { data, isLoading } = useTicketDetails(ticketId);
+  const replyMut = useReplyToTicket(ticketId);
+  const ticket = data?.ticket ?? null;
+  const messages = data?.messages ?? [];
+
+  const isClosed = ticket?.status === "closed";
+
+  return (
+    <Sheet open={ticketId !== null} onOpenChange={(o) => { if (!o) { onClose(); setReply(""); } }}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        {isLoading || !ticket ? (
+          <div className="space-y-3 mt-6">
+            <Skeleton className="h-7 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          <>
+            <SheetHeader className="space-y-2">
+              <div className="flex items-start gap-2 flex-wrap">
+                <span className="text-xs font-mono text-muted-foreground">{ticket.ticketRef}</span>
+                <StatusBadge status={ticket.status} />
+                <PriorityBadge priority={ticket.priority} />
+                <Badge variant="outline" className="text-[10px]">{CATEGORY_LABELS[ticket.category] ?? ticket.category}</Badge>
+              </div>
+              <SheetTitle className="text-left text-lg">{ticket.subject}</SheetTitle>
+              <SheetDescription>
+                Создан {new Date(ticket.createdAt).toLocaleString("ru-RU")}
+                {ticket.assignee ? ` · Исполнитель: ${ticket.assignee.name}` : " · Ожидает назначения"}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-5 space-y-3">
+              {messages.map((m: TicketMessage) => (
+                <MessageBubble key={m.id} message={m} />
+              ))}
+            </div>
+
+            {isClosed ? (
+              <div className="mt-5 p-3 rounded-md border border-border/60 bg-muted/20 flex items-center gap-2 text-xs text-muted-foreground">
+                <Lock className="h-3.5 w-3.5" /> Тикет закрыт. Создайте новый, если нужна помощь.
+              </div>
+            ) : (
+              <div className="mt-5 space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">Ответить</Label>
+                <textarea
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Напишите сообщение..."
+                  className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md bg-background/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    disabled={!reply.trim() || replyMut.isPending}
+                    onClick={() => {
+                      replyMut.mutate(
+                        { body: reply.trim(), isInternal: false },
+                        {
+                          onSuccess: () => { setReply(""); toast({ title: "Сообщение отправлено" }); },
+                          onError: (e: any) => toast({ variant: "destructive", title: "Не удалось отправить", description: e?.message }),
+                        },
+                      );
+                    }}
+                  >
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                    {replyMut.isPending ? "Отправка..." : "Отправить"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MessageBubble({ message }: { message: TicketMessage }) {
+  const isStaff = message.author?.role === "admin" || message.author?.role === "manager";
+  return (
+    <div className={`p-3 rounded-lg border ${isStaff ? "bg-primary/5 border-primary/20" : "bg-muted/20 border-border/60"}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-[9px] bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold">
+              {message.author?.name.slice(0, 2).toUpperCase() ?? "??"}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-xs font-medium">{message.author?.name ?? "—"}</span>
+          {isStaff && <Badge variant="outline" className="text-[9px] text-primary bg-primary/10 border-primary/20">Поддержка</Badge>}
+          {message.isInternal && <Badge variant="outline" className="text-[9px] text-amber-400 bg-amber-500/10 border-amber-500/20">Internal</Badge>}
+        </div>
+        <span className="text-[10px] text-muted-foreground">{new Date(message.createdAt).toLocaleString("ru-RU")}</span>
+      </div>
+      <p className="text-xs whitespace-pre-wrap leading-relaxed">{message.body}</p>
+    </div>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function fmtRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "только что";
+  if (m < 60) return `${m} мин. назад`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ч. назад`;
+  const d = Math.floor(h / 24);
+  return `${d} д. назад`;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string }> = {
-    open:        { label: "Открыт",      cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
-    in_progress: { label: "В работе",    cls: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-    resolved:    { label: "Решён",       cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+    open:        { label: "Открыт",     cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+    in_progress: { label: "В работе",   cls: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+    waiting:     { label: "Ждёт ответа", cls: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
+    resolved:    { label: "Решён",      cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+    closed:      { label: "Закрыт",     cls: "text-muted-foreground bg-muted/30 border-border/40" },
   };
   const c = cfg[status] ?? cfg.open;
   return <Badge variant="outline" className={`text-[10px] ${c.cls}`}>{c.label}</Badge>;
@@ -331,9 +521,10 @@ function StatusBadge({ status }: { status: string }) {
 
 function PriorityBadge({ priority }: { priority: string }) {
   const cfg: Record<string, { label: string; cls: string }> = {
-    high:   { label: "Высокий",  cls: "text-rose-400" },
-    medium: { label: "Средний",  cls: "text-amber-400" },
-    low:    { label: "Низкий",   cls: "text-muted-foreground" },
+    urgent: { label: "Срочный", cls: "text-rose-400" },
+    high:   { label: "Высокий", cls: "text-rose-400" },
+    medium: { label: "Средний", cls: "text-amber-400" },
+    low:    { label: "Низкий",  cls: "text-muted-foreground" },
   };
   const c = cfg[priority] ?? cfg.medium;
   return <span className={`text-[10px] font-medium ${c.cls}`}>{c.label}</span>;

@@ -69,7 +69,6 @@ const navGroups: NavGroup[] = [
       { nameKey: "releases", href: "/releases", icon: Disc3,       iconColor: "text-emerald-400" },
       { nameKey: "artists",  href: "/artists",  icon: Mic2,        iconColor: "text-emerald-400" },
       { nameKey: "labels",   href: "/labels",   icon: Building2,   iconColor: "text-emerald-400" },
-      { nameKey: "videos",   href: "/videos",   icon: Clapperboard,iconColor: "text-emerald-400" },
     ],
   },
   {

@@ -21,6 +21,7 @@ import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
 import kycRouter from "./kyc";
 import notificationsRouter from "./notifications";
+import supportRouter from "./support";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -74,9 +75,10 @@ router.use(analyticsRouter);
 router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
+router.use(notificationsRouter);         // /notifications — scoped to current user inside (BEFORE integrationsRouter, у которого глобальный requireRole)
+router.use(supportRouter);               // /support — customer scoped or staff inbox (per-route guards inside) — также ДО integrationsRouter
 router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
-router.use(notificationsRouter);         // /notifications — scoped to current user inside
 
 export default router;
