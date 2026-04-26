@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet } from "lucide-react";
+import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle } from "lucide-react";
 import { PeriodSummaryCard } from "@/components/period-summary-card";
 
 interface ImportRow {
@@ -53,6 +53,7 @@ export default function Finance() {
   const [page, setPage] = useState(1);
   const [imports, setImports] = useState<ImportRow[]>([]);
   const [importsLoading, setImportsLoading] = useState(true);
+  const [unmatchedPending, setUnmatchedPending] = useState<number>(0);
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
 
@@ -61,10 +62,18 @@ export default function Finance() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/finance/imports?limit=10", { credentials: "same-origin" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        // Параллельно: история импортов + счётчик нерешённых строк (для бейджа).
+        const [impRes, unmRes] = await Promise.all([
+          fetch("/api/finance/imports?limit=10", { credentials: "same-origin" }),
+          fetch("/api/finance/ingest/unmatched?status=pending&limit=1", { credentials: "same-origin" }),
+        ]);
+        if (!impRes.ok) throw new Error(`HTTP ${impRes.status}`);
+        const data = await impRes.json();
         if (!cancelled) setImports(data);
+        if (unmRes.ok) {
+          const unm = await unmRes.json();
+          if (!cancelled) setUnmatchedPending(unm?.pagination?.total ?? 0);
+        }
       } catch {
         if (!cancelled) setImports([]);
       } finally {
@@ -192,12 +201,29 @@ export default function Finance() {
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">Загрузка отчётов от платформ → автоматический парсинг → раскладка по артистам/трекам</CardDescription>
               </div>
-              <Link href="/finance/import">
-                <Button data-testid="button-open-import">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Загрузить CSV
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/finance/unmatched">
+                  <Button
+                    variant={unmatchedPending > 0 ? "default" : "outline"}
+                    className={unmatchedPending > 0 ? "bg-amber-500/90 hover:bg-amber-500 text-amber-950" : ""}
+                    data-testid="button-open-unmatched"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Нерешённые
+                    {unmatchedPending > 0 && (
+                      <Badge variant="outline" className="ml-2 bg-amber-950/30 text-amber-950 border-amber-950/40">
+                        {unmatchedPending}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
+                <Link href="/finance/import">
+                  <Button data-testid="button-open-import">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Загрузить CSV
+                  </Button>
+                </Link>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
