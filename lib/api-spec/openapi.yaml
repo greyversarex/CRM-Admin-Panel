@@ -1943,17 +1943,22 @@ components:
           type: integer
         totalTracks:
           type: integer
+        totalStreams:
+          type: integer
+          description: SUM(streams) from usage_reports (real ingestion data, scoped by role).
         totalRevenue:
           type: number
+          description: SUM(revenue) from usage_reports (real ingestion data, scoped by role).
         pendingPayouts:
           type: integer
         activeDeliveries:
           type: integer
         revenueGrowth:
           type: number
+          description: % change of usage_reports revenue (last 30d vs prior 30d).
         releasesThisMonth:
           type: integer
-      required: [totalArtists, totalReleases, totalTracks, totalRevenue, pendingPayouts, activeDeliveries, revenueGrowth, releasesThisMonth]
+      required: [totalArtists, totalReleases, totalTracks, totalStreams, totalRevenue, pendingPayouts, activeDeliveries, revenueGrowth, releasesThisMonth]
 
     ActivityItem:
       type: object

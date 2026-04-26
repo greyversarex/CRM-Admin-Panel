@@ -114,7 +114,7 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
 
 /* ───── Top Territories Card ───── */
 
-type TerritoryRow = { country: string; streams: number; revenue: number; artistCount: number };
+type TerritoryRow = { country: string; countryCode: string; streams: number; revenue: number; artistCount: number };
 
 export function TopTerritoriesCard() {
   const { data, isLoading } = useQuery({
@@ -141,9 +141,9 @@ export function TopTerritoriesCard() {
         ) : (
           <div className="space-y-2">
             {data.slice(0, 10).map((c, i) => (
-              <div key={c.country + i} className="flex items-center gap-3 py-1.5 border-b border-border/25 last:border-0">
+              <div key={(c.countryCode || c.country) + i} className="flex items-center gap-3 py-1.5 border-b border-border/25 last:border-0">
                 <span className="text-[11px] font-bold text-muted-foreground/40 w-4 text-right shrink-0">{i + 1}</span>
-                <span className="text-lg shrink-0 leading-none">{flagEmoji(c.country)}</span>
+                <span className="text-lg shrink-0 leading-none">{flagEmoji(c.countryCode)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[12px] font-medium">{c.country}</span>

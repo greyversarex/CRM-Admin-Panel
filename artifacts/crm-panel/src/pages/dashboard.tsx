@@ -8,7 +8,7 @@ import {
   useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
   TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard,
@@ -45,11 +45,19 @@ export default function Dashboard() {
   const topArtists = topArtistsData ?? [];
 
   const totalRevenue = summary?.totalRevenue ?? 0;
+  const totalStreams = summary?.totalStreams ?? 0;
   const totalArtists = summary?.totalArtists ?? 0;
   const totalReleases = summary?.totalReleases ?? 0;
   const activeDeliveries = summary?.activeDeliveries ?? 0;
   const revenueGrowth = summary?.revenueGrowth ?? 0;
   const releasesThisMonth = summary?.releasesThisMonth ?? 0;
+
+  const formatStreams = (n: number): string => {
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
+  };
 
   const scopeBadge = role === "label"
     ? (user?.orgName ?? "Лейбл")
@@ -88,7 +96,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── KPI Cards ── */}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             label={role === "artist" ? "Мой доход" : role === "label" ? "Доход лейбла" : d.total_revenue}
             value={`$${totalRevenue.toLocaleString()}`}
@@ -97,6 +105,15 @@ export default function Dashboard() {
             iconBg="bg-emerald-500/12"
             iconBorder="border-emerald-500/20"
             trend={{ value: `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth}%`, up: revenueGrowth >= 0, label: "vs last period" }}
+          />
+          <KpiCard
+            label={d.total_streams}
+            value={formatStreams(totalStreams)}
+            icon={Headphones}
+            iconColor="text-fuchsia-400"
+            iconBg="bg-fuchsia-500/12"
+            iconBorder="border-fuchsia-500/20"
+            trend={{ value: totalStreams > 0 ? `${totalStreams.toLocaleString()} прослушиваний` : "Нет данных", up: undefined }}
           />
           <KpiCard
             label={role === "label" ? "Артисты лейбла" : d.total_artists}

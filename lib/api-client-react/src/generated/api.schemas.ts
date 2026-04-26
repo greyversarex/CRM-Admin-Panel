@@ -21,6 +21,7 @@ export interface DashboardSummary {
   totalReleases: number;
   totalTracks: number;
   totalRevenue: number;
+  totalStreams: number;
   pendingPayouts: number;
   activeDeliveries: number;
   revenueGrowth: number;
