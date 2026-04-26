@@ -62,6 +62,13 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     "insertedRows", "unmatchedRows", "totalRevenue", "currency",
     "idempotencyKey", "createdAt",
   ]),
+  // Ручное сопоставление unmatched-строки с треком: критично знать, кто
+  // и какую сумму отнёс к какому треку (audit trail для финансовой претензии).
+  ingestion_unmatched: new Set([
+    "id", "importId", "dsp", "period", "rawIsrc", "rawTitle", "rawArtist",
+    "countryCode", "streams", "revenue", "currency", "resolved", "trackId",
+    "transactionId", "alreadyAccounted",
+  ]),
   // ─── Task #6: KYC + публичная регистрация ────────────────────────────────
   signup_request: new Set([
     "id", "entityType", "name", "email", "phone", "country", "legalName", "inn",

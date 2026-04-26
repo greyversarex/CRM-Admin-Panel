@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, auditLogTable, usersTable } from "@workspace/db";
-import { and, eq, desc, gte, lte, count } from "drizzle-orm";
+import { and, eq, desc, gte, lte, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
 
@@ -12,6 +12,10 @@ router.use("/audit", requireRole("admin", "manager"));
 
 const ListQuery = z.object({
   entity_type: z.string().min(1).max(50).optional(),
+  // CSV-список: позволяет фильтровать по нескольким сущностям сразу (UI-пресет
+  // «только финансы» = transaction,payout,ingestion,ingestion_unmatched). Если
+  // указан и entity_type, и entity_types — entity_type имеет приоритет (single wins).
+  entity_types: z.string().min(1).max(500).optional(),
   entity_id: z.coerce.number().int().positive().optional(),
   user_id: z.coerce.number().int().positive().optional(),
   action: z.enum(["create", "update", "delete", "login", "approve", "reject", "deliver"]).optional(),
@@ -30,7 +34,18 @@ router.get("/audit", async (req, res): Promise<void> => {
   const q = parsed.data;
 
   const conditions = [];
-  if (q.entity_type) conditions.push(eq(auditLogTable.entityType, q.entity_type));
+  if (q.entity_type) {
+    conditions.push(eq(auditLogTable.entityType, q.entity_type));
+  } else if (q.entity_types) {
+    // Парсим CSV, фильтруем пустые/слишком длинные значения. Лимит 20 типов —
+    // защита от запроса со списком на тысячу элементов.
+    const list = q.entity_types
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && s.length <= 50)
+      .slice(0, 20);
+    if (list.length > 0) conditions.push(inArray(auditLogTable.entityType, list));
+  }
   if (q.entity_id !== undefined) conditions.push(eq(auditLogTable.entityId, q.entity_id));
   if (q.user_id !== undefined) conditions.push(eq(auditLogTable.userId, q.user_id));
   if (q.action) conditions.push(eq(auditLogTable.action, q.action));

@@ -457,13 +457,53 @@ router.post("/finance/ingest/unmatched/:id/resolve", async (req, res): Promise<v
     throw err;
   }
 
+  // Аудит #1 — изменение строки unmatched (resolved: false → true).
+  // Включаем всю значимую финансовую метаинформацию (period/dsp/revenue),
+  // чтобы запись была самодостаточной даже без join к ingestion-таблице.
   void auditMutation(req, {
     action: "update",
     entityType: "ingestion_unmatched",
     entityId: unmatched.id,
-    before: { resolved: false, trackId: null },
-    after:  { resolved: true, trackId: track.id, transactionId, alreadyAccounted },
+    before: {
+      id: unmatched.id, importId: unmatched.importId, dsp: unmatched.dsp,
+      period: unmatched.period, rawIsrc: unmatched.rawIsrc, rawTitle: unmatched.rawTitle,
+      rawArtist: unmatched.rawArtist, countryCode: unmatched.countryCode,
+      streams: unmatched.streams, revenue: unmatched.revenue, currency: unmatched.currency,
+      resolved: false, trackId: null, transactionId: null,
+    },
+    after: {
+      id: unmatched.id, importId: unmatched.importId, dsp: unmatched.dsp,
+      period: unmatched.period, rawIsrc: unmatched.rawIsrc, rawTitle: unmatched.rawTitle,
+      rawArtist: unmatched.rawArtist, countryCode: unmatched.countryCode,
+      streams: unmatched.streams, revenue: unmatched.revenue, currency: unmatched.currency,
+      resolved: true, trackId: track.id, transactionId, alreadyAccounted,
+    },
   });
+
+  // Аудит #2 — фактическое создание транзакции (если она была создана).
+  // Это даёт searchability: можно фильтровать audit_log по entityType=transaction
+  // и видеть в т.ч. транзакции, рождённые из ручного резолва. Без этой записи
+  // транзакция бы «появлялась из ниоткуда» с точки зрения аудита.
+  if (transactionId !== null) {
+    void auditMutation(req, {
+      action: "create",
+      entityType: "transaction",
+      entityId: transactionId,
+      before: null,
+      after: {
+        id: transactionId,
+        type: "dsp_revenue",
+        amount: unmatched.revenue,
+        currency: unmatched.currency,
+        artistId: track.artistId,
+        labelId,
+        releaseId: track.releaseId,
+        platform: unmatched.dsp,
+        description: `Manual match: unmatched #${unmatched.id} → track #${track.id}`,
+        period: unmatched.period,
+      },
+    });
+  }
 
   res.json({
     ok: true,

@@ -27,6 +27,7 @@ import {
   LifeBuoy,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
 } from "lucide-react";
 
 type NavItem = {
@@ -107,7 +108,8 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "system",
     items: [
-      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
+      { nameKey: "audit",    href: "/admin/audit", icon: ShieldCheck, iconColor: "text-blue-400" },
+      { nameKey: "settings", href: "/settings",    icon: Settings2,   iconColor: "text-slate-400" },
     ],
   },
 ];

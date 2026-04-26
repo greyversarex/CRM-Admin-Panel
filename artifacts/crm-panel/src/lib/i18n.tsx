@@ -30,6 +30,7 @@ const translations = {
       profile: "Profile",
       support: "Support",
       system: "System",
+      audit: "Audit log",
       settings: "Settings",
     },
     header: {
@@ -128,6 +129,7 @@ const translations = {
       profile: "Профиль",
       support: "Поддержка",
       system: "Система",
+      audit: "Аудит-лог",
       settings: "Настройки",
     },
     header: {

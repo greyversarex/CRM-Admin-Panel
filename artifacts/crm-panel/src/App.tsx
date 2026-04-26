@@ -10,6 +10,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import AdminSignups from "@/pages/admin/signups";
 import AdminKyc from "@/pages/admin/kyc";
+import AdminAudit from "@/pages/admin/audit";
 
 import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
@@ -112,6 +113,7 @@ function Router() {
       {/* Task #6 — admin/manager only (gated через permissions.ts) */}
       <ProtectedRoute path="/admin/signups"  component={AdminSignups} />
       <ProtectedRoute path="/admin/kyc"      component={AdminKyc} />
+      <ProtectedRoute path="/admin/audit"    component={AdminAudit} />
 
       <Route component={NotFound} />
     </Switch>
