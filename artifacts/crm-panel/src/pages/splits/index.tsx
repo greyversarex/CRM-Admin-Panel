@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PieChart, Trash2, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { NewSplitDialog } from "./_new-split-dialog";
 
 const COLORS = [
   "bg-violet-500/10 text-violet-400 border-violet-500/20",
@@ -24,6 +25,7 @@ const BAR_COLORS = ["bg-violet-500", "bg-blue-500", "bg-emerald-500", "bg-amber-
 export default function Splits() {
   const { user } = useAuth();
   const [page, setPage] = useState(1);
+  const [newOpen, setNewOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
@@ -63,7 +65,7 @@ export default function Splits() {
             <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
           </div>
           {isAdminLike && (
-            <Button className="gap-2" data-testid="button-new-split">
+            <Button className="gap-2" data-testid="button-new-split" onClick={() => setNewOpen(true)}>
               <Plus className="h-4 w-4" />
               New Split
             </Button>
@@ -178,6 +180,7 @@ export default function Splits() {
           )}
         </Card>
       </div>
+      <NewSplitDialog open={newOpen} onClose={() => setNewOpen(false)} />
     </Layout>
   );
 }

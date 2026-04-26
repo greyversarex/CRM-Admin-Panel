@@ -18,9 +18,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import {
-  Users2, Search, Plus, Phone, Mail, MessageSquare, CheckSquare, Filter,
+  Users2, Search, Plus, Phone, Mail, MessageSquare, CheckSquare, Filter, X,
   Pencil, Trash2, Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -180,17 +182,59 @@ export default function CRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAdmin]);
 
+  const [filterTypes, setFilterTypes] = useState<Set<ContactType>>(new Set());
+  const [filterCountry, setFilterCountry] = useState<string>("all");
+  const [filterHasOpen, setFilterHasOpen] = useState<boolean>(false);
+
+  const countryOptions = useMemo(() => {
+    const s = new Set<string>();
+    contacts.forEach((c) => { if (c.country) s.add(c.country); });
+    return Array.from(s).sort();
+  }, [contacts]);
+
+  // Контакты с открытыми задачами (для фильтра «есть открытые задачи»)
+  const contactsWithOpenTasks = useMemo(() => {
+    const s = new Set<number>();
+    tasks.forEach((t) => {
+      if (
+        (t.status === "todo" || t.status === "in_progress") &&
+        t.relatedEntityType === "contact" &&
+        t.relatedEntityId != null
+      ) {
+        s.add(t.relatedEntityId);
+      }
+    });
+    return s;
+  }, [tasks]);
+
+  const activeFilterCount =
+    (filterTypes.size > 0 ? 1 : 0) +
+    (filterCountry !== "all" ? 1 : 0) +
+    (filterHasOpen ? 1 : 0);
+
+  function resetFilters() {
+    setFilterTypes(new Set());
+    setFilterCountry("all");
+    setFilterHasOpen(false);
+  }
+
   const filteredContacts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.email ?? "").toLowerCase().includes(q) ||
-        (c.company ?? "").toLowerCase().includes(q) ||
-        (c.phone ?? "").toLowerCase().includes(q),
-    );
-  }, [contacts, search]);
+    return contacts.filter((c) => {
+      if (q) {
+        const matchSearch =
+          c.name.toLowerCase().includes(q) ||
+          (c.email ?? "").toLowerCase().includes(q) ||
+          (c.company ?? "").toLowerCase().includes(q) ||
+          (c.phone ?? "").toLowerCase().includes(q);
+        if (!matchSearch) return false;
+      }
+      if (filterTypes.size > 0 && !filterTypes.has(c.type)) return false;
+      if (filterCountry !== "all" && c.country !== filterCountry) return false;
+      if (filterHasOpen && !contactsWithOpenTasks.has(c.id)) return false;
+      return true;
+    });
+  }, [contacts, search, filterTypes, filterCountry, filterHasOpen, contactsWithOpenTasks]);
 
   const kpi = useMemo(() => ({
     total: contacts.length,
@@ -323,9 +367,82 @@ export default function CRM() {
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" size="icon" className="h-9 w-9 bg-background/50" disabled>
-                  <Filter className="h-4 w-4" />
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 bg-background/50 relative"
+                      data-testid="button-filter"
+                      aria-label="Фильтры контактов"
+                    >
+                      <Filter className="h-4 w-4" />
+                      {activeFilterCount > 0 && (
+                        <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-primary text-[10px] text-primary-foreground font-bold flex items-center justify-center">
+                          {activeFilterCount}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 space-y-4">
+                    <div>
+                      <div className="text-xs font-medium mb-2">Тип контакта</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {(Object.keys(CONTACT_TYPE_LABEL) as ContactType[]).map((t) => (
+                          <label key={t} className="flex items-center gap-2 text-xs cursor-pointer hover-elevate rounded p-1">
+                            <Checkbox
+                              checked={filterTypes.has(t)}
+                              onCheckedChange={(v) => {
+                                const s = new Set(filterTypes);
+                                if (v) s.add(t); else s.delete(t);
+                                setFilterTypes(s);
+                              }}
+                              data-testid={`filter-type-${t}`}
+                            />
+                            <span>{CONTACT_TYPE_LABEL[t]}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-medium mb-2">Страна</div>
+                      <select
+                        aria-label="Filter by country"
+                        className="w-full h-9 px-2 text-xs rounded-md bg-background border border-border"
+                        value={filterCountry}
+                        onChange={(e) => setFilterCountry(e.target.value)}
+                        data-testid="filter-country"
+                      >
+                        <option value="all">Все страны</option>
+                        {countryOptions.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-2 text-xs cursor-pointer hover-elevate rounded p-1">
+                        <Checkbox
+                          checked={filterHasOpen}
+                          onCheckedChange={(v) => setFilterHasOpen(!!v)}
+                          data-testid="filter-has-open-tasks"
+                        />
+                        <span>Только с открытыми задачами</span>
+                      </label>
+                    </div>
+
+                    {activeFilterCount > 0 && (
+                      <Button
+                        variant="ghost" size="sm" className="w-full h-8 text-xs"
+                        onClick={resetFilters}
+                        data-testid="button-reset-filters"
+                      >
+                        <X className="h-3 w-3 mr-1" /> Сбросить фильтры
+                      </Button>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </div>
               <CardContent className="p-0">
                 {loading ? (
