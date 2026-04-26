@@ -51,15 +51,14 @@ const DELIVER_TARGETS: Array<{ code: DeliveryTarget; label: string }> = [
   { code: "ok_music",      label: "OK Music" },
 ];
 
-// Backend: POST /releases/:id/deliver принимает только status='approved' (409 иначе),
-// поэтому кнопку показываем строго на approved. Re-deliver на delivering/live — отдельная
-// фича (требует takedown→approve flow), сюда не входит.
-const CAN_DELIVER_STATUSES = new Set(["approved"]);
-// Источник истины: backend разрешает редактировать только в этих статусах.
-// Должно совпадать с releaseEditableReason() в artifacts/api-server/src/routes/releases.ts.
-const EDITABLE_STATUSES = new Set(["draft", "rejected"]);
-// Только из этих двух статусов можно отправить релиз на модерацию.
-const SUBMITTABLE_STATUSES = new Set(["draft", "rejected"]);
+// Управление видимостью кнопок теперь полностью основано на флагах, которые
+// возвращает бэкенд в каждом объекте Release:
+//   release.canSubmit          — показывать «Send to Moderation»
+//   release.canDeliver         — показывать «Deliver to DSPs»
+//   release.isEditable         — показывать «Edit Release» (иначе «Edit Locked»)
+//   release.allowedTransitions — содержит "takedown_requested" только если
+//                                кнопку Take Down имеет смысл показывать
+// Единый источник истины — RELEASE_STATUS_TRANSITIONS + флаги в enrichRelease на бэкенде.
 const TAKEDOWN_REASONS = [
   "Other", "Legal/contractual obligations", "Incorrect metadata",
   "Wrong audio file", "Replacement release", "Artist request",
@@ -137,7 +136,7 @@ export default function ReleaseDetail() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {/* Send to Moderation: только из draft/rejected, доступно владельцу */}
-            {SUBMITTABLE_STATUSES.has(release.status) && (
+            {release.canSubmit && (
               <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95">
@@ -151,7 +150,7 @@ export default function ReleaseDetail() {
                 />
               </Dialog>
             )}
-            {user && (user.role === "admin" || user.role === "manager") && CAN_DELIVER_STATUSES.has(release.status) && (
+            {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
               <Dialog open={deliverOpen} onOpenChange={setDeliverOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
@@ -164,8 +163,8 @@ export default function ReleaseDetail() {
                 />
               </Dialog>
             )}
-            {/* Take Down: только когда релиз уже опубликован/в процессе доставки */}
-            {(release.status === "live" || release.status === "delivering" || release.status === "delivered") && (
+            {/* Take Down: показываем только когда backend разрешает переход в takedown_requested */}
+            {release.allowedTransitions.includes("takedown_requested") && (
               <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
@@ -178,8 +177,8 @@ export default function ReleaseDetail() {
                 />
               </Dialog>
             )}
-            {/* Edit Release: только когда статус editable. В остальных — disabled с подсказкой. */}
-            {EDITABLE_STATUSES.has(release.status) ? (
+            {/* Edit Release: backend-флаг isEditable (draft/rejected). В остальных — disabled. */}
+            {release.isEditable ? (
               <Dialog open={editOpen} onOpenChange={setEditOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="bg-card">

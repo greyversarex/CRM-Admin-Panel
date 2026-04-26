@@ -129,6 +129,19 @@ export interface Release {
   cLine?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Статусы, доступные через PATCH /releases/:id/status (state-machine бэкенда).
+Пустой массив — статус терминальный или переходы невозможны.
+Для отправки на модерацию используйте canSubmit (POST /releases/:id/submit).
+*/
+  allowedTransitions: ReleaseStatus[];
+  /** true, если поля/треки/ассеты релиза можно редактировать (статус draft или rejected).
+Совпадает с releaseEditableReason() на бэкенде.
+*/
+  isEditable: boolean;
+  /** true, если артист/лейбл вправе отправить релиз на модерацию (POST /releases/:id/submit). */
+  canSubmit: boolean;
+  /** true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved). */
+  canDeliver: boolean;
 }
 
 export interface Track {

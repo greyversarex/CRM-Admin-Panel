@@ -78,6 +78,7 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
 
   const [trackCount] = await db.select({ count: count() }).from(tracksTable).where(eq(tracksTable.releaseId, r.id));
 
+  const EDITABLE_STATUSES = new Set(["draft", "rejected"]);
   return {
     ...r,
     artistName,
@@ -85,6 +86,15 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
     totalTracks: trackCount.count,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    // ── Флаги единого источника истины (используются фронтендом) ──────────
+    // Список допустимых переходов для PATCH /releases/:id/status.
+    allowedTransitions: RELEASE_STATUS_TRANSITIONS[r.status] ?? [] as readonly string[],
+    // Можно редактировать поля/треки/ассеты (совпадает с releaseEditableReason).
+    isEditable: EDITABLE_STATUSES.has(r.status),
+    // Можно нажать «Send to Moderation» (POST /releases/:id/submit).
+    canSubmit: EDITABLE_STATUSES.has(r.status),
+    // Можно запустить отгрузку в DSP (POST /releases/:id/deliver).
+    canDeliver: r.status === "approved",
   };
 }
 

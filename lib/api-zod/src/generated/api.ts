@@ -502,6 +502,10 @@ export const ListReleasesResponse = zod.object({
       cLine: zod.string().nullish(),
       createdAt: zod.string(),
       updatedAt: zod.string(),
+      allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+      isEditable: zod.boolean(),
+      canSubmit: zod.boolean(),
+      canDeliver: zod.boolean(),
     }),
   ),
   pagination: zod.object({
@@ -582,6 +586,10 @@ export const GetReleaseResponse = zod
     cLine: zod.string().nullish(),
     createdAt: zod.string(),
     updatedAt: zod.string(),
+    allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+    isEditable: zod.boolean(),
+    canSubmit: zod.boolean(),
+    canDeliver: zod.boolean(),
   })
   .and(
     zod.object({
@@ -678,6 +686,10 @@ export const UpdateReleaseResponse = zod.object({
   cLine: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+  isEditable: zod.boolean(),
+  canSubmit: zod.boolean(),
+  canDeliver: zod.boolean(),
 });
 
 /**
@@ -732,6 +744,10 @@ export const SubmitReleaseForReviewResponse = zod.object({
   cLine: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+  isEditable: zod.boolean(),
+  canSubmit: zod.boolean(),
+  canDeliver: zod.boolean(),
 });
 
 /**
@@ -795,6 +811,10 @@ export const UpdateReleaseStatusResponse = zod.object({
   cLine: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+  isEditable: zod.boolean(),
+  canSubmit: zod.boolean(),
+  canDeliver: zod.boolean(),
 });
 
 /**
@@ -847,6 +867,10 @@ export const ImportReleaseByUpcResponse = zod.object({
   cLine: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  allowedTransitions: zod.array(zod.enum(["draft","pending_review","approved","rejected","delivering","delivered","live","error","takedown_requested","removed"])),
+  isEditable: zod.boolean(),
+  canSubmit: zod.boolean(),
+  canDeliver: zod.boolean(),
 });
 
 /**

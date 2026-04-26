@@ -2270,7 +2270,30 @@ components:
           type: string
         updatedAt:
           type: string
-      required: [id, title, releaseType, status, artistId, artistName, isExplicit, territories, totalTracks, createdAt, updatedAt]
+        allowedTransitions:
+          type: array
+          description: |
+            Статусы, доступные через PATCH /releases/:id/status (state-machine бэкенда).
+            Пустой массив — статус терминальный (removed) или переходы невозможны.
+            Артистский POST /releases/:id/submit сюда не входит (используйте canSubmit).
+          items:
+            type: string
+            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+        isEditable:
+          type: boolean
+          description: |
+            true, если поля релиза и треки можно редактировать (статус draft или rejected).
+            Совпадает с releaseEditableReason() на бэкенде.
+        canSubmit:
+          type: boolean
+          description: |
+            true, если артист/лейбл вправе отправить релиз на модерацию (POST /releases/:id/submit).
+            Совпадает с isEditable, выделено для ясности UI.
+        canDeliver:
+          type: boolean
+          description: |
+            true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved).
+      required: [id, title, releaseType, status, artistId, artistName, isExplicit, territories, totalTracks, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver]
 
     ReleaseDetail:
       allOf:
