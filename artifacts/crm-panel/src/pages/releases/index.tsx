@@ -133,15 +133,18 @@ export default function Releases() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")}>
-              <ArrowUpRight className="mr-2 h-4 w-4" />
-              Transfer Track
-            </Button>
+            {!isArtist && !isLabel && (
+              <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")} data-testid="button-transfer-track">
+                <ArrowUpRight className="mr-2 h-4 w-4" />
+                Transfer Track
+              </Button>
+            )}
             <Button
               variant="outline"
               className="bg-card"
               onClick={onExportCatalog}
               disabled={exporting}
+              data-testid="button-export-csv"
             >
               <Download className="mr-2 h-4 w-4" />
               {exporting
@@ -152,11 +155,13 @@ export default function Releases() {
                     : "Готовлю файл…"
                 : "Экспорт CSV"}
             </Button>
-            <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")}>
-              <Upload className="mr-2 h-4 w-4" />
-              Загрузить CSV
-            </Button>
-            <Button onClick={() => setLocation("/releases/new")} className="bg-primary">
+            {!isArtist && !isLabel && (
+              <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")} data-testid="button-upload-csv">
+                <Upload className="mr-2 h-4 w-4" />
+                Загрузить CSV
+              </Button>
+            )}
+            <Button onClick={() => setLocation("/releases/new")} className="bg-primary" data-testid="button-create-release">
               <Plus className="mr-2 h-4 w-4" />
               Create Release
             </Button>
