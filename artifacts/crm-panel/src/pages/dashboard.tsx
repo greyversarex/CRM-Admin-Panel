@@ -60,9 +60,9 @@ export default function Dashboard() {
   };
 
   const scopeBadge = role === "label"
-    ? (user?.orgName ?? "Лейбл")
+    ? (user?.orgName ?? d.role_label)
     : role === "artist"
-    ? (user?.orgName ?? user?.name ?? "Артист")
+    ? (user?.orgName ?? user?.name ?? d.role_artist)
     : null;
 
   return (
@@ -81,15 +81,15 @@ export default function Dashboard() {
               )}
               {role !== "admin" && role !== "manager" && (
                 <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-amber-500/30 text-amber-400 bg-amber-500/8 px-2 py-0.5">
-                  {ROLE_LABELS[role]} · только мои данные
+                  {ROLE_LABELS[role]} · {d.my_data_only}
                 </Badge>
               )}
             </div>
             <p className="text-[13px] text-muted-foreground mt-0.5">
               {role === "artist"
-                ? "Ваш персональный обзор релизов и доходов"
+                ? d.subtitle_artist
                 : role === "label"
-                ? "Обзор каталога и доходов вашего лейбла"
+                ? d.subtitle_label
                 : d.subtitle}
             </p>
           </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
         {/* ── KPI Cards ── */}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <KpiCard
-            label={role === "artist" ? "Мой доход" : role === "label" ? "Доход лейбла" : d.total_revenue}
+            label={role === "artist" ? d.my_revenue : role === "label" ? d.label_revenue : d.total_revenue}
             value={`$${totalRevenue.toLocaleString()}`}
             icon={DollarSign}
             iconColor="text-emerald-400"
@@ -113,19 +113,19 @@ export default function Dashboard() {
             iconColor="text-fuchsia-400"
             iconBg="bg-fuchsia-500/12"
             iconBorder="border-fuchsia-500/20"
-            trend={{ value: totalStreams > 0 ? `${totalStreams.toLocaleString()} прослушиваний` : "Нет данных", up: undefined }}
+            trend={{ value: totalStreams > 0 ? `${totalStreams.toLocaleString()} ${d.streams_suffix}` : d.no_data, up: undefined }}
           />
           <KpiCard
-            label={role === "label" ? "Артисты лейбла" : d.total_artists}
+            label={role === "label" ? d.label_artists : d.total_artists}
             value={totalArtists.toLocaleString()}
             icon={Users}
             iconColor="text-primary"
             iconBg="bg-primary/12"
             iconBorder="border-primary/20"
-            trend={{ value: `${totalArtists} активных`, up: undefined }}
+            trend={{ value: `${totalArtists} ${d.active_suffix}`, up: undefined }}
           />
           <KpiCard
-            label={role === "artist" ? "Мои релизы" : role === "label" ? "Релизы лейбла" : d.total_releases}
+            label={role === "artist" ? d.my_releases : role === "label" ? d.label_releases : d.total_releases}
             value={totalReleases.toLocaleString()}
             icon={Disc3}
             iconColor="text-violet-400"
@@ -140,7 +140,7 @@ export default function Dashboard() {
             iconColor="text-sky-400"
             iconBg="bg-sky-500/12"
             iconBorder="border-sky-500/20"
-            trend={{ value: "В обработке", up: undefined }}
+            trend={{ value: d.processing, up: undefined }}
           />
         </div>
 
@@ -154,7 +154,7 @@ export default function Dashboard() {
             <CardContent className="pl-1">
               <div className="h-[280px] w-full">
                 {revenue.length === 0 ? (
-                  <EmptyChart message="Пока нет данных по выручке" />
+                  <EmptyChart message={d.empty_revenue} />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revenue} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -193,7 +193,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="flex-1 overflow-auto px-4">
               {topArtists.length === 0 ? (
-                <EmptyChart message="Нет данных по топ-артистам" />
+                <EmptyChart message={d.empty_top_artists} />
               ) : (
                 <div className="space-y-1">
                   {topArtists.map((artist, i) => (
@@ -234,7 +234,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="h-[220px] w-full">
                 {status.length === 0 ? (
-                  <EmptyChart message="Нет релизов" />
+                  <EmptyChart message={d.empty_releases} />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={status} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
@@ -264,13 +264,13 @@ export default function Dashboard() {
               <div className="flex items-center gap-2">
                 <Layers className="h-4 w-4 text-muted-foreground/60" />
                 <CardTitle className="text-base font-semibold">
-                  {role === "artist" ? "Моя активность" : role === "label" ? "Активность лейбла" : "Recent Activity"}
+                  {role === "artist" ? d.my_activity : role === "label" ? d.label_activity : d.recent_activity}
                 </CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               {activity.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground/60 py-8 text-center">Нет недавних событий</p>
+                <p className="text-[12px] text-muted-foreground/60 py-8 text-center">{d.empty_activity}</p>
               ) : (
                 <div className="space-y-0">
                   {activity.map((item) => (
@@ -282,7 +282,7 @@ export default function Dashboard() {
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[12px] font-medium leading-snug">{item.title}</p>
                           <time className="text-[10px] text-muted-foreground/60 shrink-0 tabular-nums">
-                            {new Date(item.timestamp).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
+                            {new Date(item.timestamp).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
                           </time>
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{item.description}</p>

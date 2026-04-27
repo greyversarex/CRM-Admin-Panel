@@ -39,19 +39,11 @@ import { toast } from "@/hooks/use-toast";
 
 const PIE_COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#ec4899", "#10b981", "#8b5cf6", "#ef4444", "#14b8a6", "#a855f7"];
 
-const PAYOUT_STATUS: Record<string, { label: string; cls: string }> = {
-  pending:  { label: "В ожидании", cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  approved: { label: "Одобрено",   cls: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  paid:     { label: "Выплачено",  cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  rejected: { label: "Отклонено",  cls: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
-};
-
-const METHOD_LABELS: Record<string, string> = {
-  bank_transfer: "Банковский перевод",
-  paypal: "PayPal",
-  payoneer: "Payoneer",
-  crypto: "Криптовалюта",
-  wallet: "Внутренний кошелёк",
+const PAYOUT_STATUS_CLS: Record<string, string> = {
+  pending:  "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  approved: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  paid:     "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  rejected: "bg-rose-500/10 text-rose-400 border-rose-500/20",
 };
 
 function fmtMoney(n: number, currency = "USD") {
@@ -104,27 +96,42 @@ export default function Royalties() {
 
   const canRequestPayout = !!entityParams.entity_type;
 
+  const payoutStatusLabel = (s: string) => ({
+    pending:  t.royalties.history.status_pending,
+    approved: t.royalties.history.status_approved,
+    paid:     t.royalties.history.status_paid,
+    rejected: t.royalties.history.status_rejected,
+  }[s] ?? s);
+
+  const methodLabel = (m: string) => ({
+    bank_transfer: t.royalties.history.method_bank,
+    paypal:        t.royalties.history.method_paypal,
+    payoneer:      t.royalties.history.method_payoneer,
+    crypto:        t.royalties.history.method_crypto,
+    wallet:        t.royalties.history.method_wallet,
+  }[m] ?? m);
+
   function handlePayoutSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canRequestPayout) {
-      toast({ title: "Недоступно", description: "Запрос выплаты доступен только для аккаунтов артиста или лейбла.", variant: "destructive" });
+      toast({ title: t.royalties.payout_form.unavailable, description: t.royalties.payout_form.unavailable_desc, variant: "destructive" });
       return;
     }
     if (!summary) {
-      toast({ title: "Данные ещё не загрузились", description: "Подожди пару секунд, пока загрузится баланс.", variant: "destructive" });
+      toast({ title: t.royalties.payout_form.data_loading, description: t.royalties.payout_form.data_loading_desc, variant: "destructive" });
       return;
     }
     const amt = parseFloat(payAmount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      toast({ title: "Неверная сумма", description: "Укажи сумму больше нуля", variant: "destructive" });
+      toast({ title: t.royalties.payout_form.invalid_amount, description: t.royalties.payout_form.invalid_amount_desc, variant: "destructive" });
       return;
     }
     if (amt < summary.minimumPayout) {
-      toast({ title: "Сумма ниже минимума", description: `Минимум для выплаты: ${fmtMoney(summary.minimumPayout)}`, variant: "destructive" });
+      toast({ title: t.royalties.payout_form.below_minimum, description: `${t.royalties.kpi.min_payout}: ${fmtMoney(summary.minimumPayout)}`, variant: "destructive" });
       return;
     }
     if (amt > summary.availableBalance) {
-      toast({ title: "Недостаточно средств", description: `Доступно: ${fmtMoney(summary.availableBalance)}`, variant: "destructive" });
+      toast({ title: t.royalties.payout_form.insufficient, description: `${t.royalties.kpi.available}: ${fmtMoney(summary.availableBalance)}`, variant: "destructive" });
       return;
     }
     createPayout.mutate(
@@ -140,13 +147,13 @@ export default function Royalties() {
       },
       {
         onSuccess: () => {
-          toast({ title: "Запрос отправлен", description: "Заявка на выплату создана и ждёт одобрения." });
+          toast({ title: t.royalties.payout_form.request_sent, description: t.royalties.payout_form.request_sent_desc });
           setPayAmount(""); setPayDetails("");
           queryClient.invalidateQueries({ queryKey: getListPayoutsQueryKey(payoutParams) });
           queryClient.invalidateQueries({ queryKey: getGetRoyaltySummaryQueryKey(entityParams) });
         },
         onError: () => {
-          toast({ title: "Ошибка", description: "Не удалось создать заявку. Попробуй ещё раз.", variant: "destructive" });
+          toast({ title: t.royalties.payout_form.request_error, description: t.royalties.payout_form.request_error_desc, variant: "destructive" });
         },
       },
     );
@@ -170,13 +177,12 @@ export default function Royalties() {
               {user?.role === "label" ? nav.earnings : nav.royalties}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Отчёты, выплаты и аналитика доходов
-              {entityParams.entity_type ? "" : " по всему каталогу"}.
+              {entityParams.entity_type ? t.royalties.subtitle : t.royalties.subtitle_full}
             </p>
           </div>
           <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5 self-start">
             <Calendar className="h-3 w-3 mr-1" />
-            Период: последние 12 месяцев
+            {t.royalties.period_label}
           </Badge>
         </div>
 
@@ -184,7 +190,7 @@ export default function Royalties() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Доступно к выплате</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t.royalties.kpi.available}</CardTitle>
               <Wallet className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
@@ -192,27 +198,27 @@ export default function Royalties() {
                 <div className="text-2xl font-bold text-primary">{fmtMoney(summary?.availableBalance ?? 0)}</div>
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                Минимум для запроса: {fmtMoney(summary?.minimumPayout ?? 0)}
+                {t.royalties.kpi.min_payout}: {fmtMoney(summary?.minimumPayout ?? 0)}
               </p>
             </CardContent>
           </Card>
 
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">В обработке</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t.royalties.kpi.in_processing}</CardTitle>
               <DollarSign className="h-4 w-4 text-amber-400" />
             </CardHeader>
             <CardContent>
               {summaryQ.isLoading ? <Skeleton className="h-8 w-24" /> : (
                 <div className="text-2xl font-bold text-amber-400">{fmtMoney(summary?.pendingBalance ?? 0)}</div>
               )}
-              <p className="text-xs text-muted-foreground mt-1">Текущий отчётный месяц</p>
+              <p className="text-xs text-muted-foreground mt-1">{t.royalties.kpi.current_period}</p>
             </CardContent>
           </Card>
 
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Этот месяц</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t.royalties.kpi.this_month}</CardTitle>
               {grossDelta >= 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : <ArrowDownRight className="h-4 w-4 text-rose-400" />}
             </CardHeader>
             <CardContent>
@@ -220,14 +226,14 @@ export default function Royalties() {
                 <div className="text-2xl font-bold">{fmtMoney(summary?.currentPeriodGross ?? 0)}</div>
               )}
               <p className={`text-xs mt-1 ${grossDelta >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {grossDelta >= 0 ? "+" : ""}{grossDelta.toFixed(1)}% vs прошлый месяц
+                {grossDelta >= 0 ? "+" : ""}{grossDelta.toFixed(1)}% {t.royalties.kpi.vs_prev}
               </p>
             </CardContent>
           </Card>
 
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Стримы (мес)</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t.royalties.kpi.streams}</CardTitle>
               {streamDelta >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-rose-400" />}
             </CardHeader>
             <CardContent>
@@ -235,7 +241,7 @@ export default function Royalties() {
                 <div className="text-2xl font-bold">{fmtNum(summary?.currentPeriodStreams ?? 0)}</div>
               )}
               <p className={`text-xs mt-1 ${streamDelta >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {streamDelta >= 0 ? "+" : ""}{streamDelta.toFixed(1)}% vs прошлый месяц
+                {streamDelta >= 0 ? "+" : ""}{streamDelta.toFixed(1)}% {t.royalties.kpi.vs_prev}
               </p>
             </CardContent>
           </Card>
@@ -244,12 +250,12 @@ export default function Royalties() {
         {/* Tabs */}
         <Tabs defaultValue="summary" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 bg-card/50 backdrop-blur">
-            <TabsTrigger value="summary"><Wallet className="h-4 w-4 mr-2" /> Сводка</TabsTrigger>
-            <TabsTrigger value="statements"><FileText className="h-4 w-4 mr-2" /> Отчёты</TabsTrigger>
-            <TabsTrigger value="releases"><Disc3 className="h-4 w-4 mr-2" /> По релизам</TabsTrigger>
-            <TabsTrigger value="dsp"><Radio className="h-4 w-4 mr-2" /> По DSP</TabsTrigger>
-            <TabsTrigger value="request"><Send className="h-4 w-4 mr-2" /> Выплата</TabsTrigger>
-            <TabsTrigger value="history"><History className="h-4 w-4 mr-2" /> История</TabsTrigger>
+            <TabsTrigger value="summary"><Wallet className="h-4 w-4 mr-2" /> {t.royalties.tabs.summary}</TabsTrigger>
+            <TabsTrigger value="statements"><FileText className="h-4 w-4 mr-2" /> {t.royalties.tabs.statements}</TabsTrigger>
+            <TabsTrigger value="releases"><Disc3 className="h-4 w-4 mr-2" /> {t.royalties.tabs.releases}</TabsTrigger>
+            <TabsTrigger value="dsp"><Radio className="h-4 w-4 mr-2" /> {t.royalties.tabs.dsp}</TabsTrigger>
+            <TabsTrigger value="request"><Send className="h-4 w-4 mr-2" /> {t.royalties.tabs.request}</TabsTrigger>
+            <TabsTrigger value="history"><History className="h-4 w-4 mr-2" /> {t.royalties.tabs.history}</TabsTrigger>
           </TabsList>
 
           {/* ─── 1. Royalty Summary ───────────────────────── */}
@@ -257,14 +263,14 @@ export default function Royalties() {
             <div className="grid gap-6 lg:grid-cols-3">
               <Card className="bg-card/50 backdrop-blur border-border/50 lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>Доход за 12 месяцев</CardTitle>
-                  <CardDescription>Гросс и нетто после комиссии (15%)</CardDescription>
+                  <CardTitle>{t.royalties.chart.income_12m}</CardTitle>
+                  <CardDescription>{t.royalties.chart.gross_net}</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[320px]">
                   {summaryQ.isLoading ? (
                     <Skeleton className="h-full w-full" />
                   ) : summaryQ.isError ? (
-                    <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Не удалось загрузить данные.</AlertDescription></Alert>
+                    <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.statements.load_error}</AlertDescription></Alert>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={summary?.timeline ?? []} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -287,8 +293,8 @@ export default function Royalties() {
                           labelFormatter={(l) => l}
                         />
                         <Legend />
-                        <Area type="monotone" dataKey="gross" name="Гросс" stroke="#6366f1" fill="url(#grossGrad)" strokeWidth={2} />
-                        <Area type="monotone" dataKey="net"   name="Нетто" stroke="#22d3ee" fill="url(#netGrad)"   strokeWidth={2} />
+                        <Area type="monotone" dataKey="gross" name={t.royalties.chart.gross} stroke="#6366f1" fill="url(#grossGrad)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="net"   name={t.royalties.chart.net}   stroke="#22d3ee" fill="url(#netGrad)"   strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
@@ -297,33 +303,33 @@ export default function Royalties() {
 
               <Card className="bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle>Ключевые показатели</CardTitle>
+                  <CardTitle>{t.royalties.chart.kpi_title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {summaryQ.isLoading ? <Skeleton className="h-40" /> : (
                     <>
                       <div className="flex justify-between items-center pb-3 border-b border-border/50">
-                        <span className="text-sm text-muted-foreground">Lifetime доход</span>
+                        <span className="text-sm text-muted-foreground">{t.royalties.chart.lifetime}</span>
                         <span className="font-semibold">{fmtMoney(summary?.lifetimeEarnings ?? 0)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b border-border/50">
-                        <span className="text-sm text-muted-foreground">Доход (этот мес)</span>
+                        <span className="text-sm text-muted-foreground">{t.royalties.chart.current_month}</span>
                         <span className="font-semibold">{fmtMoney(summary?.currentPeriodGross ?? 0)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b border-border/50">
-                        <span className="text-sm text-muted-foreground">Доход (прошлый мес)</span>
+                        <span className="text-sm text-muted-foreground">{t.royalties.chart.prev_month}</span>
                         <span className="font-semibold">{fmtMoney(summary?.previousPeriodGross ?? 0)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-3 border-b border-border/50">
-                        <span className="text-sm text-muted-foreground">Следующий отчёт</span>
+                        <span className="text-sm text-muted-foreground">{t.royalties.chart.next_statement}</span>
                         <span className="font-semibold text-sm">
-                          {summary?.nextStatementDate ? new Date(summary.nextStatementDate).toLocaleDateString("ru-RU") : "—"}
+                          {summary?.nextStatementDate ? new Date(summary.nextStatementDate).toLocaleDateString() : "—"}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Следующая выплата</span>
+                        <span className="text-sm text-muted-foreground">{t.royalties.chart.next_payment}</span>
                         <span className="font-semibold text-sm">
-                          {summary?.nextPaymentDate ? new Date(summary.nextPaymentDate).toLocaleDateString("ru-RU") : "—"}
+                          {summary?.nextPaymentDate ? new Date(summary.nextPaymentDate).toLocaleDateString() : "—"}
                         </span>
                       </div>
                     </>
@@ -337,28 +343,28 @@ export default function Royalties() {
           <TabsContent value="statements" className="space-y-4">
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader>
-                <CardTitle>Месячные отчёты</CardTitle>
-                <CardDescription>Скачивай отчёты в формате PDF или CSV.</CardDescription>
+                <CardTitle>{t.royalties.statements.title}</CardTitle>
+                <CardDescription>{t.royalties.statements.desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 {statementsQ.isLoading ? (
                   <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
                 ) : statementsQ.isError ? (
-                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Не удалось загрузить отчёты.</AlertDescription></Alert>
+                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.statements.load_error}</AlertDescription></Alert>
                 ) : (statementsQ.data ?? []).length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">Отчётов пока нет.</div>
+                  <div className="text-center py-12 text-muted-foreground">{t.royalties.statements.empty}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Период</TableHead>
-                          <TableHead className="text-right">Стримы</TableHead>
-                          <TableHead className="text-right">Гросс</TableHead>
-                          <TableHead className="text-right">Комиссия</TableHead>
-                          <TableHead className="text-right">Нетто</TableHead>
-                          <TableHead>Статус</TableHead>
-                          <TableHead className="text-right">Скачать</TableHead>
+                          <TableHead>{t.royalties.statements.period}</TableHead>
+                          <TableHead className="text-right">{t.royalties.statements.streams}</TableHead>
+                          <TableHead className="text-right">{t.royalties.statements.gross}</TableHead>
+                          <TableHead className="text-right">{t.royalties.statements.commission}</TableHead>
+                          <TableHead className="text-right">{t.royalties.statements.net}</TableHead>
+                          <TableHead>{t.royalties.statements.status}</TableHead>
+                          <TableHead className="text-right">{t.royalties.statements.download}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -375,7 +381,7 @@ export default function Royalties() {
                                 s.status === "finalized" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
                                                            "bg-amber-500/10 text-amber-400 border-amber-500/20"
                               }>
-                                {s.status === "paid" ? "Выплачен" : s.status === "finalized" ? "Финализирован" : "Черновик"}
+                                {s.status === "paid" ? t.royalties.statements.status_paid : s.status === "finalized" ? t.royalties.statements.status_finalized : t.royalties.statements.status_draft}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -406,27 +412,27 @@ export default function Royalties() {
           <TabsContent value="releases" className="space-y-4">
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader>
-                <CardTitle>Доход по релизам</CardTitle>
-                <CardDescription>Отсортировано по убыванию gross-дохода.</CardDescription>
+                <CardTitle>{t.royalties.by_release.title}</CardTitle>
+                <CardDescription>{t.royalties.by_release.desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 {byReleaseQ.isLoading ? (
                   <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
                 ) : byReleaseQ.isError ? (
-                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Не удалось загрузить данные.</AlertDescription></Alert>
+                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.by_release.load_error}</AlertDescription></Alert>
                 ) : (byReleaseQ.data ?? []).length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">У тебя пока нет релизов с доходом.</div>
+                  <div className="text-center py-12 text-muted-foreground">{t.royalties.by_release.empty}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Релиз</TableHead>
-                          <TableHead>Артист</TableHead>
-                          <TableHead className="text-right">Стримы</TableHead>
-                          <TableHead className="text-right">Гросс</TableHead>
-                          <TableHead className="text-right">Нетто</TableHead>
-                          <TableHead className="text-right">Тренд</TableHead>
+                          <TableHead>{t.royalties.by_release.release}</TableHead>
+                          <TableHead>{t.royalties.by_release.artist}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_release.streams}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_release.gross}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_release.net}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_release.trend}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -472,13 +478,13 @@ export default function Royalties() {
             <div className="grid gap-6 lg:grid-cols-2">
               <Card className="bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle>Распределение по платформам</CardTitle>
-                  <CardDescription>Доля в общем доходе</CardDescription>
+                  <CardTitle>{t.royalties.by_dsp.title}</CardTitle>
+                  <CardDescription>{t.royalties.by_dsp.desc}</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[320px]">
                   {byDspQ.isLoading ? <Skeleton className="h-full w-full" /> :
-                   byDspQ.isError ? <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Ошибка загрузки.</AlertDescription></Alert> :
-                   (byDspQ.data ?? []).length === 0 ? <div className="flex h-full items-center justify-center text-muted-foreground">Нет данных</div> : (
+                   byDspQ.isError ? <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.by_dsp.load_error}</AlertDescription></Alert> :
+                   (byDspQ.data ?? []).length === 0 ? <div className="flex h-full items-center justify-center text-muted-foreground">{t.royalties.by_dsp.empty}</div> : (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={byDspQ.data} dataKey="gross" nameKey="dsp" cx="50%" cy="50%" outerRadius={100} innerRadius={55} paddingAngle={2}>
@@ -496,12 +502,12 @@ export default function Royalties() {
 
               <Card className="bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle>Доход по DSP</CardTitle>
-                  <CardDescription>Топ платформ за период</CardDescription>
+                  <CardTitle>{t.royalties.by_dsp.title}</CardTitle>
+                  <CardDescription>{t.royalties.chart.for_period}</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[320px]">
                   {byDspQ.isLoading ? <Skeleton className="h-full w-full" /> :
-                   (byDspQ.data ?? []).length === 0 ? <div className="flex h-full items-center justify-center text-muted-foreground">Нет данных</div> : (
+                   (byDspQ.data ?? []).length === 0 ? <div className="flex h-full items-center justify-center text-muted-foreground">{t.royalties.by_dsp.empty}</div> : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={byDspQ.data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -524,20 +530,20 @@ export default function Royalties() {
                 {byDspQ.isLoading ? (
                   <Skeleton className="h-32" />
                 ) : byDspQ.isError ? (
-                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Не удалось загрузить таблицу DSP.</AlertDescription></Alert>
+                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.by_dsp.load_error}</AlertDescription></Alert>
                 ) : (byDspQ.data ?? []).length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">Доходов по платформам пока нет.</div>
+                  <div className="text-center py-8 text-muted-foreground">{t.royalties.by_dsp.empty}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Платформа</TableHead>
-                          <TableHead className="text-right">Стримы</TableHead>
-                          <TableHead className="text-right">Гросс</TableHead>
-                          <TableHead className="text-right">Нетто</TableHead>
-                          <TableHead className="text-right">Доля</TableHead>
-                          <TableHead className="text-right">Тренд</TableHead>
+                          <TableHead>{t.royalties.by_dsp.platform}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_dsp.streams}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_dsp.gross}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_dsp.net}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_dsp.share}</TableHead>
+                          <TableHead className="text-right">{t.royalties.by_release.trend}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -574,10 +580,10 @@ export default function Royalties() {
             <div className="grid gap-6 lg:grid-cols-3">
               <Card className="bg-card/50 backdrop-blur border-border/50 lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>Запросить выплату</CardTitle>
+                  <CardTitle>{t.royalties.payout_form.title}</CardTitle>
                   <CardDescription>
-                    Доступно сейчас: <span className="text-primary font-semibold">{fmtMoney(summary?.availableBalance ?? 0)}</span>
-                    {" · "}минимум: {fmtMoney(summary?.minimumPayout ?? 50)}
+                    {t.royalties.kpi.available}: <span className="text-primary font-semibold">{fmtMoney(summary?.availableBalance ?? 0)}</span>
+                    {" · "}{t.royalties.kpi.min_payout}: {fmtMoney(summary?.minimumPayout ?? 50)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -585,23 +591,17 @@ export default function Royalties() {
                     <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
                       <Info className="h-4 w-4 text-amber-400" />
                       <AlertDescription>
-                        Ты вошёл как админ/менеджер. Запрос выплаты доступен только из аккаунта артиста или лейбла.
+                        {t.royalties.payout_form.unavailable_desc}
                       </AlertDescription>
                     </Alert>
                   )}
-                  {/* Task #6 — KYC + bank guard. Решение принимается на бэке
-                      (POST /payouts вернёт 403), но дублируем UI-блокировку,
-                      чтобы пользователь сразу понимал, что требуется. */}
                   {canRequestPayout && user && user.kycStatus !== "approved" && (
                     <Alert className="mb-4 border-rose-500/30 bg-rose-500/5">
                       <ShieldAlert className="h-4 w-4 text-rose-400" />
                       <AlertDescription className="text-rose-200/90">
-                        Запрос выплаты заблокирован: KYC ещё не одобрен{" "}
-                        {user.kycStatus === "pending" ? "(документы на проверке)" :
-                         user.kycStatus === "rejected" ? "(заявка отклонена — обнови документы)" :
-                         "(документы ещё не отправлены)"}.{" "}
+                        {t.royalties.payout_form.kyc_blocked}{" "}
                         <Link to="/profile" className="underline font-medium hover:text-white">
-                          Перейти в профиль → KYC
+                          {t.royalties.payout_form.kyc_link}
                         </Link>
                       </AlertDescription>
                     </Alert>
@@ -611,10 +611,9 @@ export default function Royalties() {
                     <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
                       <Banknote className="h-4 w-4 text-amber-400" />
                       <AlertDescription className="text-amber-200/90">
-                        Заполни банковские реквизиты, чтобы запрашивать выплаты: нужны номер счёта,
-                        SWIFT/BIC и имя владельца.{" "}
+                        {t.royalties.payout_form.bank_blocked}{" "}
                         <Link to="/profile" className="underline font-medium hover:text-white">
-                          Перейти в профиль → Банк
+                          {t.royalties.payout_form.bank_link}
                         </Link>
                       </AlertDescription>
                     </Alert>
@@ -622,7 +621,7 @@ export default function Royalties() {
                   <form onSubmit={handlePayoutSubmit} className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="amount">Сумма (USD)</Label>
+                        <Label htmlFor="amount">{t.royalties.payout_form.amount}</Label>
                         <Input
                           id="amount" type="number" min="0" step="0.01"
                           placeholder="0.00"
@@ -632,27 +631,22 @@ export default function Royalties() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Метод выплаты</Label>
+                        <Label>{t.royalties.payout_form.method}</Label>
                         <Select value={payMethod} onValueChange={(v) => setPayMethod(v as any)}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {Object.entries(METHOD_LABELS).map(([k, v]) => (
-                              <SelectItem key={k} value={k}>{v}</SelectItem>
+                            {(["bank_transfer", "paypal", "payoneer", "crypto", "wallet"] as const).map((k) => (
+                              <SelectItem key={k} value={k}>{methodLabel(k)}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="details">Реквизиты / комментарий</Label>
+                      <Label htmlFor="details">{t.royalties.payout_form.details}</Label>
                       <Input
                         id="details"
-                        placeholder={
-                          payMethod === "bank_transfer" ? "IBAN / номер счёта, банк, BIC" :
-                          payMethod === "paypal" ? "PayPal email" :
-                          payMethod === "crypto" ? "Адрес кошелька (USDT TRC20 и т.д.)" :
-                          "Дополнительная информация"
-                        }
+                        placeholder={t.royalties.payout_form.details_placeholder}
                         value={payDetails}
                         onChange={(e) => setPayDetails(e.target.value)}
                       />
@@ -669,14 +663,9 @@ export default function Royalties() {
                           <Button
                             type="submit"
                             disabled={submitDisabled}
-                            title={
-                              guardBlocked
-                                ? (kycMissing ? "Сначала пройди KYC" : "Заполни банковские реквизиты")
-                                : undefined
-                            }
                           >
                             <Send className="h-4 w-4 mr-2" />
-                            {createPayout.isPending ? "Отправка..." : "Отправить запрос"}
+                            {createPayout.isPending ? t.royalties.payout_form.submitting : t.royalties.payout_form.submit}
                           </Button>
                           <Button
                             type="button"
@@ -684,7 +673,7 @@ export default function Royalties() {
                             disabled={!canRequestPayout || !summary}
                             onClick={() => summary && setPayAmount(String(summary.availableBalance))}
                           >
-                            Запросить максимум
+                            {t.royalties.payout_form.request_max}
                           </Button>
                         </div>
                       );
@@ -695,14 +684,14 @@ export default function Royalties() {
 
               <Card className="bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2"><Info className="h-4 w-4 text-primary" /> Условия</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2"><Info className="h-4 w-4 text-primary" /> {t.royalties.payout_form.conditions_title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <p>• Минимальная сумма для запроса: <span className="text-foreground font-semibold">{fmtMoney(summary?.minimumPayout ?? 50)}</span></p>
-                  <p>• Запросы обрабатываются в течение 5–10 рабочих дней.</p>
-                  <p>• Комиссия дистрибьютора: <span className="text-foreground font-semibold">15%</span> с дохода.</p>
-                  <p>• Сетевые комиссии (банк, крипто) могут вычитаться отдельно.</p>
-                  <p>• История всех заявок — на вкладке «История».</p>
+                  <p>• {t.royalties.payout_form.min_payout_label}: <span className="text-foreground font-semibold">{fmtMoney(summary?.minimumPayout ?? 50)}</span></p>
+                  <p>• {t.royalties.payout_form.processing_time}: <span className="text-foreground font-semibold">{t.royalties.payout_form.processing_days}</span></p>
+                  <p>• {t.royalties.payout_form.fee_label}: <span className="text-foreground font-semibold">{t.royalties.payout_form.fee_value}</span></p>
+                  <p>• {t.royalties.payout_form.network_fee_note}</p>
+                  <p>• {t.royalties.payout_form.history_note}</p>
                 </CardContent>
               </Card>
             </div>
@@ -712,40 +701,45 @@ export default function Royalties() {
           <TabsContent value="history" className="space-y-4">
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader>
-                <CardTitle>История выплат</CardTitle>
-                <CardDescription>Все запросы и их статус.</CardDescription>
+                <CardTitle>{t.royalties.history.title}</CardTitle>
+                <CardDescription>{t.royalties.history.desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 {payoutsQ.isLoading ? (
                   <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
                 ) : payoutsQ.isError ? (
-                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Не удалось загрузить историю.</AlertDescription></Alert>
+                  <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{t.royalties.history.load_error}</AlertDescription></Alert>
                 ) : (payoutsQ.data?.data ?? []).length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">Заявок на выплату пока нет.</div>
+                  <div className="text-center py-12 text-muted-foreground">{t.royalties.history.empty}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Дата</TableHead>
-                          <TableHead>Метод</TableHead>
-                          <TableHead className="text-right">Сумма</TableHead>
-                          <TableHead>Статус</TableHead>
-                          <TableHead>Обработана</TableHead>
-                          <TableHead>Примечание</TableHead>
+                          <TableHead>{t.royalties.history.col_date}</TableHead>
+                          <TableHead>{t.royalties.history.col_method}</TableHead>
+                          <TableHead className="text-right">{t.royalties.history.col_amount}</TableHead>
+                          <TableHead>{t.royalties.history.col_status}</TableHead>
+                          <TableHead>{t.royalties.history.col_processed}</TableHead>
+                          <TableHead>{t.royalties.history.col_note}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {(payoutsQ.data?.data ?? []).map((p) => {
-                          const st = PAYOUT_STATUS[p.status] ?? PAYOUT_STATUS.pending;
+                          const stLabel = payoutStatusLabel(p.status);
+                          const stCls =
+                            p.status === "paid"      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                            p.status === "rejected"  ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                            p.status === "processing"? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                                                       "bg-amber-500/10 text-amber-400 border-amber-500/20";
                           return (
                             <TableRow key={p.id}>
-                              <TableCell>{new Date(p.createdAt).toLocaleDateString("ru-RU")}</TableCell>
-                              <TableCell className="text-muted-foreground">{METHOD_LABELS[p.method] ?? p.method}</TableCell>
+                              <TableCell>{new Date(p.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell className="text-muted-foreground">{methodLabel(p.method)}</TableCell>
                               <TableCell className="text-right font-semibold">{fmtMoney(p.amount, p.currency)}</TableCell>
-                              <TableCell><Badge variant="outline" className={st.cls}>{st.label}</Badge></TableCell>
+                              <TableCell><Badge variant="outline" className={stCls}>{stLabel}</Badge></TableCell>
                               <TableCell className="text-sm text-muted-foreground">
-                                {p.processedAt ? new Date(p.processedAt).toLocaleDateString("ru-RU") : "—"}
+                                {p.processedAt ? new Date(p.processedAt).toLocaleDateString() : "—"}
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground max-w-[240px] truncate">
                                 {p.rejectionReason ?? p.paymentDetails ?? "—"}

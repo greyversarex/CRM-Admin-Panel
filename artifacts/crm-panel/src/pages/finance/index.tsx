@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import { useListTransactions, useListBalances, getListTransactionsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,6 +50,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function Finance() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [imports, setImports] = useState<ImportRow[]>([]);
@@ -100,26 +102,26 @@ export default function Finance() {
     return true;
   }) ?? [];
 
-  const titleByRole = isAdminLike ? "Финансы платформы"
-    : isLabel  ? "Финансы лейбла"
-    :            "Мои финансы";
+  const titleByRole = isAdminLike ? t.finance.title_admin
+    : isLabel  ? t.finance.title_label
+    :            t.finance.title_artist;
   const subtitleByRole = isAdminLike
-    ? "Транзакции, балансы артистов и лейблов, ингест отчётов DSP."
-    : "Твои транзакции и текущий баланс.";
+    ? t.finance.subtitle_admin
+    : t.finance.subtitle_artist;
 
   const totalIncome = transactionsData?.data
-    .filter(t => t.amount > 0)
-    .reduce((sum, t) => sum + t.amount, 0) ?? 0;
+    .filter(tx => tx.amount > 0)
+    .reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
 
   const totalPayout = transactionsData?.data
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0) ?? 0;
+    .filter(tx => tx.amount < 0)
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0) ?? 0;
 
-  const filteredTx = transactionsData?.data.filter(t =>
+  const filteredTx = transactionsData?.data.filter(tx =>
     !search ||
-    t.description?.toLowerCase().includes(search.toLowerCase()) ||
-    t.platform?.toLowerCase().includes(search.toLowerCase()) ||
-    t.artistName?.toLowerCase().includes(search.toLowerCase())
+    tx.description?.toLowerCase().includes(search.toLowerCase()) ||
+    tx.platform?.toLowerCase().includes(search.toLowerCase()) ||
+    tx.artistName?.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
 
   return (
@@ -174,7 +176,7 @@ export default function Finance() {
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                {isAdminLike ? "Artist Balances" : "Текущий баланс"}
+                {isAdminLike ? t.finance.kpi_balances_admin : t.finance.kpi_balance}
               </CardTitle>
               <Wallet className="h-4 w-4 text-primary" />
             </CardHeader>
@@ -199,7 +201,7 @@ export default function Finance() {
                   <FileSpreadsheet className="h-4 w-4 text-primary" />
                   Revenue Ingestion (DSP CSV)
                 </CardTitle>
-                <CardDescription className="text-xs mt-1">Загрузка отчётов от платформ → автоматический парсинг → раскладка по артистам/трекам</CardDescription>
+                <CardDescription className="text-xs mt-1">{t.finance.ingestion_desc}</CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Link href="/finance/unmatched">
@@ -209,7 +211,7 @@ export default function Finance() {
                     data-testid="button-open-unmatched"
                   >
                     <AlertTriangle className="mr-2 h-4 w-4" />
-                    Нерешённые
+                    {t.finance.unmatched_btn}
                     {unmatchedPending > 0 && (
                       <Badge variant="outline" className="ml-2 bg-amber-950/30 text-amber-950 border-amber-950/40">
                         {unmatchedPending}
@@ -220,7 +222,7 @@ export default function Finance() {
                 <Link href="/finance/import">
                   <Button data-testid="button-open-import">
                     <Upload className="mr-2 h-4 w-4" />
-                    Загрузить CSV
+                    {t.finance.upload_csv}
                   </Button>
                 </Link>
               </div>
@@ -247,7 +249,7 @@ export default function Finance() {
                 ) : imports.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      Импортов ещё нет. Нажмите «Загрузить CSV» чтобы добавить первый отчёт DSP.
+                      {t.finance.no_imports}
                     </TableCell>
                   </TableRow>
                 ) : imports.map(r => (
@@ -311,21 +313,21 @@ export default function Finance() {
                         No transactions found.
                       </TableCell>
                     </TableRow>
-                  ) : filteredTx.map(t => (
-                    <TableRow key={t.id} className="border-border/50 hover:bg-accent/30" data-testid={`row-transaction-${t.id}`}>
+                  ) : filteredTx.map(tx => (
+                    <TableRow key={tx.id} className="border-border/50 hover:bg-accent/30" data-testid={`row-transaction-${tx.id}`}>
                       <TableCell>
-                        <Badge variant="outline" className={`text-xs ${TYPE_COLORS[t.type] ?? ""}`}>
-                          {TYPE_LABELS[t.type] ?? t.type}
+                        <Badge variant="outline" className={`text-xs ${TYPE_COLORS[tx.type] ?? ""}`}>
+                          {TYPE_LABELS[tx.type] ?? tx.type}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm font-medium">{t.artistName || t.labelName || "—"}</div>
-                        <div className="text-xs text-muted-foreground">{t.platform || "—"}</div>
+                        <div className="text-sm font-medium">{tx.artistName || tx.labelName || "—"}</div>
+                        <div className="text-xs text-muted-foreground">{tx.platform || "—"}</div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{t.description || "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{t.period || "—"}</TableCell>
-                      <TableCell className={`text-right font-semibold tabular-nums ${t.amount >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {t.amount >= 0 ? "+" : ""}${Math.abs(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{tx.description || "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{tx.period || "—"}</TableCell>
+                      <TableCell className={`text-right font-semibold tabular-nums ${tx.amount >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {tx.amount >= 0 ? "+" : ""}${Math.abs(tx.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -348,10 +350,10 @@ export default function Finance() {
           <Card className="bg-card/50 backdrop-blur border-border/50">
             <CardHeader className="pb-3 border-b border-border/50">
               <CardTitle className="text-base">
-                {isAdminLike ? "Artist Balances" : "Балансы"}
+                {isAdminLike ? t.finance.balances_admin_title : t.finance.balances_title}
               </CardTitle>
               <CardDescription>
-                {isAdminLike ? "Current pending balances by artist" : "Твой текущий и pending-баланс"}
+                {isAdminLike ? t.finance.balances_admin_desc : t.finance.balances_desc}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-auto max-h-[500px]">

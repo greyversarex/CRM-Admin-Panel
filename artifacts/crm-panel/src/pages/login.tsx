@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
-const DEMO_ACCOUNTS: { role: Role; email: string; password: string; hint: string }[] = [
-  { role: "admin",   email: "admin@tajikmusic.com",   password: "admin123",   hint: "Полный доступ" },
-  { role: "manager", email: "manager@tajikmusic.com", password: "manager123", hint: "Без системных" },
-  { role: "label",   email: "label@tajikmusic.com",   password: "label123",   hint: "Только своё" },
-  { role: "artist",  email: "artist@tajikmusic.com",  password: "artist123",  hint: "Только своё" },
+const DEMO_ACCOUNTS: { role: Role; email: string; password: string; hintKey: "demo_hint_admin" | "demo_hint_manager" | "demo_hint_own" }[] = [
+  { role: "admin",   email: "admin@tajikmusic.com",   password: "admin123",   hintKey: "demo_hint_admin" },
+  { role: "manager", email: "manager@tajikmusic.com", password: "manager123", hintKey: "demo_hint_manager" },
+  { role: "label",   email: "label@tajikmusic.com",   password: "label123",   hintKey: "demo_hint_own" },
+  { role: "artist",  email: "artist@tajikmusic.com",  password: "artist123",  hintKey: "demo_hint_own" },
 ];
 
 /* ─── Canvas Music Visualizer ─── */
@@ -345,6 +346,8 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { t } = useLang();
+  const l = t.login;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -353,7 +356,7 @@ export default function Login() {
     const result = await login(email, password);
     setLoading(false);
     if (result.ok) navigate("/");
-    else setError(result.error ?? "Ошибка входа");
+    else setError(result.error ?? l.error);
   };
 
   const handleDemo = async (role: Role) => {
@@ -362,7 +365,7 @@ export default function Login() {
     const result = await loginAs(role);
     setLoading(false);
     if (result.ok) navigate("/");
-    else setError(result.error ?? "Не удалось войти как " + role);
+    else setError(result.error ?? l.error_as + role);
   };
 
   return (
@@ -394,8 +397,8 @@ export default function Login() {
           <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[hsl(226,84%,67%)] via-50% to-[hsl(271,80%,68%)] to-transparent" />
 
           <div className="p-7">
-            <h2 className="text-[18px] font-bold text-white mb-1">Вход в систему</h2>
-            <p className="text-[13px] text-white/50 mb-6">Введите данные аккаунта для входа</p>
+            <h2 className="text-[18px] font-bold text-white mb-1">{l.title}</h2>
+            <p className="text-[13px] text-white/50 mb-6">{l.subtitle}</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -411,7 +414,7 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="text-[12px] font-medium text-white/65 mb-1.5 block">Пароль</label>
+                <label className="text-[12px] font-medium text-white/65 mb-1.5 block">{l.password}</label>
                 <div className="relative">
                   <Input
                     type={showPw ? "text" : "password"}
@@ -446,21 +449,21 @@ export default function Login() {
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Вход...
+                    {l.signing_in}
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <LogIn className="h-4 w-4" />Войти
+                    <LogIn className="h-4 w-4" />{l.sign_in}
                   </span>
                 )}
               </Button>
             </form>
 
-            {/* Public-signup link (Task #6) — для тех, у кого нет аккаунта */}
+            {/* Public-signup link */}
             <p className="text-center text-[12px] text-white/55 mt-5">
-              Ещё нет аккаунта?{" "}
+              {l.no_account}{" "}
               <Link to="/signup" className="text-primary font-medium hover:underline">
-                Подать заявку
+                {l.apply}
               </Link>
             </p>
 
@@ -468,7 +471,7 @@ export default function Login() {
             {import.meta.env.DEV && (
             <div className="mt-6 pt-5 border-t border-white/10">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/30 mb-3">
-                Демо-аккаунты (dev)
+                {l.demo_accounts}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {DEMO_ACCOUNTS.map(acc => (
@@ -482,7 +485,7 @@ export default function Login() {
                     )}
                   >
                     <span className="text-[11px] font-bold">{ROLE_LABELS[acc.role]}</span>
-                    <span className="text-[10px] opacity-70">{acc.hint}</span>
+                    <span className="text-[10px] opacity-70">{l[acc.hintKey]}</span>
                   </button>
                 ))}
               </div>

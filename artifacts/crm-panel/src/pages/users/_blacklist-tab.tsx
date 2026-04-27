@@ -6,12 +6,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useListUsers, useUpdateUser, getListUsersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Ban } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useLang } from "@/lib/i18n";
 
 type Props = { onCountChange?: (n: number) => void };
 
 export function BlacklistTab({ onCountChange }: Props) {
+  const { t } = useLang();
   const queryClient = useQueryClient();
   const params = { status: "suspended" as const, limit: 100 };
   const { data, isLoading } = useListUsers(params as any, {
@@ -22,7 +24,6 @@ export function BlacklistTab({ onCountChange }: Props) {
 
   const items = data?.data ?? [];
 
-  // info-only side-effect: оповестить родителя о count (в useEffect, не в render)
   useEffect(() => {
     if (typeof onCountChange === "function" && data) onCountChange(items.length);
   }, [items.length, data, onCountChange]);
@@ -31,7 +32,7 @@ export function BlacklistTab({ onCountChange }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
 
   async function unblock(u: { id: number; name: string; email: string; role: any }) {
-    if (!window.confirm(`Снять блокировку с ${u.name}?`)) return;
+    if (!window.confirm(t.users.blacklist_title + " — " + u.name + "?")) return;
     setBusyId(u.id);
     try {
       await update.mutateAsync({
@@ -44,9 +45,9 @@ export function BlacklistTab({ onCountChange }: Props) {
         } as any,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: "Пользователь разблокирован", description: u.name });
+      toast({ title: t.users.blacklist_unblocked, description: u.name });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Не удалось разблокировать", description: e?.message });
+      toast({ variant: "destructive", title: t.users.blacklist_unblock_error, description: e?.message });
     } finally {
       setBusyId(null);
     }
@@ -55,20 +56,18 @@ export function BlacklistTab({ onCountChange }: Props) {
   return (
     <Card className="card-surface no-lift border-border/60">
       <CardHeader className="pb-3 border-b border-border/50">
-        <CardTitle>Blacklist / Suspended</CardTitle>
-        <CardDescription>
-          Список пользователей со статусом <code className="text-[11px]">suspended</code>. Они не могут войти и не получают выплат.
-        </CardDescription>
+        <CardTitle>{t.users.blacklist_title}</CardTitle>
+        <CardDescription>{t.users.blacklist_desc}</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
           <TableHeader className="bg-background/30">
             <TableRow className="hover:bg-transparent">
-              <TableHead>User</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead>Last login</TableHead>
-              <TableHead className="text-right">Action</TableHead>
+              <TableHead>{t.users.blacklist_col_user}</TableHead>
+              <TableHead>{t.users.blacklist_col_role}</TableHead>
+              <TableHead>{t.users.blacklist_col_joined}</TableHead>
+              <TableHead>{t.users.blacklist_col_last_login}</TableHead>
+              <TableHead className="text-right">{t.users.blacklist_col_action}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -77,7 +76,7 @@ export function BlacklistTab({ onCountChange }: Props) {
             ))}
             {!isLoading && items.length === 0 && (
               <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                В blacklist никого нет.
+                {t.users.blacklist_empty}
               </TableCell></TableRow>
             )}
             {!isLoading && items.map((u) => (
@@ -103,7 +102,7 @@ export function BlacklistTab({ onCountChange }: Props) {
                     onClick={() => unblock(u)}
                     data-testid={`button-unblock-${u.id}`}
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Разблокировать
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> {t.users.blacklist_unblock}
                   </Button>
                 </TableCell>
               </TableRow>

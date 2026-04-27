@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -78,21 +79,7 @@ interface Paginated<T> {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-const CONTACT_TYPE_LABEL: Record<ContactType, string> = {
-  artist: "Артист",
-  author: "Автор",
-  label: "Лейбл",
-  manager: "Менеджер",
-  partner: "Партнёр",
-};
-
-const PRIORITY_LABEL: Record<TaskPriority, string> = {
-  low: "Низкий", medium: "Средний", high: "Высокий", urgent: "Срочно",
-};
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: "В работе", in_progress: "В процессе", done: "Готово", cancelled: "Отменено",
-};
+const CONTACT_TYPE_KEYS = ["artist", "author", "label", "manager", "partner"] as const;
 
 function priorityClass(p: TaskPriority) {
   if (p === "urgent") return "text-rose-400 bg-rose-500/15 border-rose-500/30";
@@ -139,6 +126,29 @@ function safeTelegramHref(value: string): string | null {
 export default function CRM() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useLang();
+
+  const contactTypeLabel = (tp: ContactType): string => ({
+    artist: t.crm.contact_types.artist,
+    author: t.crm.contact_types.author,
+    label: t.crm.contact_types.label,
+    manager: t.crm.contact_types.manager,
+    partner: t.crm.contact_types.partner,
+  }[tp] ?? tp);
+
+  const priorityLabel = (p: TaskPriority): string => ({
+    low: t.crm.priority.low,
+    medium: t.crm.priority.medium,
+    high: t.crm.priority.high,
+    urgent: t.crm.priority.urgent,
+  }[p] ?? p);
+
+  const statusLabel = (s: TaskStatus): string => ({
+    todo: t.crm.task_status.todo,
+    in_progress: t.crm.task_status.in_progress,
+    done: t.crm.task_status.done,
+    cancelled: t.crm.task_status.cancelled,
+  }[s] ?? s);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [tasks, setTasks] = useState<CrmTask[]>([]);
@@ -160,16 +170,16 @@ export default function CRM() {
   async function reload() {
     setLoading(true);
     try {
-      const [c, t, u] = await Promise.all([
+      const [c, tasksResp, u] = await Promise.all([
         api<Paginated<Contact>>("/api/crm/contacts?limit=100"),
         api<Paginated<CrmTask>>("/api/crm/tasks?limit=100"),
         api<{ data: UserLite[] }>("/api/users?limit=100").catch(() => ({ data: [] })),
       ]);
       setContacts(c.data);
-      setTasks(t.data);
+      setTasks(tasksResp.data);
       setUsers(u.data);
     } catch (e: any) {
-      toast({ title: "Не удалось загрузить CRM", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.crm.loading_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -251,7 +261,7 @@ export default function CRM() {
         <Card className="bg-card/50 border-border/50 max-w-md mx-auto mt-12">
           <CardContent className="pt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              CRM доступен только администраторам и менеджерам.
+              {t.crm.access_restricted}
             </p>
           </CardContent>
         </Card>
@@ -259,33 +269,32 @@ export default function CRM() {
     );
   }
 
-  async function toggleTaskDone(t: CrmTask) {
-    if (pendingTaskIds.has(t.id)) return; // ignore double-clicks while in flight
-    const previousStatus = t.status;
+  async function toggleTaskDone(task: CrmTask) {
+    if (pendingTaskIds.has(task.id)) return;
+    const previousStatus = task.status;
     const nextStatus: TaskStatus = previousStatus === "done" ? "todo" : "done";
-    setPendingTaskIds((p) => new Set(p).add(t.id));
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: nextStatus } : x)));
+    setPendingTaskIds((p) => new Set(p).add(task.id));
+    setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, status: nextStatus } : x)));
     try {
-      const updated = await api<CrmTask>(`/api/crm/tasks/${t.id}`, {
+      const updated = await api<CrmTask>(`/api/crm/tasks/${task.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          title: t.title,
-          description: t.description,
+          title: task.title,
+          description: task.description,
           status: nextStatus,
-          priority: t.priority,
-          assignedToId: t.assignedToId,
-          dueDate: t.dueDate,
-          relatedEntityType: t.relatedEntityType,
-          relatedEntityId: t.relatedEntityId,
+          priority: task.priority,
+          assignedToId: task.assignedToId,
+          dueDate: task.dueDate,
+          relatedEntityType: task.relatedEntityType,
+          relatedEntityId: task.relatedEntityId,
         }),
       });
-      // Reconcile with server payload (authoritative).
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...updated } : x)));
+      setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, ...updated } : x)));
     } catch (e: any) {
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: previousStatus } : x)));
-      toast({ title: "Не получилось обновить задачу", description: e?.message ?? "", variant: "destructive" });
+      setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, status: previousStatus } : x)));
+      toast({ title: t.crm.task_update_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
-      setPendingTaskIds((p) => { const n = new Set(p); n.delete(t.id); return n; });
+      setPendingTaskIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
     }
   }
 
@@ -296,14 +305,14 @@ export default function CRM() {
       if (item.kind === "contact") {
         await api(`/api/crm/contacts/${item.id}`, { method: "DELETE" });
         setContacts((p) => p.filter((c) => c.id !== item.id));
-        toast({ title: "Контакт удалён" });
+        toast({ title: t.crm.contact_deleted });
       } else {
         await api(`/api/crm/tasks/${item.id}`, { method: "DELETE" });
-        setTasks((p) => p.filter((t) => t.id !== item.id));
-        toast({ title: "Задача удалена" });
+        setTasks((p) => p.filter((tk) => tk.id !== item.id));
+        toast({ title: t.crm.task_deleted });
       }
     } catch (e: any) {
-      toast({ title: "Удаление не удалось", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.crm.delete_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setConfirmDelete(null);
     }
@@ -315,20 +324,20 @@ export default function CRM() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
-            <p className="text-muted-foreground mt-1">Контакты артистов, лейблов, партнёров и внутренние задачи.</p>
+            <p className="text-muted-foreground mt-1">{t.crm.subtitle}</p>
           </div>
           <Button onClick={() => setContactDlg("new")}>
             <Plus className="mr-2 h-4 w-4" />
-            Добавить контакт
+            {t.crm.add_contact}
           </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: "Всего контактов", value: kpi.total, icon: Users2, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Артистов", value: kpi.artists, icon: Users2, color: "text-violet-400", bg: "bg-violet-500/10" },
-            { label: "Открытых задач", value: kpi.open, icon: CheckSquare, color: "text-amber-400", bg: "bg-amber-500/10" },
-            { label: "Просрочено", value: kpi.overdue, icon: CheckSquare, color: "text-rose-400", bg: "bg-rose-500/10" },
+            { label: t.crm.kpi.total_contacts, value: kpi.total, icon: Users2, color: "text-primary", bg: "bg-primary/10" },
+            { label: t.crm.kpi.artists, value: kpi.artists, icon: Users2, color: "text-violet-400", bg: "bg-violet-500/10" },
+            { label: t.crm.kpi.open_tasks, value: kpi.open, icon: CheckSquare, color: "text-amber-400", bg: "bg-amber-500/10" },
+            { label: t.crm.kpi.overdue, value: kpi.overdue, icon: CheckSquare, color: "text-rose-400", bg: "bg-rose-500/10" },
           ].map((k) => (
             <Card key={k.label} className="bg-card/50 backdrop-blur border-border/50">
               <CardContent className="pt-5 flex items-center gap-4">
@@ -347,10 +356,10 @@ export default function CRM() {
         <Tabs defaultValue="contacts">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1">
             <TabsTrigger value="contacts" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Users2 className="h-3.5 w-3.5" /> Контакты
+              <Users2 className="h-3.5 w-3.5" /> {t.crm.tab_contacts}
             </TabsTrigger>
             <TabsTrigger value="tasks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <CheckSquare className="h-3.5 w-3.5" /> Задачи
+              <CheckSquare className="h-3.5 w-3.5" /> {t.crm.tab_tasks}
             </TabsTrigger>
           </TabsList>
 
@@ -361,7 +370,7 @@ export default function CRM() {
                 <div className="relative flex-1 max-w-xs">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Поиск контактов…"
+                    placeholder={t.crm.search_contacts}
                     className="pl-8 bg-background/50 border-border h-9"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -374,7 +383,7 @@ export default function CRM() {
                       size="icon"
                       className="h-9 w-9 bg-background/50 relative"
                       data-testid="button-filter"
-                      aria-label="Фильтры контактов"
+                      aria-label={t.crm.filter_type}
                     >
                       <Filter className="h-4 w-4" />
                       {activeFilterCount > 0 && (
@@ -386,27 +395,27 @@ export default function CRM() {
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-72 space-y-4">
                     <div>
-                      <div className="text-xs font-medium mb-2">Тип контакта</div>
+                      <div className="text-xs font-medium mb-2">{t.crm.filter_type}</div>
                       <div className="grid grid-cols-2 gap-1.5">
-                        {(Object.keys(CONTACT_TYPE_LABEL) as ContactType[]).map((t) => (
-                          <label key={t} className="flex items-center gap-2 text-xs cursor-pointer hover-elevate rounded p-1">
+                        {CONTACT_TYPE_KEYS.map((tp) => (
+                          <label key={tp} className="flex items-center gap-2 text-xs cursor-pointer hover-elevate rounded p-1">
                             <Checkbox
-                              checked={filterTypes.has(t)}
+                              checked={filterTypes.has(tp)}
                               onCheckedChange={(v) => {
                                 const s = new Set(filterTypes);
-                                if (v) s.add(t); else s.delete(t);
+                                if (v) s.add(tp); else s.delete(tp);
                                 setFilterTypes(s);
                               }}
-                              data-testid={`filter-type-${t}`}
+                              data-testid={`filter-type-${tp}`}
                             />
-                            <span>{CONTACT_TYPE_LABEL[t]}</span>
+                            <span>{contactTypeLabel(tp)}</span>
                           </label>
                         ))}
                       </div>
                     </div>
 
                     <div>
-                      <div className="text-xs font-medium mb-2">Страна</div>
+                      <div className="text-xs font-medium mb-2">{t.crm.contact_country}</div>
                       <select
                         aria-label="Filter by country"
                         className="w-full h-9 px-2 text-xs rounded-md bg-background border border-border"
@@ -414,7 +423,7 @@ export default function CRM() {
                         onChange={(e) => setFilterCountry(e.target.value)}
                         data-testid="filter-country"
                       >
-                        <option value="all">Все страны</option>
+                        <option value="all">{t.crm.filter_all_countries}</option>
                         {countryOptions.map((c) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
@@ -428,7 +437,7 @@ export default function CRM() {
                           onCheckedChange={(v) => setFilterHasOpen(!!v)}
                           data-testid="filter-has-open-tasks"
                         />
-                        <span>Только с открытыми задачами</span>
+                        <span>{t.crm.filter_open_tasks}</span>
                       </label>
                     </div>
 
@@ -438,7 +447,7 @@ export default function CRM() {
                         onClick={resetFilters}
                         data-testid="button-reset-filters"
                       >
-                        <X className="h-3 w-3 mr-1" /> Сбросить фильтры
+                        <X className="h-3 w-3 mr-1" /> {t.crm.reset_filters}
                       </Button>
                     )}
                   </PopoverContent>
@@ -447,11 +456,11 @@ export default function CRM() {
               <CardContent className="p-0">
                 {loading ? (
                   <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
-                    <Spinner /> Загрузка…
+                    <Spinner /> {t.crm.loading}
                   </div>
                 ) : filteredContacts.length === 0 ? (
                   <div className="text-center py-12 text-sm text-muted-foreground">
-                    {contacts.length === 0 ? "Пока нет контактов. Добавь первый." : "Ничего не найдено."}
+                    {contacts.length === 0 ? t.crm.no_contacts : t.crm.no_results}
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">
@@ -465,7 +474,7 @@ export default function CRM() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium truncate">{c.name}</p>
-                            <Badge variant="outline" className="text-xs">{CONTACT_TYPE_LABEL[c.type]}</Badge>
+                            <Badge variant="outline" className="text-xs">{contactTypeLabel(c.type)}</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
                             {[c.company, c.country].filter(Boolean).join(" · ") || "—"}
@@ -488,10 +497,10 @@ export default function CRM() {
                               </a>
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Редактировать контакт ${c.name}`} onClick={() => setContactDlg(c)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${t.crm.edit_aria} ${c.name}`} onClick={() => setContactDlg(c)}>
                             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Удалить контакт ${c.name}`} onClick={() => setConfirmDelete({ kind: "contact", id: c.id, name: c.name })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${t.crm.delete_aria} ${c.name}`} onClick={() => setConfirmDelete({ kind: "contact", id: c.id, name: c.name })}>
                             <Trash2 className="h-3.5 w-3.5 text-rose-400" />
                           </Button>
                         </div>
@@ -508,55 +517,55 @@ export default function CRM() {
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
-                  <CardTitle>Задачи</CardTitle>
-                  <CardDescription>Внутренние задачи и фоллоу-апы команды</CardDescription>
+                  <CardTitle>{t.crm.tasks_title}</CardTitle>
+                  <CardDescription>{t.crm.tasks_desc}</CardDescription>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => setTaskDlg("new")}>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Добавить задачу
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> {t.crm.add_task}
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
                 {loading ? (
                   <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
-                    <Spinner /> Загрузка…
+                    <Spinner /> {t.crm.loading}
                   </div>
                 ) : tasks.length === 0 ? (
-                  <div className="text-center py-12 text-sm text-muted-foreground">Задач пока нет.</div>
+                  <div className="text-center py-12 text-sm text-muted-foreground">{t.crm.empty_tasks}</div>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {tasks.map((t) => {
-                      const done = t.status === "done";
-                      const overdue = !done && t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10);
+                    {tasks.map((task) => {
+                      const done = task.status === "done";
+                      const overdue = !done && task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
                       return (
-                        <div key={t.id} className={`flex items-center gap-4 px-6 py-4 hover:bg-accent/20 transition-colors group ${done ? "opacity-60" : ""}`}>
+                        <div key={task.id} className={`flex items-center gap-4 px-6 py-4 hover:bg-accent/20 transition-colors group ${done ? "opacity-60" : ""}`}>
                           <button
                             type="button"
-                            onClick={() => toggleTaskDone(t)}
-                            disabled={pendingTaskIds.has(t.id)}
+                            onClick={() => toggleTaskDone(task)}
+                            disabled={pendingTaskIds.has(task.id)}
                             className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-wait ${
                               done ? "border-emerald-500 bg-emerald-500" : "border-muted-foreground hover:border-primary"
                             }`}
-                            aria-label={done ? "Снять отметку" : "Отметить выполненной"}
+                            aria-label={done ? t.crm.task_unmark : t.crm.task_mark_done}
                             aria-pressed={done}
                           >
                             {done && <span className="text-white text-[8px]">✓</span>}
                           </button>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${done ? "line-through text-muted-foreground" : ""}`}>{t.title}</p>
+                            <p className={`text-sm font-medium ${done ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              {t.dueDate ? <>Срок: <span className={overdue ? "text-rose-400 font-medium" : ""}>{t.dueDate}</span></> : "Без срока"}
-                              {t.assignedToName && <> · {t.assignedToName}</>}
-                              {!done && <> · {STATUS_LABEL[t.status]}</>}
+                              {task.dueDate ? <>{t.crm.due}: <span className={overdue ? "text-rose-400 font-medium" : ""}>{task.dueDate}</span></> : t.crm.no_due}
+                              {task.assignedToName && <> · {task.assignedToName}</>}
+                              {!done && <> · {statusLabel(task.status)}</>}
                             </p>
                           </div>
-                          <Badge variant="outline" className={`text-xs shrink-0 ${priorityClass(t.priority)}`}>
-                            {PRIORITY_LABEL[t.priority]}
+                          <Badge variant="outline" className={`text-xs shrink-0 ${priorityClass(task.priority)}`}>
+                            {priorityLabel(task.priority)}
                           </Badge>
                           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Редактировать задачу ${t.title}`} onClick={() => setTaskDlg(t)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${t.crm.edit_aria} ${task.title}`} onClick={() => setTaskDlg(task)}>
                               <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Удалить задачу ${t.title}`} onClick={() => setConfirmDelete({ kind: "task", id: t.id, name: t.title })}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${t.crm.delete_aria} ${task.title}`} onClick={() => setConfirmDelete({ kind: "task", id: task.id, name: task.title })}>
                               <Trash2 className="h-3.5 w-3.5 text-rose-400" />
                             </Button>
                           </div>
@@ -598,14 +607,14 @@ export default function CRM() {
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить безвозвратно?</AlertDialogTitle>
+            <AlertDialogTitle>{t.crm.delete_confirm_title}</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDelete?.kind === "contact" ? "Контакт" : "Задача"} «{confirmDelete?.name}» будет удалён{confirmDelete?.kind === "task" ? "а" : ""}. Действие нельзя отменить.
+              «{confirmDelete?.name}» {t.crm.delete_confirm_desc}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={performDelete} className="bg-rose-500 hover:bg-rose-600">Удалить</AlertDialogAction>
+            <AlertDialogCancel>{t.crm.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={performDelete} className="bg-rose-500 hover:bg-rose-600">{t.crm.confirm_delete}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -625,6 +634,7 @@ function ContactDialog({
   onSaved: (c: Contact, mode: "create" | "update") => void;
 }) {
   const { toast } = useToast();
+  const { t } = useLang();
   const isOpen = state !== null;
   const isNew = state === "new";
   const editing = state && state !== "new" ? state : null;
@@ -659,9 +669,17 @@ function ContactDialog({
     }
   }, [isOpen, editing]);
 
+  const contactTypeLabel = (tp: ContactType): string => ({
+    artist: t.crm.contact_types.artist,
+    author: t.crm.contact_types.author,
+    label: t.crm.contact_types.label,
+    manager: t.crm.contact_types.manager,
+    partner: t.crm.contact_types.partner,
+  }[tp] ?? tp);
+
   async function save() {
     if (!form.name.trim()) {
-      toast({ title: "Укажите имя", variant: "destructive" });
+      toast({ title: t.crm.name_required, variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -679,15 +697,15 @@ function ContactDialog({
     try {
       if (isNew) {
         const created = await api<Contact>("/api/crm/contacts", { method: "POST", body: JSON.stringify(body) });
-        toast({ title: "Контакт добавлен" });
+        toast({ title: t.crm.contact_added });
         onSaved(created, "create");
       } else if (editing) {
         const updated = await api<Contact>(`/api/crm/contacts/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
-        toast({ title: "Контакт обновлён" });
+        toast({ title: t.crm.contact_updated });
         onSaved(updated, "update");
       }
     } catch (e: any) {
-      toast({ title: "Сохранение не удалось", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.crm.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -697,35 +715,35 @@ function ContactDialog({
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isNew ? "Новый контакт" : "Редактировать контакт"}</DialogTitle>
-          <DialogDescription>Базовая информация для связи и тэгирования.</DialogDescription>
+          <DialogTitle>{isNew ? t.crm.new_contact : t.crm.edit_contact}</DialogTitle>
+          <DialogDescription>{t.crm.contact_dlg_desc}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="c-name">Имя *</Label>
+            <Label htmlFor="c-name">{t.crm.contact_name} *</Label>
             <Input id="c-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label>Тип</Label>
+            <Label>{t.crm.contact_type}</Label>
             <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as ContactType })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(Object.keys(CONTACT_TYPE_LABEL) as ContactType[]).map((k) => (
-                  <SelectItem key={k} value={k}>{CONTACT_TYPE_LABEL[k]}</SelectItem>
+                {CONTACT_TYPE_KEYS.map((k) => (
+                  <SelectItem key={k} value={k}>{contactTypeLabel(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="c-company">Компания</Label>
+            <Label htmlFor="c-company">{t.crm.contact_company}</Label>
             <Input id="c-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="c-email">Email</Label>
+            <Label htmlFor="c-email">{t.crm.contact_email}</Label>
             <Input id="c-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="c-phone">Телефон</Label>
+            <Label htmlFor="c-phone">{t.crm.contact_phone}</Label>
             <Input id="c-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
           <div className="space-y-1.5">
@@ -737,19 +755,19 @@ function ContactDialog({
             <Input id="c-wa" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="c-country">Страна</Label>
+            <Label htmlFor="c-country">{t.crm.contact_country}</Label>
             <Input id="c-country" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="c-notes">Заметки</Label>
+            <Label htmlFor="c-notes">{t.crm.contact_notes}</Label>
             <Textarea id="c-notes" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Отмена</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t.crm.cancel}</Button>
           <Button onClick={save} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Сохранить
+            {t.crm.save}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -768,9 +786,10 @@ function TaskDialog({
   state: CrmTask | "new" | null;
   users: UserLite[];
   onClose: () => void;
-  onSaved: (t: CrmTask, mode: "create" | "update") => void;
+  onSaved: (task: CrmTask, mode: "create" | "update") => void;
 }) {
   const { toast } = useToast();
+  const { t } = useLang();
   const isOpen = state !== null;
   const isNew = state === "new";
   const editing = state && state !== "new" ? state : null;
@@ -802,9 +821,23 @@ function TaskDialog({
     }
   }, [isOpen, editing]);
 
+  const priorityLabel = (p: TaskPriority): string => ({
+    low: t.crm.priority.low,
+    medium: t.crm.priority.medium,
+    high: t.crm.priority.high,
+    urgent: t.crm.priority.urgent,
+  }[p] ?? p);
+
+  const statusLabel = (s: TaskStatus): string => ({
+    todo: t.crm.task_status.todo,
+    in_progress: t.crm.task_status.in_progress,
+    done: t.crm.task_status.done,
+    cancelled: t.crm.task_status.cancelled,
+  }[s] ?? s);
+
   async function save() {
     if (!form.title.trim()) {
-      toast({ title: "Укажите название задачи", variant: "destructive" });
+      toast({ title: t.crm.task_title_required, variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -821,15 +854,15 @@ function TaskDialog({
     try {
       if (isNew) {
         const created = await api<CrmTask>("/api/crm/tasks", { method: "POST", body: JSON.stringify(body) });
-        toast({ title: "Задача создана" });
+        toast({ title: t.crm.task_created });
         onSaved(created, "create");
       } else if (editing) {
         const updated = await api<CrmTask>(`/api/crm/tasks/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
-        toast({ title: "Задача обновлена" });
+        toast({ title: t.crm.task_updated });
         onSaved(updated, "update");
       }
     } catch (e: any) {
-      toast({ title: "Сохранение не удалось", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.crm.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -839,46 +872,46 @@ function TaskDialog({
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isNew ? "Новая задача" : "Редактировать задачу"}</DialogTitle>
-          <DialogDescription>Внутренние задачи команды.</DialogDescription>
+          <DialogTitle>{isNew ? t.crm.new_task : t.crm.edit_task}</DialogTitle>
+          <DialogDescription>{t.crm.task_dlg_desc}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="t-title">Название *</Label>
+            <Label htmlFor="t-title">{t.crm.task_title_label} *</Label>
             <Input id="t-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <Label htmlFor="t-desc">Описание</Label>
+            <Label htmlFor="t-desc">{t.crm.task_desc_label}</Label>
             <Textarea id="t-desc" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
           <div className="space-y-1.5">
-            <Label>Статус</Label>
+            <Label>{t.crm.task_status_label}</Label>
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as TaskStatus })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((k) => (
-                  <SelectItem key={k} value={k}>{STATUS_LABEL[k]}</SelectItem>
+                {(["todo", "in_progress", "done", "cancelled"] as TaskStatus[]).map((k) => (
+                  <SelectItem key={k} value={k}>{statusLabel(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Приоритет</Label>
+            <Label>{t.crm.task_priority_label}</Label>
             <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v as TaskPriority })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((k) => (
-                  <SelectItem key={k} value={k}>{PRIORITY_LABEL[k]}</SelectItem>
+                {(["low", "medium", "high", "urgent"] as TaskPriority[]).map((k) => (
+                  <SelectItem key={k} value={k}>{priorityLabel(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Ответственный</Label>
+            <Label>{t.crm.task_assignee_label}</Label>
             <Select value={form.assignedToId} onValueChange={(v) => setForm({ ...form, assignedToId: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Не назначен</SelectItem>
+                <SelectItem value="none">{t.crm.not_assigned}</SelectItem>
                 {users.map((u) => (
                   <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                 ))}
@@ -886,15 +919,15 @@ function TaskDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="t-due">Срок</Label>
+            <Label htmlFor="t-due">{t.crm.task_due_label}</Label>
             <Input id="t-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Отмена</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t.crm.cancel}</Button>
           <Button onClick={save} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Сохранить
+            {t.crm.save}
           </Button>
         </DialogFooter>
       </DialogContent>

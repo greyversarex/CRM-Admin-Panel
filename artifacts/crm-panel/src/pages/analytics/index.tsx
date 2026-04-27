@@ -56,7 +56,7 @@ const COUNTRY_FLAGS: Record<string, string> = {
   GB: "🇬🇧", AE: "🇦🇪",
 };
 
-const fmtInt = (n: number) => n.toLocaleString("ru-RU");
+const fmtInt = (n: number) => n.toLocaleString("en-US");
 const fmtCompact = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
   : n >= 1_000   ? `${(n / 1_000).toFixed(1)}K`
@@ -69,7 +69,7 @@ function bucketByMonth(byDay: StreamsResp["byDay"]) {
   for (const d of byDay) {
     const dt = new Date(d.date);
     const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    const label = dt.toLocaleDateString("ru-RU", { month: "short", year: "2-digit" });
+    const label = dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
     const cur = map.get(key) ?? { label, streams: 0, revenue: 0 };
     cur.streams += d.streams;
     cur.revenue += d.revenue;
@@ -115,12 +115,12 @@ export default function AnalyticsPage() {
 
   const monthlyStreams = useMemo(() => streams ? bucketByMonth(streams.byDay) : [], [streams]);
 
-  // Dailу chart on short periods, monthly on long ones.
+  // Daily chart on short periods, monthly on long ones.
   const chartData = useMemo(() => {
     if (!streams) return [];
     if (period === "7d" || period === "30d") {
       return streams.byDay.map((d) => ({
-        label: new Date(d.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" }),
+        label: new Date(d.date).toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
         streams: d.streams,
         revenue: parseFloat(d.revenue.toFixed(2)),
       }));
@@ -137,15 +137,16 @@ export default function AnalyticsPage() {
       <Layout>
         <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
           <Lock className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-          <h1 className="text-xl font-semibold">Доступ ограничен</h1>
+          <h1 className="text-xl font-semibold">{t.analytics.access_restricted}</h1>
           <p className="text-sm text-muted-foreground max-w-md">
-            Эта страница доступна только администраторам и менеджерам.
-            Артистам и лейблам доступна персональная статистика на дашборде.
+            {t.analytics.access_restricted_desc}
           </p>
         </div>
       </Layout>
     );
   }
+
+  const isShortPeriod = period === "7d" || period === "30d";
 
   return (
     <Layout>
@@ -156,20 +157,20 @@ export default function AnalyticsPage() {
             <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
             <h1 className="text-2xl font-bold tracking-tight">{t.analytics.title}</h1>
             <p className="text-[13px] text-muted-foreground mt-0.5">
-              Реальные данные из usage_reports · обновляется ежедневно
+              {t.analytics.real_data_subtitle}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-40 bg-card border-border" aria-label="Выберите период">
+              <SelectTrigger className="w-40 bg-card border-border" aria-label={t.analytics.title}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Последние 7 дней</SelectItem>
-                <SelectItem value="30d">Последние 30 дней</SelectItem>
-                <SelectItem value="90d">Последние 90 дней</SelectItem>
-                <SelectItem value="180d">Последние 6 месяцев</SelectItem>
-                <SelectItem value="1y">Последний год</SelectItem>
+                <SelectItem value="7d">{t.analytics.period_7d}</SelectItem>
+                <SelectItem value="30d">{t.analytics.period_30d}</SelectItem>
+                <SelectItem value="90d">{t.analytics.period_90d}</SelectItem>
+                <SelectItem value="180d">{t.analytics.period_180d}</SelectItem>
+                <SelectItem value="1y">{t.analytics.period_1y}</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -178,7 +179,6 @@ export default function AnalyticsPage() {
               onClick={() => {
                 window.location.href = `/api/analytics/export?period=${encodeURIComponent(period)}`;
               }}
-              title="Скачать CSV за выбранный период"
             >
               <Download className="mr-2 h-4 w-4" aria-hidden="true" />
               {t.common.export}
@@ -188,14 +188,14 @@ export default function AnalyticsPage() {
 
         {error && (
           <Card className="border-rose-500/30 bg-rose-500/5">
-            <CardContent className="py-3 text-sm text-rose-400">Ошибка загрузки: {error}</CardContent>
+            <CardContent className="py-3 text-sm text-rose-400">{t.analytics.load_error}: {error}</CardContent>
           </Card>
         )}
 
         {/* KPIs */}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <KpiCard
-            label="Стримы за период"
+            label={t.analytics.kpi.streams_period}
             value={loading || !streams ? "—" : fmtCompact(streams.totalStreams)}
             icon={Play}
             iconColor="text-primary"
@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
             iconBorder="border-primary/20"
           />
           <KpiCard
-            label="Доход за период"
+            label={t.analytics.kpi.revenue_period}
             value={loading || !streams ? "—" : fmtMoney(streams.totalRevenue)}
             icon={DollarSign}
             iconColor="text-emerald-400"
@@ -211,7 +211,7 @@ export default function AnalyticsPage() {
             iconBorder="border-emerald-500/20"
           />
           <KpiCard
-            label="Активных платформ"
+            label={t.analytics.kpi.active_platforms}
             value={loading || !platforms ? "—" : String(platforms.length)}
             icon={Music}
             iconColor="text-violet-400"
@@ -219,7 +219,7 @@ export default function AnalyticsPage() {
             iconBorder="border-violet-500/20"
           />
           <KpiCard
-            label="Стран присутствия"
+            label={t.analytics.kpi.countries}
             value={loading || !geo ? "—" : String(geo.length)}
             icon={Globe2}
             iconColor="text-sky-400"
@@ -230,10 +230,10 @@ export default function AnalyticsPage() {
 
         <Tabs defaultValue="streams" className="w-full">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex flex-wrap">
-            <TabsTrigger value="streams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Стримы</TabsTrigger>
-            <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Доходы</TabsTrigger>
-            <TabsTrigger value="geo" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">География</TabsTrigger>
-            <TabsTrigger value="tracks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Топ треки</TabsTrigger>
+            <TabsTrigger value="streams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.streams}</TabsTrigger>
+            <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.revenue}</TabsTrigger>
+            <TabsTrigger value="geo" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.geo}</TabsTrigger>
+            <TabsTrigger value="tracks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.tracks}</TabsTrigger>
           </TabsList>
 
           {/* ─── Streams ─── */}
@@ -241,13 +241,13 @@ export default function AnalyticsPage() {
             <div className="grid gap-4 lg:grid-cols-7">
               <Card className="col-span-7 lg:col-span-4 bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle>Динамика стримов</CardTitle>
-                  <CardDescription>{period === "7d" || period === "30d" ? "По дням" : "По месяцам"}</CardDescription>
+                  <CardTitle>{t.analytics.chart.stream_dynamics}</CardTitle>
+                  <CardDescription>{isShortPeriod ? t.analytics.chart.by_day : t.analytics.chart.by_month}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[280px]">
                     {loading ? <Skeleton className="h-full w-full" /> : chartData.length === 0 ? (
-                      <EmptyChart />
+                      <EmptyChart label={t.analytics.chart.no_data} />
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -262,7 +262,7 @@ export default function AnalyticsPage() {
                           <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={fmtCompact} />
                           <Tooltip
                             contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
-                            formatter={(v: number) => [fmtInt(v), "Стримы"]}
+                            formatter={(v: number) => [fmtInt(v), t.analytics.chart.streams_label]}
                           />
                           <Area type="monotone" dataKey="streams" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#streamGrad)" />
                         </AreaChart>
@@ -274,12 +274,12 @@ export default function AnalyticsPage() {
 
               <Card className="col-span-7 lg:col-span-3 bg-card/50 backdrop-blur border-border/50">
                 <CardHeader>
-                  <CardTitle>По платформам</CardTitle>
-                  <CardDescription>Доля стримов по DSP</CardDescription>
+                  <CardTitle>{t.analytics.chart.by_platform}</CardTitle>
+                  <CardDescription>{t.analytics.chart.stream_share}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loading ? <Skeleton className="h-[180px] w-full" /> : !platforms || platforms.length === 0 ? (
-                    <EmptyChart />
+                    <EmptyChart label={t.analytics.chart.no_data} />
                   ) : (
                     <>
                       <div className="h-[180px] mb-4">
@@ -290,7 +290,7 @@ export default function AnalyticsPage() {
                             </Pie>
                             <Tooltip
                               contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
-                              formatter={(v: number) => [fmtInt(v), "Стримы"]}
+                              formatter={(v: number) => [fmtInt(v), t.analytics.chart.streams_label]}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -317,21 +317,21 @@ export default function AnalyticsPage() {
           <TabsContent value="revenue" className="mt-4 space-y-4">
             <Card className="card-surface border-border/60">
               <CardHeader>
-                <CardTitle>Доход по {period === "7d" || period === "30d" ? "дням" : "месяцам"}</CardTitle>
-                <CardDescription>Расчётный доход по данным usage_reports (per-stream rate)</CardDescription>
+                <CardTitle>{isShortPeriod ? t.analytics.chart.revenue_days : t.analytics.chart.revenue_months}</CardTitle>
+                <CardDescription>{t.analytics.chart.revenue_calc_desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
                   {loading ? <Skeleton className="h-full w-full" /> : chartData.length === 0 ? (
-                    <EmptyChart />
+                    <EmptyChart label={t.analytics.chart.no_data} />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} formatter={(v: number) => [fmtMoney(v), "Доход"]} />
-                        <Bar dataKey="revenue" name="Доход" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} formatter={(v: number) => [fmtMoney(v), t.analytics.chart.revenue_label]} />
+                        <Bar dataKey="revenue" name={t.analytics.chart.revenue_label} fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -341,20 +341,20 @@ export default function AnalyticsPage() {
 
             <Card className="card-surface border-border/60">
               <CardHeader>
-                <CardTitle>Доход по платформам</CardTitle>
-                <CardDescription>За выбранный период</CardDescription>
+                <CardTitle>{t.analytics.chart.revenue_by_platform}</CardTitle>
+                <CardDescription>{t.analytics.chart.for_period}</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {loading ? <div className="p-6"><Skeleton className="h-32 w-full" /></div> : !platforms || platforms.length === 0 ? (
-                  <div className="p-6"><EmptyChart /></div>
+                  <div className="p-6"><EmptyChart label={t.analytics.chart.no_data} /></div>
                 ) : (
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border/50 bg-background/30">
-                        <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Платформа</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Стримы</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Доля</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Доход</th>
+                        <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">{t.analytics.chart.platform}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.streams}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.share}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">{t.analytics.chart.revenue}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -382,12 +382,12 @@ export default function AnalyticsPage() {
           <TabsContent value="geo" className="mt-4">
             <Card className="card-surface border-border/60">
               <CardHeader>
-                <CardTitle>География</CardTitle>
-                <CardDescription>Стримы по странам за выбранный период</CardDescription>
+                <CardTitle>{t.analytics.chart.geo}</CardTitle>
+                <CardDescription>{t.analytics.chart.geo_desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? <Skeleton className="h-48 w-full" /> : !geo || geo.length === 0 ? (
-                  <EmptyChart />
+                  <EmptyChart label={t.analytics.chart.no_data} />
                 ) : (
                   <div className="space-y-3">
                     {geo.map((item, i) => (
@@ -417,22 +417,22 @@ export default function AnalyticsPage() {
           <TabsContent value="tracks" className="mt-4">
             <Card className="card-surface border-border/60">
               <CardHeader>
-                <CardTitle>Топ треки</CardTitle>
-                <CardDescription>Самые стримингуемые треки за период (тренд vs предыдущий период)</CardDescription>
+                <CardTitle>{t.analytics.chart.top_tracks}</CardTitle>
+                <CardDescription>{t.analytics.chart.top_tracks_desc}</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {loading ? <div className="p-6"><Skeleton className="h-48 w-full" /></div> : !tracks || tracks.length === 0 ? (
-                  <div className="p-6"><EmptyChart /></div>
+                  <div className="p-6"><EmptyChart label={t.analytics.chart.no_data} /></div>
                 ) : (
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border/50 bg-background/30">
                         <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3 w-8">#</th>
-                        <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Трек</th>
-                        <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Топ платформа</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Стримы</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Доход</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Тренд</th>
+                        <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.track}</th>
+                        <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.top_platform}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.streams}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">{t.analytics.chart.revenue}</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">{t.analytics.chart.trend}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -452,7 +452,6 @@ export default function AnalyticsPage() {
                             ) : (
                               <span className={`text-xs font-medium flex items-center justify-end gap-0.5 ${tr.trend > 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                 {tr.trend > 0 ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
-                                <span className="sr-only">{tr.trend > 0 ? "рост" : "падение"} </span>
                                 {Math.abs(tr.trend)}%
                               </span>
                             )}
@@ -471,10 +470,10 @@ export default function AnalyticsPage() {
   );
 }
 
-function EmptyChart() {
+function EmptyChart({ label }: { label: string }) {
   return (
     <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-      Нет данных за выбранный период
+      {label}
     </div>
   );
 }

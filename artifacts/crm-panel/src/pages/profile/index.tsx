@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import {
   User as UserIcon, Link as LinkIcon, KeyRound, Users2,
   CheckCircle2, Phone, MapPin, Mail, ImagePlus, Eye, EyeOff,
@@ -18,13 +19,6 @@ import {
   Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Banknote, Receipt,
   Upload, Trash2, FileText, AlertTriangle, ExternalLink,
 } from "lucide-react";
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: "Администратор",
-  manager: "Менеджер",
-  label: "Лейбл",
-  artist: "Артист",
-};
 
 async function patchMe(body: Record<string, any>) {
   const res = await fetch("/api/users/me", {
@@ -59,6 +53,7 @@ async function changePassword(currentPassword: string, newPassword: string) {
 export default function ProfilePage() {
   const { user, refresh, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Profile form
@@ -147,9 +142,9 @@ export default function ProfilePage() {
         about: about || null,
       });
       await refresh();
-      toast({ title: "Профиль обновлён", description: "Изменения сохранены." });
+      toast({ title: t.profile.saved, description: t.profile.saved_desc });
     } catch (e: any) {
-      toast({ title: "Не получилось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.profile.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSavingProfile(false);
     }
@@ -167,9 +162,9 @@ export default function ProfilePage() {
         },
       });
       await refresh();
-      toast({ title: "DSP-профили обновлены" });
+      toast({ title: t.profile.dsp_saved });
     } catch (e: any) {
-      toast({ title: "Не получилось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.profile.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSavingDsp(false);
     }
@@ -191,9 +186,9 @@ export default function ProfilePage() {
         },
       });
       await refresh();
-      toast({ title: "Соцсети обновлены", description: "Ссылки сохранены." });
+      toast({ title: t.profile.social_saved, description: t.profile.social_saved_desc });
     } catch (e: any) {
-      toast({ title: "Не получилось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.profile.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSavingSocial(false);
     }
@@ -201,24 +196,24 @@ export default function ProfilePage() {
 
   async function handleChangePassword() {
     if (!curPwd || !newPwd || !confirmPwd) {
-      toast({ title: "Заполни все поля", variant: "destructive" });
+      toast({ title: t.profile.fill_all, variant: "destructive" });
       return;
     }
     if (newPwd.length < 8) {
-      toast({ title: "Слабый пароль", description: "Минимум 8 символов.", variant: "destructive" });
+      toast({ title: t.profile.weak_password, description: t.profile.weak_password_desc, variant: "destructive" });
       return;
     }
     if (newPwd !== confirmPwd) {
-      toast({ title: "Пароли не совпадают", variant: "destructive" });
+      toast({ title: t.profile.passwords_mismatch, variant: "destructive" });
       return;
     }
     setSavingPwd(true);
     try {
       await changePassword(curPwd, newPwd);
-      toast({ title: "Пароль изменён", description: "Войди с новым паролем при следующем входе." });
+      toast({ title: t.profile.password_changed, description: t.profile.password_changed_desc });
       setCurPwd(""); setNewPwd(""); setConfirmPwd("");
     } catch (e: any) {
-      toast({ title: "Не удалось сменить пароль", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.profile.password_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSavingPwd(false);
     }
@@ -229,17 +224,16 @@ export default function ProfilePage() {
     const f = input.files?.[0];
     if (!f) return;
     if (!["image/jpeg", "image/png", "image/gif", "image/webp"].includes(f.type)) {
-      toast({ title: "Неверный формат", description: "Только JPG, PNG, GIF, WEBP.", variant: "destructive" });
+      toast({ title: t.profile.format_error, description: t.profile.format_error_desc, variant: "destructive" });
       input.value = "";
       return;
     }
     if (f.size > 5 * 1024 * 1024) {
-      toast({ title: "Файл слишком большой", description: "Максимум 5 MB.", variant: "destructive" });
+      toast({ title: t.profile.size_error, description: t.profile.size_error_desc, variant: "destructive" });
       input.value = "";
       return;
     }
 
-    // Локальное превью пока идёт загрузка.
     const localUrl = URL.createObjectURL(f);
     setAvatarPreview(localUrl);
 
@@ -257,17 +251,14 @@ export default function ProfilePage() {
         throw new Error(msg);
       }
       const updated = await res.json();
-      // Cache-bust: добавляем ts чтобы <img> точно перезагрузил картинку.
       const fresh = updated.avatarUrl ? `${updated.avatarUrl}?ts=${Date.now()}` : null;
       setAvatarPreview(fresh);
-      // Синхронизируем глобальный AuthContext (хедер, сайдбар).
       await refresh();
-      toast({ title: "Аватар обновлён" });
+      toast({ title: t.profile.avatar_updated });
     } catch (err: any) {
-      // Откат локального превью при ошибке.
       setAvatarPreview(null);
       toast({
-        title: "Не удалось загрузить аватар",
+        title: t.profile.avatar_error,
         description: err?.message ?? "",
         variant: "destructive",
       });
@@ -281,7 +272,7 @@ export default function ProfilePage() {
     return (
       <Layout>
         <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Загрузка профиля...
+          <Loader2 className="h-4 w-4 animate-spin" /> {t.profile.loading}
         </div>
       </Layout>
     );
@@ -296,9 +287,9 @@ export default function ProfilePage() {
         {/* Header */}
         <div className="relative pl-4">
           <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)] shadow-[0_0_8px_hsl(var(--primary)/0.5)]" />
-          <h1 className="text-2xl font-bold tracking-tight">Профиль</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t.profile.title}</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
-            Добро пожаловать, <span className="text-foreground font-medium">{user.name}</span>
+            {t.profile.welcome.replace("{name}", "")}<span className="text-foreground font-medium">{user.name}</span>
           </p>
         </div>
 
@@ -325,7 +316,7 @@ export default function ProfilePage() {
               {city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {city}</span>}
               <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {user.email}</span>
               <Badge variant="outline" className="text-[10px] text-primary bg-primary/10 border-primary/20">
-                {ROLE_LABEL[user.role] ?? user.role}
+                {(t.profile.role as any)[user.role] ?? user.role}
               </Badge>
               <KycStatusBadge status={user.kycStatus} />
             </div>
@@ -336,27 +327,26 @@ export default function ProfilePage() {
         <Tabs defaultValue="profile">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex-wrap mx-auto">
             <TabsTrigger value="profile" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <UserIcon className="h-3.5 w-3.5" /> Профиль
+              <UserIcon className="h-3.5 w-3.5" /> {t.profile.tabs.profile}
             </TabsTrigger>
             <TabsTrigger value="social" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <LinkIcon className="h-3.5 w-3.5" /> Соцсети
+              <LinkIcon className="h-3.5 w-3.5" /> {t.profile.tabs.social}
             </TabsTrigger>
             <TabsTrigger value="password" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" /> Сменить пароль
+              <KeyRound className="h-3.5 w-3.5" /> {t.profile.tabs.password}
             </TabsTrigger>
-            {/* Task #6 — KYC/Bank/Tax табы доступны всем ролям */}
             <TabsTrigger value="kyc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5" /> KYC
+              <ShieldCheck className="h-3.5 w-3.5" /> {t.profile.tabs.kyc}
             </TabsTrigger>
             <TabsTrigger value="bank" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Banknote className="h-3.5 w-3.5" /> Банк
+              <Banknote className="h-3.5 w-3.5" /> {t.profile.tabs.bank}
             </TabsTrigger>
             <TabsTrigger value="tax" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Receipt className="h-3.5 w-3.5" /> Налоги
+              <Receipt className="h-3.5 w-3.5" /> {t.profile.tabs.tax}
             </TabsTrigger>
             {isAdmin && (
               <TabsTrigger value="members" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-                <Users2 className="h-3.5 w-3.5" /> Участники
+                <Users2 className="h-3.5 w-3.5" /> {t.profile.tabs.members}
               </TabsTrigger>
             )}
           </TabsList>
@@ -371,19 +361,19 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => fileRef.current?.click()}
-                      aria-label="Загрузить изображение профиля"
+                      aria-label={t.profile.avatar_label}
                       className="w-full border-2 border-dashed border-border/60 rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all focus:outline-none focus:ring-2 focus:ring-primary/40"
                     >
                       {displayAvatar ? (
-                        <img src={displayAvatar} alt="Загруженный аватар" className="h-24 w-24 mx-auto rounded-lg object-cover" />
+                        <img src={displayAvatar} alt={t.profile.avatar_uploaded_alt} className="h-24 w-24 mx-auto rounded-lg object-cover" />
                       ) : (
                         <ImagePlus className="h-10 w-10 text-primary/60 mx-auto mb-2" />
                       )}
-                      <p className="text-sm font-medium mt-2">Загрузить изображение</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Кликни или перетащи файл</p>
+                      <p className="text-sm font-medium mt-2">{t.profile.avatar_upload}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{t.profile.avatar_click_drag}</p>
                     </button>
                     <p className="text-[10px] text-muted-foreground text-center mt-2">
-                      Допустимо: *.jpeg, *.jpg, *.png, *.gif
+                      {t.profile.avatar_allowed}
                     </p>
                     <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif" className="hidden" onChange={handleAvatarPick} />
                   </CardContent>
@@ -391,16 +381,16 @@ export default function ProfilePage() {
 
                 <Card className="card-surface no-lift border-border/60">
                   <CardHeader>
-                    <CardTitle className="text-base">DSP-профили</CardTitle>
-                    <CardDescription className="text-xs">Ссылки на твои страницы на стриминге</CardDescription>
+                    <CardTitle className="text-base">{t.profile.dsp_title}</CardTitle>
+                    <CardDescription className="text-xs">{t.profile.dsp_desc}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <DspInput icon={<Music className="h-3.5 w-3.5 text-rose-400" />} label="Apple Music ID" value={appleId} onChange={setAppleId} placeholder="Введи свой Apple Music profile" />
-                    <DspInput icon={<Music className="h-3.5 w-3.5 text-emerald-400" />} label="Spotify ID" value={spotifyId} onChange={setSpotifyId} placeholder="Введи свой Spotify Music profile" />
-                    <DspInput icon={<Apple className="h-3.5 w-3.5 text-amber-400" />} label="Yandex Music ID" value={yandexId} onChange={setYandexId} placeholder="Введи свой Yandex Music profile" />
-                    <DspInput icon={<Youtube className="h-3.5 w-3.5 text-red-400" />} label="YouTube Topic ID" value={youtubeId} onChange={setYoutubeId} placeholder="Введи свой YouTube Topic profile" />
+                    <DspInput icon={<Music className="h-3.5 w-3.5 text-rose-400" />} label="Apple Music ID" value={appleId} onChange={setAppleId} placeholder={t.profile.dsp_placeholder_apple} />
+                    <DspInput icon={<Music className="h-3.5 w-3.5 text-emerald-400" />} label="Spotify ID" value={spotifyId} onChange={setSpotifyId} placeholder={t.profile.dsp_placeholder_spotify} />
+                    <DspInput icon={<Apple className="h-3.5 w-3.5 text-amber-400" />} label="Yandex Music ID" value={yandexId} onChange={setYandexId} placeholder={t.profile.dsp_placeholder_yandex} />
+                    <DspInput icon={<Youtube className="h-3.5 w-3.5 text-red-400" />} label="YouTube Topic ID" value={youtubeId} onChange={setYoutubeId} placeholder={t.profile.dsp_placeholder_youtube} />
                     <Button size="sm" className="w-full mt-1" onClick={handleSaveDsp} disabled={savingDsp}>
-                      {savingDsp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Сохранить"}
+                      {savingDsp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t.profile.dsp_save}
                     </Button>
                   </CardContent>
                 </Card>
@@ -409,32 +399,32 @@ export default function ProfilePage() {
               {/* Right: Your details */}
               <Card className="card-surface no-lift border-border/60">
                 <CardHeader>
-                  <CardTitle>Твои данные</CardTitle>
+                  <CardTitle>{t.profile.details_title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Имя">
+                    <Field label={t.profile.first_name}>
                       <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="bg-background/50" />
                     </Field>
-                    <Field label="Фамилия">
+                    <Field label={t.profile.last_name}>
                       <Input value={lastName} onChange={(e) => setLastName(e.target.value)} className="bg-background/50" />
                     </Field>
                     <Field label="Email">
                       <Input type="email" value={user.email} disabled className="bg-background/50" />
                     </Field>
-                    <Field label="Номер телефона">
+                    <Field label={t.profile.phone}>
                       <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-background/50" />
                     </Field>
                   </div>
 
-                  <Field label="Адрес">
-                    <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Введи адрес" className="bg-background/50" />
+                  <Field label={t.profile.address}>
+                    <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t.profile.address_placeholder} className="bg-background/50" />
                   </Field>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Страна">
+                    <Field label={t.profile.country}>
                       <Select value={country || undefined} onValueChange={setCountry}>
-                        <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери страну" /></SelectTrigger>
+                        <SelectTrigger className="bg-background/50"><SelectValue placeholder={t.profile.country_placeholder} /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="tj">🇹🇯 Таджикистан</SelectItem>
                           <SelectItem value="ru">🇷🇺 Россия</SelectItem>
@@ -444,33 +434,33 @@ export default function ProfilePage() {
                         </SelectContent>
                       </Select>
                     </Field>
-                    <Field label="Регион / Область">
+                    <Field label={t.profile.region}>
                       <Input value={region} onChange={(e) => setRegion(e.target.value)} className="bg-background/50" />
                     </Field>
-                    <Field label="Город">
+                    <Field label={t.profile.city}>
                       <Input value={city} onChange={(e) => setCity(e.target.value)} className="bg-background/50" />
                     </Field>
-                    <Field label="Почтовый индекс">
+                    <Field label={t.profile.zip}>
                       <Input value={zip} onChange={(e) => setZip(e.target.value)} className="bg-background/50" />
                     </Field>
                   </div>
 
-                  <Field label="Тип аккаунта">
-                    <Input value={ROLE_LABEL[user.role] ?? user.role} disabled className="bg-background/50" />
+                  <Field label={t.profile.account_type}>
+                    <Input value={(t.profile.role as any)[user.role] ?? user.role} disabled className="bg-background/50" />
                   </Field>
 
-                  <Field label="О себе">
+                  <Field label={t.profile.about}>
                     <textarea
                       value={about}
                       onChange={(e) => setAbout(e.target.value)}
-                      placeholder="Расскажи о себе..."
+                      placeholder={t.profile.about_placeholder}
                       className="w-full min-h-[110px] px-3 py-2 text-sm rounded-md bg-background/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
                     />
                   </Field>
 
                   <div className="flex justify-end pt-2">
                     <Button onClick={handleSaveProfile} disabled={savingProfile}>
-                      {savingProfile ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохраняю...</> : "Сохранить изменения"}
+                      {savingProfile ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.saving}</> : t.profile.save}
                     </Button>
                   </div>
                 </CardContent>
@@ -482,8 +472,8 @@ export default function ProfilePage() {
           <TabsContent value="social" className="mt-6">
             <Card className="card-surface no-lift border-border/60">
               <CardHeader>
-                <CardTitle>Соцсети</CardTitle>
-                <CardDescription>Добавь ссылки на свои страницы для увеличения охвата</CardDescription>
+                <CardTitle>{t.profile.social_title}</CardTitle>
+                <CardDescription>{t.profile.social_desc}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -498,7 +488,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex justify-end mt-6">
                   <Button onClick={handleSaveSocials} disabled={savingSocial}>
-                    {savingSocial ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохраняю...</> : "Сохранить изменения"}
+                    {savingSocial ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.saving}</> : t.profile.save}
                   </Button>
                 </div>
               </CardContent>
@@ -509,29 +499,29 @@ export default function ProfilePage() {
           <TabsContent value="password" className="mt-6">
             <Card className="card-surface no-lift border-border/60 max-w-3xl mx-auto">
               <CardHeader>
-                <CardTitle>Сменить пароль</CardTitle>
+                <CardTitle>{t.profile.password_title}</CardTitle>
                 <CardDescription>
-                  Чтобы обновить пароль, введи текущий и новый пароль. Если возникнут проблемы —{" "}
-                  <a href="#" className="text-primary underline-offset-2 hover:underline">свяжись с поддержкой</a>.
+                  {t.profile.password_desc}{" "}
+                  <a href="#" className="text-primary underline-offset-2 hover:underline">{t.profile.password_support_link}</a>.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Field label="Email">
                   <Input value={user.email} disabled className="bg-background/50" />
                 </Field>
-                <Field label="Текущий пароль">
+                <Field label={t.profile.current_password}>
                   <PwdInput value={curPwd} onChange={setCurPwd} show={showCur} onToggle={() => setShowCur(!showCur)} />
                 </Field>
-                <Field label="Новый пароль">
+                <Field label={t.profile.new_password}>
                   <PwdInput value={newPwd} onChange={setNewPwd} show={showNew} onToggle={() => setShowNew(!showNew)} />
-                  <p className="text-[11px] text-muted-foreground mt-1">Минимум 8 символов, желательно с цифрами и спецсимволами</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{t.profile.password_hint}</p>
                 </Field>
-                <Field label="Подтверди новый пароль">
+                <Field label={t.profile.confirm_password}>
                   <PwdInput value={confirmPwd} onChange={setConfirmPwd} show={showCfm} onToggle={() => setShowCfm(!showCfm)} />
                 </Field>
                 <div className="flex justify-end pt-2">
                   <Button onClick={handleChangePassword} disabled={savingPwd}>
-                    {savingPwd ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохраняю...</> : "Сохранить изменения"}
+                    {savingPwd ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.saving}</> : t.profile.save}
                   </Button>
                 </div>
               </CardContent>
@@ -567,6 +557,7 @@ export default function ProfilePage() {
 
 // ─── Members tab — admin/manager only, real users from /api/users ───
 function MembersTab() {
+  const { t } = useLang();
   const [members, setMembers] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -577,7 +568,7 @@ function MembersTab() {
         const j = await res.json();
         setMembers(j.data ?? []);
       } catch (e: any) {
-        setError(e?.message ?? "Ошибка загрузки");
+        setError(e?.message ?? t.profile.members_load_error);
       }
     })();
   }, []);
@@ -586,32 +577,32 @@ function MembersTab() {
     <Card className="card-surface no-lift border-border/60">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle>Участники аккаунта</CardTitle>
-          <CardDescription>Команда, имеющая доступ к этому аккаунту</CardDescription>
+          <CardTitle>{t.profile.members_title}</CardTitle>
+          <CardDescription>{t.profile.members_desc}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         {error && <div className="p-4 text-sm text-rose-400">{error}</div>}
         {!members && !error && (
           <div className="p-6 flex items-center justify-center text-muted-foreground gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Загрузка...
+            <Loader2 className="h-4 w-4 animate-spin" /> {t.profile.members_loading}
           </div>
         )}
         {members && (
           <Table>
             <TableHeader className="bg-background/30">
               <TableRow className="hover:bg-transparent">
-                <TableHead>Имя</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Роль</TableHead>
-                <TableHead>Последний вход</TableHead>
-                <TableHead>Статус</TableHead>
+                <TableHead>{t.profile.members_col_name}</TableHead>
+                <TableHead>{t.profile.members_col_email}</TableHead>
+                <TableHead>{t.profile.members_col_role}</TableHead>
+                <TableHead>{t.profile.members_col_last_login}</TableHead>
+                <TableHead>{t.profile.members_col_status}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {members.map((m: any) => {
                 const initials = String(m.name ?? "").split(/\s+/).map((s: string) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
-                const last = m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString("ru-RU") : "—";
+                const last = m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : "—";
                 return (
                   <TableRow key={m.id} className="hover:bg-accent/20">
                     <TableCell>
@@ -625,18 +616,18 @@ function MembersTab() {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{m.email}</TableCell>
-                    <TableCell className="text-xs">{ROLE_LABEL[m.role] ?? m.role}</TableCell>
+                    <TableCell className="text-xs">{(t.profile.role as any)[m.role] ?? m.role}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{last}</TableCell>
                     <TableCell>
-                      {m.status === "active"   && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Активен</Badge>}
-                      {m.status === "suspended" && <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/20">Заблокирован</Badge>}
-                      {m.status === "inactive"  && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">Неактивен</Badge>}
+                      {m.status === "active"   && <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">{t.profile.member_status_active}</Badge>}
+                      {m.status === "suspended" && <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/20">{t.profile.member_status_suspended}</Badge>}
+                      {m.status === "inactive"  && <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">{t.profile.member_status_inactive}</Badge>}
                     </TableCell>
                   </TableRow>
                 );
               })}
               {members.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">Пользователей пока нет</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">{t.profile.members_empty}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -693,52 +684,38 @@ function SocialField({ icon, label, value, onChange }: {
   );
 }
 
-// ─── KYC status badge — компактная плашка для hero ─────────────────────────
+// ─── KYC status badge — compact badge for hero ──────────────────────────────
 function KycStatusBadge({ status }: { status: "not_started" | "pending" | "approved" | "rejected" }) {
+  const { t } = useLang();
   if (status === "approved") {
     return (
       <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/30 gap-1">
-        <ShieldCheck className="h-3 w-3" /> KYC одобрен
+        <ShieldCheck className="h-3 w-3" /> {t.profile.kyc_badge_approved}
       </Badge>
     );
   }
   if (status === "pending") {
     return (
       <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/30 gap-1">
-        <ShieldQuestion className="h-3 w-3" /> KYC на проверке
+        <ShieldQuestion className="h-3 w-3" /> {t.profile.kyc_badge_pending}
       </Badge>
     );
   }
   if (status === "rejected") {
     return (
       <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/30 gap-1">
-        <ShieldAlert className="h-3 w-3" /> KYC отклонён
+        <ShieldAlert className="h-3 w-3" /> {t.profile.kyc_badge_rejected}
       </Badge>
     );
   }
   return (
     <Badge variant="outline" className="text-[10px] text-muted-foreground border-border gap-1">
-      <ShieldQuestion className="h-3 w-3" /> KYC не пройден
+      <ShieldQuestion className="h-3 w-3" /> {t.profile.kyc_not_passed}
     </Badge>
   );
 }
 
-// ─── KYC documents tab (Task #6) ──────────────────────────────────────────
-// Загрузка через прямой multipart на /api/users/me/kyc-documents (multer в backend
-// обрабатывает файл сам — не используем presign на этом этапе, чтобы не зависеть
-// от внешнего storage). После загрузки документ имеет status=pending; список
-// ниже показывает уже загруженные с действиями «открыть» и «удалить» (только
-// для status=pending). Кнопка «Отправить на проверку» переводит kyc_status юзера
-// в pending — после этого админ рассматривает в /admin/kyc.
-const KYC_KIND_LABEL: Record<string, string> = {
-  passport: "Паспорт",
-  id_card: "ID-карта",
-  company_reg: "Свидетельство о регистрации",
-  tax_certificate: "Налоговая справка",
-  bank_statement: "Банковская выписка",
-  other: "Другое",
-};
-const KYC_KIND_OPTIONS = Object.entries(KYC_KIND_LABEL);
+const KYC_KIND_KEYS = ["passport", "id_card", "company_reg", "tax_certificate", "bank_statement", "other"] as const;
 const ALLOWED_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic"];
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -757,6 +734,7 @@ interface KycDoc {
 function KycTab() {
   const { user, refresh } = useAuth();
   const { toast } = useToast();
+  const { t } = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs]       = useState<KycDoc[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -764,6 +742,18 @@ function KycTab() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [busyDelId, setBusyDelId]   = useState<number | null>(null);
+
+  function kycKindLabel(k: string): string {
+    const map: Record<string, string> = {
+      passport: t.profile.kyc_kind_passport,
+      id_card: t.profile.kyc_kind_id_card,
+      company_reg: t.profile.kyc_kind_company_reg,
+      tax_certificate: t.profile.kyc_kind_tax_certificate,
+      bank_statement: t.profile.kyc_kind_bank_statement,
+      other: t.profile.kyc_kind_other,
+    };
+    return map[k] ?? k;
+  }
 
   async function load() {
     setLoading(true);
@@ -773,7 +763,7 @@ function KycTab() {
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setDocs(j.data ?? []);
     } catch (err: any) {
-      toast({ title: "Ошибка загрузки", description: err.message, variant: "destructive" });
+      toast({ title: t.profile.kyc_load_error, description: err.message, variant: "destructive" });
       setDocs([]);
     } finally {
       setLoading(false);
@@ -783,11 +773,11 @@ function KycTab() {
 
   async function handleUpload(file: File) {
     if (!ALLOWED_MIME.includes(file.type)) {
-      toast({ title: "Недопустимый формат", description: "Разрешены PDF, PNG, JPEG, WEBP, HEIC", variant: "destructive" });
+      toast({ title: t.profile.kyc_invalid_format, description: t.profile.kyc_invalid_format_desc, variant: "destructive" });
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast({ title: "Файл слишком большой", description: "Максимум 25 МБ", variant: "destructive" });
+      toast({ title: t.profile.kyc_too_large, description: t.profile.kyc_too_large_desc, variant: "destructive" });
       return;
     }
     setUploading(true);
@@ -800,18 +790,18 @@ function KycTab() {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "Документ загружен" });
+      toast({ title: t.profile.kyc_uploaded });
       if (fileRef.current) fileRef.current.value = "";
       await load();
     } catch (err: any) {
-      toast({ title: "Не удалось загрузить", description: err.message, variant: "destructive" });
+      toast({ title: t.profile.kyc_upload_error, description: err.message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
   }
 
   async function handleDelete(docId: number) {
-    if (!confirm("Удалить документ?")) return;
+    if (!confirm(t.profile.kyc_delete_confirm)) return;
     setBusyDelId(docId);
     try {
       const res = await fetch(`/api/users/me/kyc-documents/${docId}`, {
@@ -821,10 +811,10 @@ function KycTab() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
-      toast({ title: "Документ удалён" });
+      toast({ title: t.profile.kyc_deleted });
       await load();
     } catch (err: any) {
-      toast({ title: "Не удалось удалить", description: err.message, variant: "destructive" });
+      toast({ title: t.profile.kyc_delete_error, description: err.message, variant: "destructive" });
     } finally {
       setBusyDelId(null);
     }
@@ -838,11 +828,11 @@ function KycTab() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "Отправлено на проверку", description: "Менеджер рассмотрит документы в ближайшее время." });
+      toast({ title: t.profile.kyc_submitted, description: t.profile.kyc_submitted_desc });
       await refresh();
       await load();
     } catch (err: any) {
-      toast({ title: "Не удалось отправить", description: err.message, variant: "destructive" });
+      toast({ title: t.profile.kyc_submit_error, description: err.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -859,49 +849,44 @@ function KycTab() {
       <Card className="card-surface no-lift border-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary" /> KYC верификация
+            <ShieldCheck className="h-4 w-4 text-primary" /> {t.profile.kyc_title}
           </CardTitle>
-          <CardDescription>
-            Загрузи документы, удостоверяющие личность (или регистрацию юр. лица), затем отправь на проверку.
-            Без одобренного KYC заявки на выплату недоступны.
-          </CardDescription>
+          <CardDescription>{t.profile.kyc_desc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Status alert */}
           {user.kycStatus === "approved" && (
             <div className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200/90">
               <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>KYC одобрен. Дальнейшая загрузка документов не требуется. Если хочешь обновить информацию — обратись к менеджеру.</span>
+              <span>{t.profile.kyc_approved_alert}</span>
             </div>
           )}
           {user.kycStatus === "pending" && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200/90">
               <ShieldQuestion className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-              <span>Документы отправлены на проверку. Обычно решение принимается в течение 1–2 рабочих дней.</span>
+              <span>{t.profile.kyc_pending_alert}</span>
             </div>
           )}
           {user.kycStatus === "rejected" && (
             <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200/90">
               <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-              <span>KYC отклонён. Просмотри комментарии к документам ниже, замени отклонённые и отправь повторно.</span>
+              <span>{t.profile.kyc_rejected_alert}</span>
             </div>
           )}
 
-          {/* Upload form (заблокирована, пока статус pending или approved) */}
           {!isLocked && (
             <div className="rounded-lg border border-dashed border-border/60 p-4 space-y-3">
               <div className="grid gap-3 md:grid-cols-[200px_1fr]">
-                <Field label="Тип документа">
+                <Field label={t.profile.kyc_doc_type}>
                   <Select value={kind} onValueChange={setKind}>
                     <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {KYC_KIND_OPTIONS.map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      {KYC_KIND_KEYS.map((k) => (
+                        <SelectItem key={k} value={k}>{kycKindLabel(k)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Файл (PDF / PNG / JPEG / WEBP / HEIC, до 25 МБ)">
+                <Field label={t.profile.kyc_file_label}>
                   <input
                     ref={fileRef}
                     type="file"
@@ -917,24 +902,23 @@ function KycTab() {
               </div>
               {uploading && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Загрузка…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t.profile.kyc_uploading}
                 </div>
               )}
             </div>
           )}
 
-          {/* Documents list */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Загруженные документы</Label>
+              <Label className="text-sm">{t.profile.kyc_docs_header}</Label>
               <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Обновить"}
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t.profile.kyc_refresh}
               </Button>
             </div>
-            {loading && !docs && <div className="p-6 text-center text-sm text-muted-foreground">Загрузка…</div>}
+            {loading && !docs && <div className="p-6 text-center text-sm text-muted-foreground">{t.profile.kyc_docs_loading}</div>}
             {docs && docs.length === 0 && (
               <div className="p-6 text-center text-sm text-muted-foreground border border-dashed border-border/40 rounded-lg">
-                Документов пока нет
+                {t.profile.kyc_docs_empty}
               </div>
             )}
             {docs && docs.length > 0 && (
@@ -947,17 +931,17 @@ function KycTab() {
                     d.status === "rejected" ? "text-rose-400 border-rose-500/30 bg-rose-500/10" :
                     "text-amber-400 border-amber-500/30 bg-amber-500/10";
                   const statusLabel =
-                    d.status === "approved" ? "Одобрен" :
-                    d.status === "rejected" ? "Отклонён" : "На проверке";
+                    d.status === "approved" ? t.profile.kyc_status_approved :
+                    d.status === "rejected" ? t.profile.kyc_status_rejected : t.profile.kyc_status_pending;
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/50 bg-background/40">
                       <div className="flex items-start gap-3 min-w-0">
                         <FileText className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                         <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{KYC_KIND_LABEL[d.kind] ?? d.kind}</div>
+                          <div className="text-sm font-medium truncate">{kycKindLabel(d.kind)}</div>
                           <div className="text-xs text-muted-foreground truncate">{d.originalFilename} · {sizeKb} KB</div>
                           {d.status === "rejected" && d.rejectionReason && (
-                            <div className="text-[11px] text-rose-400/80 mt-1">Причина: {d.rejectionReason}</div>
+                            <div className="text-[11px] text-rose-400/80 mt-1">{t.profile.kyc_rejected_reason} {d.rejectionReason}</div>
                           )}
                         </div>
                       </div>
@@ -986,18 +970,17 @@ function KycTab() {
             )}
           </div>
 
-          {/* Submit button */}
           {canSubmit && (
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
               <p className="text-xs text-muted-foreground">
-                После отправки список документов будет заблокирован до решения менеджера.
+                {t.profile.kyc_submit_note}
               </p>
               <Button
                 onClick={handleSubmit}
                 disabled={submitting || pendingDocsCount === 0}
               >
-                {submitting ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Отправка…</> : (
-                  <><Upload className="h-3.5 w-3.5 mr-2" /> Отправить на проверку ({pendingDocsCount})</>
+                {submitting ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.kyc_submitting}</> : (
+                  <><Upload className="h-3.5 w-3.5 mr-2" /> {t.profile.kyc_submit_btn} ({pendingDocsCount})</>
                 )}
               </Button>
             </div>
@@ -1005,27 +988,26 @@ function KycTab() {
         </CardContent>
       </Card>
 
-      {/* Right: requirements card */}
       <Card className="card-surface no-lift border-border/60 self-start">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400" /> Что прислать
+            <AlertTriangle className="h-4 w-4 text-amber-400" /> {t.profile.kyc_req_title}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2.5 text-xs text-muted-foreground">
-          <p>Для <span className="text-foreground font-medium">артиста</span>:</p>
+          <p>{t.profile.kyc_req_for_artist}</p>
           <ul className="list-disc list-inside space-y-1 pl-1">
-            <li>Паспорт (разворот с фото) или ID-карта</li>
-            <li>Налоговый идентификатор (если есть)</li>
+            <li>{t.profile.kyc_req_artist_1}</li>
+            <li>{t.profile.kyc_req_artist_2}</li>
           </ul>
-          <p className="pt-2">Для <span className="text-foreground font-medium">лейбла</span>:</p>
+          <p className="pt-2">{t.profile.kyc_req_for_label}</p>
           <ul className="list-disc list-inside space-y-1 pl-1">
-            <li>Свидетельство о регистрации</li>
-            <li>Налоговая справка</li>
-            <li>Документ подписанта (паспорт)</li>
+            <li>{t.profile.kyc_req_label_1}</li>
+            <li>{t.profile.kyc_req_label_2}</li>
+            <li>{t.profile.kyc_req_label_3}</li>
           </ul>
           <p className="pt-3 border-t border-border/40 text-[11px]">
-            Документы хранятся зашифрованно. Доступ — только менеджер на этапе верификации.
+            {t.profile.kyc_privacy}
           </p>
         </CardContent>
       </Card>
@@ -1058,6 +1040,8 @@ function BankTab() {
   const hasExistingAccount = Boolean(user?.bankAccountNumber);
   const hasExistingIban    = Boolean(user?.bankIban);
 
+  const { t } = useLang();
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -1076,13 +1060,13 @@ function BankTab() {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "Банковские реквизиты сохранены" });
+      toast({ title: t.profile.bank_saved });
       setAccountNumber("");
       setIban("");
       await refresh();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Ошибка сохранения";
-      toast({ title: "Ошибка", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : t.profile.bank_error;
+      toast({ title: t.profile.bank_error, description: msg, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1093,43 +1077,40 @@ function BankTab() {
     <Card className="card-surface no-lift border-border/60 max-w-3xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Banknote className="h-4 w-4 text-primary" /> Банковские реквизиты
+          <Banknote className="h-4 w-4 text-primary" /> {t.profile.bank_title}
         </CardTitle>
-        <CardDescription>
-          На эти реквизиты будут производиться выплаты роялти. Поля чувствительны и
-          не отображаются в системных журналах.
-        </CardDescription>
+        <CardDescription>{t.profile.bank_desc}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Название банка">
+          <Field label={t.profile.bank_name_label}>
             <Input value={bankName} onChange={(e) => setBankName(e.target.value)} className="bg-background/50" />
           </Field>
-          <Field label="Имя владельца счёта (по документам)">
+          <Field label={t.profile.bank_holder_label}>
             <Input value={holder} onChange={(e) => setHolder(e.target.value)} className="bg-background/50" />
           </Field>
-          <Field label="Номер счёта">
+          <Field label={t.profile.bank_account_label}>
             <Input
               value={accountNumber}
               onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder={hasExistingAccount ? "Сохранён — введите заново для изменения" : ""}
+              placeholder={hasExistingAccount ? t.profile.bank_account_placeholder : ""}
               className="bg-background/50 font-mono"
             />
           </Field>
-          <Field label="IBAN (если применимо)">
+          <Field label={t.profile.bank_iban_label}>
             <Input
               value={iban}
               onChange={(e) => setIban(e.target.value)}
-              placeholder={hasExistingIban ? "Сохранён — введите заново для изменения" : ""}
+              placeholder={hasExistingIban ? t.profile.bank_iban_placeholder : ""}
               className="bg-background/50 font-mono"
             />
           </Field>
-          <Field label="SWIFT / BIC">
+          <Field label={t.profile.bank_swift_label}>
             <Input value={swift} onChange={(e) => setSwift(e.target.value)} className="bg-background/50 font-mono" />
           </Field>
-          <Field label="Страна банка">
+          <Field label={t.profile.bank_country_label}>
             <Select value={country || undefined} onValueChange={setCountry}>
-              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери страну" /></SelectTrigger>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder={t.profile.country_placeholder} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="tj">🇹🇯 Таджикистан</SelectItem>
                 <SelectItem value="ru">🇷🇺 Россия</SelectItem>
@@ -1143,7 +1124,7 @@ function BankTab() {
         </div>
         <div className="flex justify-end pt-2">
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохранение…</> : "Сохранить"}
+            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.saving}</> : t.profile.save}
           </Button>
         </div>
       </CardContent>
@@ -1155,6 +1136,7 @@ function BankTab() {
 function TaxTab() {
   const { user, refresh } = useAuth();
   const { toast } = useToast();
+  const { t } = useLang();
   const [taxId, setTaxId]           = useState("");
   const [taxCountry, setTaxCountry] = useState("");
   const [taxFormType, setTaxFormType] = useState("");
@@ -1181,10 +1163,10 @@ function TaxTab() {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "Налоговые данные сохранены" });
+      toast({ title: t.profile.tax_saved });
       await refresh();
     } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+      toast({ title: t.profile.tax_error, description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1195,20 +1177,18 @@ function TaxTab() {
     <Card className="card-surface no-lift border-border/60 max-w-3xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Receipt className="h-4 w-4 text-primary" /> Налоговые данные
+          <Receipt className="h-4 w-4 text-primary" /> {t.profile.tax_title}
         </CardTitle>
-        <CardDescription>
-          Используется для расчёта удержаний при выплате роялти. ИНН/Tax ID не отображается в журналах действий.
-        </CardDescription>
+        <CardDescription>{t.profile.tax_desc}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="ИНН / Tax ID">
+          <Field label={t.profile.tax_id_label}>
             <Input value={taxId} onChange={(e) => setTaxId(e.target.value)} className="bg-background/50 font-mono" />
           </Field>
-          <Field label="Страна налоговой резиденции">
+          <Field label={t.profile.tax_country_label}>
             <Select value={taxCountry || undefined} onValueChange={setTaxCountry}>
-              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери страну" /></SelectTrigger>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder={t.profile.country_placeholder} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="tj">🇹🇯 Таджикистан</SelectItem>
                 <SelectItem value="ru">🇷🇺 Россия</SelectItem>
@@ -1219,21 +1199,21 @@ function TaxTab() {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Форма налогообложения">
+          <Field label={t.profile.tax_form_label}>
             <Select value={taxFormType || undefined} onValueChange={setTaxFormType}>
-              <SelectTrigger className="bg-background/50"><SelectValue placeholder="Выбери форму" /></SelectTrigger>
+              <SelectTrigger className="bg-background/50"><SelectValue placeholder={t.profile.tax_form_placeholder} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="self_employed">Самозанятый / физлицо</SelectItem>
-                <SelectItem value="individual_entrepreneur">Индивидуальный предприниматель</SelectItem>
-                <SelectItem value="w8">W-8 (нерезидент США)</SelectItem>
-                <SelectItem value="w9">W-9 (резидент США)</SelectItem>
+                <SelectItem value="self_employed">{t.profile.tax_form_self_employed}</SelectItem>
+                <SelectItem value="individual_entrepreneur">{t.profile.tax_form_ie}</SelectItem>
+                <SelectItem value="w8">{t.profile.tax_form_w8}</SelectItem>
+                <SelectItem value="w9">{t.profile.tax_form_w9}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
         </div>
         <div className="flex justify-end pt-2">
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Сохранение…</> : "Сохранить"}
+            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> {t.profile.saving}</> : t.profile.save}
           </Button>
         </div>
       </CardContent>
@@ -1244,6 +1224,7 @@ function TaxTab() {
 function PwdInput({ value, onChange, show, onToggle }: {
   value: string; onChange: (v: string) => void; show: boolean; onToggle: () => void;
 }) {
+  const { t } = useLang();
   return (
     <div className="relative">
       <Input
@@ -1255,7 +1236,7 @@ function PwdInput({ value, onChange, show, onToggle }: {
       <button
         type="button"
         onClick={onToggle}
-        aria-label={show ? "Скрыть пароль" : "Показать пароль"}
+        aria-label={show ? t.profile.hide_password : t.profile.show_password}
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
       >
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

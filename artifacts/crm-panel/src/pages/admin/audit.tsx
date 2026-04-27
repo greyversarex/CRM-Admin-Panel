@@ -39,38 +39,10 @@ interface Facets {
   users: { id: number; name: string; email: string }[];
 }
 
-const ACTION_META: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
-  create:  { label: "Создание",   cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30", icon: Plus },
-  update:  { label: "Изменение",  cls: "bg-blue-500/10 text-blue-300 border-blue-500/30",          icon: Pencil },
-  delete:  { label: "Удаление",   cls: "bg-rose-500/10 text-rose-300 border-rose-500/30",          icon: Trash2 },
-  login:   { label: "Вход",       cls: "bg-violet-500/10 text-violet-300 border-violet-500/30",    icon: LogIn },
-  approve: { label: "Одобрено",   cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30", icon: CheckCircle2 },
-  reject:  { label: "Отклонено",  cls: "bg-amber-500/10 text-amber-300 border-amber-500/30",       icon: XCircle },
-  deliver: { label: "Доставлено", cls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",          icon: Send },
-};
-
 // Финансовые сущности — для пресета фильтров «только финансы».
 // Передаются на бэкенд через ?entity_types=... (CSV) → серверная фильтрация
 // + корректный total в пагинации (без клиентского post-filter).
 const FINANCE_ENTITY_TYPES = ["transaction", "payout", "ingestion", "ingestion_unmatched"];
-
-const ENTITY_LABEL: Record<string, string> = {
-  transaction: "Транзакция",
-  payout: "Выплата",
-  ingestion: "Импорт CSV",
-  release: "Релиз",
-  track: "Трек",
-  artist: "Артист",
-  label: "Лейбл",
-  split: "Сплит",
-  delivery: "Доставка",
-  user: "Пользователь",
-  signup_request: "Заявка",
-  kyc_document: "KYC-документ",
-  user_kyc: "KYC-статус",
-  profile_bank: "Банк. реквизиты",
-  profile_tax: "Налог. данные",
-};
 
 const PAGE_SIZE = 50;
 
@@ -89,6 +61,34 @@ function fmtDate(iso: string): string {
 export default function AdminAudit() {
   const { toast } = useToast();
   const { t } = useLang();
+
+  const ACTION_META: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
+    create:  { label: t.audit.action_create,  cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30", icon: Plus },
+    update:  { label: t.audit.action_update,  cls: "bg-blue-500/10 text-blue-300 border-blue-500/30",          icon: Pencil },
+    delete:  { label: t.audit.action_delete,  cls: "bg-rose-500/10 text-rose-300 border-rose-500/30",          icon: Trash2 },
+    login:   { label: t.audit.action_login,   cls: "bg-violet-500/10 text-violet-300 border-violet-500/30",    icon: LogIn },
+    approve: { label: t.audit.action_approve, cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30", icon: CheckCircle2 },
+    reject:  { label: t.audit.action_reject,  cls: "bg-amber-500/10 text-amber-300 border-amber-500/30",       icon: XCircle },
+    deliver: { label: t.audit.action_deliver, cls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",          icon: Send },
+  };
+
+  const ENTITY_LABEL: Record<string, string> = {
+    transaction:    t.audit.entity_transaction,
+    payout:         t.audit.entity_payout,
+    ingestion:      t.audit.entity_ingestion,
+    release:        t.audit.entity_release,
+    track:          t.audit.entity_track,
+    artist:         t.audit.entity_artist,
+    label:          t.audit.entity_label,
+    split:          t.audit.entity_split,
+    delivery:       t.audit.entity_delivery,
+    user:           t.audit.entity_user,
+    signup_request: t.audit.entity_signup_request,
+    kyc_document:   t.audit.entity_kyc_document,
+    user_kyc:       t.audit.entity_user_kyc,
+    profile_bank:   t.audit.entity_profile_bank,
+    profile_tax:    t.audit.entity_profile_tax,
+  };
 
   // ─── filters ────────────────────────────────────────────────────────────
   const [entityType, setEntityType] = useState<string>("");
@@ -177,7 +177,7 @@ export default function AdminAudit() {
   // facet entity types — не показываем технические/внутренние
   const visibleEntityTypes = useMemo(() => {
     if (!facets) return [];
-    return [...facets.entityTypes].sort((a, b) => (ENTITY_LABEL[a] ?? a).localeCompare(ENTITY_LABEL[b] ?? b, "ru"));
+    return [...facets.entityTypes].sort((a, b) => (ENTITY_LABEL[a] ?? a).localeCompare(ENTITY_LABEL[b] ?? b));
   }, [facets]);
 
   return (
@@ -200,7 +200,7 @@ export default function AdminAudit() {
               data-testid="button-finance-preset"
             >
               <Filter className="mr-2 h-4 w-4" />
-              {financeOnly ? "Только финансы ✓" : "Только финансы"}
+              {financeOnly ? t.audit.finance_only_active : t.audit.finance_only}
             </Button>
             <Button variant="outline" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
               <RotateCcw className="mr-2 h-4 w-4" />
@@ -383,7 +383,7 @@ export default function AdminAudit() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-blue-400" />
-                  Запись #{detail.id}
+                  {t.audit.record}{detail.id}
                 </DialogTitle>
                 <DialogDescription>
                   {fmtDate(detail.createdAt)} · {detail.userEmail ?? "—"} ({detail.userRole ?? "—"})
@@ -394,18 +394,18 @@ export default function AdminAudit() {
                 {/* Meta */}
                 <div className="grid grid-cols-2 gap-3 text-sm bg-muted/30 rounded-md p-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Действие</div>
+                    <div className="text-xs text-muted-foreground">{t.audit.detail_action}</div>
                     <div className="font-medium">{ACTION_META[detail.action]?.label ?? detail.action}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Объект</div>
+                    <div className="text-xs text-muted-foreground">{t.audit.detail_entity}</div>
                     <div className="font-medium">
                       {ENTITY_LABEL[detail.entityType] ?? detail.entityType}
                       {detail.entityId !== null && <span className="text-muted-foreground font-mono"> #{detail.entityId}</span>}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">IP</div>
+                    <div className="text-xs text-muted-foreground">{t.audit.table.ip}</div>
                     <div className="font-mono text-xs">{detail.ip ?? "—"}</div>
                   </div>
                   <div>
@@ -460,7 +460,7 @@ export default function AdminAudit() {
                 )}
 
                 {!detail.before && !detail.after && (!detail.diff || detail.diff.length === 0) && (
-                  <div className="text-sm text-muted-foreground italic">Эта запись не содержит снимка состояния (например, событие входа в систему).</div>
+                  <div className="text-sm text-muted-foreground italic">{t.audit.no_snapshot}</div>
                 )}
               </div>
             </>
