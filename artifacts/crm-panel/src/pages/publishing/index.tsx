@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useLang } from "@/lib/i18n";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,8 @@ type WorkStatus = "draft" | "registered" | "pending" | "active" | "rejected";
 
 interface Writer {
   name: string;
-  role: string;       // composer | lyricist | producer | arranger | …
-  share: number;      // 0–100
+  role: string;
+  share: number;
   caeIpi?: string | null;
 }
 
@@ -56,14 +57,6 @@ interface Paginated<T> {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-const STATUS_LABEL: Record<WorkStatus, string> = {
-  draft: "Черновик",
-  pending: "В обработке",
-  registered: "Зарегистрировано",
-  active: "Активно",
-  rejected: "Отклонено",
-};
-
 const STATUS_CLS: Record<WorkStatus, string> = {
   draft:      "bg-white/[0.05] text-white/65 border-white/10",
   pending:    "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -71,14 +64,6 @@ const STATUS_CLS: Record<WorkStatus, string> = {
   active:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   rejected:   "bg-rose-500/15 text-rose-300 border-rose-500/30",
 };
-
-const ROLE_OPTIONS = [
-  { v: "composer", l: "Композитор" },
-  { v: "lyricist", l: "Автор текста" },
-  { v: "producer", l: "Продюсер" },
-  { v: "arranger", l: "Аранжировщик" },
-  { v: "performer", l: "Исполнитель" },
-];
 
 // ─── API helper ─────────────────────────────────────────────────────────────
 
@@ -102,12 +87,49 @@ const initialsOf = (name: string) =>
 
 const sumShares = (ws: Writer[]) => ws.reduce((s, w) => s + (Number.isFinite(w.share) ? w.share : 0), 0);
 
+// ─── KPI Tile ───────────────────────────────────────────────────────────────
+function KpiTile({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number; color: string }) {
+  const cls: Record<string, string> = {
+    cyan:    "bg-cyan-500/10 border-cyan-500/20 text-cyan-300",
+    emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
+    amber:   "bg-amber-500/10 border-amber-500/20 text-amber-300",
+    primary: "bg-primary/10 border-primary/20 text-primary",
+    rose:    "bg-rose-500/10 border-rose-500/20 text-rose-300",
+  };
+  return (
+    <div className={`rounded-lg border p-3 ${cls[color] ?? cls.primary} flex items-center gap-3`}>
+      <Icon className="h-5 w-5 shrink-0" />
+      <div>
+        <div className="text-lg font-bold">{value}</div>
+        <div className="text-[11px] opacity-70">{label}</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function Publishing() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useLang();
   const isAdmin = user?.role === "admin" || user?.role === "manager";
+
+  const STATUS_LABEL: Record<WorkStatus, string> = {
+    draft:      t.common.draft,
+    pending:    t.common.pending,
+    registered: "Registered",
+    active:     t.common.active,
+    rejected:   t.common.reject,
+  };
+
+  const ROLE_OPTIONS = [
+    { v: "composer", l: t.publishing.dialog.roles.composer },
+    { v: "lyricist", l: t.publishing.dialog.roles.lyricist },
+    { v: "producer", l: t.publishing.dialog.roles.producer },
+    { v: "arranger", l: t.publishing.dialog.roles.arranger },
+    { v: "performer", l: t.publishing.dialog.roles.performer },
+  ];
 
   const [works, setWorks] = useState<PublishingWork[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +146,7 @@ export default function Publishing() {
       const r = await api<Paginated<PublishingWork>>("/api/publishing/works?limit=200");
       setWorks(r.data);
     } catch (e: any) {
-      toast({ title: "Не удалось загрузить произведения", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.publishing.toast.load_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -170,7 +192,7 @@ export default function Publishing() {
       <Layout>
         <Card className="bg-card/50 border-border/50 max-w-md mx-auto mt-12">
           <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-            Раздел «Произведения» доступен только администраторам и менеджерам.
+            {t.publishing.title} — admin/manager only.
           </CardContent>
         </Card>
       </Layout>
@@ -187,25 +209,23 @@ export default function Publishing() {
               <span className="h-10 w-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
                 <BookMarked className="h-5 w-5 text-cyan-300" />
               </span>
-              Произведения
+              {t.publishing.title}
             </h1>
-            <p className="text-muted-foreground mt-1.5 text-sm">
-              Каталог произведений, авторский состав и регистрация в PRO.
-            </p>
+            <p className="text-muted-foreground mt-1.5 text-sm">{t.publishing.subtitle}</p>
           </div>
           <Button className="gap-2" onClick={() => setEditor("new")}>
             <Plus className="h-4 w-4" />
-            Новое произведение
+            {t.publishing.new_work}
           </Button>
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KpiTile icon={BookMarked}    label="Всего"            value={kpi.total}      color="cyan" />
-          <KpiTile icon={FileCheck2}    label="Зарегистрировано" value={kpi.registered} color="emerald" />
-          <KpiTile icon={Clock}         label="В обработке"      value={kpi.pending}    color="amber" />
-          <KpiTile icon={FileText}      label="Черновики"        value={kpi.drafts}     color="primary" />
-          <KpiTile icon={AlertTriangle} label="Отклонено"        value={kpi.rejected}   color="rose" />
+          <KpiTile icon={BookMarked}    label={t.common.status}   value={kpi.total}      color="cyan" />
+          <KpiTile icon={FileCheck2}    label={STATUS_LABEL.registered} value={kpi.registered} color="emerald" />
+          <KpiTile icon={Clock}         label={t.common.pending}  value={kpi.pending}    color="amber" />
+          <KpiTile icon={FileText}      label={t.common.draft}    value={kpi.drafts}     color="primary" />
+          <KpiTile icon={AlertTriangle} label={t.common.reject}   value={kpi.rejected}   color="rose" />
         </div>
 
         {/* Table */}
@@ -214,21 +234,21 @@ export default function Publishing() {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <label htmlFor="pub-search" className="sr-only">Поиск произведений</label>
+                <label htmlFor="pub-search" className="sr-only">{t.publishing.search_placeholder}</label>
                 <Input
                   id="pub-search"
-                  placeholder="Поиск: название, ISWC, ISRC, автор…"
+                  placeholder={t.publishing.search_placeholder}
                   className="pl-8 w-[300px] bg-background/40"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 />
               </div>
               <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setPage(1); }}>
-                <SelectTrigger className="w-[170px] bg-background/40" aria-label="Фильтр по статусу">
-                  <SelectValue placeholder="Статус" />
+                <SelectTrigger className="w-[170px] bg-background/40" aria-label={t.common.status}>
+                  <SelectValue placeholder={t.common.status} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
+                  <SelectItem value="all">{t.publishing.all_statuses}</SelectItem>
                   {(Object.keys(STATUS_LABEL) as WorkStatus[]).map((s) => (
                     <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
                   ))}
@@ -236,7 +256,7 @@ export default function Publishing() {
               </Select>
             </div>
             <p className="text-[12px] text-muted-foreground">
-              Найдено: <span className="font-bold text-white">{filtered.length}</span> из {works.length}
+              {filtered.length} / {works.length}
             </p>
           </div>
 
@@ -244,13 +264,13 @@ export default function Publishing() {
             <Table>
               <TableHeader>
                 <TableRow className="border-border/40 hover:bg-transparent">
-                  <TableHead>Название</TableHead>
-                  <TableHead>Авторы</TableHead>
-                  <TableHead>ISWC / ISRC</TableHead>
-                  <TableHead>Издатель</TableHead>
-                  <TableHead>PRO / реестры</TableHead>
-                  <TableHead className="text-right">Доли</TableHead>
-                  <TableHead>Статус</TableHead>
+                  <TableHead>{t.publishing.table.title}</TableHead>
+                  <TableHead>{t.publishing.table.writers}</TableHead>
+                  <TableHead>{t.publishing.table.codes}</TableHead>
+                  <TableHead>{t.publishing.table.publisher}</TableHead>
+                  <TableHead>{t.publishing.table.pro}</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                  <TableHead>{t.publishing.table.status}</TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -258,13 +278,13 @@ export default function Publishing() {
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center h-32 text-muted-foreground">
-                      <span className="inline-flex items-center gap-2"><Spinner /> Загрузка…</span>
+                      <span className="inline-flex items-center gap-2"><Spinner /> …</span>
                     </TableCell>
                   </TableRow>
                 ) : pageRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center h-32 text-muted-foreground">
-                      {works.length === 0 ? "Каталог пуст. Добавь первое произведение." : "Ничего не найдено."}
+                      {t.publishing.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -322,7 +342,7 @@ export default function Publishing() {
                         </TableCell>
                         <TableCell className="text-right">
                           <span
-                            title={valid ? "Сумма долей = 100%" : `Сумма долей: ${total}% (норма 100%)`}
+                            title={valid ? "100%" : `${total}%`}
                             className={`tabular-nums font-semibold text-sm ${valid ? "text-emerald-300" : "text-amber-300"}`}
                           >
                             {total}%
@@ -334,7 +354,7 @@ export default function Publishing() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Редактировать ${w.title}`} onClick={() => setEditor(w)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit ${w.title}`} onClick={() => setEditor(w)}>
                             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
                         </TableCell>
@@ -349,14 +369,14 @@ export default function Publishing() {
           {filtered.length > perPage && (
             <div className="p-3 border-t border-border/40 flex items-center justify-between">
               <p className="text-[12px] text-muted-foreground">
-                Показано {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} из {filtered.length}
+                {t.publishing.page_of.replace("{p}", String(safePage)).replace("{t}", String(totalPages))}
               </p>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" disabled={safePage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  Назад
+                  {t.publishing.previous}
                 </Button>
                 <Button variant="outline" size="sm" disabled={safePage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                  Далее
+                  {t.publishing.next}
                 </Button>
               </div>
             </div>
@@ -367,6 +387,8 @@ export default function Publishing() {
       <WorkDialog
         state={editor}
         onClose={() => setEditor(null)}
+        statusLabel={STATUS_LABEL}
+        roleOptions={ROLE_OPTIONS}
         onSaved={(saved, mode) => {
           setWorks((prev) => mode === "create" ? [saved, ...prev] : prev.map((w) => (w.id === saved.id ? saved : w)));
           setEditor(null);
@@ -382,12 +404,17 @@ function WorkDialog({
   state,
   onClose,
   onSaved,
+  statusLabel,
+  roleOptions,
 }: {
   state: PublishingWork | "new" | null;
   onClose: () => void;
   onSaved: (w: PublishingWork, mode: "create" | "update") => void;
+  statusLabel: Record<WorkStatus, string>;
+  roleOptions: { v: string; l: string }[];
 }) {
   const { toast } = useToast();
+  const { t } = useLang();
   const isOpen = state !== null;
   const isNew = state === "new";
   const editing = state && state !== "new" ? state : null;
@@ -395,7 +422,7 @@ function WorkDialog({
   const [form, setForm] = useState<{
     title: string; iswc: string; isrc: string;
     status: WorkStatus; publisher: string;
-    territory: string;     // comma-separated
+    territory: string;
     songtrust: boolean; ascap: boolean; bmi: boolean;
     writers: Writer[];
   }>({
@@ -459,19 +486,18 @@ function WorkDialog({
 
   async function save() {
     if (!form.title.trim()) {
-      toast({ title: "Укажите название", variant: "destructive" });
+      toast({ title: t.publishing.toast.title_required, variant: "destructive" });
       return;
     }
     const cleanWriters: Writer[] = [];
     for (let i = 0; i < form.writers.length; i++) {
       const w = form.writers[i];
       const name = w.name.trim();
-      if (!name) continue; // skip empty rows
+      if (!name) continue;
       const share = Number(w.share);
       if (!Number.isFinite(share) || share < 0 || share > 100) {
         toast({
-          title: `Доля автора «${name}» некорректна`,
-          description: "Допускаются числа от 0 до 100.",
+          title: t.publishing.toast.invalid_share.replace("{name}", name),
           variant: "destructive",
         });
         return;
@@ -484,17 +510,15 @@ function WorkDialog({
       });
     }
     if (cleanWriters.length === 0) {
-      toast({ title: "Добавьте хотя бы одного автора", variant: "destructive" });
+      toast({ title: t.publishing.toast.no_writers, variant: "destructive" });
       return;
     }
-    // Reject duplicates by normalized (name, caeIpi).
     const seen = new Set<string>();
     for (const w of cleanWriters) {
       const key = `${w.name.toLowerCase()}|${w.caeIpi ?? ""}`;
       if (seen.has(key)) {
         toast({
-          title: `Автор «${w.name}» указан дважды`,
-          description: "Объедините доли в одну строку.",
+          title: t.publishing.toast.duplicate_writer.replace("{name}", w.name),
           variant: "destructive",
         });
         return;
@@ -503,8 +527,8 @@ function WorkDialog({
     }
     if (Math.round(sumShares(cleanWriters)) !== 100) {
       toast({
-        title: "Сумма долей должна быть 100%",
-        description: `Сейчас: ${sumShares(cleanWriters)}%`,
+        title: t.publishing.toast.share_sum,
+        description: `${sumShares(cleanWriters)}%`,
         variant: "destructive",
       });
       return;
@@ -530,15 +554,15 @@ function WorkDialog({
     try {
       if (isNew) {
         const created = await api<PublishingWork>("/api/publishing/works", { method: "POST", body: JSON.stringify(body) });
-        toast({ title: "Произведение добавлено" });
+        toast({ title: t.publishing.toast.added });
         onSaved(created, "create");
       } else if (editing) {
         const updated = await api<PublishingWork>(`/api/publishing/works/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
-        toast({ title: "Произведение обновлено" });
+        toast({ title: t.publishing.toast.updated });
         onSaved(updated, "update");
       }
     } catch (e: any) {
-      toast({ title: "Сохранение не удалось", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.publishing.toast.save_error, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -548,48 +572,48 @@ function WorkDialog({
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isNew ? "Новое произведение" : "Редактировать произведение"}</DialogTitle>
-          <DialogDescription>Метаданные, авторский состав и регистрация в PRO.</DialogDescription>
+          <DialogTitle>{isNew ? t.publishing.dialog.new_title : t.publishing.dialog.edit_title}</DialogTitle>
+          <DialogDescription>{t.publishing.dialog.description}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 space-y-1.5">
-              <Label htmlFor="w-title">Название *</Label>
+              <Label htmlFor="w-title">{t.publishing.dialog.field_title}</Label>
               <Input id="w-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="w-iswc">ISWC</Label>
+              <Label htmlFor="w-iswc">{t.publishing.dialog.field_iswc}</Label>
               <Input id="w-iswc" placeholder="T-345.246.800-1" value={form.iswc} onChange={(e) => setForm({ ...form, iswc: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="w-isrc">ISRC</Label>
+              <Label htmlFor="w-isrc">{t.publishing.dialog.field_isrc}</Label>
               <Input id="w-isrc" placeholder="TJX001234567" value={form.isrc} onChange={(e) => setForm({ ...form, isrc: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label>Статус</Label>
+              <Label>{t.publishing.dialog.field_status}</Label>
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as WorkStatus })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(STATUS_LABEL) as WorkStatus[]).map((s) => (
-                    <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
+                  {(Object.keys(statusLabel) as WorkStatus[]).map((s) => (
+                    <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="w-pub">Издатель</Label>
+              <Label htmlFor="w-pub">{t.publishing.dialog.field_publisher}</Label>
               <Input id="w-pub" value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="w-terr">Территории</Label>
-              <Input id="w-terr" placeholder="WW или RU, TJ, KZ" value={form.territory} onChange={(e) => setForm({ ...form, territory: e.target.value })} />
+              <Label htmlFor="w-terr">{t.publishing.dialog.field_territory}</Label>
+              <Input id="w-terr" placeholder="WW or RU, TJ, KZ" value={form.territory} onChange={(e) => setForm({ ...form, territory: e.target.value })} />
             </div>
           </div>
 
           {/* PRO toggles */}
           <div className="rounded-lg border border-border/50 p-3 bg-background/30">
-            <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Регистрация в PRO</div>
+            <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">PRO Registration</div>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <Switch checked={form.ascap} onCheckedChange={(v) => setForm({ ...form, ascap: v })} />
@@ -610,68 +634,60 @@ function WorkDialog({
           <div>
             <div className="flex items-center justify-between mb-2">
               <div>
-                <div className="text-sm font-semibold">Авторы и доли</div>
+                <div className="text-sm font-semibold">{t.publishing.dialog.field_writers}</div>
                 <div className="text-xs text-muted-foreground">
-                  Сумма должна быть 100% — сейчас{" "}
+                  Total:{" "}
                   <span className={shareOk ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>{totalShare}%</span>
                 </div>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={addWriter}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Добавить автора
+                <Plus className="h-3.5 w-3.5 mr-1" /> {t.publishing.dialog.add_writer}
               </Button>
             </div>
             <div className="space-y-2">
               {form.writers.map((w, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-end p-2 rounded border border-border/40 bg-background/30">
-                  <div className="col-span-5 space-y-1">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Имя</Label>
-                    <Input
-                      value={w.name}
-                      onChange={(e) => updateWriter(i, { name: e.target.value })}
-                      placeholder="Имя автора"
-                    />
-                  </div>
-                  <div className="col-span-3 space-y-1">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Роль</Label>
-                    <Select value={w.role} onValueChange={(v) => updateWriter(i, { role: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ROLE_OPTIONS.map((r) => (
-                          <SelectItem key={r.v} value={r.v}>{r.l}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Доля %</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.01"
-                      value={w.share}
-                      onChange={(e) => updateWriter(i, { share: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-[10px] uppercase text-muted-foreground">CAE/IPI</Label>
-                    <div className="flex gap-1">
-                      <Input
-                        value={w.caeIpi ?? ""}
-                        onChange={(e) => updateWriter(i, { caeIpi: e.target.value })}
-                        placeholder="00000000000"
-                      />
-                      {form.writers.length > 1 && (
-                        <Button
-                          type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0"
-                          aria-label="Удалить автора"
-                          onClick={() => removeWriter(i)}
-                        >
-                          <RemoveIcon className="h-3.5 w-3.5 text-rose-400" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center rounded-lg border border-border/30 bg-background/20 p-2">
+                  <Input
+                    placeholder={t.publishing.dialog.writer_name_placeholder}
+                    value={w.name}
+                    onChange={(e) => updateWriter(i, { name: e.target.value })}
+                    className="h-8 text-sm bg-background/40"
+                  />
+                  <Select value={w.role} onValueChange={(v) => updateWriter(i, { role: v })}>
+                    <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((r) => (
+                        <SelectItem key={r.v} value={r.v}>{r.l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    placeholder="%"
+                    value={w.share}
+                    onChange={(e) => updateWriter(i, { share: parseFloat(e.target.value) || 0 })}
+                    className="h-8 w-[70px] text-xs text-right bg-background/40"
+                  />
+                  <Input
+                    placeholder={t.publishing.dialog.writer_cae_placeholder}
+                    value={w.caeIpi ?? ""}
+                    onChange={(e) => updateWriter(i, { caeIpi: e.target.value })}
+                    className="h-8 w-[120px] text-xs font-mono bg-background/40"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-rose-400"
+                    disabled={form.writers.length === 1}
+                    onClick={() => removeWriter(i)}
+                    title={t.publishing.dialog.remove_writer}
+                  >
+                    <RemoveIcon className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
@@ -679,46 +695,12 @@ function WorkDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Отмена</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t.publishing.dialog.cancel}</Button>
           <Button onClick={save} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Сохранить
+            {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{t.publishing.dialog.saving}</> : t.publishing.dialog.save}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ─── KPI tile ───────────────────────────────────────────────────────────────
-
-function KpiTile({
-  icon: Icon, label, value, color,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: number | string;
-  color: "cyan" | "emerald" | "amber" | "rose" | "primary";
-}) {
-  const cfg = {
-    cyan:    { bg: "bg-cyan-500/10",    border: "border-cyan-500/25",    text: "text-cyan-300" },
-    emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/25", text: "text-emerald-300" },
-    amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/25",   text: "text-amber-300" },
-    rose:    { bg: "bg-rose-500/10",    border: "border-rose-500/25",    text: "text-rose-300" },
-    primary: { bg: "bg-primary/10",     border: "border-primary/25",     text: "text-primary" },
-  }[color];
-
-  return (
-    <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4 flex items-center gap-3`}>
-      <span className={`h-10 w-10 rounded-lg bg-black/30 border ${cfg.border} flex items-center justify-center`}>
-        <Icon className={`h-5 w-5 ${cfg.text}`} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wider text-white/55 truncate">{label}</p>
-        <p className="text-[22px] font-bold tabular-nums leading-tight mt-0.5">
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </p>
-      </div>
-    </div>
   );
 }

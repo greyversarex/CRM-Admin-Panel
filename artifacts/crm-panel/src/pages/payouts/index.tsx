@@ -11,9 +11,11 @@ import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download } from "lu
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { exportPayoutsCsv } from "@/lib/export-payouts";
+import { useLang } from "@/lib/i18n";
 
 export default function Payouts() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -48,15 +50,15 @@ export default function Payouts() {
         .map(([cur, amt]) => `${amt.toFixed(2)} ${cur}`)
         .join(", ");
       toast({
-        title: "Выплаты выгружены",
+        title: t.payouts.export_success,
         description: res.count === 0
-          ? "За выбранный период заявок не найдено."
-          : `Записей: ${res.count}. Сумма: ${sums || "—"}.`,
+          ? t.payouts.export_no_records
+          : t.payouts.export_records.replace("{n}", String(res.count)).replace("{sum}", sums || "—"),
       });
     } catch (e: any) {
       toast({
-        title: "Не удалось выгрузить выплаты",
-        description: e?.message ?? "Неизвестная ошибка",
+        title: t.payouts.export_error,
+        description: e?.message ?? t.payouts.unknown_error,
         variant: "destructive",
       });
     } finally {
@@ -64,29 +66,27 @@ export default function Payouts() {
     }
   };
 
-  const titleByRole = isAdminLike ? "Заявки на выплату" : "Мои выплаты";
-  const subtitleByRole = isAdminLike
-    ? "Review and process payout requests from artists and labels."
-    : "Твои заявки на выплату и их статусы.";
+  const title    = isAdminLike ? t.payouts.title_admin : t.payouts.title_other;
+  const subtitle = isAdminLike ? t.payouts.subtitle_admin : t.payouts.subtitle_other;
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
-            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+            <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">с</span>
+              <span className="text-muted-foreground">{t.payouts.from}</span>
               <Input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 className="h-9 w-[140px] bg-background/50"
               />
-              <span className="text-muted-foreground">по</span>
+              <span className="text-muted-foreground">{t.payouts.to}</span>
               <Input
                 type="date"
                 value={toDate}
@@ -96,11 +96,11 @@ export default function Payouts() {
             </div>
             <Button variant="outline" onClick={onExport} disabled={exporting}>
               <Download className="mr-2 h-4 w-4" />
-              {exporting ? `Выгрузка… ${exportLoaded}` : "Экспорт CSV"}
+              {exporting ? `${t.payouts.exporting} ${exportLoaded}` : t.payouts.export_csv}
             </Button>
             {!isAdminLike && (
-              <Button onClick={() => toast({ title: "Заявка на выплату", description: "Форма откроется после привязки банковских реквизитов в профиле." })}>
-                <Plus className="mr-2 h-4 w-4" /> Запросить выплату
+              <Button onClick={() => toast({ title: t.payouts.request_payout, description: t.payouts.request_payout_desc })}>
+                <Plus className="mr-2 h-4 w-4" /> {t.payouts.request_payout}
               </Button>
             )}
           </div>
@@ -113,7 +113,7 @@ export default function Payouts() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search requests..."
+                  placeholder={t.payouts.search_placeholder}
                   className="pl-8 bg-background/50 border-border"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -129,12 +129,12 @@ export default function Payouts() {
               <TableHeader className="bg-background/50 sticky top-0 z-10">
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead className="w-[40px]"></TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Date Requested</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t.payouts.table.entity}</TableHead>
+                  <TableHead>{t.payouts.table.amount}</TableHead>
+                  <TableHead>{t.payouts.table.method}</TableHead>
+                  <TableHead>{t.payouts.table.date_requested}</TableHead>
+                  <TableHead>{t.payouts.table.status}</TableHead>
+                  <TableHead className="text-right">{t.payouts.table.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -153,7 +153,7 @@ export default function Payouts() {
                 ) : payoutsData?.data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-32 text-muted-foreground">
-                      No payout requests found.
+                      {t.payouts.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -166,7 +166,9 @@ export default function Payouts() {
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-foreground">{payout.artistName || payout.labelName}</div>
-                        <div className="text-xs text-muted-foreground">{payout.artistId ? 'Artist' : 'Label'}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {payout.artistId ? t.payouts.artist_type : t.payouts.label_type}
+                        </div>
                       </TableCell>
                       <TableCell className="font-bold text-foreground">
                         {payout.currency} {payout.amount.toLocaleString()}
@@ -183,16 +185,16 @@ export default function Payouts() {
                       <TableCell className="text-right">
                         {payout.status === 'pending' && isAdminLike && (
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" title="Approve" aria-label="Одобрить выплату">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" title={t.common.approve} aria-label={t.common.approve}>
                               <CheckCircle className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" title="Reject" aria-label="Отклонить выплату">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" title={t.common.reject} aria-label={t.common.reject}>
                               <XCircle className="h-4 w-4" />
                             </Button>
                           </div>
                         )}
                         {payout.status === 'pending' && !isAdminLike && (
-                          <span className="text-[10px] text-amber-300">Ожидает рассмотрения</span>
+                          <span className="text-[10px] text-amber-300">{t.payouts.awaiting_review}</span>
                         )}
                       </TableCell>
                     </TableRow>

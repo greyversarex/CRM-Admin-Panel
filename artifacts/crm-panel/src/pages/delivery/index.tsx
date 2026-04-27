@@ -9,35 +9,41 @@ import { Button } from "@/components/ui/button";
 import { Search, Send, RefreshCw, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLang } from "@/lib/i18n";
 
 export default function Delivery() {
+  const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
-  
-  const { data: deliveryData, isLoading } = useListDeliveries({ 
-    limit: 50 
+
+  const { data: deliveryData, isLoading } = useListDeliveries({
+    limit: 50
   });
+
+  const filtered = (deliveryData?.data ?? []).filter(d =>
+    !searchQuery || d.releaseName?.toLowerCase().includes(searchQuery.toLowerCase()) || d.target?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Delivery Queue</h1>
-            <p className="text-muted-foreground mt-1">Monitor DDEX deliveries to DSP platforms.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{t.delivery.title}</h1>
+            <p className="text-muted-foreground mt-1">{t.delivery.subtitle}</p>
           </div>
           <Button>
             <Send className="mr-2 h-4 w-4" />
-            New Delivery
+            {t.delivery.new_delivery}
           </Button>
         </div>
 
         <Card className="flex-1 bg-card/50 backdrop-blur border-border/50 flex flex-col overflow-hidden">
           <CardHeader className="pb-3 border-b border-border/50">
-            <div className="flex items-center gap-2 w-full sm:w-80">
-              <Search className="absolute left-6 top-[138px] h-4 w-4 text-muted-foreground z-10" />
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search deliveries..."
+                placeholder={t.delivery.search_placeholder}
                 className="pl-8 bg-background/50 border-border"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -48,12 +54,12 @@ export default function Delivery() {
             <Table>
               <TableHeader className="bg-background/50 sticky top-0 z-10">
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead>Release</TableHead>
-                  <TableHead>Target DSP</TableHead>
-                  <TableHead>DDEX Version</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t.delivery.table.release}</TableHead>
+                  <TableHead>{t.delivery.table.target_dsp}</TableHead>
+                  <TableHead>{t.delivery.table.ddex_version}</TableHead>
+                  <TableHead>{t.delivery.table.date}</TableHead>
+                  <TableHead>{t.delivery.table.status}</TableHead>
+                  <TableHead className="text-right">{t.delivery.table.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -68,14 +74,14 @@ export default function Delivery() {
                       <TableCell className="text-right"><Skeleton className="h-8 w-8 rounded-md ml-auto" /></TableCell>
                     </TableRow>
                   ))
-                ) : deliveryData?.data.length === 0 ? (
+                ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center h-32 text-muted-foreground">
-                      No deliveries found.
+                      {t.delivery.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  deliveryData?.data.map((delivery) => (
+                  filtered.map((delivery) => (
                     <TableRow key={delivery.id} className="border-border/50 hover:bg-accent/30 cursor-pointer">
                       <TableCell className="font-medium text-foreground">{delivery.releaseName}</TableCell>
                       <TableCell className="text-muted-foreground capitalize">{delivery.target}</TableCell>
@@ -99,7 +105,7 @@ export default function Delivery() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" title="Retry Delivery">
+                        <Button variant="ghost" size="icon" title={t.delivery.retry}>
                           <RefreshCw className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                         </Button>
                       </TableCell>

@@ -1,7 +1,4 @@
-// ─── Admin: KYC Review (Task #6) ──────────────────────────────────────────
-// Слева — список юзеров с pending-статусом KYC. Справа (когда выбран) —
-// просмотр документов: открыть, одобрить/отклонить отдельный документ,
-// глобально approve/reject пользователя.
+// ─── Admin: KYC Review ────────────────────────────────────────────────────
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ShieldCheck, ShieldAlert, FileText, ExternalLink, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 type KycStatus = "not_started" | "pending" | "approved" | "rejected";
 
@@ -39,29 +37,17 @@ interface KycDoc {
 }
 
 const KIND_LABEL: Record<string, string> = {
-  passport: "Паспорт",
-  id_card: "ID-карта",
-  company_reg: "Свидетельство о регистрации",
-  tax_certificate: "Налоговая справка",
-  bank_statement: "Банковская выписка",
-  other: "Другое",
-};
-
-const DOC_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  pending:  { label: "На проверке", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  approved: { label: "Одобрен",    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  rejected: { label: "Отклонён",   cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
-};
-
-const USER_STATUS_BADGE: Record<KycStatus, { label: string; cls: string }> = {
-  not_started: { label: "Не начат", cls: "bg-muted/40 text-muted-foreground border-border" },
-  pending:     { label: "На проверке", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  approved:    { label: "Одобрен", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  rejected:    { label: "Отклонён", cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
+  passport: "Passport",
+  id_card: "ID Card",
+  company_reg: "Company Registration",
+  tax_certificate: "Tax Certificate",
+  bank_statement: "Bank Statement",
+  other: "Other",
 };
 
 export default function AdminKyc() {
   const { toast } = useToast();
+  const { t } = useLang();
   const [filter, setFilter] = useState<KycStatus>("pending");
   const [users, setUsers]   = useState<KycUser[] | null>(null);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -72,9 +58,21 @@ export default function AdminKyc() {
   const [busyDocId, setBusyDocId] = useState<number | null>(null);
   const [busyUserAction, setBusyUserAction] = useState<"approve" | "reject" | null>(null);
 
-  // reject dialog (для документа или для юзера)
   const [rejectTarget, setRejectTarget] = useState<{ kind: "doc" | "user"; id: number } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  const DOC_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+    pending:  { label: t.kyc.approve_doc,  cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+    approved: { label: t.common.approve,   cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+    rejected: { label: t.common.reject,    cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
+  };
+
+  const USER_STATUS_BADGE: Record<KycStatus, { label: string; cls: string }> = {
+    not_started: { label: "—",                cls: "bg-muted/40 text-muted-foreground border-border" },
+    pending:     { label: t.kyc.approve_doc,  cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+    approved:    { label: t.common.approve,   cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+    rejected:    { label: t.common.reject,    cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
+  };
 
   async function loadUsers() {
     setLoadingUsers(true);
@@ -84,7 +82,7 @@ export default function AdminKyc() {
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setUsers(j.data ?? []);
     } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+      toast({ title: t.kyc.toast.error, description: err.message, variant: "destructive" });
       setUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -100,7 +98,7 @@ export default function AdminKyc() {
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setDocs(j.data ?? []);
     } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+      toast({ title: t.kyc.toast.error, description: err.message, variant: "destructive" });
       setDocs([]);
     } finally {
       setLoadingDocs(false);
@@ -122,10 +120,10 @@ export default function AdminKyc() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
-      toast({ title: "Документ одобрен" });
+      toast({ title: t.kyc.toast.approved_doc });
       if (selected) await loadDocs(selected.id);
     } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+      toast({ title: t.kyc.toast.error, description: err.message, variant: "destructive" });
     } finally {
       setBusyDocId(null);
     }
@@ -134,7 +132,7 @@ export default function AdminKyc() {
   async function submitReject() {
     if (!rejectTarget) return;
     if (rejectReason.trim().length < 3) {
-      toast({ title: "Укажи причину", description: "Минимум 3 символа", variant: "destructive" });
+      toast({ title: t.kyc.toast.reason_required, description: t.kyc.toast.min_chars, variant: "destructive" });
       return;
     }
     const url = rejectTarget.kind === "doc"
@@ -150,14 +148,14 @@ export default function AdminKyc() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "Отклонено" });
+      toast({ title: t.kyc.toast.rejected });
       setRejectTarget(null); setRejectReason("");
       if (selected) {
         await loadDocs(selected.id);
         if (rejectTarget.kind === "user") { await loadUsers(); setSelected(null); }
       }
     } catch (err: any) {
-      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+      toast({ title: t.kyc.toast.error, description: err.message, variant: "destructive" });
     } finally {
       setBusyDocId(null);
       setBusyUserAction(null);
@@ -173,11 +171,11 @@ export default function AdminKyc() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      toast({ title: "KYC пользователя одобрен" });
+      toast({ title: t.kyc.toast.approved_kyc });
       await loadUsers();
       setSelected(null);
     } catch (err: any) {
-      toast({ title: "Не удалось одобрить", description: err.message, variant: "destructive" });
+      toast({ title: t.kyc.toast.approve_error, description: err.message, variant: "destructive" });
     } finally {
       setBusyUserAction(null);
     }
@@ -188,8 +186,8 @@ export default function AdminKyc() {
       <div className="flex flex-col gap-6">
         <div className="relative pl-4">
           <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)]" />
-          <h1 className="text-2xl font-bold">KYC верификация</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">Документы пользователей, ожидающие проверки</p>
+          <h1 className="text-2xl font-bold">{t.kyc.title}</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{t.kyc.subtitle}</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
@@ -198,20 +196,20 @@ export default function AdminKyc() {
             <CardHeader className="pb-3">
               <Tabs value={filter} onValueChange={(v) => { setFilter(v as KycStatus); setSelected(null); setDocs(null); }}>
                 <TabsList className="w-full">
-                  <TabsTrigger value="pending" className="flex-1">На проверке</TabsTrigger>
-                  <TabsTrigger value="approved" className="flex-1">Одобрены</TabsTrigger>
-                  <TabsTrigger value="rejected" className="flex-1">Отклонены</TabsTrigger>
+                  <TabsTrigger value="pending" className="flex-1">{t.common.pending}</TabsTrigger>
+                  <TabsTrigger value="approved" className="flex-1">{t.common.approve}</TabsTrigger>
+                  <TabsTrigger value="rejected" className="flex-1">{t.common.reject}</TabsTrigger>
                 </TabsList>
               </Tabs>
             </CardHeader>
             <CardContent className="p-0 max-h-[70vh] overflow-y-auto">
               {loadingUsers && (
                 <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               )}
               {users && users.length === 0 && !loadingUsers && (
-                <div className="p-8 text-center text-sm text-muted-foreground">Пусто</div>
+                <div className="p-8 text-center text-sm text-muted-foreground">—</div>
               )}
               {users && users.map((u) => (
                 <button
@@ -225,7 +223,7 @@ export default function AdminKyc() {
                     <div className="text-sm font-medium truncate">{u.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                     <div className="text-[10px] text-muted-foreground/70 mt-1">
-                      {u.docs.total} док. · {u.docs.pending} pending · {u.docs.approved} ok · {u.docs.rejected} rej
+                      {u.docs.total} docs · {u.docs.pending} pending · {u.docs.approved} ok · {u.docs.rejected} rej
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -239,7 +237,7 @@ export default function AdminKyc() {
             <Card className="card-surface no-lift border-border/60">
               <CardContent className="p-12 text-center text-muted-foreground">
                 <ShieldCheck className="h-10 w-10 mx-auto opacity-30 mb-3" />
-                <p className="text-sm">Выбери пользователя слева, чтобы просмотреть документы</p>
+                <p className="text-sm">{t.kyc.select_user}</p>
               </CardContent>
             </Card>
           ) : (
@@ -263,7 +261,7 @@ export default function AdminKyc() {
                     onClick={approveUser}
                   >
                     {busyUserAction === "approve" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1" />}
-                    Одобрить пользователя
+                    {t.kyc.approve_kyc}
                   </Button>
                   <Button
                     size="sm"
@@ -272,18 +270,18 @@ export default function AdminKyc() {
                     disabled={busyUserAction !== null}
                     onClick={() => { setRejectTarget({ kind: "user", id: selected.id }); setRejectReason(""); }}
                   >
-                    <ShieldAlert className="h-3.5 w-3.5 mr-1" /> Отклонить
+                    <ShieldAlert className="h-3.5 w-3.5 mr-1" /> {t.kyc.reject_doc}
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {loadingDocs && (
                   <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Загрузка документов…
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   </div>
                 )}
                 {docs && docs.length === 0 && !loadingDocs && (
-                  <div className="p-8 text-center text-muted-foreground text-sm">Документов нет</div>
+                  <div className="p-8 text-center text-muted-foreground text-sm">—</div>
                 )}
                 {docs && docs.length > 0 && (
                   <div className="space-y-3">
@@ -300,10 +298,10 @@ export default function AdminKyc() {
                                 <div className="text-sm font-medium">{KIND_LABEL[d.kind] ?? d.kind}</div>
                                 <div className="text-xs text-muted-foreground truncate">{d.originalFilename}</div>
                                 <div className="text-[10px] text-muted-foreground/70 mt-0.5">
-                                  {d.mimeType} · {sizeKb} KB · {new Date(d.uploadedAt).toLocaleString("ru-RU")}
+                                  {d.mimeType} · {sizeKb} KB · {new Date(d.uploadedAt).toLocaleString()}
                                 </div>
                                 {d.status === "rejected" && d.rejectionReason && (
-                                  <div className="text-[11px] text-rose-400/80 mt-1">Причина: {d.rejectionReason}</div>
+                                  <div className="text-[11px] text-rose-400/80 mt-1">{d.rejectionReason}</div>
                                 )}
                               </div>
                             </div>
@@ -316,7 +314,7 @@ export default function AdminKyc() {
                           <div className="flex justify-end gap-2 mt-3">
                             <Button asChild size="sm" variant="outline">
                               <a href={viewUrl} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-3.5 w-3.5 mr-1" /> Открыть
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" /> {t.kyc.view_doc}
                               </a>
                             </Button>
                             <Button
@@ -326,7 +324,7 @@ export default function AdminKyc() {
                               disabled={busyDocId === d.id || d.status === "approved"}
                               onClick={() => approveDoc(d.id)}
                             >
-                              {busyDocId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Одобрить</>}
+                              {busyDocId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> {t.kyc.approve_doc}</>}
                             </Button>
                             <Button
                               size="sm"
@@ -335,7 +333,7 @@ export default function AdminKyc() {
                               disabled={busyDocId === d.id || d.status === "rejected"}
                               onClick={() => { setRejectTarget({ kind: "doc", id: d.id }); setRejectReason(""); }}
                             >
-                              <XCircle className="h-3.5 w-3.5 mr-1" /> Отклонить
+                              <XCircle className="h-3.5 w-3.5 mr-1" /> {t.kyc.reject_doc}
                             </Button>
                           </div>
                         </div>
@@ -349,30 +347,30 @@ export default function AdminKyc() {
         </div>
       </div>
 
-      {/* Reject dialog (общий для doc/user) */}
+      {/* Reject dialog */}
       <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{rejectTarget?.kind === "doc" ? "Отклонить документ" : "Отклонить KYC пользователя"}</DialogTitle>
-            <DialogDescription>Укажи причину — будет показана пользователю.</DialogDescription>
+            <DialogTitle>{rejectTarget?.kind === "doc" ? t.kyc.reject_dialog.title : t.kyc.reject_doc}</DialogTitle>
+            <DialogDescription>{t.kyc.reject_dialog.placeholder}</DialogDescription>
           </DialogHeader>
           <textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             maxLength={500}
-            placeholder="Например: документ нечитабелен, не виден срок действия…"
+            placeholder={t.kyc.reject_dialog.placeholder}
             className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md bg-background/50 border border-border focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>{t.kyc.reject_dialog.cancel}</Button>
             <Button
               variant="destructive"
               disabled={rejectReason.trim().length < 3 || busyDocId !== null || busyUserAction !== null}
               onClick={submitReject}
             >
               {(busyDocId !== null || busyUserAction === "reject")
-                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Отклонение…</>
-                : "Отклонить"}
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /></>
+                : t.kyc.reject_dialog.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>

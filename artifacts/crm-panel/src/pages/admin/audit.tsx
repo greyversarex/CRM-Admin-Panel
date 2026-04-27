@@ -12,6 +12,7 @@ import {
   Loader2, Search, Eye, ShieldCheck, Plus, Pencil, Trash2, LogIn,
   CheckCircle2, XCircle, Send, Filter, RotateCcw, AlertTriangle,
 } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 type AuditAction = "create" | "update" | "delete" | "login" | "approve" | "reject" | "deliver";
 
@@ -82,11 +83,12 @@ function fmtValue(v: unknown): string {
 }
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "medium" });
+  return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" });
 }
 
 export default function AdminAudit() {
   const { toast } = useToast();
+  const { t } = useLang();
 
   // ─── filters ────────────────────────────────────────────────────────────
   const [entityType, setEntityType] = useState<string>("");
@@ -150,7 +152,7 @@ export default function AdminAudit() {
       setTotal(j.pagination?.total ?? 0);
     } catch (err: any) {
       if (myReq !== reqIdRef.current) return;
-      toast({ title: "Ошибка загрузки", description: err.message, variant: "destructive" });
+      toast({ title: t.audit.title, description: err.message, variant: "destructive" });
       setRows([]);
       setTotal(0);
     } finally {
@@ -186,11 +188,9 @@ export default function AdminAudit() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShieldCheck className="h-6 w-6 text-blue-400" />
-              Аудит-лог
+              {t.audit.title}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Журнал всех изменений: кто, когда и что сделал. Финансовые операции, релизы, KYC, пользователи.
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">{t.audit.subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -204,7 +204,7 @@ export default function AdminAudit() {
             </Button>
             <Button variant="outline" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
               <RotateCcw className="mr-2 h-4 w-4" />
-              Сброс
+              {t.audit.reset}
             </Button>
           </div>
         </div>
@@ -212,19 +212,19 @@ export default function AdminAudit() {
         {/* Filters */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Фильтры</CardTitle>
+            <CardTitle className="text-base">{t.common.filter}</CardTitle>
             <CardDescription className="text-xs">
-              Найдено: <span className="font-medium text-foreground">{total}</span>
+              {total}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Сущность</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_entity}</label>
                 <Select value={entityType || "__all__"} onValueChange={(v) => { setEntityType(v === "__all__" ? "" : v); setPage(1); }}>
-                  <SelectTrigger data-testid="select-entity-type"><SelectValue placeholder="Все" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-entity-type"><SelectValue placeholder={t.audit.all} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">Все</SelectItem>
+                    <SelectItem value="__all__">{t.audit.all}</SelectItem>
                     {visibleEntityTypes.map((et) => (
                       <SelectItem key={et} value={et}>{ENTITY_LABEL[et] ?? et}</SelectItem>
                     ))}
@@ -233,11 +233,11 @@ export default function AdminAudit() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Действие</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_action}</label>
                 <Select value={action || "__all__"} onValueChange={(v) => { setAction(v === "__all__" ? "" : v); setPage(1); }}>
-                  <SelectTrigger data-testid="select-action"><SelectValue placeholder="Все" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-action"><SelectValue placeholder={t.audit.all} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">Все</SelectItem>
+                    <SelectItem value="__all__">{t.audit.all}</SelectItem>
                     {(facets?.actions ?? []).map((a) => (
                       <SelectItem key={a} value={a}>{ACTION_META[a]?.label ?? a}</SelectItem>
                     ))}
@@ -246,11 +246,11 @@ export default function AdminAudit() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Пользователь</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_user}</label>
                 <Select value={userId || "__all__"} onValueChange={(v) => { setUserId(v === "__all__" ? "" : v); setPage(1); }}>
-                  <SelectTrigger data-testid="select-user"><SelectValue placeholder="Все" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-user"><SelectValue placeholder={t.audit.all} /></SelectTrigger>
                   <SelectContent className="max-h-72">
-                    <SelectItem value="__all__">Все</SelectItem>
+                    <SelectItem value="__all__">{t.audit.all}</SelectItem>
                     {(facets?.users ?? []).map((u) => (
                       <SelectItem key={u.id} value={String(u.id)}>{u.name} · {u.email}</SelectItem>
                     ))}
@@ -259,11 +259,11 @@ export default function AdminAudit() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">ID объекта</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_id}</label>
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                   <Input
-                    type="number" inputMode="numeric" placeholder="напр. 42"
+                    type="number" inputMode="numeric" placeholder={t.audit.filter_id_placeholder}
                     value={entityId} onChange={(e) => { setEntityId(e.target.value); setPage(1); }}
                     className="pl-7" data-testid="input-entity-id"
                   />
@@ -271,7 +271,7 @@ export default function AdminAudit() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">С даты</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_from}</label>
                 <Input
                   type="datetime-local" value={from}
                   onChange={(e) => { setFrom(e.target.value); setPage(1); }}
@@ -280,7 +280,7 @@ export default function AdminAudit() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">По дату</label>
+                <label className="text-xs text-muted-foreground mb-1 block">{t.audit.filter_to}</label>
                 <Input
                   type="datetime-local" value={to}
                   onChange={(e) => { setTo(e.target.value); setPage(1); }}
@@ -301,18 +301,18 @@ export default function AdminAudit() {
             ) : rows && rows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <AlertTriangle className="h-8 w-8 mb-2" />
-                <p className="text-sm">По заданным фильтрам ничего не найдено</p>
+                <p className="text-sm">{t.audit.empty}</p>
               </div>
             ) : (
               <Table>
                 <TableHeader className="bg-background/30">
                   <TableRow>
-                    <TableHead className="w-[170px]">Время</TableHead>
-                    <TableHead>Пользователь</TableHead>
-                    <TableHead className="w-[140px]">Действие</TableHead>
-                    <TableHead>Объект</TableHead>
-                    <TableHead className="w-[120px]">IP</TableHead>
-                    <TableHead className="w-[80px] text-right">Детали</TableHead>
+                    <TableHead className="w-[170px]">{t.audit.table.when}</TableHead>
+                    <TableHead>{t.audit.table.who}</TableHead>
+                    <TableHead className="w-[140px]">{t.audit.table.action}</TableHead>
+                    <TableHead>{t.audit.table.entity}</TableHead>
+                    <TableHead className="w-[120px]">{t.audit.table.ip}</TableHead>
+                    <TableHead className="w-[80px] text-right">{t.audit.table.changes}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -359,16 +359,16 @@ export default function AdminAudit() {
         {total > PAGE_SIZE && (
           <div className="flex items-center justify-between text-sm">
             <div className="text-muted-foreground">
-              Стр. {page} из {totalPages} · всего записей: {total}
+              {t.splits.page_of.replace("{p}", String(page)).replace("{t}", String(totalPages))} · {total}
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" disabled={page <= 1 || loading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))} data-testid="button-prev-page">
-                Назад
+                {t.splits.previous}
               </Button>
               <Button size="sm" variant="outline" disabled={page >= totalPages || loading}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))} data-testid="button-next-page">
-                Вперёд
+                {t.splits.next}
               </Button>
             </div>
           </div>
@@ -417,14 +417,14 @@ export default function AdminAudit() {
                 {/* Diff (если есть) */}
                 {detail.diff && detail.diff.length > 0 ? (
                   <div>
-                    <div className="text-sm font-semibold mb-2">Изменения</div>
+                    <div className="text-sm font-semibold mb-2">{t.audit.table.changes}</div>
                     <div className="overflow-hidden rounded-md border border-border">
                       <Table>
                         <TableHeader className="bg-muted/30">
                           <TableRow>
-                            <TableHead className="w-[180px]">Поле</TableHead>
-                            <TableHead>Было</TableHead>
-                            <TableHead>Стало</TableHead>
+                            <TableHead className="w-[180px]">{t.audit.table.changes}</TableHead>
+                            <TableHead>{t.audit.before}</TableHead>
+                            <TableHead>{t.audit.after}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -445,13 +445,13 @@ export default function AdminAudit() {
                 {(detail.before || detail.after) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <div className="text-sm font-semibold mb-2 text-rose-300">Состояние до</div>
+                      <div className="text-sm font-semibold mb-2 text-rose-300">{t.audit.before}</div>
                       <pre className="text-xs font-mono bg-rose-500/5 border border-rose-500/20 rounded-md p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                         {detail.before ? JSON.stringify(detail.before, null, 2) : "—"}
                       </pre>
                     </div>
                     <div>
-                      <div className="text-sm font-semibold mb-2 text-emerald-300">Состояние после</div>
+                      <div className="text-sm font-semibold mb-2 text-emerald-300">{t.audit.after}</div>
                       <pre className="text-xs font-mono bg-emerald-500/5 border border-emerald-500/20 rounded-md p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                         {detail.after ? JSON.stringify(detail.after, null, 2) : "—"}
                       </pre>

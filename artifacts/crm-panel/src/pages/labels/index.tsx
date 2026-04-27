@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Search, Plus, Filter, Building2, MoreHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useLang } from "@/lib/i18n";
 
 export default function Labels() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
@@ -22,26 +24,25 @@ export default function Labels() {
     search: searchQuery || undefined,
     limit: 50,
   });
-  // Label sees only itself
   const labelsData = isLabel
     ? { ...labelsDataRaw, data: (labelsDataRaw?.data ?? []).filter(l => l.id === user?.labelId) }
     : labelsDataRaw;
 
-  const titleByRole = isAdminLike ? "Labels" : "Мой лейбл";
-  const subtitleByRole = isAdminLike ? "Manage partner labels and imprints." : "Твой профиль лейбла.";
+  const title = isAdminLike ? t.labels.title_admin : t.labels.title_label;
+  const subtitle = isAdminLike ? t.labels.subtitle_admin : t.labels.subtitle_label;
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
-            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+            <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
           {isAdminLike && (
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              New Label
+              {t.labels.new_label}
             </Button>
           )}
         </div>
@@ -54,7 +55,7 @@ export default function Labels() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Search labels..."
+                    placeholder={t.labels.search_placeholder}
                     className="pl-8 bg-background/50 border-border"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -70,13 +71,13 @@ export default function Labels() {
             <Table>
               <TableHeader className="bg-background/50 sticky top-0 z-10">
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className="w-[60px]">Logo</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead className="text-right">Artists</TableHead>
-                  <TableHead className="text-right">Releases</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[60px]">{t.labels.table.logo}</TableHead>
+                  <TableHead>{t.labels.table.name}</TableHead>
+                  <TableHead>{t.labels.table.country}</TableHead>
+                  <TableHead className="text-right">{t.labels.table.artists}</TableHead>
+                  <TableHead className="text-right">{t.labels.table.releases}</TableHead>
+                  <TableHead>{t.labels.table.status}</TableHead>
+                  <TableHead className="text-right">{t.labels.table.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -95,7 +96,7 @@ export default function Labels() {
                 ) : labelsData?.data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-32 text-muted-foreground">
-                      No labels found matching your search.
+                      {t.labels.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -125,8 +126,8 @@ export default function Labels() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem>Edit Label</DropdownMenuItem>
+                            <DropdownMenuLabel>{t.labels.actions}</DropdownMenuLabel>
+                            <DropdownMenuItem>{t.labels.edit_label}</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

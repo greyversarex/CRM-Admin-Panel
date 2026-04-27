@@ -12,9 +12,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
+import { useLang } from "@/lib/i18n";
 
 export default function Artists() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
   const [, setLocation] = useLocation();
 
@@ -27,30 +29,25 @@ export default function Artists() {
     limit: 50,
     ...(isLabel && user?.labelId ? { label_id: user.labelId } : {}),
   });
-  // Artist sees only themselves
   const artistsData = isArtist
     ? { ...artistsDataRaw, data: (artistsDataRaw?.data ?? []).filter(a => a.id === user?.artistId) }
     : artistsDataRaw;
 
-  const titleByRole = isAdminLike ? "Artists"
-    : isLabel  ? "Артисты лейбла"
-    :            "Мой артист-профиль";
-  const subtitleByRole = isAdminLike ? "Manage artist roster and profiles."
-    : isLabel  ? "Артисты твоего ростера."
-    :            "Твоя страница артиста.";
+  const title = isAdminLike ? t.artists.title_admin : isLabel ? t.artists.title_label : t.artists.title_artist;
+  const subtitle = isAdminLike ? t.artists.subtitle_admin : isLabel ? t.artists.subtitle_label : t.artists.subtitle_artist;
 
   return (
     <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
-            <p className="text-muted-foreground mt-1">{subtitleByRole}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+            <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
           {(isAdminLike || isLabel) && (
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              {isLabel ? "Подписать артиста" : "New Artist"}
+              {isLabel ? t.artists.sign_artist : t.artists.new_artist}
             </Button>
           )}
         </div>
@@ -63,7 +60,7 @@ export default function Artists() {
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Search artists..."
+                    placeholder={t.artists.search_placeholder}
                     className="pl-8 bg-background/50 border-border"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -79,13 +76,13 @@ export default function Artists() {
             <Table>
               <TableHeader className="bg-background/50 sticky top-0 z-10">
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className="w-[60px]">Artist</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Genre</TableHead>
-                  <TableHead>Releases</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[60px]">{t.artists.table.artist}</TableHead>
+                  <TableHead>{t.artists.table.name}</TableHead>
+                  <TableHead>{t.artists.table.label}</TableHead>
+                  <TableHead>{t.artists.table.genre}</TableHead>
+                  <TableHead>{t.artists.table.releases}</TableHead>
+                  <TableHead>{t.artists.table.status}</TableHead>
+                  <TableHead className="text-right">{t.artists.table.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -104,13 +101,13 @@ export default function Artists() {
                 ) : artistsData?.data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-32 text-muted-foreground">
-                      No artists found matching your search.
+                      {t.artists.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
                   artistsData?.data.map((artist) => (
-                    <TableRow 
-                      key={artist.id} 
+                    <TableRow
+                      key={artist.id}
                       className="border-border/50 hover:bg-accent/30 cursor-pointer transition-colors"
                     >
                       <TableCell>
@@ -122,7 +119,7 @@ export default function Artists() {
                         </Avatar>
                       </TableCell>
                       <TableCell className="font-medium text-foreground">{artist.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{artist.labelName || 'Independent'}</TableCell>
+                      <TableCell className="text-muted-foreground">{artist.labelName || t.artists.independent}</TableCell>
                       <TableCell className="text-muted-foreground">{artist.genre || 'N/A'}</TableCell>
                       <TableCell className="text-muted-foreground">{artist.totalReleases}</TableCell>
                       <TableCell>
@@ -136,10 +133,10 @@ export default function Artists() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuLabel>{t.artists.actions}</DropdownMenuLabel>
                             <DropdownMenuItem>
                               <FileEdit className="mr-2 h-4 w-4" />
-                              Edit Profile
+                              {t.artists.edit_profile}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
