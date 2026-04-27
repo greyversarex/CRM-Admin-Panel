@@ -1,6 +1,7 @@
 import { SidebarNav } from "./sidebar-nav";
 import { WaveBackground } from "./wave-background";
 import { NotificationsPopover } from "./notifications-popover";
+import { ImpersonateDialog } from "./impersonate-dialog";
 import {
   Search, Globe, ChevronDown,
   User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut,
@@ -31,6 +32,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [stopBusy, setStopBusy] = useState(false);
+  const [impersonateOpen, setImpersonateOpen] = useState(false);
 
   const handleStopImpersonating = async () => {
     setStopBusy(true);
@@ -181,16 +183,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       </span>
                       Оплата и налоги
                     </DropdownMenuItem>
-                    {user?.role === "admin" && (
+                    {user?.role === "admin" && !impersonator && (
                       <DropdownMenuItem
                         className="text-sm cursor-pointer gap-3 py-2.5"
-                        onClick={(e) => { e.preventDefault(); toast({ title: "Скоро", description: "Переключение между несколькими аккаунтами появится в следующем релизе." }); }}
+                        onSelect={() => setImpersonateOpen(true)}
                       >
                         <span className="h-7 w-7 rounded-md bg-cyan-500/10 flex items-center justify-center">
                           <Repeat className="h-3.5 w-3.5 text-cyan-400" />
                         </span>
                         Сменить аккаунт
-                        <span className="ml-auto text-[9px] uppercase tracking-wider text-muted-foreground/70 bg-muted/40 px-1.5 py-0.5 rounded">Скоро</span>
                       </DropdownMenuItem>
                     )}
 
@@ -248,6 +249,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+      <ImpersonateDialog open={impersonateOpen} onOpenChange={setImpersonateOpen} />
     </div>
   );
 }
