@@ -1955,7 +1955,7 @@ components:
           type: integer
         revenueGrowth:
           type: number
-          description: % change of usage_reports revenue (last 30d vs prior 30d).
+          description: "% change of usage_reports revenue (last 30d vs prior 30d)."
         releasesThisMonth:
           type: integer
       required: [totalArtists, totalReleases, totalTracks, totalStreams, totalRevenue, pendingPayouts, activeDeliveries, revenueGrowth, releasesThisMonth]
