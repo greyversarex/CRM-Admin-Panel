@@ -43,8 +43,8 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
   const total = chartData.reduce((s, r) => s + r.value, 0);
 
   return (
-    <Card className="card-surface border-border/60">
-      <CardHeader className="pb-2">
+    <Card className="card-surface border-border/60 h-full flex flex-col">
+      <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <Disc3 className="h-3.5 w-3.5 text-primary" />
           {title ?? (metric === "streams" ? "Top DSP · Streams" : "Top DSP · Earnings")}
@@ -53,7 +53,7 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
           {metric === "streams" ? "Распределение стримов по платформам" : "Распределение доходов по платформам"}
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
           <Skeleton className="h-[200px] w-full" />
         ) : chartData.length === 0 ? (
@@ -255,15 +255,15 @@ export function TopTracksCard() {
   });
 
   return (
-    <Card className="card-surface border-border/60 flex flex-col">
-      <CardHeader className="pb-3">
+    <Card className="card-surface border-border/60 flex flex-col h-full">
+      <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Music2 className="h-4 w-4 text-violet-400" />
           Top Tracks
         </CardTitle>
         <CardDescription className="text-[12px]">Самые прослушиваемые треки</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 px-4">
+      <CardContent className="flex-1 px-4 overflow-y-auto min-h-0">
         {isLoading ? (
           <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : !data || data.length === 0 ? (
@@ -314,15 +314,15 @@ export function RoyaltySummaryCard() {
   });
 
   return (
-    <Card className="card-surface border-border/60">
-      <CardHeader className="pb-3">
+    <Card className="card-surface border-border/60 h-full flex flex-col">
+      <CardHeader className="pb-3 shrink-0">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Award className="h-4 w-4 text-amber-400" />
           Royalty Summary
         </CardTitle>
         <CardDescription className="text-[12px]">Общий доход и лидеры по выплатам</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-16 w-full" />
