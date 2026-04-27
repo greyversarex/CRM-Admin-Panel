@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
 import { exportCatalogCsv, type ExportProgress } from "@/lib/export-catalog";
 import { useListReleases, useGetReleaseCounts } from "@workspace/api-client-react";
@@ -29,28 +30,18 @@ import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "draft" | "pending_review" | "scheduled" | "live" | "takedown";
 
-// Maps a UI tab to the API `status` query param. Multi-status tabs send
-// comma-separated values which the backend interprets as IN (...).
 const TAB_TO_STATUS: Record<StatusFilter, string | undefined> = {
-  all:              undefined,
-  draft:            "draft",
-  pending_review:   "pending_review",
-  scheduled:        "approved,delivering,delivered",
-  live:             "live",
-  takedown:         "takedown_requested,removed",
+  all:            undefined,
+  draft:          "draft",
+  pending_review: "pending_review",
+  scheduled:      "approved,delivering,delivered",
+  live:           "live",
+  takedown:       "takedown_requested,removed",
 };
-
-const STATUS_TABS: { value: StatusFilter; label: string }[] = [
-  { value: "all",              label: "All Releases" },
-  { value: "draft",            label: "Drafts" },
-  { value: "pending_review",   label: "Pending" },
-  { value: "scheduled",        label: "Scheduled" },
-  { value: "live",             label: "Live" },
-  { value: "takedown",         label: "Takedown / Removed" },
-];
 
 export default function Releases() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -61,6 +52,15 @@ export default function Releases() {
   const [exporting, setExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<ExportProgress["phase"]>("releases");
   const [exportLoaded, setExportLoaded] = useState(0);
+
+  const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+    { value: "all",            label: t.releases.tabs.all },
+    { value: "draft",          label: t.releases.tabs.draft },
+    { value: "pending_review", label: t.releases.tabs.pending_review },
+    { value: "scheduled",      label: t.releases.tabs.scheduled },
+    { value: "live",           label: t.releases.tabs.live },
+    { value: "takedown",       label: t.releases.tabs.takedown },
+  ];
 
   const onExportCatalog = async () => {
     if (exporting) return;
@@ -73,13 +73,16 @@ export default function Releases() {
         setExportLoaded(p.loaded);
       });
       toast({
-        title: "Каталог выгружен",
-        description: `Релизов: ${res.releaseCount}, треков: ${res.trackCount}, строк в файле: ${res.rowCount}.`,
+        title: t.releases.export_success,
+        description: t.releases.export_success_desc
+          .replace("{r}", String(res.releaseCount))
+          .replace("{t}", String(res.trackCount))
+          .replace("{ro}", String(res.rowCount)),
       });
     } catch (e: any) {
       toast({
-        title: "Не удалось выгрузить каталог",
-        description: e?.message ?? "Неизвестная ошибка",
+        title: t.releases.export_error,
+        description: e?.message ?? "Unknown error",
         variant: "destructive",
       });
     } finally {
@@ -115,28 +118,40 @@ export default function Releases() {
 
   const goto = (id: number) => setLocation(`/releases/${id}`);
 
+  const pageTitle = isArtist
+    ? t.releases.title_artist
+    : isLabel
+      ? t.releases.title_label
+      : t.releases.title;
+
+  const pageSubtitle = isArtist
+    ? t.releases.subtitle_artist
+    : isLabel
+      ? t.releases.subtitle_label
+      : t.releases.subtitle_admin;
+
+  const exportLabel = exporting
+    ? exportPhase === "releases"
+      ? `${t.releases.exporting.releases} ${exportLoaded}`
+      : exportPhase === "tracks"
+        ? `${t.releases.exporting.tracks} ${exportLoaded}`
+        : t.releases.exporting.preparing
+    : t.releases.export_csv;
+
   return (
     <Layout>
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {isArtist ? "Мои релизы" : isLabel ? "Релизы лейбла" : "Releases"}
-            </h1>
-            <p className="text-muted-foreground mt-1 max-w-2xl">
-              {isArtist
-                ? "Твой каталог релизов: создавай новые, дорабатывай черновики и отзывай для правок."
-                : isLabel
-                  ? "Каталог релизов лейбла: создание, доработка, отзыв и повторная отправка."
-                  : "View and manage your catalog. Create new releases, complete unfinished ones, and pull back releases to edit and provide more information."}
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
+            <p className="text-muted-foreground mt-1 max-w-2xl">{pageSubtitle}</p>
           </div>
           <div className="flex gap-2">
             {!isArtist && !isLabel && (
               <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")} data-testid="button-transfer-track">
                 <ArrowUpRight className="mr-2 h-4 w-4" />
-                Transfer Track
+                {t.releases.transfer_track}
               </Button>
             )}
             <Button
@@ -147,56 +162,54 @@ export default function Releases() {
               data-testid="button-export-csv"
             >
               <Download className="mr-2 h-4 w-4" />
-              {exporting
-                ? exportPhase === "releases"
-                  ? `Релизы… ${exportLoaded}`
-                  : exportPhase === "tracks"
-                    ? `Треки… ${exportLoaded}`
-                    : "Готовлю файл…"
-                : "Экспорт CSV"}
+              {exportLabel}
             </Button>
             {!isArtist && !isLabel && (
               <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")} data-testid="button-upload-csv">
                 <Upload className="mr-2 h-4 w-4" />
-                Загрузить CSV
+                {t.releases.upload_csv}
               </Button>
             )}
             <Button onClick={() => setLocation("/releases/new")} className="bg-primary" data-testid="button-create-release">
               <Plus className="mr-2 h-4 w-4" />
-              Create Release
+              {t.releases.create_release}
             </Button>
           </div>
         </div>
 
-        {/* Top stat cards — admin/manager only (counts are global) */}
+        {/* Top stat cards — admin/manager only */}
         {!isArtist && !isLabel && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard
-            label="Ready to submit"
+            label={t.releases.stats.ready_to_submit}
             value={counts?.readyToSubmit ?? 0}
             tone="indigo"
-            cta="View"
+            cta={t.releases.stats.view}
+            releaseWord={t.releases.stats.release_count}
             onClick={() => setStatusFilter("pending_review")}
           />
           <StatCard
-            label="Unfinished"
+            label={t.releases.stats.unfinished}
             value={counts?.unfinished ?? 0}
             tone="slate"
-            cta="View"
+            cta={t.releases.stats.view}
+            releaseWord={t.releases.stats.release_count}
             onClick={() => setStatusFilter("draft")}
           />
           <StatCard
-            label="Live on DSPs"
+            label={t.releases.stats.live_on_dsps}
             value={counts?.live ?? 0}
             tone="emerald"
-            cta="View"
+            cta={t.releases.stats.view}
+            releaseWord={t.releases.stats.release_count}
             onClick={() => setStatusFilter("live")}
           />
           <StatCard
-            label="Takedown / Removed"
+            label={t.releases.stats.takedown_removed}
             value={counts?.takedown ?? 0}
             tone="rose"
-            cta="View"
+            cta={t.releases.stats.view}
+            releaseWord={t.releases.stats.release_count}
             onClick={() => setStatusFilter("takedown")}
           />
         </div>
@@ -207,9 +220,9 @@ export default function Releases() {
           <CardHeader className="pb-3 border-b border-border/50 gap-3">
             <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setPage(1); }}>
               <TabsList className="bg-background/50 flex-wrap h-auto">
-                {STATUS_TABS.map((t) => (
-                  <TabsTrigger key={t.value} value={t.value} className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                    {t.label}
+                {STATUS_TABS.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                    {tab.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -219,7 +232,7 @@ export default function Releases() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search by UPC, title, artist"
+                  placeholder={t.releases.search_placeholder}
                   className="pl-8 bg-background/50 border-border"
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
@@ -234,13 +247,13 @@ export default function Releases() {
                     <List className="h-4 w-4" />
                   </ToggleGroupItem>
                 </ToggleGroup>
-                <Button variant="outline" size="sm" className="bg-background/40">
+                <Button variant="outline" size="sm" className="bg-background/40" onClick={onExportCatalog} disabled={exporting}>
                   <Download className="mr-2 h-3.5 w-3.5" />
-                  Export Full Catalog
+                  {t.releases.export_full}
                 </Button>
                 <Button size="sm" onClick={() => setLocation("/releases/new")}>
                   <Plus className="mr-2 h-3.5 w-3.5" />
-                  Create Release
+                  {t.releases.create_release}
                 </Button>
               </div>
             </div>
@@ -252,7 +265,7 @@ export default function Releases() {
                 {isLoading
                   ? Array.from({ length: 12 }).map((_, i) => <ReleaseCardSkeleton key={i} />)
                   : releasesData?.data.length === 0
-                    ? <EmptyState span={6} />
+                    ? <EmptyState span={6} message={t.releases.empty} />
                     : releasesData?.data.map((r) => (
                         <button key={r.id} onClick={() => goto(r.id)}
                           className="group text-left rounded-lg overflow-hidden border border-border/40 bg-background/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all">
@@ -268,7 +281,7 @@ export default function Releases() {
                             <div className="font-semibold text-sm leading-tight truncate">{r.title}</div>
                             <div className="text-xs text-muted-foreground truncate">{r.artistName}</div>
                             <div className="text-[10px] text-muted-foreground/60 font-mono mt-1">UPC: {r.upc || "—"}</div>
-                            <div className="text-[10px] text-muted-foreground/60">Label: {r.labelName || "Independent"}</div>
+                            <div className="text-[10px] text-muted-foreground/60">{t.releases.table.label}: {r.labelName || t.releases.independent}</div>
                           </div>
                         </button>
                       ))}
@@ -278,13 +291,13 @@ export default function Releases() {
                 <TableHeader className="bg-background/40 sticky top-0 z-10">
                   <TableRow className="border-border/50 hover:bg-transparent">
                     <TableHead className="w-[60px]"></TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Artist</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Label</TableHead>
-                    <TableHead>Release Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t.releases.table.title}</TableHead>
+                    <TableHead>{t.releases.table.artist}</TableHead>
+                    <TableHead>{t.releases.table.type}</TableHead>
+                    <TableHead>{t.releases.table.label}</TableHead>
+                    <TableHead>{t.releases.table.release_date}</TableHead>
+                    <TableHead>{t.releases.table.status}</TableHead>
+                    <TableHead className="text-right">{t.releases.table.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -302,7 +315,7 @@ export default function Releases() {
                         </TableRow>
                       ))
                     : releasesData?.data.length === 0
-                      ? <EmptyState span={8} />
+                      ? <EmptyState span={8} message={t.releases.empty} />
                       : releasesData?.data.map((r) => (
                           <TableRow key={r.id} className="border-border/50 hover:bg-accent/30 cursor-pointer" onClick={() => goto(r.id)}>
                             <TableCell>
@@ -318,9 +331,11 @@ export default function Releases() {
                             </TableCell>
                             <TableCell className="text-sm">{r.artistName}</TableCell>
                             <TableCell className="text-sm capitalize">{r.releaseType}</TableCell>
-                            <TableCell className="text-sm">{r.labelName || "Independent"}</TableCell>
+                            <TableCell className="text-sm">{r.labelName || t.releases.independent}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {r.releaseDate ? new Date(r.releaseDate).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "TBD"}
+                              {r.releaseDate
+                                ? new Date(r.releaseDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })
+                                : t.releases.tbd}
                             </TableCell>
                             <TableCell><StatusBadge status={r.status} /></TableCell>
                             <TableCell className="text-right">
@@ -331,16 +346,16 @@ export default function Releases() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuLabel>{t.releases.actions_menu.label}</DropdownMenuLabel>
                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); goto(r.id); }}>
-                                    <FileEdit className="mr-2 h-4 w-4" /> View / Edit
+                                    <FileEdit className="mr-2 h-4 w-4" /> {t.releases.actions_menu.view_edit}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                                    <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
+                                    <Send className="mr-2 h-4 w-4" /> {t.releases.actions_menu.deliver}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem className="text-destructive" onClick={(e) => e.stopPropagation()}>
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    <Trash2 className="mr-2 h-4 w-4" /> {t.releases.actions_menu.delete}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -355,7 +370,7 @@ export default function Releases() {
           {/* Pagination */}
           <div className="flex items-center justify-between p-4 border-t border-border/50 text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
-              <span>Show</span>
+              <span>{t.releases.show}</span>
               <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                 <SelectTrigger className="h-8 w-20 bg-background/40">
                   <SelectValue />
@@ -364,10 +379,10 @@ export default function Releases() {
                   {[10, 20, 50, 100].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <span>per page</span>
+              <span>{t.releases.per_page}</span>
             </div>
             <div className="text-muted-foreground hidden sm:block">
-              {start}-{end} of {total}
+              {start}–{end} / {total}
             </div>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" className="h-8 w-8 bg-background/40" disabled={page <= 1} onClick={() => setPage(page - 1)}>
@@ -394,11 +409,11 @@ export default function Releases() {
 // ─── helpers ──────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, tone, cta, onClick,
+  label, value, tone, cta, releaseWord, onClick,
 }: {
   label: string; value: number;
   tone: "indigo" | "slate" | "emerald" | "rose";
-  cta: string; onClick: () => void;
+  cta: string; releaseWord: string; onClick: () => void;
 }) {
   const ringClass = {
     indigo: "from-indigo-500/15 to-indigo-500/0 border-indigo-500/30",
@@ -416,7 +431,7 @@ function StatCard({
     <Card className={cn("bg-gradient-to-br border", ringClass)}>
       <CardContent className="p-4 flex items-center justify-between">
         <div>
-          <div className="text-2xl font-bold tracking-tight">{value} <span className="text-xs text-muted-foreground font-medium">release(s)</span></div>
+          <div className="text-2xl font-bold tracking-tight">{value} <span className="text-xs text-muted-foreground font-medium">{releaseWord}</span></div>
           <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
         </div>
         <Button size="sm" className={cn("h-7 px-3 text-xs text-white", btnClass)} onClick={onClick}>
@@ -428,7 +443,6 @@ function StatCard({
 }
 
 function CoverPlaceholder({ title }: { title: string }) {
-  // Stable hash → hue
   let hash = 0;
   for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) >>> 0;
   const hue = hash % 360;
@@ -454,11 +468,11 @@ function ReleaseCardSkeleton() {
   );
 }
 
-function EmptyState({ span }: { span: number }) {
+function EmptyState({ span, message }: { span: number; message: string }) {
   return (
     <TableRow>
       <TableCell colSpan={span} className="text-center h-32 text-muted-foreground">
-        No releases match your filters.
+        {message}
       </TableCell>
     </TableRow>
   );

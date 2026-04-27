@@ -72,66 +72,66 @@
   --badge-outline: rgba(0,0,0, .05);
   --opaque-button-border-intensity: -8;
   --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-2: rgba(0,0,0, .06);
 
-  --background: 222 35% 5%;
-  --foreground: 213 31% 96%;
-  --border: 220 22% 14%;
+  --background: 220 20% 96%;
+  --foreground: 222 47% 11%;
+  --border: 220 14% 87%;
 
-  --card: 220 28% 9%;
-  --card-foreground: 213 31% 96%;
-  --card-border: 220 22% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --card-border: 220 14% 90%;
 
-  --sidebar: 222 35% 8%;
+  --sidebar: 222 40% 16%;
   --sidebar-foreground: 213 31% 96%;
-  --sidebar-border: 220 20% 14%;
+  --sidebar-border: 220 22% 22%;
   --sidebar-primary: 226 84% 67%;
   --sidebar-primary-foreground: 213 31% 96%;
-  --sidebar-accent: 220 25% 13%;
+  --sidebar-accent: 220 35% 20%;
   --sidebar-accent-foreground: 213 31% 96%;
   --sidebar-ring: 226 84% 67%;
 
-  --popover: 220 25% 10%;
-  --popover-foreground: 213 31% 96%;
-  --popover-border: 220 20% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --popover-border: 220 14% 87%;
 
-  --primary: 226 84% 67%;
-  --primary-foreground: 213 31% 96%;
+  --primary: 226 84% 60%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 20% 16%;
-  --secondary-foreground: 213 31% 96%;
+  --secondary: 220 14% 93%;
+  --secondary-foreground: 222 47% 11%;
 
-  --muted: 220 20% 14%;
-  --muted-foreground: 215 16% 56%;
+  --muted: 220 14% 93%;
+  --muted-foreground: 215 16% 45%;
 
-  --accent: 220 25% 13%;
-  --accent-foreground: 213 31% 96%;
+  --accent: 220 14% 91%;
+  --accent-foreground: 222 47% 11%;
 
-  --destructive: 0 72% 58%;
-  --destructive-foreground: 213 31% 96%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
 
-  --input: 220 20% 14%;
-  --ring: 226 84% 67%;
+  --input: 220 14% 90%;
+  --ring: 226 84% 60%;
 
-  --chart-1: 226 84% 67%;
-  --chart-2: 158 64% 52%;
-  --chart-3: 38 92% 60%;
-  --chart-4: 0 72% 58%;
-  --chart-5: 271 80% 68%;
+  --chart-1: 226 84% 60%;
+  --chart-2: 158 64% 40%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 0 72% 51%;
+  --chart-5: 271 80% 58%;
 
   --app-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
   --radius: 0.625rem;
 
-  --shadow-2xs: 0 1px 2px 0 rgba(0,0,0,0.4);
-  --shadow-xs: 0 1px 3px 0 rgba(0,0,0,0.4), 0 1px 2px -1px rgba(0,0,0,0.3);
-  --shadow-sm: 0 2px 6px -1px rgba(0,0,0,0.4), 0 1px 3px -1px rgba(0,0,0,0.3);
-  --shadow: 0 4px 12px -2px rgba(0,0,0,0.45), 0 2px 6px -2px rgba(0,0,0,0.3);
-  --shadow-md: 0 8px 20px -4px rgba(0,0,0,0.5), 0 4px 8px -4px rgba(0,0,0,0.3);
-  --shadow-lg: 0 16px 32px -8px rgba(0,0,0,0.55), 0 8px 16px -8px rgba(0,0,0,0.3);
-  --shadow-xl: 0 24px 48px -12px rgba(0,0,0,0.6), 0 12px 24px -12px rgba(0,0,0,0.3);
-  --shadow-2xl: 0 40px 80px -20px rgba(0,0,0,0.65);
+  --shadow-2xs: 0 1px 2px 0 rgba(0,0,0,0.08);
+  --shadow-xs: 0 1px 3px 0 rgba(0,0,0,0.08), 0 1px 2px -1px rgba(0,0,0,0.06);
+  --shadow-sm: 0 2px 6px -1px rgba(0,0,0,0.08), 0 1px 3px -1px rgba(0,0,0,0.06);
+  --shadow: 0 4px 12px -2px rgba(0,0,0,0.10), 0 2px 6px -2px rgba(0,0,0,0.06);
+  --shadow-md: 0 8px 20px -4px rgba(0,0,0,0.12), 0 4px 8px -4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 16px 32px -8px rgba(0,0,0,0.14), 0 8px 16px -8px rgba(0,0,0,0.06);
+  --shadow-xl: 0 24px 48px -12px rgba(0,0,0,0.16), 0 12px 24px -12px rgba(0,0,0,0.06);
+  --shadow-2xl: 0 40px 80px -20px rgba(0,0,0,0.20);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -378,23 +378,23 @@
     color: hsl(var(--sidebar-foreground) / 0.75);
   }
 
-  /* ─── Global input: white background, dark text ─── */
+  /* ─── Global input: use theme variables ─── */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   textarea,
   select {
-    background-color: #ffffff !important;
-    border-color: rgba(0,0,0,0.15) !important;
-    color: #111827 !important;
+    background-color: hsl(var(--card)) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(var(--foreground)) !important;
   }
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
   textarea:focus,
   select:focus {
-    background-color: #ffffff !important;
+    background-color: hsl(var(--card)) !important;
     border-color: hsl(var(--primary)) !important;
   }
   input::placeholder,
   textarea::placeholder {
-    color: #9ca3af !important;
+    color: hsl(var(--muted-foreground)) !important;
   }
 
   .glow-primary {
@@ -414,8 +414,24 @@
 
   /* ─── Card surface: gradient overlay + shadow + hover glow ─── */
   .card-surface {
-    /* Use background-image so Tailwind bg-* classes can still set background-color */
-    background-color: hsl(220 28% 9%);
+    background-color: hsl(var(--card));
+    background-image:
+      linear-gradient(
+        160deg,
+        rgba(255,255,255,0.4) 0%,
+        rgba(255,255,255,0.1) 50%,
+        rgba(0,0,0,0.01) 100%
+      );
+    border-color: hsl(var(--card-border));
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.06),
+      0 4px 16px rgba(0,0,0,0.06),
+      inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: box-shadow 220ms ease, border-color 220ms ease, transform 220ms ease;
+    position: relative;
+  }
+
+  .dark .card-surface {
     background-image:
       linear-gradient(
         160deg,
@@ -423,21 +439,25 @@
         rgba(255,255,255,0.008) 50%,
         rgba(0,0,0,0.04) 100%
       );
-    /* Thin top-edge highlight so the card "lifts" off the background */
-    border-color: hsl(220 22% 16%);
-    /* Soft outer shadow — depth without weight */
     box-shadow:
       0 1px 2px rgba(0,0,0,0.5),
       0 4px 16px rgba(0,0,0,0.28),
       inset 0 1px 0 rgba(255,255,255,0.04);
-    /* Smooth all transitions */
-    transition: box-shadow 220ms ease, border-color 220ms ease, transform 220ms ease;
-    position: relative;
   }
 
   /* Hover: card lifts 1px, border brightens, faint primary bloom */
   .card-surface:hover {
     transform: translateY(-1px);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.08),
+      0 8px 28px rgba(0,0,0,0.10),
+      0 0 0 1px hsl(var(--border)),
+      0 0 18px hsl(var(--primary) / 0.06),
+      inset 0 1px 0 rgba(255,255,255,0.6);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  .dark .card-surface:hover {
     box-shadow:
       0 2px 4px rgba(0,0,0,0.55),
       0 8px 28px rgba(0,0,0,0.32),

@@ -3,7 +3,7 @@ import { WaveBackground } from "./wave-background";
 import { NotificationsPopover } from "./notifications-popover";
 import {
   Search, Globe, ChevronDown,
-  User as UserIcon, CreditCard, Repeat, Moon, LogOut,
+  User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut,
 } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -181,16 +181,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       </span>
                       Оплата и налоги
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-sm cursor-pointer gap-3 py-2.5"
-                      onClick={(e) => { e.preventDefault(); toast({ title: "Скоро", description: "Переключение между несколькими аккаунтами появится в следующем релизе." }); }}
-                    >
-                      <span className="h-7 w-7 rounded-md bg-cyan-500/10 flex items-center justify-center">
-                        <Repeat className="h-3.5 w-3.5 text-cyan-400" />
-                      </span>
-                      Сменить аккаунт
-                      <span className="ml-auto text-[9px] uppercase tracking-wider text-muted-foreground/70 bg-muted/40 px-1.5 py-0.5 rounded">Скоро</span>
-                    </DropdownMenuItem>
+                    {user?.role === "admin" && (
+                      <DropdownMenuItem
+                        className="text-sm cursor-pointer gap-3 py-2.5"
+                        onClick={(e) => { e.preventDefault(); toast({ title: "Скоро", description: "Переключение между несколькими аккаунтами появится в следующем релизе." }); }}
+                      >
+                        <span className="h-7 w-7 rounded-md bg-cyan-500/10 flex items-center justify-center">
+                          <Repeat className="h-3.5 w-3.5 text-cyan-400" />
+                        </span>
+                        Сменить аккаунт
+                        <span className="ml-auto text-[9px] uppercase tracking-wider text-muted-foreground/70 bg-muted/40 px-1.5 py-0.5 rounded">Скоро</span>
+                      </DropdownMenuItem>
+                    )}
 
                     <DropdownMenuSeparator />
 
@@ -213,9 +215,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                     <div className="flex items-center gap-3 px-2 py-2 rounded-md">
                       <span className="h-7 w-7 rounded-md bg-indigo-500/10 flex items-center justify-center">
-                        <Moon className="h-3.5 w-3.5 text-indigo-400" />
+                        {darkMode
+                          ? <Moon className="h-3.5 w-3.5 text-indigo-400" />
+                          : <Sun className="h-3.5 w-3.5 text-amber-400" />}
                       </span>
-                      <span className="text-sm flex-1">Тёмная тема</span>
+                      <span className="text-sm flex-1">{darkMode ? "Тёмная тема" : "Светлая тема"}</span>
                       <Switch checked={darkMode} onCheckedChange={setDarkMode} />
                     </div>
 

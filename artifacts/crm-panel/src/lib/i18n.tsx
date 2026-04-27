@@ -74,6 +74,64 @@ const translations = {
       title: "CRM",
       subtitle: "Contacts, tasks, notes, and communication history.",
     },
+    releases: {
+      title: "Releases",
+      title_artist: "My Releases",
+      title_label: "Label Releases",
+      subtitle_admin: "View and manage your catalog. Create new releases, complete unfinished ones, and pull back releases to edit and provide more information.",
+      subtitle_artist: "Your release catalog: create new ones, finish drafts, and pull back for edits.",
+      subtitle_label: "Label release catalog: create, finish, retract and resubmit releases.",
+      tabs: {
+        all: "All Releases",
+        draft: "Drafts",
+        pending_review: "Pending",
+        scheduled: "Scheduled",
+        live: "Live",
+        takedown: "Takedown / Removed",
+      },
+      stats: {
+        ready_to_submit: "Ready to submit",
+        unfinished: "Unfinished",
+        live_on_dsps: "Live on DSPs",
+        takedown_removed: "Takedown / Removed",
+        view: "View",
+        release_count: "release(s)",
+      },
+      search_placeholder: "Search by UPC, title, artist",
+      export_csv: "Export CSV",
+      export_full: "Export Full Catalog",
+      upload_csv: "Upload CSV",
+      transfer_track: "Transfer Track",
+      create_release: "Create Release",
+      table: {
+        title: "Title",
+        artist: "Artist",
+        type: "Type",
+        label: "Label",
+        release_date: "Release Date",
+        status: "Status",
+        actions: "Actions",
+      },
+      actions_menu: {
+        label: "Actions",
+        view_edit: "View / Edit",
+        deliver: "Deliver to DSPs",
+        delete: "Delete",
+      },
+      empty: "No releases match your filters.",
+      show: "Show",
+      per_page: "per page",
+      independent: "Independent",
+      tbd: "TBD",
+      exporting: {
+        releases: "Releases…",
+        tracks: "Tracks…",
+        preparing: "Preparing file…",
+      },
+      export_success: "Catalog exported",
+      export_success_desc: "Releases: {r}, tracks: {t}, rows: {ro}.",
+      export_error: "Failed to export catalog",
+    },
     common: {
       export: "Export",
       new: "New",
@@ -169,6 +227,64 @@ const translations = {
       title: "CRM",
       subtitle: "Контакты, задачи, заметки и история коммуникаций.",
     },
+    releases: {
+      title: "Релизы",
+      title_artist: "Мои релизы",
+      title_label: "Релизы лейбла",
+      subtitle_admin: "Просмотр и управление каталогом. Создавайте новые релизы, дорабатывайте незавершённые и отзывайте для правок.",
+      subtitle_artist: "Твой каталог релизов: создавай новые, дорабатывай черновики и отзывай для правок.",
+      subtitle_label: "Каталог релизов лейбла: создание, доработка, отзыв и повторная отправка.",
+      tabs: {
+        all: "Все релизы",
+        draft: "Черновики",
+        pending_review: "На модерации",
+        scheduled: "Запланировано",
+        live: "Активные",
+        takedown: "Отзыв / Удалено",
+      },
+      stats: {
+        ready_to_submit: "Готово к отправке",
+        unfinished: "Незавершённые",
+        live_on_dsps: "Активны на DSP",
+        takedown_removed: "Отзыв / Удалено",
+        view: "Показать",
+        release_count: "релиз(ов)",
+      },
+      search_placeholder: "Поиск по UPC, названию, исполнителю",
+      export_csv: "Экспорт CSV",
+      export_full: "Экспорт каталога",
+      upload_csv: "Загрузить CSV",
+      transfer_track: "Перенести трек",
+      create_release: "Создать релиз",
+      table: {
+        title: "Название",
+        artist: "Исполнитель",
+        type: "Тип",
+        label: "Лейбл",
+        release_date: "Дата релиза",
+        status: "Статус",
+        actions: "Действия",
+      },
+      actions_menu: {
+        label: "Действия",
+        view_edit: "Просмотр / Изменить",
+        deliver: "Доставить на DSP",
+        delete: "Удалить",
+      },
+      empty: "Нет релизов, соответствующих фильтрам.",
+      show: "Показывать",
+      per_page: "на странице",
+      independent: "Независимый",
+      tbd: "Не указана",
+      exporting: {
+        releases: "Релизы…",
+        tracks: "Треки…",
+        preparing: "Готовлю файл…",
+      },
+      export_success: "Каталог выгружен",
+      export_success_desc: "Релизов: {r}, треков: {t}, строк в файле: {ro}.",
+      export_error: "Не удалось выгрузить каталог",
+    },
     common: {
       export: "Экспорт",
       new: "Новый",
@@ -210,9 +326,15 @@ const LangContext = createContext<LangContextType>({
 });
 
 export function LangProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLang] = useState<Lang>(() => {
+    try { return (localStorage.getItem("lang") as Lang) || "en"; } catch { return "en"; }
+  });
+  const handleSetLang = (l: Lang) => {
+    setLang(l);
+    try { localStorage.setItem("lang", l); } catch { /* ignore */ }
+  };
   return (
-    <LangContext.Provider value={{ lang, setLang, t: translations[lang] }}>
+    <LangContext.Provider value={{ lang, setLang: handleSetLang, t: translations[lang] }}>
       {children}
     </LangContext.Provider>
   );
