@@ -11,6 +11,8 @@ export * from "./payouts";
 export * from "./publishing_works";
 export * from "./analytics";
 export * from "./deliveries";
+export * from "./ddex_batches";
+export * from "./ddex_messages";
 export * from "./activity_log";
 export * from "./audit_log";
 export * from "./integrations";

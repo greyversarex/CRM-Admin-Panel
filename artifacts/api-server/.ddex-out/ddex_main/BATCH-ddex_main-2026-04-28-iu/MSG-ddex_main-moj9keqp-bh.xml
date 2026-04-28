@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PurgeReleaseMessage xmlns:ern="http://ddex.net/xml/ern/43" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" MessageSchemaVersionId="ern/43" LanguageAndScriptCode="en">
+  <MessageHeader>
+    <MessageThreadId>THREAD-ddex_main-R1-moj9k63n</MessageThreadId>
+    <MessageId>MSG-ddex_main-moj9keqp-bh</MessageId>
+    <MessageSender>
+      <PartyId>PADPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music Distribution</FullName>
+      </PartyName>
+    </MessageSender>
+    <MessageRecipient>
+      <PartyId>PADPIDA-DDEX-MAIN</PartyId>
+      <PartyName>
+        <FullName>DDEX SFTP (универсальный)</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>2026-04-28T23:35:12.290Z</MessageCreatedDateTime>
+    <MessageControlType>TakedownMessage</MessageControlType>
+  </MessageHeader>
+  <ReleaseList>
+    <Release>
+      <ReleaseId>
+        <ICPN isEan="false">7908000000001</ICPN>
+      </ReleaseId>
+      <DisplayTitleText>Bahor</DisplayTitleText>
+    </Release>
+  </ReleaseList>
+</PurgeReleaseMessage>

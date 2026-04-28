@@ -14,6 +14,7 @@ import splitsRouter from "./splits";
 import publishingRouter from "./publishing";
 import analyticsRouter from "./analytics";
 import deliveryRouter from "./delivery";
+import ddexRouter, { ddexInboundRouter } from "./ddex";
 import integrationsRouter from "./integrations";
 import assetsRouter from "./assets";
 import storageUploadRouter from "./storage-upload";
@@ -36,6 +37,9 @@ router.use(signupRouter);
 // Streaming PUT-приёмник presigned-загрузок. Аутентификация по HMAC-токену
 // в query, не по cookie — поэтому стоит ДО requireAuth.
 router.use(storageUploadRouter);
+// DDEX inbound webhook. Аутентификация по HMAC-подписи партнёра (X-DDEX-Signature),
+// не по cookie — поэтому ДО requireAuth.
+router.use(ddexInboundRouter);
 
 // All other API routes require an active session
 router.use(requireAuth);
@@ -78,6 +82,8 @@ router.use(analyticsRouter);
 // Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
 router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
+router.use("/ddex", adminOnly);
+router.use(ddexRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
 router.use(notificationsRouter);         // /notifications — scoped to current user inside (BEFORE integrationsRouter, у которого глобальный requireRole)
 router.use(supportRouter);               // /support — customer scoped or staff inbox (per-route guards inside) — также ДО integrationsRouter

@@ -1,21 +1,27 @@
 /**
- * DDEX delivery worker — фоновая обработка очереди deliveries.
+ * DDEX delivery worker — фоновая обработка очереди `deliveries`.
  *
- * Жизненный цикл одного job'а:
+ * После рефакторинга T6 каждый job из `deliveries` теперь:
+ *   1. claim'ится атомарно (queued → processing)
+ *   2. порождает `ddex_message` через `ddex/service.createMessage()`
+ *   3. отправляется через `ddex/service.processMessage()` (transport.upload + batch)
+ *   4. результат проецируется обратно на `deliveries.status`:
+ *        validated→sent      → deliveries.status = sent
+ *        invalid             → deliveries.status = failed (validation errors)
+ *        upload error        → deliveries.status = failed (с retry exp-backoff)
+ *
+ * Жизненный цикл `deliveries`:
  *   queued → processing → (sent | failed)
  *   failed (attempts<5) → через 2^attempts мин снова queued (по nextRetryAt)
  *   failed (attempts>=5) → permanent fail; разблокируется только ручным retry
  *
- * Запускается из index.ts после app.listen.
+ * Запускается из `index.ts` после `app.listen`.
  */
-import { db, deliveriesTable, releasesTable, tracksTable, artistsTable, assetsTable, auditLogTable } from "@workspace/db";
+import { db, deliveriesTable, ddexMessagesTable, auditLogTable } from "@workspace/db";
 import { notifyByReleaseId } from "../services/notifications";
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { getConnector } from "../connectors/registry";
-import { createDdexSftpConnector, generateDdexErn } from "../connectors/ddex-sftp";
-import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
-import type { DeliveryPayload } from "../connectors/base";
+import { createMessage, processMessage } from "../ddex/service";
 
 type DeliveryRow = typeof deliveriesTable.$inferSelect;
 
@@ -54,40 +60,6 @@ let timer: NodeJS.Timeout | null = null;
 let stopping = false;
 let activeTick: Promise<void> | null = null;
 
-async function buildPayload(releaseId: number): Promise<DeliveryPayload | null> {
-  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId));
-  if (!release) return null;
-
-  const [artist] = await db.select({ name: artistsTable.name }).from(artistsTable).where(eq(artistsTable.id, release.artistId));
-  const trackRows = await db.select().from(tracksTable).where(eq(tracksTable.releaseId, releaseId));
-
-  // Подтягиваем audio asset'ы для треков (если есть). Если нет — отгружаем
-  // metadata-only XML; это валидный сценарий "pre-release notification".
-  const trackAssetMap = new Map<number, string>();
-  for (const t of trackRows) {
-    const [a] = await db.select({ objectPath: assetsTable.objectPath })
-      .from(assetsTable)
-      .where(and(eq(assetsTable.trackId, t.id), eq(assetsTable.kind, "audio")))
-      .limit(1);
-    if (a) trackAssetMap.set(t.id, a.objectPath);
-  }
-
-  return {
-    releaseId: release.id,
-    upc: release.upc ?? `MOCK-${release.id.toString().padStart(13, "0")}`,
-    title: release.title,
-    artist: artist?.name ?? "Unknown Artist",
-    releaseDate: release.releaseDate ?? new Date().toISOString().slice(0, 10),
-    artworkUrl: release.coverUrl ?? "",
-    tracks: trackRows.map((t) => ({
-      isrc: t.isrc ?? `TJM${release.id.toString().padStart(7, "0")}${t.id.toString().padStart(3, "0")}`,
-      title: t.title,
-      duration: t.durationSeconds ?? 0,
-      audioUrl: t.audioUrl ?? trackAssetMap.get(t.id) ?? "",
-    })),
-  };
-}
-
 async function processOne(jobId: number): Promise<void> {
   // Сначала читаем состояние ДО — для audit diff queued→processing.
   const [before] = await db.select().from(deliveriesTable).where(eq(deliveriesTable.id, jobId));
@@ -102,55 +74,67 @@ async function processOne(jobId: number): Promise<void> {
   await auditTransition(before, claimed, "worker");
 
   const attempts = claimed.attempts + 1;
-  // xml поднимаем во внешний scope, чтобы сохранить его и в успехе, и в failed
-  // (для дебага без перегенерации). Партийный ID — заглушка для тестового режима;
-  // в проде должен браться из integration.config.partyId.
   let xmlPayload: string | null = null;
+
   try {
-    const payload = await buildPayload(claimed.releaseId);
-    if (!payload) throw new Error(`Release ${claimed.releaseId} not found`);
+    // 1. Если для этого delivery уже создано ddex_message в прошлой попытке —
+    //    переиспользуем его. Иначе создаём новое.
+    let messageId: number;
+    const [existingMsg] = await db.select({ id: ddexMessagesTable.id, status: ddexMessagesTable.status, xmlPayload: ddexMessagesTable.xmlPayload, validationErrors: ddexMessagesTable.validationErrors })
+      .from(ddexMessagesTable)
+      .where(eq(ddexMessagesTable.deliveryId, claimed.id))
+      .limit(1);
 
-    // Spotify не имеет deliverRelease — все DSP уходят через DDEX-SFTP fallback.
-    let connector = getConnector(claimed.target);
-    if (!connector?.deliverRelease) connector = createDdexSftpConnector(claimed.target);
-
-    // Креды лучше иметь, но допускаем пустые для тестового режима DDEX-SFTP.
-    let credentials: Record<string, string> = {};
-    const integration = await getIntegrationByCode(claimed.target);
-    if (integration) credentials = await loadCredentials(integration.id);
-
-    // Генерируем ERN ДО вызова коннектора, чтобы xml_payload был доступен в БД
-    // даже если доставка упадёт. Connector.deliverRelease возвращает только xmlSize,
-    // поэтому источник истины для XML — этот вызов.
-    const partyId = (integration?.config as Record<string, string> | undefined)?.partyId ?? `PADPIDA-${claimed.target.toUpperCase()}`;
-    xmlPayload = generateDdexErn(payload, partyId);
-
-    const result = await connector.deliverRelease!({ credentials, config: {} }, payload);
-
-    if (result.ok) {
-      const [sent] = await db.update(deliveriesTable).set({
-        status: "sent",
-        attempts,
-        lastError: null,
-        nextRetryAt: null,
-        xmlPayload,
-        deliveredAt: new Date(), // transport timestamp; partner ack позже → 'delivered'
-      }).where(eq(deliveriesTable.id, jobId)).returning();
-      await auditTransition(claimed, sent, "worker");
-      logger.info({ jobId, target: claimed.target, releaseId: claimed.releaseId, attempts, xmlBytes: xmlPayload.length }, "delivery sent");
-
-      // Уведомляем артиста и лейбл об успешной отправке на платформу.
-      void notifyByReleaseId(claimed.releaseId, {
-        type: "delivery_sent",
-        title: `📦 Релиз отправлен на ${claimed.target}`,
-        body: `Доставка успешно завершена. Релиз появится на платформе в течение нескольких дней.`,
-        entityType: "release",
-        entityId: claimed.releaseId,
-        link: `/releases/${claimed.releaseId}`,
-      });
+    if (existingMsg) {
+      messageId = existingMsg.id;
+      xmlPayload = existingMsg.xmlPayload;
+      if (existingMsg.status === "invalid") {
+        const errs = (existingMsg.validationErrors as Array<{ message: string }>) ?? [];
+        throw new Error(`Сообщение invalid: ${errs.map((e) => e.message).join("; ").slice(0, 800)}`);
+      }
     } else {
-      throw new Error(result.message ?? "Connector returned ok=false");
+      const created = await createMessage({
+        releaseId: claimed.releaseId,
+        partnerCode: claimed.target,
+        updateIndicator: "OriginalMessage",
+        deliveryId: claimed.id,
+      });
+      messageId = created.id;
+      // подгружаем сгенерированный XML для записи в delivery (для дебага)
+      const [m] = await db.select({ xmlPayload: ddexMessagesTable.xmlPayload }).from(ddexMessagesTable).where(eq(ddexMessagesTable.id, messageId));
+      xmlPayload = m?.xmlPayload ?? null;
+      if (created.status === "invalid") {
+        throw new Error(`Бизнес-валидация не прошла (${created.validationErrors.length} ошибок): ${created.validationErrors.slice(0, 3).map((e) => e.message).join("; ")}`);
+      }
     }
+
+    // 2. Отправка через transport
+    const upload = await processMessage(messageId);
+    if (!upload.ok) throw new Error(upload.error ?? "transport upload failed");
+
+    const [sent] = await db.update(deliveriesTable).set({
+      status: "sent",
+      attempts,
+      lastError: null,
+      nextRetryAt: null,
+      xmlPayload,
+      deliveredAt: new Date(),
+    }).where(eq(deliveriesTable.id, jobId)).returning();
+    await auditTransition(claimed, sent, "worker");
+    logger.info({
+      jobId, target: claimed.target, releaseId: claimed.releaseId,
+      attempts, messageId, batchId: upload.batchId, remotePath: upload.remotePath,
+      xmlBytes: xmlPayload?.length ?? 0,
+    }, "delivery sent");
+
+    void notifyByReleaseId(claimed.releaseId, {
+      type: "delivery_sent",
+      title: `Релиз отправлен: ${claimed.target}`,
+      body: `Доставка завершена. Релиз появится на платформе в течение нескольких дней.`,
+      entityType: "release",
+      entityId: claimed.releaseId,
+      link: `/releases/${claimed.releaseId}`,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const next = attempts < MAX_ATTEMPTS
@@ -161,16 +145,15 @@ async function processOne(jobId: number): Promise<void> {
       attempts,
       lastError: msg.slice(0, 1000),
       nextRetryAt: next,
-      xmlPayload, // null если упали до generateDdexErn, иначе сгенерированный ERN
+      xmlPayload,
     }).where(eq(deliveriesTable.id, jobId)).returning();
     await auditTransition(claimed, failed, "worker");
     logger.warn({ jobId, target: claimed.target, attempts, err: msg, nextRetryAt: next }, "delivery failed");
 
-    // Уведомляем только при окончательной ошибке (все попытки исчерпаны).
     if (next === null) {
       void notifyByReleaseId(claimed.releaseId, {
         type: "delivery_failed",
-        title: `❌ Доставка на ${claimed.target} не удалась`,
+        title: `Доставка на ${claimed.target} не удалась`,
         body: `После ${attempts} попыток релиз не был доставлен. Ошибка: ${msg.slice(0, 200)}`,
         entityType: "release",
         entityId: claimed.releaseId,

@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { seedIntegrations } from "./services/integrations-seed";
 import { startDeliveryWorker, stopDeliveryWorker } from "./workers/delivery-worker";
+import { startAckPoller, stopAckPoller } from "./workers/ack-poller";
 
 const rawPort = process.env["PORT"];
 
@@ -29,6 +30,8 @@ const server = app.listen(port, async (err) => {
   seedIntegrations().catch((e) => logger.error({ err: e }, "seedIntegrations failed"));
   // Стартуем фоновый delivery-воркер (Task #4)
   startDeliveryWorker().catch((e) => logger.error({ err: e }, "startDeliveryWorker failed"));
+  // Опциональный ack-poller — включается env-переменной DDEX_ACK_POLLER_ENABLED=1
+  startAckPoller().catch((e) => logger.error({ err: e }, "startAckPoller failed"));
 });
 
 // Graceful shutdown: останавливаем воркер до закрытия HTTP, чтобы дать активному
@@ -39,6 +42,11 @@ async function shutdown(signal: string) {
     await stopDeliveryWorker();
   } catch (e) {
     logger.error({ err: e }, "stopDeliveryWorker failed");
+  }
+  try {
+    await stopAckPoller();
+  } catch (e) {
+    logger.error({ err: e }, "stopAckPoller failed");
   }
   server.close((err) => {
     if (err) { logger.error({ err }, "server.close error"); process.exit(1); }
