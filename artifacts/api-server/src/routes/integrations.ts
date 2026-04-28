@@ -23,6 +23,7 @@ import {
   upsertIntegration,
   saveCredentials,
   setEnabled,
+  updateIntegrationConfig,
   disconnectIntegration,
   testConnection,
   getSyncJobs,
@@ -38,7 +39,7 @@ router.use(requireRole("admin", "manager"));
 // SQL-fragment payload and so we get clean error messages instead of cryptic
 // drizzle errors deep inside the service layer.
 const CodeParam = z.object({
-  code: z.string().min(1).max(64).regex(/^[a-z0-9-]+$/, "code must match /^[a-z0-9-]+$/"),
+  code: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/, "code must match /^[a-z0-9_-]+$/"),
 });
 
 const RegisterBody = z.object({
@@ -55,6 +56,15 @@ const CredentialsBody = z.object({
 
 const EnableBody = z.object({
   enabled: z.boolean(),
+}).strict();
+
+// Конфиг интеграции (transport, host, port, username, remotePath, partyIds, …)
+// Значения — string|number|boolean. Пустая строка / null трактуются как сброс ключа.
+const ConfigBody = z.object({
+  config: z.record(
+    z.string(),
+    z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  ),
 }).strict();
 
 // Some "test" connectors take optional probe parameters; we accept an empty body
@@ -106,6 +116,20 @@ router.delete("/integrations/:code", async (req, res): Promise<void> => {
 
   await disconnectIntegration(params.data.code);
   res.json({ ok: true });
+});
+
+router.patch("/integrations/:code/config", async (req, res): Promise<void> => {
+  const params = CodeParam.safeParse(req.params);
+  if (!params.success) return badRequest(res, params.error);
+  const body = ConfigBody.safeParse(req.body);
+  if (!body.success) return badRequest(res, body.error);
+
+  try {
+    const updated = await updateIntegrationConfig(params.data.code, body.data.config);
+    res.json({ ok: true, config: updated.config ?? {} });
+  } catch (e) {
+    res.status(404).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
 });
 
 router.post("/integrations/:code/enable", async (req, res): Promise<void> => {

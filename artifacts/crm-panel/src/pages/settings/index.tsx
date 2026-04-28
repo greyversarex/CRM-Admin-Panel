@@ -13,9 +13,10 @@ import { useAuth } from "@/lib/auth";
 import {
   FileCode2, ScrollText, Activity as ActivityIcon, Globe2,
   Copy, RefreshCcw, Download, CheckCircle2, AlertTriangle, Clock, Lock,
-  PlugZap, Unplug, FlaskConical,
+  PlugZap, Unplug, FlaskConical, Settings2,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
+import { IntegrationConfigDialog } from "@/components/integration-config-dialog";
 
 // ─── API helper ─────────────────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ interface IntegrationRow {
   lastSyncAt: string | null;
   lastError: string | null;
   hasCredentials: boolean;
+  config?: Record<string, unknown>;
+  credentialFields?: { fieldKey: string; masked: string }[];
 }
 
 interface ActivityRow {
@@ -108,6 +111,7 @@ export default function Settings() {
   const [integrations, setIntegrations] = useState<IntegrationRow[] | null>(null);
   const [intLoading, setIntLoading] = useState(true);
   const [intBusy, setIntBusy] = useState<string | null>(null);
+  const [configRow, setConfigRow] = useState<IntegrationRow | null>(null);
   const [activity, setActivity] = useState<ActivityRow[] | null>(null);
   const [actLoading, setActLoading] = useState(true);
   const [actFilter, setActFilter] = useState("");
@@ -384,12 +388,20 @@ export default function Settings() {
                               />
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" className="h-7 text-xs"
-                                disabled={busy}
-                                onClick={() => testIntegration(d)}
-                                aria-label={`${t.settings.test_connection} ${d.name}`}>
-                                <FlaskConical className="h-3.5 w-3.5 mr-1" aria-hidden="true" /> {t.settings.test_connection}
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 text-xs"
+                                  disabled={busy}
+                                  onClick={() => setConfigRow(d)}
+                                  aria-label={`Configure ${d.name}`}>
+                                  <Settings2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" /> Настроить
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs"
+                                  disabled={busy}
+                                  onClick={() => testIntegration(d)}
+                                  aria-label={`${t.settings.test_connection} ${d.name}`}>
+                                  <FlaskConical className="h-3.5 w-3.5 mr-1" aria-hidden="true" /> {t.settings.test_connection}
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -399,6 +411,13 @@ export default function Settings() {
                 )}
               </CardContent>
             </Card>
+
+            <IntegrationConfigDialog
+              integration={configRow}
+              open={configRow !== null}
+              onOpenChange={(v) => { if (!v) setConfigRow(null); }}
+              onSaved={loadIntegrations}
+            />
           </TabsContent>
 
           {/* ================= AUDIT LOGS (live, audit_log table) ================= */}

@@ -95,23 +95,60 @@ export function createDdexSftpConnector(code: string): IConnector {
     authType: "sftp",
 
     async testConnection(ctx: ConnectorContext): Promise<ConnectorResult> {
-      const host = ctx.credentials.host;
-      const port = parseInt(ctx.credentials.port ?? "22", 10);
-      const username = ctx.credentials.username;
+      // Транспорт можно задать прямо в config (новый путь через мастер настройки).
+      // Если transport=local-fs — это тестовый режим (нет внешнего соединения).
+      const transport = (ctx.config.transport as string | undefined) ?? "sftp";
+      if (transport === "local-fs") {
+        return { ok: true, message: "Транспорт local-fs — файлы пишутся в локальную директорию api-server (.ddex-out). Соединение не требуется." };
+      }
+
+      // Поля host/port/username приоритетно берём из config (cleartext),
+      // fallback — из credentials (так раньше задавали через старую форму).
+      const host = (ctx.config.host as string | undefined) ?? ctx.credentials.host;
+      const port = parseInt(((ctx.config.port as string | undefined) ?? ctx.credentials.port ?? "22"), 10);
+      const username = (ctx.config.username as string | undefined) ?? ctx.credentials.username;
+
+      // Аутентификация: пароль ИЛИ приватный ключ (только в credentials, шифровано).
       const password = ctx.credentials.password;
-      if (!host || !username || !password) {
-        return { ok: false, message: "Заполните host, username и password" };
+      const privateKey = ctx.credentials.private_key || ctx.credentials.ssh_private_key;
+
+      if (!host) return { ok: false, message: "В конфиге не задан host" };
+      if (!username) return { ok: false, message: "Не задан username (config или credentials)" };
+      if (!password && !privateKey) return { ok: false, message: "Нужен password или private_key" };
+
+      // Если есть пакет ssh2-sftp-client — делаем настоящий SFTP-handshake.
+      try {
+        const Client = (await import("ssh2-sftp-client")).default;
+        const sftp = new Client();
+        const remoteBase = (ctx.config.remotePath as string | undefined) ?? "/incoming";
+        try {
+          await sftp.connect({
+            host, port, username,
+            ...(password ? { password } : {}),
+            ...(privateKey ? { privateKey } : {}),
+            ...(ctx.credentials.passphrase ? { passphrase: ctx.credentials.passphrase } : {}),
+          });
+          const exists = await sftp.exists(remoteBase);
+          await sftp.end();
+          return {
+            ok: true,
+            message: `SFTP подключение успешно. Директория ${remoteBase}: ${exists ? "существует" : "будет создана при первой отгрузке"}`,
+            data: { host, port, remoteBase, dirExists: !!exists },
+          };
+        } catch (err) {
+          try { await sftp.end(); } catch { /* noop */ }
+          return { ok: false, message: `SFTP error: ${(err as Error).message}` };
+        }
+      } catch {
+        // Пакет не установлен — деградируем до TCP-проверки.
+        const reachable = await testTcpReachable(host, port);
+        if (!reachable) return { ok: false, message: `SFTP-хост ${host}:${port} недоступен (TCP)` };
+        return {
+          ok: true,
+          message: `Хост ${host}:${port} доступен по TCP. Для полноценного handshake установите ssh2-sftp-client.`,
+          data: { host, port },
+        };
       }
-      const reachable = await testTcpReachable(host, port);
-      if (!reachable) {
-        return { ok: false, message: `SFTP-хост ${host}:${port} недоступен (TCP-соединение не установлено)` };
-      }
-      // Полноценный SSH-handshake требует пакет ssh2 — добавим при первой реальной интеграции.
-      return {
-        ok: true,
-        message: `Хост ${host}:${port} доступен. Для полноценной проверки нужен пакет ssh2-sftp-client (доустановим при первой реальной отгрузке).`,
-        data: { host, port },
-      };
     },
 
     async deliverRelease(ctx: ConnectorContext, payload: DeliveryPayload): Promise<ConnectorResult> {

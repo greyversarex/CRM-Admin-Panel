@@ -125,6 +125,23 @@ export async function loadCredentials(integrationId: number): Promise<Record<str
   return out;
 }
 
+export async function updateIntegrationConfig(
+  integrationCode: string,
+  config: Record<string, unknown>,
+): Promise<Integration> {
+  const integration = await getIntegrationByCode(integrationCode);
+  if (!integration) throw new Error(`Интеграция ${integrationCode} не найдена`);
+  // merge с существующим config (партиальный апдейт)
+  const merged = { ...((integration.config ?? {}) as Record<string, unknown>), ...config };
+  // null-значения убираем (фронт может явно сбросить поле)
+  for (const k of Object.keys(merged)) if (merged[k] === null || merged[k] === "") delete merged[k];
+  const [updated] = await db.update(integrationsTable)
+    .set({ config: merged })
+    .where(eq(integrationsTable.id, integration.id))
+    .returning();
+  return updated;
+}
+
 export async function setEnabled(integrationCode: string, enabled: boolean): Promise<void> {
   const integration = await getIntegrationByCode(integrationCode);
   if (!integration) throw new Error(`Интеграция ${integrationCode} не найдена`);
