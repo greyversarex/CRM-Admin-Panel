@@ -37,11 +37,15 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://tajikmusic_user:${POSTGRES_PASSWORD}@postgres:5432/tajikmusic
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      # Где хранить загруженные обложки/аудио/KYC. Совпадает с volume ниже.
+      LOCAL_STORAGE_ROOT: /var/lib/tajikmusic/uploads
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
       # Чтобы nginx-контейнер мог отдавать статику
       - frontend_dist:/app/artifacts/crm-panel/dist
+      # Загруженные файлы — на named volume, переживают пересборки и git pull
+      - uploads:/var/lib/tajikmusic/uploads
 
   nginx:
     image: nginx:1.27-alpine
@@ -57,3 +61,4 @@ services:
 volumes:
   pgdata:
   frontend_dist:
+  uploads:

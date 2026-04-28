@@ -43,10 +43,16 @@ set +a
 : "${DATABASE_URL:?DATABASE_URL отсутствует в .env}"
 : "${SESSION_SECRET:?SESSION_SECRET отсутствует в .env}"
 : "${PORT:=3001}"
-export PORT
+: "${LOCAL_STORAGE_ROOT:=/var/lib/tajikmusic/uploads}"
+export PORT LOCAL_STORAGE_ROOT
 
 echo "▶ Создаём папки..."
 mkdir -p /var/log/tajikmusic
+mkdir -p "$LOCAL_STORAGE_ROOT"
+# pm2 запускается под root (см. `pm2 startup systemd -u root`), так что
+# владелец каталога — root. Если перенесёте pm2 на другого юзера — поменяйте здесь.
+chown -R root:root "$LOCAL_STORAGE_ROOT"
+chmod 750 "$LOCAL_STORAGE_ROOT"
 
 # ── Проверяем память (билд фронта требует ~3 ГБ) ────────
 TOTAL_MEM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
