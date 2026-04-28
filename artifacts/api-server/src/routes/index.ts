@@ -16,6 +16,7 @@ import analyticsRouter from "./analytics";
 import deliveryRouter from "./delivery";
 import integrationsRouter from "./integrations";
 import assetsRouter from "./assets";
+import storageUploadRouter from "./storage-upload";
 import auditRouter from "./audit";
 import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
@@ -32,6 +33,9 @@ router.use(authRouter);
 // Public signup endpoint (POST /signup-requests). Admin endpoints в этом
 // router'е защищены своим requireRole внутри хендлеров.
 router.use(signupRouter);
+// Streaming PUT-приёмник presigned-загрузок. Аутентификация по HMAC-токену
+// в query, не по cookie — поэтому стоит ДО requireAuth.
+router.use(storageUploadRouter);
 
 // All other API routes require an active session
 router.use(requireAuth);

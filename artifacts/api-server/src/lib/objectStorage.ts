@@ -1,34 +1,52 @@
-import { Storage, File } from "@google-cloud/storage";
-import { Readable } from "stream";
-import { randomUUID } from "crypto";
-import {
-  ObjectAclPolicy,
-  ObjectPermission,
-  canAccessObject,
-  getObjectAclPolicy,
-  setObjectAclPolicy,
-} from "./objectAcl";
+// ─── Local-filesystem object storage ──────────────────────────────────────
+//
+// Хранилище медиа-файлов (обложки релизов, аудио, аватары, KYC-документы)
+// на локальном диске сервера. Архитектурно сохраняет тот же интерфейс, что
+// был у GCS-обёртки: ObjectStorageService + objectStorageClient.bucket().file(),
+// поэтому остальной код (routes/assets.ts, routes/users.ts, routes/kyc.ts)
+// продолжает работать без изменений.
+//
+// Файлы лежат под `LOCAL_STORAGE_ROOT` (env, по умолчанию `<cwd>/.local-storage`).
+// MIME-тип каждого файла сохраняется в спутник-файле `<name>.meta.json`,
+// чтобы потоки отдачи проставляли правильный Content-Type.
+//
+// Поток загрузки (presign → PUT → confirm) реализован через короткоживущие
+// HMAC-токены: `createUpload()` возвращает URL вида
+//   /api/storage/upload/<objectId>?exp=<ms>&sig=<hex>
+// Соответствующий PUT-роут лежит в routes/storage-upload.ts и пишет тело
+// напрямую в файл под PRIVATE_OBJECT_DIR.
 
-const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+import { promises as fs, createReadStream, createWriteStream, type ReadStream } from "fs";
+import path from "path";
+import { Transform, type Readable } from "stream";
+import { pipeline } from "stream/promises";
+import { randomUUID, createHmac, timingSafeEqual } from "crypto";
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
-      },
-    },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+// ─── Roots ────────────────────────────────────────────────────────────────
+export const LOCAL_STORAGE_ROOT = path.resolve(
+  process.env.LOCAL_STORAGE_ROOT?.trim() ||
+    path.join(process.cwd(), ".local-storage"),
+);
 
+function getPrivateObjectDirRaw(): string {
+  const dir = process.env.PRIVATE_OBJECT_DIR?.trim() || "private";
+  // Strip leading slash if present — мы трактуем PRIVATE_OBJECT_DIR как
+  // относительный префикс под LOCAL_STORAGE_ROOT.
+  return dir.replace(/^\/+/, "");
+}
+
+// Resolve a path relative to LOCAL_STORAGE_ROOT, защищая от path traversal.
+function resolveSafe(...parts: string[]): string {
+  const joined = path.join(LOCAL_STORAGE_ROOT, ...parts);
+  const normalized = path.resolve(joined);
+  const root = path.resolve(LOCAL_STORAGE_ROOT);
+  if (normalized !== root && !normalized.startsWith(root + path.sep)) {
+    throw new Error("Path traversal detected");
+  }
+  return normalized;
+}
+
+// ─── Errors ───────────────────────────────────────────────────────────────
 export class ObjectNotFoundError extends Error {
   constructor() {
     super("Object not found");
@@ -37,141 +55,270 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
-export class ObjectStorageService {
-  constructor() {}
+// ─── HMAC upload tokens ───────────────────────────────────────────────────
+function uploadSecret(): string {
+  return (
+    process.env.UPLOAD_SIGNING_SECRET?.trim() ||
+    process.env.SESSION_SECRET?.trim() ||
+    "dev-only-insecure-upload-fallback"
+  );
+}
 
-  getPublicObjectSearchPaths(): Array<string> {
-    const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
-    const paths = Array.from(
-      new Set(
-        pathsStr
-          .split(",")
-          .map((path) => path.trim())
-          .filter((path) => path.length > 0)
-      )
-    );
-    if (paths.length === 0) {
-      throw new Error(
-        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
-          "tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths)."
-      );
-    }
-    return paths;
+function signUploadToken(objectId: string, expMs: number, maxBytes: number): string {
+  return createHmac("sha256", uploadSecret())
+    .update(`${objectId}|${expMs}|${maxBytes}`)
+    .digest("hex");
+}
+
+export function verifyUploadToken(
+  objectId: string,
+  expMs: number,
+  maxBytes: number,
+  sig: string,
+): boolean {
+  if (!Number.isFinite(expMs) || Date.now() > expMs) return false;
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return false;
+  const expected = signUploadToken(objectId, expMs, maxBytes);
+  if (expected.length !== sig.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"));
+  } catch {
+    return false;
+  }
+}
+
+// ─── File-like shim (mimics @google-cloud/storage File API) ───────────────
+type FileMetadata = { size: number; contentType?: string };
+
+function metaPathFor(fp: string): string {
+  return `${fp}.meta.json`;
+}
+
+async function readSidecarMeta(fp: string): Promise<{ contentType?: string }> {
+  try {
+    const txt = await fs.readFile(metaPathFor(fp), "utf8");
+    return JSON.parse(txt);
+  } catch {
+    return {};
+  }
+}
+
+async function writeSidecarMeta(fp: string, meta: { contentType?: string }): Promise<void> {
+  await fs.writeFile(metaPathFor(fp), JSON.stringify(meta));
+}
+
+export class LocalFile {
+  constructor(public bucket: LocalBucket, public name: string) {}
+
+  /** Полный путь на диске (валидируется через resolveSafe). */
+  fullPath(): string {
+    return resolveSafe(this.bucket.name, this.name);
   }
 
-  getPrivateObjectDir(): string {
-    const dir = process.env.PRIVATE_OBJECT_DIR || "";
-    if (!dir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
+  async exists(): Promise<[boolean]> {
+    try {
+      const st = await fs.stat(this.fullPath());
+      return [st.isFile()];
+    } catch {
+      return [false];
     }
-    return dir;
   }
 
-  async searchPublicObject(filePath: string): Promise<File | null> {
-    for (const searchPath of this.getPublicObjectSearchPaths()) {
-      const fullPath = `${searchPath}/${filePath}`;
+  async getMetadata(): Promise<[FileMetadata]> {
+    const fp = this.fullPath();
+    const stat = await fs.stat(fp);
+    const sidecar = await readSidecarMeta(fp);
+    return [{ size: stat.size, contentType: sidecar.contentType }];
+  }
 
-      const { bucketName, objectName } = parseObjectPath(fullPath);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
+  async setMetadata(opts: { metadata?: { contentType?: string } } = {}): Promise<void> {
+    const fp = this.fullPath();
+    const existing = await readSidecarMeta(fp);
+    await writeSidecarMeta(fp, { ...existing, ...(opts.metadata ?? {}) });
+  }
 
-      const [exists] = await file.exists();
-      if (exists) {
-        return file;
+  createReadStream(opts?: { start?: number; end?: number }): ReadStream {
+    return createReadStream(this.fullPath(), opts);
+  }
+
+  async delete(opts?: { ignoreNotFound?: boolean }): Promise<void> {
+    const fp = this.fullPath();
+    try {
+      await fs.unlink(fp);
+    } catch (err: any) {
+      if (err?.code === "ENOENT" && opts?.ignoreNotFound) {
+        // ничего
+      } else if (err?.code !== "ENOENT") {
+        throw err;
       }
     }
-
-    return null;
-  }
-
-  async downloadObject(file: File, cacheTtlSec: number = 3600): Promise<Response> {
-    const [metadata] = await file.getMetadata();
-    const aclPolicy = await getObjectAclPolicy(file);
-    const isPublic = aclPolicy?.visibility === "public";
-
-    const nodeStream = file.createReadStream();
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream;
-
-    const headers: Record<string, string> = {
-      "Content-Type": (metadata.contentType as string) || "application/octet-stream",
-      "Cache-Control": `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
-    };
-    if (metadata.size) {
-      headers["Content-Length"] = String(metadata.size);
+    // sidecar meta — best effort
+    try {
+      await fs.unlink(metaPathFor(fp));
+    } catch {
+      /* ignore */
     }
-
-    return new Response(webStream, { headers });
-  }
-
-  async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
-    }
-
-    const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
   }
 
   /**
-   * Generate a presigned PUT URL plus the canonical references we need to
-   * persist in the `assets` table afterwards.
-   *
-   * - `objectId`     – the UUID under uploads/ (used as logical id)
-   * - `storageKey`   – `{privateDir}/uploads/{uuid}` (resolves to a GCS file)
-   * - `objectPath`   – `/objects/uploads/{uuid}` (passed back to clients,
-   *                    consumed by getObjectEntityFile / download endpoints)
-   * - `uploadURL`    – signed PUT URL valid for ttlSec
+   * Совместимо с GCS API: записывает буфер целиком. Для больших файлов
+   * (covers через presign-flow) используется streaming-PUT через отдельный
+   * роут; этот метод используется только аватарами и KYC (≤25 МБ).
    */
-  async createUpload(opts?: { contentType?: string; ttlSec?: number }): Promise<{
+  async save(
+    data: Buffer,
+    opts?: { contentType?: string; resumable?: boolean; metadata?: { contentType?: string } },
+  ): Promise<void> {
+    const fp = this.fullPath();
+    await fs.mkdir(path.dirname(fp), { recursive: true });
+    await fs.writeFile(fp, data);
+    const ct = opts?.metadata?.contentType ?? opts?.contentType;
+    if (ct) {
+      await writeSidecarMeta(fp, { contentType: ct });
+    }
+  }
+}
+
+export class LocalBucket {
+  constructor(public name: string) {}
+  file(name: string): LocalFile {
+    return new LocalFile(this, name);
+  }
+}
+
+class LocalStorageClient {
+  bucket(name: string): LocalBucket {
+    return new LocalBucket(name);
+  }
+}
+
+// Совместимый со старым кодом экспорт.
+export const objectStorageClient = new LocalStorageClient();
+
+// ─── Upload streaming (used by routes/storage-upload.ts) ──────────────────
+export class PayloadTooLargeError extends Error {
+  constructor(public maxBytes: number) {
+    super(`Payload exceeds ${maxBytes} bytes`);
+    this.name = "PayloadTooLargeError";
+    Object.setPrototypeOf(this, PayloadTooLargeError.prototype);
+  }
+}
+
+class SizeLimiter extends Transform {
+  public bytes = 0;
+  constructor(private readonly max: number) {
+    super();
+  }
+  _transform(
+    chunk: Buffer,
+    _enc: BufferEncoding,
+    cb: (err?: Error | null, data?: Buffer) => void,
+  ): void {
+    this.bytes += chunk.length;
+    if (this.bytes > this.max) {
+      cb(new PayloadTooLargeError(this.max));
+      return;
+    }
+    cb(null, chunk);
+  }
+}
+
+/**
+ * Stream a readable body straight to disk under PRIVATE_OBJECT_DIR/uploads/<id>,
+ * enforcing a hard byte-cap with proper backpressure (pipeline()). On any
+ * failure (oversize, abort, fs error) the partially-written target file and
+ * its sidecar meta are removed so confirm-step never sees orphaned data.
+ *
+ * Throws PayloadTooLargeError when body exceeds `maxBytes`. Returns the
+ * actual size after the write completes.
+ */
+export async function streamUploadToObject(
+  objectId: string,
+  body: Readable,
+  maxBytes: number,
+  contentType: string | null,
+): Promise<{ size: number }> {
+  const privateDir = getPrivateObjectDirRaw();
+  const target = resolveSafe(privateDir, "uploads", objectId);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+
+  const limiter = new SizeLimiter(maxBytes);
+  const ws = createWriteStream(target);
+
+  try {
+    await pipeline(body, limiter, ws);
+  } catch (err) {
+    // Best-effort cleanup of the partial file + sidecar.
+    await fs.unlink(target).catch(() => {});
+    await fs.unlink(metaPathFor(target)).catch(() => {});
+    throw err;
+  }
+
+  if (limiter.bytes === 0) {
+    // Empty bodies leave a 0-byte file behind — kill it so confirm fails clean.
+    await fs.unlink(target).catch(() => {});
+    await fs.unlink(metaPathFor(target)).catch(() => {});
+    return { size: 0 };
+  }
+
+  if (contentType) {
+    await writeSidecarMeta(target, { contentType });
+  }
+  return { size: limiter.bytes };
+}
+
+// ─── Public service ───────────────────────────────────────────────────────
+export class ObjectStorageService {
+  constructor() {}
+
+  /** Логический префикс под LOCAL_STORAGE_ROOT (например "private"). */
+  getPrivateObjectDir(): string {
+    return getPrivateObjectDirRaw();
+  }
+
+  /**
+   * Сгенерировать короткоживущий PUT URL и вернуть пути для последующего
+   * сохранения в БД. Контракт идентичен предыдущей GCS-реализации:
+   *   • objectId   – UUID файла под uploads/
+   *   • storageKey – `<privateDir>/uploads/<uuid>`  (не путь на диске!)
+   *   • objectPath – `/objects/uploads/<uuid>`     (то, что ходит между UI и API)
+   *   • uploadURL  – относительный URL `/api/storage/upload/<uuid>?exp=…&sig=…`
+   */
+  async createUpload(opts?: {
+    contentType?: string;
+    ttlSec?: number;
+    /** Hard cap (bytes) bound into the HMAC token. Default 250 МБ. */
+    maxBytes?: number;
+  }): Promise<{
     objectId: string;
     storageKey: string;
     objectPath: string;
     uploadURL: string;
   }> {
-    const privateObjectDir = this.getPrivateObjectDir();
+    const privateDir = getPrivateObjectDirRaw();
     const objectId = randomUUID();
-    const storageKey = `${privateObjectDir}/uploads/${objectId}`;
-    const { bucketName, objectName } = parseObjectPath(storageKey);
-    const uploadURL = await signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: opts?.ttlSec ?? 900,
-    });
+    const ttl = opts?.ttlSec ?? 900;
+    const expMs = Date.now() + ttl * 1000;
+    const maxBytes = opts?.maxBytes ?? 250 * 1024 * 1024;
+    const sig = signUploadToken(objectId, expMs, maxBytes);
     return {
       objectId,
-      storageKey,
+      storageKey: `${privateDir}/uploads/${objectId}`,
       objectPath: `/objects/uploads/${objectId}`,
-      uploadURL,
+      uploadURL: `/api/storage/upload/${objectId}?exp=${expMs}&max=${maxBytes}&sig=${sig}`,
     };
   }
 
   /**
-   * Generate a short-lived signed GET URL for an asset previously persisted via
-   * createUpload + confirm. The objectPath is the same one we returned at
-   * presign time and stored in `assets.object_path`.
+   * Для локального хранилища "ссылка на скачивание" — это тот же
+   * cookie-аутентифицированный streaming-роут, что используется браузером
+   * для отображения обложек/проигрывания аудио. Возвращаем относительный URL.
    */
-  async getDownloadURL(objectPath: string, ttlSec: number = 300): Promise<string> {
-    const file = await this.getObjectEntityFile(objectPath);
-    const bucketName = file.bucket.name;
-    const objectName = file.name;
-    return signObjectURL({ bucketName, objectName, method: "GET", ttlSec });
+  async getDownloadURL(objectPath: string, _ttlSec: number = 300): Promise<string> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    return `/api/storage${objectPath}`;
   }
 
   async deleteByObjectPath(objectPath: string): Promise<void> {
@@ -184,142 +331,56 @@ export class ObjectStorageService {
     }
   }
 
-  async getObjectEntityFile(objectPath: string): Promise<File> {
+  /** Найти LocalFile по `/objects/<…>` пути. Бросает ObjectNotFoundError если нет на диске. */
+  async getObjectEntityFile(objectPath: string): Promise<LocalFile> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
-
-    const parts = objectPath.slice(1).split("/");
+    const parts = objectPath.slice(1).split("/").filter(Boolean);
     if (parts.length < 2) {
       throw new ObjectNotFoundError();
     }
+    const entityId = parts.slice(1).join("/"); // "uploads/<uuid>"
+    const privateDir = getPrivateObjectDirRaw(); // "private"
 
-    const entityId = parts.slice(1).join("/");
-    let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith("/")) {
-      entityDir = `${entityDir}/`;
-    }
-    const objectEntityPath = `${entityDir}${entityId}`;
-    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const objectFile = bucket.file(objectName);
-    const [exists] = await objectFile.exists();
+    const fullRel = `${privateDir}/${entityId}`;
+    const [bucketName, ...rest] = fullRel.split("/");
+    const objectName = rest.join("/");
+    const file = objectStorageClient.bucket(bucketName).file(objectName);
+    const [exists] = await file.exists();
     if (!exists) {
       throw new ObjectNotFoundError();
     }
-    return objectFile;
+    return file;
   }
 
+  /**
+   * No-op shim: на GCS это переписывало http-URL вида
+   * https://storage.googleapis.com/<bucket>/<obj> в наш `/objects/...`.
+   * Для локального хранилища таких внешних URL не бывает, поэтому возвращаем
+   * вход как есть.
+   */
   normalizeObjectEntityPath(rawPath: string): string {
-    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
-      return rawPath;
-    }
-
-    const url = new URL(rawPath);
-    const rawObjectPath = url.pathname;
-
-    let objectEntityDir = this.getPrivateObjectDir();
-    if (!objectEntityDir.endsWith("/")) {
-      objectEntityDir = `${objectEntityDir}/`;
-    }
-
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
-      return rawObjectPath;
-    }
-
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
-    return `/objects/${entityId}`;
+    return rawPath;
   }
 
+  /**
+   * No-op: ACL выполняется на уровне БД (assets/kyc_documents строки + scope).
+   * Сохраняем сигнатуру для совместимости.
+   */
   async trySetObjectEntityAclPolicy(
     rawPath: string,
-    aclPolicy: ObjectAclPolicy
+    _aclPolicy: unknown,
   ): Promise<string> {
-    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
-    if (!normalizedPath.startsWith("/")) {
-      return normalizedPath;
-    }
-
-    const objectFile = await this.getObjectEntityFile(normalizedPath);
-    await setObjectAclPolicy(objectFile, aclPolicy);
-    return normalizedPath;
+    return this.normalizeObjectEntityPath(rawPath);
   }
 
-  async canAccessObjectEntity({
-    userId,
-    objectFile,
-    requestedPermission,
-  }: {
+  async canAccessObjectEntity(_args: {
     userId?: string;
-    objectFile: File;
-    requestedPermission?: ObjectPermission;
+    objectFile: LocalFile;
+    requestedPermission?: unknown;
   }): Promise<boolean> {
-    return canAccessObject({
-      userId,
-      objectFile,
-      requestedPermission: requestedPermission ?? ObjectPermission.READ,
-    });
+    // Контроль доступа делается на уровне роута через scope/owner проверки.
+    return true;
   }
-}
-
-function parseObjectPath(path: string): {
-  bucketName: string;
-  objectName: string;
-} {
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
-  const pathParts = path.split("/");
-  if (pathParts.length < 3) {
-    throw new Error("Invalid path: must contain at least a bucket name");
-  }
-
-  const bucketName = pathParts[1];
-  const objectName = pathParts.slice(2).join("/");
-
-  return {
-    bucketName,
-    objectName,
-  };
-}
-
-async function signObjectURL({
-  bucketName,
-  objectName,
-  method,
-  ttlSec,
-}: {
-  bucketName: string;
-  objectName: string;
-  method: "GET" | "PUT" | "DELETE" | "HEAD";
-  ttlSec: number;
-}): Promise<string> {
-  const request = {
-    bucket_name: bucketName,
-    object_name: objectName,
-    method,
-    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
-  };
-  const response = await fetch(
-    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30_000),
-    }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
-    );
-  }
-
-  const { signed_url: signedURL } = (await response.json()) as {
-    signed_url: string;
-  };
-  return signedURL;
 }

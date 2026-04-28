@@ -157,6 +157,7 @@ router.post("/users/me/kyc-documents/presign", async (req, res): Promise<void> =
     const { uploadURL, objectPath, storageKey } = await storage.createUpload({
       contentType: parsed.data.mimeType,
       ttlSec: 900,
+      maxBytes: MAX_KYC_BYTES,
     });
     res.json({ uploadURL, objectPath, storageKey,
       expiresAt: new Date(Date.now() + 900_000).toISOString() });

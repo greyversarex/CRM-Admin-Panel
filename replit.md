@@ -121,13 +121,14 @@ CSV-импорт DSP-отчётов от Spotify/Apple Music/YouTube Music/TikTo
 
 ## Asset storage & uploads (Task #1)
 
-Хранилище — **Replit Object Storage** (через `@google-cloud/storage` + sidecar token). В проде заменим на Yandex Object Storage по тем же контрактам.
+Хранилище — **локальная ФС** (`artifacts/api-server/src/lib/objectStorage.ts`). Корень — `LOCAL_STORAGE_ROOT` (по умолчанию `<cwd>/.local-storage`), внутри — каталог `PRIVATE_OBJECT_DIR` (по умолчанию `private`) и подкаталог `uploads/<uuid>`. Рядом с каждым файлом лежит `<uuid>.meta.json` с content-type. Прод на Timeweb VPS: задать `LOCAL_STORAGE_ROOT=/var/lib/tajikmusic/uploads` (вне каталога деплоя, права на запись приложению), в nginx — `client_max_body_size 250m;`. Внешние объектные хранилища (S3/Yandex) не используются.
 
 - Таблица `assets` (`lib/db/src/schema/assets.ts`): `kind` (audio/cover/image/document), уникальный `storageKey`, `objectPath` (вида `/objects/uploads/<uuid>`), `sha256` (уникальный когда не null → дедуп при повторной заливке того же файла), `durationSeconds` (для аудио), FK на `release/track/artist/label`, `uploadedBy`.
-- API (`POST /api/assets/presign` → `PUT` напрямую в GCS → `POST /api/assets/confirm`):
-  - presign: лимиты — audio 200 МБ, cover/image/document 25 МБ; scope-чек по `release/track/artist/label`.
-  - confirm: тянет метаданные из GCS, считает sha256, для аудио вытаскивает длительность через `music-metadata.parseStream`. При совпадении sha256 возвращает существующий `assets` ряд (дедуп). Если `attach: true` (default) — пишет URL в `release.coverUrl` / `track.audioUrl`.
-- Чтение в браузере: `GET /api/storage/objects/uploads/:id` — стримит файл напрямую из GCS под session-cookie со scope-чеком (без подписанных URL для UI). Подписанные URL отдаются только через `GET /api/assets/:id` (5 мин TTL) — оставлено для будущего «Скачать оригинал».
+- API (`POST /api/assets/presign` → `PUT` на `/api/storage/upload/<uuid>?exp=&max=&sig=` (HMAC через `SESSION_SECRET`, лимит зашит в подпись) → `POST /api/assets/confirm`):
+  - presign: лимиты — audio 200 МБ, cover/image/document 25 МБ; scope-чек по `release/track/artist/label`. `maxBytes` зашивается в HMAC, поэтому клиент не может его поднять.
+  - PUT-роут (`routes/storage-upload.ts`): стрим через `pipeline(req, SizeLimiter, createWriteStream)` — настоящий backpressure; на любой ошибке/aborte/пустом теле частичный файл и sidecar чистятся; mounts ДО `requireAuth`.
+  - confirm: читает файл с локальной ФС, считает sha256, для аудио вытаскивает длительность через `music-metadata.parseStream`. При совпадении sha256 возвращает существующий `assets` ряд (дедуп). Если `attach: true` (default) — пишет URL в `release.coverUrl` / `track.audioUrl`.
+- Чтение в браузере: `GET /api/storage/objects/uploads/:id` — стримит файл с диска под session-cookie со scope-чеком (без подписанных URL для UI). «Скачать оригинал» через `GET /api/assets/:id` отдаёт тот же путь.
 - Frontend: `components/asset-uploader.tsx` — `useAssetUpload()` (XHR с прогрессом), `<CoverUploader>` (квадратный превью), `<AudioUploader>` (HTML5 `<audio controls>` после загрузки). На `/releases/new` и `/releases/[id]` обложка теперь грузится файл-инпутом, не URL'ом. На `/releases/[id]` появилась форма «Добавить трек» + per-track audio uploader + удаление трека.
 - `coverUrl` / `audioUrl` хранят `objectPath`; в UI рендерится через `assetHref()` → `/api/storage{objectPath}`. Старые внешние URL (если попадутся) проходят без обёртки.
 

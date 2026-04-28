@@ -156,6 +156,9 @@ router.post("/assets/presign", async (req, res): Promise<void> => {
     const { uploadURL, objectPath, storageKey } = await storage.createUpload({
       contentType: parsed.data.mimeType,
       ttlSec: 900,
+      // Лимит зашит в HMAC URL — клиент не может загрузить больше, чем
+      // заявил тип файла на этапе presign.
+      maxBytes: cap ?? 25 * 1024 * 1024,
     });
     res.json({
       uploadURL,
