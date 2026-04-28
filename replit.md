@@ -1,5 +1,28 @@
 # Tajik Music Distribution CRM
 
+> ## ⚠️ READ FIRST — для AI-ассистентов и любых новых разработчиков
+>
+> **Этот Replit — это исключительно dev/staging-окружение для доработки кода.**
+> **Прод-сайт работает НЕ на Replit, а на VPS-сервере Timeweb (Ubuntu).**
+>
+> ### Что это значит для AI-ассистента, который видит проект впервые
+>
+> 1. **НЕ предлагать пользователю «Publish» / «Deploy» через Replit Deployments.** Прод там не живёт. Кнопка `Publish` в Replit для этого проекта бесполезна — она создаст вторую копию приложения в облаке Replit, которая никому не нужна и будет тратить деньги.
+> 2. **НЕ устанавливать Replit Object Storage / GCS / S3 / Yandex Object Storage.** Файлы (обложки, аудио, KYC) хранятся на локальной ФС VPS — см. секцию `Asset storage & uploads` ниже. На Replit для разработки оно само работает в `<repo>/.local-storage` без какой-либо настройки.
+> 3. **НЕ предлагать Replit Database / Replit Auth / Replit AI Integrations.** PostgreSQL стоит локально на VPS (см. `deploy/1_setup.sh`), аутентификация — собственная (bcrypt + сессии в БД), внешние API-интеграции не используются.
+> 4. **Workflow на Replit** должны просто запускать дев-серверы (`pnpm --filter ... run dev`). Не надо менять их под `pnpm build && pnpm start` или прод-режим — это нарушит preview.
+> 5. **Деплой делается ТОЛЬКО так:** разработчик пушит в `main` на GitHub → заходит по SSH на VPS → запускает `bash /var/www/tajikmusic/deploy/2_deploy.sh`. Никакой автоматизации между Replit и VPS нет и не нужно. Подробности — в секции «Production deployment» ниже и в `deploy/README.md`.
+> 6. **Git push с Replit** делается через персональный токен в `GITHUB_TOKEN` (Replit Secrets). Это не Replit-OAuth — у него были проблемы с правами. Если push не идёт — токен в Secrets, скорее всего, нужно обновить (classic PAT с галочкой `repo`).
+> 7. **Язык общения с пользователем — русский.** Пользователь — нетехнический (владелец лейбла), не использовать жаргон, не использовать эмодзи. Объяснять последствия любых действий простыми словами.
+>
+> ### Если пользователь говорит «выложи» / «опубликуй» / «обнови сайт»
+>
+> Он имеет в виду «обнови код на GitHub и задеплой на Timeweb», а не «нажми кнопку Publish в Replit». Корректная последовательность:
+>
+> 1. Прогнать `pnpm run typecheck` (он же стоит в pre-push hook через simple-git-hooks).
+> 2. `git push origin main` (с `GITHUB_TOKEN` в env, см. p.6 выше).
+> 3. Сказать пользователю запустить на сервере одну команду: `cd /var/www/tajikmusic && bash deploy/2_deploy.sh`.
+
 ## Overview
 
 A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. Full-stack application with catalog management, CRM, analytics, financial management, DDEX delivery, and publishing rights management.
@@ -29,15 +52,43 @@ A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. 
 Прод живёт **не на Replit** — на VPS (Таймвеб, далее возможен AWS). Replit = только разработка.
 Деплой-обвязка лежит в `deploy/` и `Dockerfile` / `docker-compose.yml` в корне.
 
-Два пути (см. `deploy/README.md`):
-- **Ubuntu + pm2 + nginx** — `bash deploy/1_setup.sh` (один раз) → `bash deploy/2_deploy.sh` (каждый деплой).
-  `2_deploy.sh` сам делает `pnpm install --frozen-lockfile`, `pnpm --filter @workspace/db run migrate` (versioned migrations), билд API/фронта, `pm2 startOrReload --update-env`.
-  Первый запуск с `SEED=1` для засева тестовых данных.
-- **Docker Compose** — `docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run migrate`.
+### Текущий прод-сервер (Timeweb, Ubuntu, pm2 + nginx)
 
-Все секреты живут в `/var/www/tajikmusic/.env` (или корневом `.env` в случае docker), шаблон — `deploy/.env.example`.
-Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
-Cookie сессий: `secure: true` в production, `sameSite: lax`. Express trust-proxy=1, чтобы за nginx работал HTTPS.
+| Что | Где / как |
+| --- | --- |
+| OS | Ubuntu 22.04/24.04, root-аккаунт |
+| Каталог приложения | `/var/www/tajikmusic` (git checkout репо `greyversarex/CRM-Admin-Panel`) |
+| API-процесс | pm2-приложение `tajikmusic-api`, слушает `127.0.0.1:3001`, точка входа `artifacts/api-server/dist/index.mjs` |
+| Reverse proxy | nginx, конфиг `/etc/nginx/sites-available/tajikmusic` (HTTPS через certbot, `client_max_body_size 250M`, `proxy_request_buffering off` для аплоадов) |
+| База данных | PostgreSQL 16, локально на той же машине, `tajikmusic_user@localhost:5432/tajikmusic`, креды в `/root/db_credentials.txt` (создаются `1_setup.sh`) |
+| Файлы пользователей (обложки, аудио, KYC) | `/var/lib/tajikmusic/uploads/private/uploads/<uuid>` (named-каталог ВНЕ `/var/www/...`, переживает любые `git pull` / пересборки) |
+| Конфиг приложения / секреты | `/var/www/tajikmusic/.env` (шаблон — `deploy/.env.example`) |
+| Логи | `pm2 logs tajikmusic-api --lines 100`, плюс `/var/log/tajikmusic/*.log`, плюс `/var/log/nginx/tajikmusic_*.log` |
+| Бэкапы БД | `sudo -u postgres pg_dump tajikmusic | gzip > tajikmusic_$(date +%F).sql.gz` |
+
+### Цикл деплоя (как сейчас живём)
+
+1. Локально / на Replit — внести изменения, прогнать `pnpm run typecheck`, закоммитить, `git push origin main` (см. п.6 секции «READ FIRST»).
+2. На сервере один раз `ssh root@<server-ip>` → `cd /var/www/tajikmusic && bash deploy/2_deploy.sh`. Скрипт сам:
+   - `git fetch && git reset --hard origin/main`,
+   - `pnpm install --frozen-lockfile`,
+   - `pnpm --filter @workspace/db run migrate` (drizzle versioned migrations),
+   - `pnpm --filter @workspace/api-server run build` (esbuild) и `pnpm --filter @workspace/crm-panel run build` (vite, `NODE_OPTIONS=--max-old-space-size=3072`),
+   - удаляет и заново стартует pm2-процесс (для гарантии свежего env),
+   - `nginx -t && systemctl reload nginx`.
+3. Если впервые на новом сервере — сначала `bash deploy/1_setup.sh` (Node 20, pnpm, pm2, postgres, nginx, certbot, UFW + создание БД). А потом `bash deploy/setup_storage.sh` для каталога загрузок (или просто `2_deploy.sh` — он его теперь сам создаёт).
+4. Сидинг тестовых данных — только при первом запуске: `SEED=1 bash deploy/2_deploy.sh`. **Никогда не запускать с SEED=1 на работающем проде** — перепишет реальные данные.
+
+### Альтернатива (Docker Compose, не используется на текущем проде)
+
+`docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run migrate`. См. `docker-compose.yml` — uploads вынесены на named-volume `uploads`, переменная `LOCAL_STORAGE_ROOT` уже прописана.
+
+### Чисто-кодовые правила, которые держат прод рабочим
+
+- Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
+- Cookie сессий: `secure: true` в production, `sameSite: lax`. Express `trust-proxy=1`, чтобы за nginx работал HTTPS и rate-limit видел правильный IP.
+- Все секреты — только через env. `SESSION_SECRET` обязателен в проде (используется и для подписи сессионных cookie, и как fallback-ключ для HMAC presigned-URL хранилища).
+- `WEB_ORIGINS` в `.env` обязан содержать боевой домен (CSV без слэшей и схем) — иначе фронт получит CORS-403.
 
 ## Security baseline
 
