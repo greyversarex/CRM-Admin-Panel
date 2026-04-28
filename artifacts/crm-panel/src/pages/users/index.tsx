@@ -31,7 +31,7 @@ import { BlacklistTab } from "./_blacklist-tab";
 import { EditUserDialog } from "./_edit-user-dialog";
 
 export default function Users() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -104,19 +104,19 @@ export default function Users() {
     {
       role: "admin",
       perms: [
-        t.lang === "ru"
+        lang === "ru"
           ? "Полный доступ ко всему"
           : "Full access to everything",
-        t.lang === "ru"
+        lang === "ru"
           ? "Управление пользователями (создать / роль / suspend)"
           : "User management (create / role / suspend)",
-        t.lang === "ru"
+        lang === "ru"
           ? "Одобрение заявок и KYC"
           : "Approve registrations and KYC",
-        t.lang === "ru"
+        lang === "ru"
           ? "Финансовый контроль и выплаты"
           : "Financial control and payouts",
-        t.lang === "ru"
+        lang === "ru"
           ? "Системные настройки и интеграции"
           : "System settings and integrations",
       ],
@@ -124,19 +124,19 @@ export default function Users() {
     {
       role: "manager",
       perms: [
-        t.lang === "ru"
+        lang === "ru"
           ? "Модерация релизов (approve / reject / takedown)"
           : "Release moderation (approve / reject / takedown)",
-        t.lang === "ru"
+        lang === "ru"
           ? "Доставка в DSP и retry"
           : "DSP delivery and retry",
-        t.lang === "ru"
+        lang === "ru"
           ? "Одобрение KYC и заявок на регистрацию"
           : "Approve KYC and registration requests",
-        t.lang === "ru"
+        lang === "ru"
           ? "Просмотр финансов (read-only)"
           : "View financials (read-only)",
-        t.lang === "ru"
+        lang === "ru"
           ? "Управление CRM (контакты, задачи)"
           : "Manage CRM (contacts, tasks)",
       ],
@@ -144,16 +144,16 @@ export default function Users() {
     {
       role: "label",
       perms: [
-        t.lang === "ru"
+        lang === "ru"
           ? "Свой каталог релизов и треков"
           : "Own release and track catalog",
-        t.lang === "ru"
+        lang === "ru"
           ? "Сплиты внутри лейбла"
           : "Splits within the label",
-        t.lang === "ru"
+        lang === "ru"
           ? "Доход лейбла и подартисты"
           : "Label income and sub-artists",
-        t.lang === "ru"
+        lang === "ru"
           ? "Свои контакты и задачи"
           : "Own contacts and tasks",
       ],
@@ -161,10 +161,10 @@ export default function Users() {
     {
       role: "artist",
       perms: [
-        t.lang === "ru" ? "Подача релизов" : "Submit releases",
-        t.lang === "ru" ? "Своя аналитика и статистика" : "Personal analytics and stats",
-        t.lang === "ru" ? "Запрос выплаты" : "Request payout",
-        t.lang === "ru" ? "Свой профиль и KYC" : "Own profile and KYC",
+        lang === "ru" ? "Подача релизов" : "Submit releases",
+        lang === "ru" ? "Своя аналитика и статистика" : "Personal analytics and stats",
+        lang === "ru" ? "Запрос выплаты" : "Request payout",
+        lang === "ru" ? "Свой профиль и KYC" : "Own profile and KYC",
       ],
     },
   ];

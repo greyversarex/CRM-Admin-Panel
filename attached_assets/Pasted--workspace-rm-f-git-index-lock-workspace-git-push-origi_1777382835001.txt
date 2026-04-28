@@ -1,0 +1,87 @@
+~/workspace$ rm -f .git/index.lock
+~/workspace$ git push origin main
+
+> workspace@0.0.0 typecheck /home/runner/workspace
+> pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+
+
+> workspace@0.0.0 typecheck:libs /home/runner/workspace
+> tsc --build
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateArtistBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateContactBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateCrmTaskBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateLabelBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreatePublishingWorkBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateReleaseBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateSplitBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateTrackBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateTransactionBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateTransferImportBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'CreateUserBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'DeliverReleaseBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'RejectPayoutBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-zod/src/index.ts:2:1 - error TS2308: Module "./generated/api" has already exported a member named 'UpdateReleaseStatusBody'. Consider explicitly re-exporting to resolve the ambiguity.
+
+2 export * from "./generated/types";
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Found 14 errors.
+
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+error: failed to push some refs to 'https://github.com/greyversarex/CRM-Admin-Panel'
+~/workspace$ 

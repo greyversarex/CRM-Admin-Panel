@@ -727,11 +727,12 @@ export default function Royalties() {
                       <TableBody>
                         {(payoutsQ.data?.data ?? []).map((p) => {
                           const stLabel = payoutStatusLabel(p.status);
+                          const ps = String(p.status);
                           const stCls =
-                            p.status === "paid"      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                            p.status === "rejected"  ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                            p.status === "processing"? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
-                                                       "bg-amber-500/10 text-amber-400 border-amber-500/20";
+                            ps === "paid"      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                            ps === "rejected"  ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                            ps === "processing"? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                                                 "bg-amber-500/10 text-amber-400 border-amber-500/20";
                           return (
                             <TableRow key={p.id}>
                               <TableCell>{new Date(p.createdAt).toLocaleDateString()}</TableCell>
