@@ -101,7 +101,11 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "crm_group",
     managerKey: "crm",
     items: [
-      { nameKey: "crm", href: "/crm", icon: TrendingUp, iconColor: "text-cyan-400" },
+      { nameKey: "crm_overview", href: "/crm",                icon: BarChart3,  iconColor: "text-cyan-400" },
+      { nameKey: "crm_activity", href: "/crm?tab=activity",   icon: Users2,     iconColor: "text-cyan-400" },
+      { nameKey: "crm_arpu",     href: "/crm?tab=arpu",       icon: Coins,      iconColor: "text-cyan-400" },
+      { nameKey: "crm_growth",   href: "/crm?tab=growth",     icon: TrendingUp, iconColor: "text-cyan-400" },
+      { nameKey: "crm_funnel",   href: "/crm?tab=funnel",     icon: Workflow,   iconColor: "text-cyan-400" },
     ],
   },
   {

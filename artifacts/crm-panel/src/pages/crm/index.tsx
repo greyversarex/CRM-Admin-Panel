@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
+import { useLocation, useSearch } from "wouter";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -177,66 +178,73 @@ function FunnelBar({ items, colorFrom, colorTo }: { items: { stage: string; valu
   );
 }
 
-function CrmAnalytics() {
-  const [overview, setOverview] = useState<OverviewData | null>(null);
-  const [activity, setActivity] = useState<UserActivityRow[]>([]);
-  const [revenue, setRevenue] = useState<RevenueRow[]>([]);
-  const [growth, setGrowth] = useState<GrowthRow[]>([]);
-  const [funnel, setFunnel] = useState<FunnelData | null>(null);
+function useAnalyticsFetch<T>(url: string) {
+  const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch("/api/crm/analytics/overview", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/crm/analytics/user-activity", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/crm/analytics/revenue-per-user", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/crm/analytics/growth", { credentials: "same-origin" }).then((r) => r.json()),
-      fetch("/api/crm/analytics/funnel", { credentials: "same-origin" }).then((r) => r.json()),
-    ]).then(([ov, act, rev, gr, fn]) => {
-      setOverview(ov as OverviewData);
-      setActivity(act as UserActivityRow[]);
-      setRevenue(rev as RevenueRow[]);
-      setGrowth(gr as GrowthRow[]);
-      setFunnel(fn as FunnelData);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    let alive = true;
+    setLoading(true); setError(null);
+    fetch(url, { credentials: "same-origin" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => { if (alive) setData(d as T); })
+      .catch((e) => { if (alive) setError(e?.message ?? "Ошибка загрузки"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [url]);
+  return { data, loading, error };
+}
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground text-sm"><Loader2 className="h-5 w-5 animate-spin mr-2" />Загрузка аналитики…</div>;
-  if (!overview) return <div className="text-center py-20 text-muted-foreground text-sm">Нет данных</div>;
+function AnalyticsLoader() {
+  return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
+      <Loader2 className="h-5 w-5 animate-spin mr-2" />Загрузка аналитики…
+    </div>
+  );
+}
 
-  const releasePieData = overview.releasesByStatus.map((r) => ({ name: STATUS_RU[r.status] ?? r.status, value: r.cnt }));
-  const contactPieData = overview.contactsByType.map((r) => ({ name: ROLE_RU[r.type] ?? r.type, value: r.cnt }));
+function AnalyticsEmpty({ msg = "Нет данных" }: { msg?: string }) {
+  return <div className="text-center py-20 text-muted-foreground text-sm">{msg}</div>;
+}
+
+// ─── Tab 1: Overview ────────────────────────────────────────────────────────
+
+function CrmOverviewPanel() {
+  const { data, loading } = useAnalyticsFetch<OverviewData>("/api/crm/analytics/overview");
+  if (loading) return <AnalyticsLoader />;
+  if (!data) return <AnalyticsEmpty />;
+
+  const releasePieData = data.releasesByStatus.map((r) => ({ name: STATUS_RU[r.status] ?? r.status, value: r.cnt }));
+  const contactPieData = data.contactsByType.map((r) => ({ name: ROLE_RU[r.type] ?? r.type, value: r.cnt }));
 
   return (
     <div className="space-y-6">
-      {/* ── Overview KPIs ── */}
       <div>
         <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Обзор бизнеса</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiTile icon={Music2}   label="Треков"         value={fmt(overview.tracks)}   color="text-violet-400" />
-          <KpiTile icon={Mic2}     label="Артистов"       value={fmt(overview.artists)}  color="text-cyan-400" />
-          <KpiTile icon={Disc3}    label="Релизов"        value={fmt(overview.releases)} color="text-indigo-400" />
-          <KpiTile icon={Users2}   label="Пользователей"  value={fmt(overview.users)}    color="text-emerald-400" />
-          <KpiTile icon={DollarSign} label="Выручка (роялти)" value={fmtMoney(overview.revenue)} color="text-green-400" />
-          <KpiTile icon={Send}     label="Доставок отправлено" value={fmt(overview.sentDeliveries)}  color="text-blue-400" />
-          <KpiTile icon={Clock}    label="Доставок в очереди"  value={fmt(overview.pendingDeliveries)} color="text-amber-400" />
-          <KpiTile icon={CheckSquare} label="Задач в работе" value={fmt(funnel?.taskFunnel.find(f => f.key === "in_progress")?.value ?? 0)} color="text-rose-400" />
+          <KpiTile icon={Music2}     label="Треков"               value={fmt(data.tracks)}            color="text-violet-400" />
+          <KpiTile icon={Mic2}       label="Артистов"             value={fmt(data.artists)}           color="text-cyan-400" />
+          <KpiTile icon={Disc3}      label="Релизов"              value={fmt(data.releases)}          color="text-indigo-400" />
+          <KpiTile icon={Users2}     label="Пользователей"        value={fmt(data.users)}             color="text-emerald-400" />
+          <KpiTile icon={DollarSign} label="Выручка (роялти)"     value={fmtMoney(data.revenue)}      color="text-green-400" />
+          <KpiTile icon={Send}       label="Доставок отправлено"  value={fmt(data.sentDeliveries)}    color="text-blue-400" />
+          <KpiTile icon={Clock}      label="Доставок в очереди"   value={fmt(data.pendingDeliveries)} color="text-amber-400" />
+          <KpiTile icon={CheckSquare} label="Релизов всего"       value={fmt(data.releases)}          color="text-rose-400" />
         </div>
       </div>
 
-      {/* ── Pie charts ── */}
       {(releasePieData.length > 0 || contactPieData.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {releasePieData.length > 0 && (
             <Card className="bg-card/50 border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Релизы по статусу</CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Релизы по статусу</CardTitle></CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
-                    <Pie data={releasePieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={10}>
+                    <Pie data={releasePieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={10}>
                       {releasePieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #30304a", fontSize: 12 }} />
@@ -247,13 +255,11 @@ function CrmAnalytics() {
           )}
           {contactPieData.length > 0 && (
             <Card className="bg-card/50 border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Контакты по типу</CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Контакты по типу</CardTitle></CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
-                    <Pie data={contactPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={10}>
+                    <Pie data={contactPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={10}>
                       {contactPieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #30304a", fontSize: 12 }} />
@@ -264,125 +270,177 @@ function CrmAnalytics() {
           )}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* ── Growth chart ── */}
-      {growth.length > 0 && (
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-400" />Рост по месяцам</CardTitle>
-            <CardDescription className="text-xs">Новые артисты, релизы, пользователи за последние 12 месяцев</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={growth} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #30304a", fontSize: 12 }} />
-                <Legend iconType="square" wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="artists"  name="Артисты"       fill="#6366f1" radius={[2,2,0,0]} />
-                <Bar dataKey="releases" name="Релизы"        fill="#22d3ee" radius={[2,2,0,0]} />
-                <Bar dataKey="users"    name="Пользователи"  fill="#34d399" radius={[2,2,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
+// ─── Tab 2: User Activity ───────────────────────────────────────────────────
 
-      {/* ── Revenue per artist ── */}
-      {revenue.length > 0 && (
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-400" />Выручка по артистам</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border/40">
-                  <th className="text-left pb-2 font-medium">Артист</th>
-                  <th className="text-right pb-2 font-medium">Роялти</th>
-                  <th className="text-right pb-2 font-medium">Аванс</th>
-                  <th className="text-right pb-2 font-medium">Выплачено</th>
-                  <th className="text-right pb-2 font-medium">Нетто</th>
+function CrmActivityPanel() {
+  const { data, loading } = useAnalyticsFetch<UserActivityRow[]>("/api/crm/analytics/user-activity");
+  if (loading) return <AnalyticsLoader />;
+  if (!data || data.length === 0) return <AnalyticsEmpty />;
+  return (
+    <Card className="bg-card/50 border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2"><Users2 className="h-4 w-4 text-cyan-400" />Активность пользователей</CardTitle>
+        <CardDescription className="text-xs">Задачи назначены / завершены по каждому участнику команды</CardDescription>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground border-b border-border/40">
+              <th className="text-left pb-2 font-medium">Пользователь</th>
+              <th className="text-left pb-2 font-medium">Роль</th>
+              <th className="text-right pb-2 font-medium">Всего задач</th>
+              <th className="text-right pb-2 font-medium">Завершено</th>
+              <th className="text-right pb-2 font-medium">% выполнения</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((u) => {
+              const pct = u.totalTasks > 0 ? Math.round((u.doneTasks / u.totalTasks) * 100) : 0;
+              return (
+                <tr key={u.id} className="border-b border-border/20 hover:bg-muted/10">
+                  <td className="py-1.5 font-medium">{u.name}</td>
+                  <td className="py-1.5"><Badge variant="outline" className="text-[10px]">{ROLE_RU[u.role] ?? u.role}</Badge></td>
+                  <td className="py-1.5 text-right">{u.totalTasks}</td>
+                  <td className="py-1.5 text-right text-emerald-400">{u.doneTasks}</td>
+                  <td className="py-1.5 text-right">
+                    <span className={pct >= 80 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-muted-foreground"}>{pct}%</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {revenue.map((r) => (
-                  <tr key={r.id} className="border-b border-border/20 hover:bg-muted/10">
-                    <td className="py-1.5 font-medium">{r.name}</td>
-                    <td className="py-1.5 text-right text-emerald-400">{fmtMoney(r.royalty)}</td>
-                    <td className="py-1.5 text-right text-blue-400">{fmtMoney(r.advance)}</td>
-                    <td className="py-1.5 text-right text-amber-400">{fmtMoney(r.payout)}</td>
-                    <td className={`py-1.5 text-right font-semibold ${r.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmtMoney(r.net)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+              );
+            })}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}
 
-      {/* ── User Activity ── */}
-      {activity.length > 0 && (
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><Users2 className="h-4 w-4 text-cyan-400" />Активность пользователей</CardTitle>
-            <CardDescription className="text-xs">Задачи назначены / завершены по каждому участнику команды</CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border/40">
-                  <th className="text-left pb-2 font-medium">Пользователь</th>
-                  <th className="text-left pb-2 font-medium">Роль</th>
-                  <th className="text-right pb-2 font-medium">Всего задач</th>
-                  <th className="text-right pb-2 font-medium">Завершено</th>
-                  <th className="text-right pb-2 font-medium">% выполнения</th>
+// ─── Tab 3: ARPU (revenue per artist) ───────────────────────────────────────
+
+function CrmArpuPanel() {
+  const { data, loading } = useAnalyticsFetch<RevenueRow[]>("/api/crm/analytics/revenue-per-user");
+  if (loading) return <AnalyticsLoader />;
+  if (!data || data.length === 0) return <AnalyticsEmpty />;
+
+  const totalRoyalty = data.reduce((s, r) => s + r.royalty, 0);
+  const totalPayout  = data.reduce((s, r) => s + r.payout, 0);
+  const arpu = data.length > 0 ? totalRoyalty / data.length : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiTile icon={DollarSign} label="Общая выручка"    value={fmtMoney(totalRoyalty)}     color="text-emerald-400" />
+        <KpiTile icon={DollarSign} label="Выплачено"        value={fmtMoney(totalPayout)}      color="text-amber-400" />
+        <KpiTile icon={TrendingUp} label="ARPU (на артиста)" value={fmtMoney(arpu)}            color="text-indigo-400" />
+      </div>
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-400" />Выручка по артистам</CardTitle>
+          <CardDescription className="text-xs">Сортировка по нетто-выручке (роялти − выплаты)</CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border/40">
+                <th className="text-left pb-2 font-medium">Артист</th>
+                <th className="text-right pb-2 font-medium">Роялти</th>
+                <th className="text-right pb-2 font-medium">Аванс</th>
+                <th className="text-right pb-2 font-medium">Выплачено</th>
+                <th className="text-right pb-2 font-medium">Нетто</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...data].sort((a, b) => b.net - a.net).map((r) => (
+                <tr key={r.id} className="border-b border-border/20 hover:bg-muted/10">
+                  <td className="py-1.5 font-medium">{r.name}</td>
+                  <td className="py-1.5 text-right text-emerald-400">{fmtMoney(r.royalty)}</td>
+                  <td className="py-1.5 text-right text-blue-400">{fmtMoney(r.advance)}</td>
+                  <td className="py-1.5 text-right text-amber-400">{fmtMoney(r.payout)}</td>
+                  <td className={`py-1.5 text-right font-semibold ${r.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmtMoney(r.net)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {activity.map((u) => {
-                  const pct = u.totalTasks > 0 ? Math.round((u.doneTasks / u.totalTasks) * 100) : 0;
-                  return (
-                    <tr key={u.id} className="border-b border-border/20 hover:bg-muted/10">
-                      <td className="py-1.5 font-medium">{u.name}</td>
-                      <td className="py-1.5"><Badge variant="outline" className="text-[10px]">{ROLE_RU[u.role] ?? u.role}</Badge></td>
-                      <td className="py-1.5 text-right">{u.totalTasks}</td>
-                      <td className="py-1.5 text-right text-emerald-400">{u.doneTasks}</td>
-                      <td className="py-1.5 text-right">
-                        <span className={pct >= 80 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-muted-foreground"}>{pct}%</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-      {/* ── Funnels ── */}
-      {funnel && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="bg-card/50 border-border/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-4 w-4 text-indigo-400" />Воронка релизов</CardTitle>
-            </CardHeader>
-            <CardContent><FunnelBar items={funnel.releaseFunnel} colorFrom="bg-indigo-500" colorTo="bg-indigo-800" /></CardContent>
-          </Card>
-          <Card className="bg-card/50 border-border/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Send className="h-4 w-4 text-blue-400" />Воронка доставок</CardTitle>
-            </CardHeader>
-            <CardContent><FunnelBar items={funnel.deliveryFunnel} colorFrom="bg-blue-500" colorTo="bg-blue-800" /></CardContent>
-          </Card>
-          <Card className="bg-card/50 border-border/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><CheckSquare className="h-4 w-4 text-emerald-400" />Воронка задач</CardTitle>
-            </CardHeader>
-            <CardContent><FunnelBar items={funnel.taskFunnel} colorFrom="bg-emerald-500" colorTo="bg-emerald-800" /></CardContent>
-          </Card>
-        </div>
-      )}
+// ─── Tab 4: Growth ──────────────────────────────────────────────────────────
+
+function CrmGrowthPanel() {
+  const { data, loading } = useAnalyticsFetch<GrowthRow[]>("/api/crm/analytics/growth");
+  if (loading) return <AnalyticsLoader />;
+  if (!data || data.length === 0) return <AnalyticsEmpty />;
+
+  const totalArtists = data.reduce((s, r) => s + r.artists, 0);
+  const totalReleases = data.reduce((s, r) => s + r.releases, 0);
+  const totalUsers = data.reduce((s, r) => s + r.users, 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiTile icon={Mic2}     label="Новых артистов (12м)"      value={fmt(totalArtists)}  color="text-cyan-400" />
+        <KpiTile icon={Disc3}    label="Новых релизов (12м)"       value={fmt(totalReleases)} color="text-indigo-400" />
+        <KpiTile icon={Users2}   label="Новых пользователей (12м)" value={fmt(totalUsers)}    color="text-emerald-400" />
+      </div>
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-400" />Рост по месяцам</CardTitle>
+          <CardDescription className="text-xs">Новые артисты, релизы, пользователи за последние 12 месяцев</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #30304a", fontSize: 12 }} />
+              <Legend iconType="square" wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="artists"  name="Артисты"       fill="#6366f1" radius={[2,2,0,0]} />
+              <Bar dataKey="releases" name="Релизы"        fill="#22d3ee" radius={[2,2,0,0]} />
+              <Bar dataKey="users"    name="Пользователи"  fill="#34d399" radius={[2,2,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Tab 5: Funnels ─────────────────────────────────────────────────────────
+
+function CrmFunnelPanel() {
+  const { data, loading } = useAnalyticsFetch<FunnelData>("/api/crm/analytics/funnel");
+  if (loading) return <AnalyticsLoader />;
+  if (!data) return <AnalyticsEmpty />;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-4 w-4 text-indigo-400" />Воронка релизов</CardTitle>
+          <CardDescription className="text-xs">draft → review → approved → delivering → live</CardDescription>
+        </CardHeader>
+        <CardContent><FunnelBar items={data.releaseFunnel} colorFrom="bg-indigo-500" colorTo="bg-indigo-800" /></CardContent>
+      </Card>
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Send className="h-4 w-4 text-blue-400" />Воронка доставок</CardTitle>
+          <CardDescription className="text-xs">queued → processing → sent → acked / failed</CardDescription>
+        </CardHeader>
+        <CardContent><FunnelBar items={data.deliveryFunnel} colorFrom="bg-blue-500" colorTo="bg-blue-800" /></CardContent>
+      </Card>
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><CheckSquare className="h-4 w-4 text-emerald-400" />Воронка задач</CardTitle>
+          <CardDescription className="text-xs">todo → in_progress → done / cancelled</CardDescription>
+        </CardHeader>
+        <CardContent><FunnelBar items={data.taskFunnel} colorFrom="bg-emerald-500" colorTo="bg-emerald-800" /></CardContent>
+      </Card>
     </div>
   );
 }
@@ -417,10 +475,25 @@ function safeTelegramHref(value: string): string | null {
   return null;
 }
 
+const CRM_TABS = ["overview", "activity", "arpu", "growth", "funnel", "contacts", "tasks"] as const;
+type CrmTab = typeof CRM_TABS[number];
+
 export default function CRM() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const { t } = useLang();
+  const [, setLocation] = useLocation();
+  const urlSearch = useSearch();
+
+  const activeTab: CrmTab = (() => {
+    const v = new URLSearchParams(urlSearch).get("tab") ?? "overview";
+    return (CRM_TABS as readonly string[]).includes(v) ? (v as CrmTab) : "overview";
+  })();
+
+  const onTabChange = (next: string) => {
+    if (next === "overview") setLocation("/crm");
+    else setLocation(`/crm?tab=${next}`);
+  };
 
   const contactTypeLabel = (tp: ContactType): string => ({
     artist: t.crm.contact_types.artist,
@@ -647,18 +720,37 @@ export default function CRM() {
           ))}
         </div>
 
-        <Tabs defaultValue="contacts">
-          <TabsList className="bg-card border border-border h-auto p-1 gap-1">
+        <Tabs value={activeTab} onValueChange={onTabChange}>
+          <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex-wrap">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <BarChart2 className="h-3.5 w-3.5" /> {t.crm.tab_overview}
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <Users2 className="h-3.5 w-3.5" /> {t.crm.tab_activity}
+            </TabsTrigger>
+            <TabsTrigger value="arpu" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <DollarSign className="h-3.5 w-3.5" /> {t.crm.tab_arpu}
+            </TabsTrigger>
+            <TabsTrigger value="growth" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5" /> {t.crm.tab_growth}
+            </TabsTrigger>
+            <TabsTrigger value="funnel" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <Layers className="h-3.5 w-3.5" /> {t.crm.tab_funnel}
+            </TabsTrigger>
             <TabsTrigger value="contacts" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Users2 className="h-3.5 w-3.5" /> {t.crm.tab_contacts}
+              <Mail className="h-3.5 w-3.5" /> {t.crm.tab_contacts}
             </TabsTrigger>
             <TabsTrigger value="tasks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <CheckSquare className="h-3.5 w-3.5" /> {t.crm.tab_tasks}
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <BarChart2 className="h-3.5 w-3.5" /> Аналитика
-            </TabsTrigger>
           </TabsList>
+
+          {/* ─── Analytics tabs ──────────────────────────────────────────── */}
+          <TabsContent value="overview" className="mt-4"><CrmOverviewPanel /></TabsContent>
+          <TabsContent value="activity" className="mt-4"><CrmActivityPanel /></TabsContent>
+          <TabsContent value="arpu"     className="mt-4"><CrmArpuPanel /></TabsContent>
+          <TabsContent value="growth"   className="mt-4"><CrmGrowthPanel /></TabsContent>
+          <TabsContent value="funnel"   className="mt-4"><CrmFunnelPanel /></TabsContent>
 
           {/* ─── Contacts ─────────────────────────────────────────────────── */}
           <TabsContent value="contacts" className="mt-4">
