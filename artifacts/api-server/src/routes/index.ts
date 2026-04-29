@@ -25,6 +25,7 @@ import kycRouter from "./kyc";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
 import rightsRouter from "./rights";
+import settingsRouter from "./settings";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -92,5 +93,9 @@ router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
 router.use(rightsRouter);               // /rights — scoped per-route inside (label/artist see their assets)
+router.use("/settings", adminOnly);
+router.use("/api-keys", adminOnly);
+router.use("/webhooks", adminOnly);
+router.use(settingsRouter);
 
 export default router;

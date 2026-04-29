@@ -26,3 +26,6 @@ export * from "./support";
 export * from "./transfer_imports";
 export * from "./rights_holders";
 export * from "./rights_conflicts";
+export * from "./platform_settings";
+export * from "./api_keys";
+export * from "./webhooks";
