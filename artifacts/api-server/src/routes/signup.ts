@@ -17,6 +17,7 @@ import { logger } from "../lib/logger";
 import { sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
+import { emitAlertAndForget } from "../services/alerts-emitter";
 
 const router = Router();
 
@@ -246,6 +247,14 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
   void auditMutation(req, {
     action: "create", entityType: "user", entityId: user.id,
     before: null, after: user,
+  });
+  emitAlertAndForget({
+    kind: "signup",
+    severity: "low",
+    message: `Новый пользователь создан: ${user.name} (${user.email}, роль ${user.role})`,
+    entityType: "user",
+    entityId: user.id,
+    meta: { signupRequestId: id, role: user.role, country: user.country },
   });
 
   // Письмо новому пользователю с временным паролем — fire-and-forget. Если

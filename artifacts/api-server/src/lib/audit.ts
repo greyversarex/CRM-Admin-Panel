@@ -214,11 +214,13 @@ export type AuditAction =
   | "approve" | "reject" | "deliver" | "submit"
   | "freeze" | "unfreeze"
   | "approve_payout" | "reject_payout"
+  | "approve_l1" | "approve_l2"
   | "send"
   | "bulk_edit"
   | "acr_scan"
   | "resolve" | "reopen"
-  | "pro_register";
+  | "import"
+  | "pro_register" | "pro_register_failed" | "pro_register_network_error";
 
 export interface AuditOptions {
   action: AuditAction;

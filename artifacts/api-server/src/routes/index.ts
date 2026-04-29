@@ -34,6 +34,7 @@ import catalogBulkRouter from "./catalog-bulk";
 import financeExtrasRouter from "./finance-extras";
 import distributionExtrasRouter from "./distribution-extras";
 import analyticsExtrasRouter from "./analytics-extras";
+import analyticsUgcImportRouter from "./analytics-ugc-import";
 import rightsExtrasRouter from "./rights-extras";
 import publishingExtrasRouter from "./publishing-extras";
 import communicationsChannelsRouter from "./communications-channels";
@@ -101,6 +102,7 @@ router.use("/analytics", adminOnly);  // currently mock org-wide aggregates
 router.use(analyticsRouter);
 // Analytics extras: UGC metrics + Realtime alerts (под /analytics → admin-only выше).
 router.use(analyticsExtrasRouter);
+router.use(analyticsUgcImportRouter);
 // /deliveries/* + POST /releases/:id/deliver — admin/manager only.
 // Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
 router.use("/deliveries", adminOnly);

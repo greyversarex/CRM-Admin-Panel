@@ -49,17 +49,23 @@ export const localFsTransport: ITransport = {
         await fs.writeFile(dest, f.content.data);
         totalBytes += f.content.data.length;
       } else {
-        // Если local-путь не существует (например в dev нет реального файла),
-        // создаём заглушку с пометкой — это даёт оператору смотреть структуру пакета
-        // даже без реального ассета.
+        // В production отсутствие исходного файла — фатальная ошибка (доставка прервана).
+        // В dev — пишем заглушку и продолжаем, чтобы упростить локальную проверку структуры.
         try {
           await fs.copyFile(f.content.localPath, dest);
           const st = await fs.stat(dest);
           totalBytes += st.size;
-        } catch {
-          const stub = Buffer.from(`[STUB] missing source: ${f.content.localPath}`, "utf8");
+        } catch (copyErr) {
+          if (process.env["NODE_ENV"] === "production") {
+            throw new Error(
+              `DDEX local-fs: исходный файл недоступен ${f.content.localPath} (${(copyErr as Error).message}). Доставка прервана.`,
+            );
+          }
+          // dev: stub + видимый warning через console (logger в этом модуле не используется)
+          const stub = Buffer.from(`[STUB-DEV] missing source: ${f.content.localPath}`, "utf8");
           await fs.writeFile(dest, stub);
           totalBytes += stub.length;
+          console.warn(`[ddex/local-fs] dev-stub: ${f.content.localPath} → ${dest}`);
         }
       }
       written.push(f.filename);

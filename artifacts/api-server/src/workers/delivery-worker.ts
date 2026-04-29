@@ -22,6 +22,7 @@ import { notifyByReleaseId } from "../services/notifications";
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { createMessage, processMessage } from "../ddex/service";
+import { emitAlertAndForget } from "../services/alerts-emitter";
 
 type DeliveryRow = typeof deliveriesTable.$inferSelect;
 
@@ -158,6 +159,14 @@ async function processOne(jobId: number): Promise<void> {
         entityType: "release",
         entityId: claimed.releaseId,
         link: `/releases/${claimed.releaseId}`,
+      });
+      emitAlertAndForget({
+        kind: "ddex_failed",
+        severity: "high",
+        message: `Доставка релиза #${claimed.releaseId} на ${claimed.target} провалилась после ${attempts} попыток: ${msg.slice(0, 200)}`,
+        entityType: "delivery",
+        entityId: jobId,
+        meta: { releaseId: claimed.releaseId, target: claimed.target, attempts, error: msg.slice(0, 1000) },
       });
     }
   }

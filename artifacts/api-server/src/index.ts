@@ -3,6 +3,8 @@ import { logger } from "./lib/logger";
 import { seedIntegrations } from "./services/integrations-seed";
 import { startDeliveryWorker, stopDeliveryWorker } from "./workers/delivery-worker";
 import { startAckPoller, stopAckPoller } from "./workers/ack-poller";
+import { startFraudEngine, stopFraudEngine } from "./services/fraud-engine";
+import { startPaymentAutomation, stopPaymentAutomation } from "./services/payment-automation";
 
 const rawPort = process.env["PORT"];
 
@@ -32,6 +34,10 @@ const server = app.listen(port, async (err) => {
   startDeliveryWorker().catch((e) => logger.error({ err: e }, "startDeliveryWorker failed"));
   // Опциональный ack-poller — включается env-переменной DDEX_ACK_POLLER_ENABLED=1
   startAckPoller().catch((e) => logger.error({ err: e }, "startAckPoller failed"));
+  // Fraud-engine: периодически прогоняет fraud_rules → создаёт fraud_alerts
+  startFraudEngine();
+  // Payment automation scheduler: cron-выражения payment_automation_rules
+  startPaymentAutomation();
 });
 
 // Graceful shutdown: останавливаем воркер до закрытия HTTP, чтобы дать активному
@@ -48,6 +54,8 @@ async function shutdown(signal: string) {
   } catch (e) {
     logger.error({ err: e }, "stopAckPoller failed");
   }
+  try { stopFraudEngine(); } catch (e) { logger.error({ err: e }, "stopFraudEngine failed"); }
+  try { stopPaymentAutomation(); } catch (e) { logger.error({ err: e }, "stopPaymentAutomation failed"); }
   server.close((err) => {
     if (err) { logger.error({ err }, "server.close error"); process.exit(1); }
     process.exit(0);

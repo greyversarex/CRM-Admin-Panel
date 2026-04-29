@@ -238,8 +238,11 @@ function TabSecurity() {
         <FieldRow label="Блокировка (мин)">
           <Input type="number" min={1} value={n("lockoutDurationMinutes")} onChange={(e) => set("lockoutDurationMinutes", Number(e.target.value))} className="w-36" />
         </FieldRow>
-        <FieldRow label="Обязательная 2FA" hint="Для всех пользователей (не только admin)">
-          <Switch checked={b("require2FA")} onCheckedChange={(v) => set("require2FA", v)} />
+        <FieldRow label="Обязательная 2FA" hint="Флаг сохранится, но фактическое подтверждение второго фактора пока не реализовано">
+          <div className="flex items-center gap-2">
+            <Switch checked={b("require2FA")} onCheckedChange={(v) => set("require2FA", v)} disabled />
+            <Badge variant="outline" className="text-xs">Скоро (требует доработки)</Badge>
+          </div>
         </FieldRow>
       </SettingsSection>
 

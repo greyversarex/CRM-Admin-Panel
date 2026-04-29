@@ -2,7 +2,7 @@
  * Analytics / UGC tab — пользовательский контент: YouTube CMS, TikTok, Meta, Instagram.
  */
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, Plus, Youtube } from "lucide-react";
+import { RefreshCw, Plus, Youtube, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,31 @@ export function UgcTab() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
+  const importSpotify = async () => {
+    setLoading(true);
+    try {
+      const r = await adminApi<{ imported: number; skipped: number; errors: number; message?: string }>(
+        "/api/analytics/ugc/import-spotify",
+        { method: "POST", body: JSON.stringify({ limit: 100 }) },
+      );
+      toast({
+        title: "Импорт из Spotify завершён",
+        description: r.message ?? `Импортировано: ${r.imported}, пропущено: ${r.skipped}, ошибок: ${r.errors}`,
+      });
+      await load();
+    } catch (e) {
+      const msg = (e as Error).message;
+      toast({
+        title: msg.includes("503") ? "Spotify не настроен" : "Ошибка импорта",
+        description: msg.includes("503")
+          ? "Заполните client_id/client_secret в Settings → Интеграции → Spotify"
+          : msg,
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
+
   const create = async () => {
     try {
       await adminApi("/api/analytics/ugc", { method: "POST", body: JSON.stringify({
@@ -53,6 +78,9 @@ export function UgcTab() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} data-testid="button-refresh-ugc">
             <RefreshCw className="h-4 w-4 mr-1" /> Обновить
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void importSpotify()} disabled={loading} data-testid="button-import-spotify">
+            <Music2 className="h-4 w-4 mr-1" /> Импорт из Spotify
           </Button>
           <Button size="sm" onClick={() => setOpen(true)} data-testid="button-add-ugc"><Plus className="h-4 w-4 mr-1" /> Добавить</Button>
         </div>

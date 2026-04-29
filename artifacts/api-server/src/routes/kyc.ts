@@ -23,6 +23,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { emitAlertAndForget } from "../services/alerts-emitter";
 import {
   ObjectStorageService, ObjectNotFoundError, objectStorageClient,
 } from "../lib/objectStorage";
@@ -366,6 +367,14 @@ router.post("/admin/kyc-documents/:id/reject", requireRole("admin", "manager"), 
   void auditMutation(req, {
     action: "reject", entityType: "kyc_document", entityId: id,
     before: doc, after: updated,
+  });
+  emitAlertAndForget({
+    kind: "kyc_rejected",
+    severity: "medium",
+    message: `Документ KYC #${id} отклонён${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+    entityType: "kyc_document",
+    entityId: id,
+    meta: { userId: doc.userId, reason: parsed.data.reason ?? null },
   });
   res.json(serializeDoc(updated));
 });

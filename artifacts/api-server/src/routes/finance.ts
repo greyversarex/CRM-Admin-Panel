@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable, usersTable } from "@workspace/db";
+import { db, transactionsTable, artistsTable, labelsTable, releasesTable, payoutsTable, usersTable, platformSettingsTable } from "@workspace/db";
 import { count, eq, desc, and, ne, inArray, sql } from "drizzle-orm";
 import {
   CreateTransactionBody,
@@ -12,6 +12,7 @@ import { PLATFORM_FEE_RATE, PAID_PAYOUT_STATUSES, PENDING_PAYOUT_STATUS } from "
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
+import { emitAlertAndForget } from "../services/alerts-emitter";
 
 const router = Router();
 
@@ -447,9 +448,22 @@ router.post("/payouts", async (req, res): Promise<void> => {
     }
   }
 
+  // Two-step approval: если сумма >= порога из settings.finance.twoStepThresholdCents → требуется L1+L2.
+  let twoStepRequired = false;
+  try {
+    const [s] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "finance"));
+    const v = (s?.value ?? {}) as { twoStepThresholdCents?: number };
+    const thresholdCents = typeof v.twoStepThresholdCents === "number" ? v.twoStepThresholdCents : 0;
+    if (thresholdCents > 0) {
+      const amountCents = Math.round(parsed.data.amount * 100);
+      twoStepRequired = amountCents >= thresholdCents;
+    }
+  } catch { /* без настроек — обычный single-step */ }
+
   const [payout] = await db.insert(payoutsTable).values({
     ...parsed.data,
     amount: parsed.data.amount.toString(),
+    twoStepRequired,
   }).returning();
   void auditMutation(req, { action: "create", entityType: "payout", entityId: payout.id, before: null, after: payout });
 
@@ -478,35 +492,93 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
   const [existing] = await db.select().from(payoutsTable).where(eq(payoutsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Payout not found" }); return; }
 
+  const approverId = req.session.user!.id;
+  const now = new Date();
+
+  // Two-step routing:
+  //   - twoStepRequired=false → одно нажатие → status='approved' (single-step).
+  //   - twoStepRequired=true:
+  //       стадия pending → 'approved_l1' (status остаётся 'pending', не финал).
+  //       стадия approved_l1 → 'approved' (другим юзером).
+  //   - Защита: один и тот же юзер не может одновременно L1+L2.
+  const isTwoStep = existing.twoStepRequired === true;
+  const stage = existing.approvalStage ?? "pending";
+
+  let updateSet: Record<string, unknown>;
+  let isFinal = false;
+
+  // Атомарное conditional update: WHERE включает ожидаемую stage+status, чтобы
+  // конкурентные approve не могли финализировать payout дважды и продублировать side-effects.
+  let updateWhere: any;
+  if (!isTwoStep) {
+    updateSet = { status: "approved", approvalStage: "approved_l2", approvedL1By: approverId, approvedL1At: now, approvedL2By: approverId, approvedL2At: now, processedAt: now };
+    isFinal = true;
+    updateWhere = and(eq(payoutsTable.id, id), eq(payoutsTable.status, "pending"));
+  } else if (stage === "pending") {
+    updateSet = { approvalStage: "approved_l1", approvedL1By: approverId, approvedL1At: now };
+    isFinal = false;
+    updateWhere = and(eq(payoutsTable.id, id), eq(payoutsTable.status, "pending"), sql`coalesce(${payoutsTable.approvalStage}, 'pending') = 'pending'`);
+  } else if (stage === "approved_l1") {
+    if (existing.approvedL1By === approverId) {
+      res.status(403).json({
+        error: "two_step_same_user",
+        message: "L2-одобрение должен сделать другой администратор/менеджер",
+      });
+      return;
+    }
+    updateSet = { status: "approved", approvalStage: "approved_l2", approvedL2By: approverId, approvedL2At: now, processedAt: now };
+    isFinal = true;
+    updateWhere = and(eq(payoutsTable.id, id), eq(payoutsTable.status, "pending"), eq(payoutsTable.approvalStage, "approved_l1"));
+  } else {
+    res.status(409).json({ error: "invalid_stage", message: `Текущая стадия: ${stage}, одобрение невозможно` });
+    return;
+  }
+
   const [payout] = await db.update(payoutsTable)
-    .set({ status: "approved", processedAt: new Date() })
-    .where(eq(payoutsTable.id, id))
+    .set(updateSet)
+    .where(updateWhere)
     .returning();
 
   if (!payout) {
-    res.status(404).json({ error: "Payout not found" });
+    // Конкурентный approve уже изменил state — отдаём 409, чтобы клиент перечитал.
+    res.status(409).json({ error: "stale_state", message: "Состояние выплаты изменилось — обновите страницу" });
     return;
   }
-  void auditMutation(req, { action: "approve", entityType: "payout", entityId: payout.id, before: existing, after: payout });
-
-  // Уведомляем получателя о том, что выплата одобрена.
-  const approveTitle = `💸 Выплата на ${payout.amount} ${payout.currency} одобрена`;
-  const approveBody = "Средства будут переведены в ближайшее время.";
-  if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
-  if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
-
-  fireTriggerAndForget("payout_approved", {
-    artistId: payout.artistId ?? null,
-    labelId: payout.labelId ?? null,
-    vars: { amount: String(payout.amount), currency: payout.currency, payout_id: String(payout.id) },
-    link: "/payouts",
-    entityType: "payout",
-    entityId: payout.id,
+  void auditMutation(req, {
+    action: isFinal ? "approve" : "approve_l1",
+    entityType: "payout", entityId: payout.id, before: existing, after: payout,
   });
-  fireWebhookAndForget("payout.approved", {
-    payoutId: payout.id, amount: payout.amount, currency: payout.currency,
-    artistId: payout.artistId, labelId: payout.labelId,
-  });
+
+  // Уведомления и триггеры — только при финальном одобрении (L2 / single).
+  if (isFinal) {
+    const approveTitle = `💸 Выплата на ${payout.amount} ${payout.currency} одобрена`;
+    const approveBody = "Средства будут переведены в ближайшее время.";
+    if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+    if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+
+    fireTriggerAndForget("payout_approved", {
+      artistId: payout.artistId ?? null,
+      labelId: payout.labelId ?? null,
+      vars: { amount: String(payout.amount), currency: payout.currency, payout_id: String(payout.id) },
+      link: "/payouts",
+      entityType: "payout",
+      entityId: payout.id,
+    });
+    fireWebhookAndForget("payout.approved", {
+      payoutId: payout.id, amount: payout.amount, currency: payout.currency,
+      artistId: payout.artistId, labelId: payout.labelId,
+    });
+  } else {
+    // L1 одобрено — нотифицируем admin'ов о том, что нужен L2
+    void notifyAdmins({
+      type: "payout_l1_approved",
+      title: `Выплата ${payout.amount} ${payout.currency}: нужен L2-одобрение`,
+      body: `L1 уже одобрено. Требуется второй администратор для финализации.`,
+      entityType: "payout",
+      entityId: payout.id,
+      link: "/payouts",
+    });
+  }
 
   res.json({
     ...formatPayout(payout),
@@ -559,6 +631,15 @@ router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req,
   fireWebhookAndForget("payout.rejected", {
     payoutId: payout.id, amount: payout.amount, currency: payout.currency,
     artistId: payout.artistId, labelId: payout.labelId, reason: parsed.data.reason,
+  });
+
+  emitAlertAndForget({
+    kind: "payment_failed",
+    severity: "medium",
+    message: `Выплата #${payout.id} на ${payout.amount} ${payout.currency} отклонена${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+    entityType: "payout",
+    entityId: payout.id,
+    meta: { artistId: payout.artistId, labelId: payout.labelId, reason: parsed.data.reason ?? null },
   });
 
   res.json({

@@ -123,10 +123,55 @@ router.post("/publishing/works/:id/register/:pro", async (req, res) => {
   const [work] = await db.select().from(publishingWorksTable).where(eq(publishingWorksTable.id, p.data.id));
   if (!work) { res.status(404).json({ error: "Work not found" }); return; }
 
-  // Каркас для реальной отправки: построить payload и POST на cfg.endpoint
-  // const payload = buildCwrPayload(work);
-  // const resp = await fetch(cfg.endpoint, { method: "POST", headers: { Authorization: `Bearer ${cfg.apiKey}` }, body: JSON.stringify(payload) });
-  // const externalId = (await resp.json()).id;
+  // Реальный POST на endpoint PRO (CWR-like JSON payload).
+  const payload = {
+    pro: p.data.pro,
+    workId: work.id,
+    title: work.title,
+    iswc: work.iswc ?? null,
+    publisher: work.publisher ?? null,
+    writers: work.writers ?? [],
+    territory: work.territory ?? ["WW"],
+    metadata: { source: "tajik-music-distribution", version: "1.0" },
+  };
+
+  let externalId: string | null = null;
+  try {
+    const resp = await fetch(cfg.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!resp.ok) {
+      const errText = (await resp.text().catch(() => "")).slice(0, 400);
+      const [updFailed] = await db.update(publishingWorksTable).set({
+        status: "failed",
+        updatedAt: new Date(),
+      } as Record<string, unknown>).where(eq(publishingWorksTable.id, p.data.id)).returning();
+      void auditMutation(req, { action: "pro_register_failed", entityType: "publishing_work", entityId: p.data.id, before: work, after: { status: "failed", upstream: { status: resp.status, body: errText } } });
+      res.status(502).json({
+        error: "pro_upstream_error",
+        message: `${p.data.pro.toUpperCase()} вернул HTTP ${resp.status}`,
+        upstreamBody: errText,
+        work: updFailed,
+      });
+      return;
+    }
+    const json = await resp.json().catch(() => ({})) as { id?: string; externalId?: string; reference?: string };
+    externalId = json.id ?? json.externalId ?? json.reference ?? null;
+  } catch (e) {
+    void auditMutation(req, { action: "pro_register_network_error", entityType: "publishing_work", entityId: p.data.id, before: work, after: { error: (e as Error).message } });
+    res.status(502).json({
+      error: "pro_network_error",
+      message: `Не удалось связаться с ${p.data.pro.toUpperCase()}: ${(e as Error).message}`,
+    });
+    return;
+  }
 
   const registeredWith = Array.from(new Set([...(work.registeredWith ?? []), p.data.pro]));
   const proFlag = ["ascap", "bmi", "songtrust"].includes(p.data.pro) ? { [p.data.pro]: true } : {};
@@ -137,8 +182,8 @@ router.post("/publishing/works/:id/register/:pro", async (req, res) => {
     updatedAt: new Date(),
   } as Record<string, unknown>).where(eq(publishingWorksTable.id, p.data.id)).returning();
 
-  void auditMutation(req, { action: "pro_register", entityType: "publishing_work", entityId: p.data.id, before: work, after: updated });
-  res.json({ ok: true, work: updated, pro: p.data.pro, status: "submitted" });
+  void auditMutation(req, { action: "pro_register", entityType: "publishing_work", entityId: p.data.id, before: work, after: { ...updated, externalId } });
+  res.json({ ok: true, work: updated, pro: p.data.pro, status: "submitted", externalId });
 });
 
 export default router;
