@@ -295,7 +295,7 @@ Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` �
 - `/artists` — Artist roster management
 - `/artists/:id` — Artist profile with stats
 - `/labels` — Label management
-- `/crm` — CRM: contacts + tasks board
+- `/crm` — CRM: contacts + tasks board + **Business Analytics** tab (Overview KPIs, Revenue per artist, User activity, Growth chart, Release/Delivery/Task funnels). Backed by 5 new API endpoints: `/api/crm/analytics/overview`, `/user-activity`, `/revenue-per-user`, `/growth`, `/funnel`.
 - `/royalties` — User-facing royalty hub (6 tabs: summary, statements PDF/CSV, by release, by DSP, request payment, history)
 - `/finance` — Admin financial overview: transaction ledger + artist balances
 - `/splits` — Revenue split management with visual distribution bars
