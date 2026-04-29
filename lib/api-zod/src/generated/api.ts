@@ -1128,6 +1128,8 @@ export const ListTransferImportsResponseItem = zod.object({
       tracks: zod.number(),
       coverUrl: zod.string().nullish(),
       success: zod.boolean(),
+      releaseId: zod.number().nullish(),
+      errorReason: zod.string().nullish(),
     }),
   ),
 });
@@ -1151,6 +1153,8 @@ export const CreateTransferImportBody = zod.object({
       tracks: zod.number(),
       coverUrl: zod.string().nullish(),
       success: zod.boolean(),
+      releaseId: zod.number().nullish(),
+      errorReason: zod.string().nullish(),
     }),
   ),
 });

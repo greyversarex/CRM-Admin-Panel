@@ -7,33 +7,35 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 export default function TransferTrack() {
   const [, setLocation] = useLocation();
   const { data: imports, isLoading } = useListTransferImports();
   const [openId, setOpenId] = useState<number | null>(null);
+  const { t, lang } = useLang();
+  const tt = t.transfer;
+  const dateLocale = lang === "ru" ? "ru-RU" : "en-US";
 
   return (
     <Layout>
       <div className="flex flex-col gap-5">
         <button onClick={() => setLocation("/releases")}
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground self-start px-2 py-1 rounded hover:bg-accent/40">
-          <ChevronLeft className="h-3.5 w-3.5" /> Back to Releases
+          <ChevronLeft className="h-3.5 w-3.5" /> {tt.back_to_releases}
         </button>
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Transfer Track</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Import your existing releases from Spotify (by ISRC / UPC). Click each import to expand details.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{tt.title}</h1>
+            <p className="text-muted-foreground text-sm mt-1">{tt.subtitle}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setLocation("/releases")} className="bg-card">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Go to Releases
+              <ArrowLeft className="mr-2 h-4 w-4" /> {tt.go_to_releases}
             </Button>
-            <Button onClick={() => setLocation("/releases/transfer/new")}>
-              <Plus className="mr-2 h-4 w-4" /> New Import
+            <Button onClick={() => setLocation("/releases/transfer/new")} data-testid="button-new-import">
+              <Plus className="mr-2 h-4 w-4" /> {tt.new_import}
             </Button>
           </div>
         </div>
@@ -42,12 +44,12 @@ export default function TransferTrack() {
           {isLoading
             ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)
             : imports?.length === 0
-              ? <Card className="bg-card/50 border-border/50"><CardContent className="p-10 text-center text-sm text-muted-foreground">No imports yet. Click "New Import" to start.</CardContent></Card>
+              ? <Card className="bg-card/50 border-border/50"><CardContent className="p-10 text-center text-sm text-muted-foreground">{tt.empty}</CardContent></Card>
               : imports?.map((imp) => {
                   const open = openId === imp.id;
                   const isError = imp.status === "error";
                   return (
-                    <Card key={imp.id} className={cn("bg-card/50 backdrop-blur border-border/50 overflow-hidden", isError && "border-rose-500/30")}>
+                    <Card key={imp.id} className={cn("bg-card/50 backdrop-blur border-border/50 overflow-hidden", isError && "border-rose-500/30")} data-testid={`row-import-${imp.id}`}>
                       <button
                         onClick={() => setOpenId(open ? null : imp.id)}
                         className="w-full flex items-center justify-between gap-4 p-4 hover:bg-accent/30 transition-colors text-left"
@@ -58,22 +60,22 @@ export default function TransferTrack() {
                             : <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />}
                           <div className="flex-1 min-w-0">
                             <div className="font-semibold text-sm">
-                              {isError ? "Error" : "Complete"}
+                              {isError ? tt.status_error : tt.status_complete}
                               <span className="ml-2 text-muted-foreground font-normal">
                                 {isError
-                                  ? `Failed to import ${imp.failedCount} Release(s)`
-                                  : `Imported ${imp.importedCount} Release(s)`}
+                                  ? tt.failed_count.replace("{n}", String(imp.failedCount))
+                                  : tt.imported_count.replace("{n}", String(imp.importedCount))}
                               </span>
                             </div>
                             {imp.spotifyArtistName && (
                               <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                                Source: {imp.spotifyArtistName}
+                                {tt.source}: {imp.spotifyArtistName}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="hidden sm:flex flex-col items-end gap-1 text-xs text-muted-foreground">
-                          <span>{new Date(imp.createdAt).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</span>
+                          <span>{new Date(imp.createdAt).toLocaleString(dateLocale, { dateStyle: "short", timeStyle: "short" })}</span>
                           {imp.createdByName && (
                             <span className="inline-flex items-center gap-1 text-[11px]">
                               <User className="h-3 w-3" />
@@ -87,9 +89,9 @@ export default function TransferTrack() {
                         <div className="border-t border-border/50 p-4 bg-background/30 space-y-4">
                           {!isError && (
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                              <Step title="Upload assets" desc="Upload audio and assign to appropriate tracks. Album art may need to be provided in some cases." done />
-                              <Step title="Complete metadata" desc="Populate audio style: vocal or instrumental, explicit status, and specify DSPs for delivery." done />
-                              <Step title="Review release" desc="Review your release, bring it up to DSP standards, and submit it for approval." done />
+                              <Step title={tt.step_upload_title} desc={tt.step_upload_desc} done />
+                              <Step title={tt.step_metadata_title} desc={tt.step_metadata_desc} done />
+                              <Step title={tt.step_review_title} desc={tt.step_review_desc} done />
                             </div>
                           )}
                           {imp.items.length > 0 && (
@@ -100,21 +102,22 @@ export default function TransferTrack() {
                                   <div className="flex-1 min-w-0">
                                     <div className="font-medium text-sm">{it.title}</div>
                                     <div className="text-muted-foreground font-mono text-[10px]">UPC: {it.upc}</div>
+                                    {it.errorReason && (
+                                      <div className="text-rose-300/80 text-[11px] mt-0.5">{it.errorReason}</div>
+                                    )}
                                   </div>
-                                  <div className="text-muted-foreground hidden sm:block">Label: <span className="text-foreground">{it.label || "—"}</span></div>
-                                  <div className="text-muted-foreground hidden sm:block">Tracks: <span className="text-foreground">{it.tracks}</span></div>
+                                  <div className="text-muted-foreground hidden sm:block">{tt.label_word}: <span className="text-foreground">{it.label || "—"}</span></div>
+                                  <div className="text-muted-foreground hidden sm:block">{tt.tracks_word}: <span className="text-foreground">{it.tracks}</span></div>
                                   <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border", it.success ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : "text-rose-400 border-rose-500/30 bg-rose-500/10")}>
                                     {it.success ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-                                    {it.success ? "Success" : "Failed"}
+                                    {it.success ? tt.success_word : tt.failed_word}
                                   </span>
                                 </div>
                               ))}
                             </div>
                           )}
                           {isError && (
-                            <p className="text-xs text-rose-300/80">
-                              The batch failed validation. Common causes: ISRC conflicts, missing audio assets, or unknown DSP mapping. Retry from "New Import".
-                            </p>
+                            <p className="text-xs text-rose-300/80">{tt.error_hint}</p>
                           )}
                         </div>
                       )}
@@ -124,7 +127,7 @@ export default function TransferTrack() {
         </div>
 
         <p className="text-[11px] text-muted-foreground/60 leading-relaxed pt-2 border-t border-border/40">
-          With this release now approved and submitted, you have agreed to the terms of the agreement signed with Tajik Music Distribution. You hereby agree that all samples, musical works, vocals, and other compositions used within this release are owned by the label/artist or properly licensed for distribution to the partners chosen.
+          {tt.legal_note}
         </p>
       </div>
     </Layout>

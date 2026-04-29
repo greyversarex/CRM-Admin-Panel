@@ -14,4 +14,6 @@ export interface TransferImportItem {
   tracks: number;
   coverUrl?: string | null;
   success: boolean;
+  releaseId?: number | null;
+  errorReason?: string | null;
 }

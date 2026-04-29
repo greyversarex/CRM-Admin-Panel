@@ -90,11 +90,18 @@ const DEFAULTS: Record<string, Record<string, unknown>> = {
     payoutCurrencies: ["USD", "TJS"],
     fxUpdateFrequency: "daily",
   },
+  // External integration credentials. Always returned as an object (even when
+  // unset) so the settings form can bind to .clientId / .clientSecret without
+  // the client having to coerce undefined into an object shape.
+  spotify: {
+    clientId: "",
+    clientSecret: "",
+  },
 };
 
 // ── /api/settings/:key ───────────────────────────────────────────────
 
-const VALID_KEYS = ["general", "security", "storage", "notifications", "currency", "channels", "acrcloud", "pros", "finance", "publishing", "paymentGateways", "tax"] as const;
+const VALID_KEYS = ["general", "security", "storage", "notifications", "currency", "channels", "acrcloud", "pros", "finance", "publishing", "paymentGateways", "tax", "spotify"] as const;
 
 router.get("/settings/:key", async (req, res): Promise<void> => {
   const key = req.params.key as string;

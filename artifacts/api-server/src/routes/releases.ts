@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, type TransferImportItem } from "@workspace/db";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, platformSettingsTable, type TransferImportItem } from "@workspace/db";
 import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
@@ -213,12 +213,86 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
 });
 
 // ─── Transfer Imports ───────────────────────────────────────────────────────
-// Global catalog-import jobs (manual back-catalog ingestion). Admin/manager only.
-// Persistent in DB; every create writes an audit_log row (who, what, when).
+// Global catalog-import jobs (back-catalog ingestion via Spotify lookup).
+// Admin/manager only. Persistent in DB; every create writes audit_log + actually
+// inserts artist/label/release/tracks rows so the catalog gets real data.
+
+interface SpotifyConfig { clientId?: string; clientSecret?: string }
+async function loadSpotifyConfig(): Promise<SpotifyConfig> {
+  try {
+    const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "spotify"));
+    return (row?.value ?? {}) as SpotifyConfig;
+  } catch { return {}; }
+}
+
+// Distinguishes config errors (missing creds → 503) from upstream/auth/network
+// failures (Spotify rejected creds or DNS error → 502). Throwing typed errors
+// lets the route map cleanly to HTTP status without conflating cases.
+class SpotifyNotConfiguredError extends Error { constructor() { super("spotify_not_configured"); } }
+class SpotifyUpstreamError extends Error { constructor(msg: string) { super(msg); } }
+
+let _spotifyToken: { value: string; expiresAt: number } | null = null;
+async function getSpotifyToken(cfg: SpotifyConfig): Promise<string> {
+  if (!cfg.clientId || !cfg.clientSecret) throw new SpotifyNotConfiguredError();
+  if (_spotifyToken && _spotifyToken.expiresAt > Date.now() + 60_000) return _spotifyToken.value;
+  const basic = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64");
+  let resp: Response;
+  try {
+    resp = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: { "Authorization": `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=client_credentials",
+    });
+  } catch (e: any) {
+    throw new SpotifyUpstreamError(`network: ${e?.message ?? "unknown"}`);
+  }
+  if (!resp.ok) {
+    let detail = "";
+    try { detail = (await resp.text()).slice(0, 200); } catch { /* ignore */ }
+    throw new SpotifyUpstreamError(`token ${resp.status}${detail ? ": " + detail : ""}`);
+  }
+  const json = await resp.json() as { access_token: string; expires_in: number };
+  _spotifyToken = { value: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
+  return _spotifyToken.value;
+}
+
 router.get("/releases/transfer-imports", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
   const rows = await db.select().from(transferImportsTable).orderBy(desc(transferImportsTable.id));
   res.json(rows.map(serializeTransferImport));
 });
+
+// Lookup-or-create helpers (case-insensitive). Run inside a transaction so
+// partial state cannot leak if a downstream insert fails.
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function findOrCreateArtist(tx: Tx, name: string, labelId: number | null): Promise<{ id: number; created: boolean; row: typeof artistsTable.$inferSelect | null }> {
+  const trimmed = name.trim();
+  const [existing] = await tx.select().from(artistsTable).where(ilike(artistsTable.name, trimmed)).limit(1);
+  if (existing) return { id: existing.id, created: false, row: existing };
+  const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `artist-${Date.now()}`;
+  const [created] = await tx.insert(artistsTable).values({ name: trimmed, slug, labelId, status: "active" }).returning();
+  return { id: created.id, created: true, row: created };
+}
+
+async function findOrCreateLabel(tx: Tx, name: string): Promise<{ id: number; created: boolean; row: typeof labelsTable.$inferSelect | null }> {
+  const trimmed = name.trim();
+  const [existing] = await tx.select().from(labelsTable).where(ilike(labelsTable.name, trimmed)).limit(1);
+  if (existing) return { id: existing.id, created: false, row: existing };
+  const [created] = await tx.insert(labelsTable).values({ name: trimmed, status: "active" }).returning();
+  return { id: created.id, created: true, row: created };
+}
+
+// Postgres unique-violation SQLSTATE. Drizzle wraps DB errors and pushes the
+// pg error onto `cause`, so we walk the cause chain to find the original code.
+function isUniqueViolation(e: any): boolean {
+  let cur = e;
+  for (let i = 0; i < 5 && cur; i++) {
+    if (cur?.code === "23505") return true;
+    if (/duplicate key|unique constraint|23505/i.test(String(cur?.message ?? ""))) return true;
+    cur = cur.cause;
+  }
+  return false;
+}
 
 router.post("/releases/transfer-imports", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = CreateTransferImportBody.safeParse(req.body);
@@ -226,12 +300,92 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), async
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const items: TransferImportItem[] = parsed.data.items.map((i) => ({
-    upc: i.upc, title: i.title, artist: i.artist,
-    label: i.label ?? parsed.data.labelName ?? null,
-    tracks: i.tracks, coverUrl: i.coverUrl ?? null,
-    success: i.success ?? true,
-  }));
+
+  // Pending audits: collected during transactions so we only persist them
+  // (and only fire-and-forget) after the parent tx commits successfully.
+  type PendingAudit = Parameters<typeof auditMutation>[1];
+  const pendingAudits: PendingAudit[] = [];
+
+  // Resolve a single labelId for the whole batch if labelName given (own tx so
+  // that label is reusable across items without rollback churn).
+  let batchLabelId: number | null = null;
+  if (parsed.data.labelName?.trim()) {
+    const audits: PendingAudit[] = [];
+    batchLabelId = await db.transaction(async (tx) => {
+      const r = await findOrCreateLabel(tx, parsed.data.labelName!);
+      if (r.created && r.row) audits.push({ action: "create", entityType: "label", entityId: r.id, before: null, after: r.row });
+      return r.id;
+    });
+    pendingAudits.push(...audits);
+  }
+
+  // Process each item: each item is its own transaction. If release+tracks
+  // insert fails midway, the entire item rolls back and we record the error.
+  const items: TransferImportItem[] = [];
+  for (const i of parsed.data.items) {
+    const baseItem: TransferImportItem = {
+      upc: i.upc, title: i.title, artist: i.artist,
+      label: i.label ?? parsed.data.labelName ?? null,
+      tracks: i.tracks, coverUrl: i.coverUrl ?? null,
+      success: false, releaseId: null, errorReason: null,
+    };
+    const itemAudits: PendingAudit[] = [];
+    try {
+      const releaseId = await db.transaction(async (tx) => {
+        const labelId = i.label?.trim()
+          ? await findOrCreateLabel(tx, i.label).then((r) => {
+              if (r.created && r.row) itemAudits.push({ action: "create", entityType: "label", entityId: r.id, before: null, after: r.row });
+              return r.id;
+            })
+          : batchLabelId;
+
+        const artist = await findOrCreateArtist(tx, i.artist, labelId);
+        if (artist.created && artist.row) itemAudits.push({ action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist.row });
+
+        const releaseType = (i.tracks ?? 1) > 1 ? "album" : "single";
+        const [release] = await tx.insert(releasesTable).values({
+          title: i.title,
+          releaseType,
+          status: "draft",
+          upc: i.upc || null,
+          artistId: artist.id,
+          labelId,
+          coverUrl: i.coverUrl ?? null,
+          statusNote: parsed.data.spotifyArtistName
+            ? `Импортировано из Spotify (${parsed.data.spotifyArtistName})`
+            : "Импортировано через перенос трека",
+        }).returning();
+        itemAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
+
+        const trackCount = Math.max(1, Math.min(i.tracks ?? 1, 50));
+        const trackRows = Array.from({ length: trackCount }, (_, idx) => ({
+          title: trackCount === 1 ? i.title : `${i.title} — ${idx + 1}`,
+          releaseId: release.id,
+          artistId: artist.id,
+          trackNumber: idx + 1,
+        }));
+        const inserted = await tx.insert(tracksTable).values(trackRows).returning({ id: tracksTable.id });
+        for (const t of inserted) {
+          itemAudits.push({ action: "create", entityType: "track", entityId: t.id, before: null, after: { releaseId: release.id } });
+        }
+        return release.id;
+      });
+
+      baseItem.success = true;
+      baseItem.releaseId = releaseId;
+      pendingAudits.push(...itemAudits);
+    } catch (e: any) {
+      // Item-level rollback: nothing was committed. Map UPC unique violation to
+      // a clear Russian message so the user knows why this item was skipped.
+      if (isUniqueViolation(e) && i.upc) {
+        baseItem.errorReason = `Релиз с UPC ${i.upc} уже существует`;
+      } else {
+        baseItem.errorReason = e?.message ?? "unknown error";
+      }
+    }
+    items.push(baseItem);
+  }
+
   const importedCount = items.filter((i) => i.success).length;
   const failedCount = items.length - importedCount;
   const status = failedCount > 0 && importedCount === 0 ? "error" : "complete";
@@ -248,6 +402,9 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), async
     createdByName: sessionUser?.name ?? null,
   }).returning();
 
+  // Flush all collected audit entries now that every transaction has committed.
+  // Done after the parent insert so audit ordering reflects logical sequence.
+  for (const a of pendingAudits) void auditMutation(req, a);
   void auditMutation(req, {
     action: "create",
     entityType: "transfer_import",
@@ -259,33 +416,90 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), async
   res.status(201).json(serializeTransferImport(inserted));
 });
 
-router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager"), (req, res): void => {
+router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = SpotifySearchReleasesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
   const query = parsed.data.query.trim();
+  const cfg = await loadSpotifyConfig();
+  let token: string;
+  try {
+    token = await getSpotifyToken(cfg);
+  } catch (e: any) {
+    if (e instanceof SpotifyNotConfiguredError) {
+      res.status(503).json({
+        error: "spotify_not_configured",
+        message: "Интеграция со Spotify не настроена. Заполните Настройки → Spotify (Client ID и Client Secret).",
+      });
+    } else {
+      res.status(502).json({
+        error: "spotify_upstream_error",
+        message: `Spotify недоступен или отклонил запрос: ${e?.message ?? "unknown"}`,
+      });
+    }
+    return;
+  }
+
+  // Resolve artistId either from /artist/<id> URL or by searching by name
   const artistIdMatch = query.match(/artist\/([A-Za-z0-9]+)/);
-  const artistId = artistIdMatch ? artistIdMatch[1] : query;
-  // Mock dataset that mirrors the screenshot
-  res.json({
-    artistId,
-    artistName: "Yosamin Davlatova",
-    artistImage: null,
-    releases: [
-      { upc: "199502855390", title: "Bacha Amujon",     artist: "Yosamin Davlatova", label: "Tajik Music",     tracks: 1,  coverUrl: null, releaseDate: "2024-08-06" },
-      { upc: "859715954814", title: "Dilm",             artist: "Umedjoni Burhon",  label: "Label Music",     tracks: 4,  coverUrl: null, releaseDate: "2024-04-21" },
-      { upc: "859714516167", title: "Tu Maro Love",     artist: "Sarvinoz Yusufi",  label: "T Media",         tracks: 2,  coverUrl: null, releaseDate: "2024-03-14" },
-      { upc: "859714586238", title: "Popuri",           artist: "Yasmina Davlatova", label: "Yasmina Davlatova", tracks: 20, coverUrl: null, releaseDate: "2024-04-20" },
-      { upc: "859714635790", title: "Dil Kandam",       artist: "Zaynura Pulodova", label: "ASC Media",       tracks: 29, coverUrl: null, releaseDate: "2024-01-29" },
-      { upc: "761861522192", title: "Marjon",           artist: "Yasmina",          label: "Capron +",        tracks: 7,  coverUrl: null, releaseDate: "2024-03-17" },
-      { upc: "713312710511", title: "Shamolak",         artist: "Yasmina",          label: "Tajik Music",     tracks: 1,  coverUrl: null, releaseDate: "2024-07-20" },
-      { upc: "8720765873405", title: "Ruymoli Zargaroni", artist: "Mino",          label: "Aftab Media",     tracks: 1,  coverUrl: null, releaseDate: "2024-05-06" },
-      { upc: "792268701859", title: "Hayot Arkadayim",  artist: "Zakiya",           label: "T Music",         tracks: 16, coverUrl: null, releaseDate: "2024-04-16" },
-      { upc: "789294621213", title: "Anar Anar",        artist: "Yasmina",          label: "Sabo Music",      tracks: 15, coverUrl: null, releaseDate: "2024-06-15" },
-    ],
-  });
+  let artistId = artistIdMatch ? artistIdMatch[1] : null;
+
+  try {
+    if (!artistId) {
+      const sr = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!sr.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${sr.status}` }); return; }
+      const sj = await sr.json() as { artists?: { items: { id: string }[] } };
+      artistId = sj.artists?.items?.[0]?.id ?? null;
+      if (!artistId) { res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден в Spotify." }); return; }
+    }
+
+    const ar = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!ar.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${ar.status}` }); return; }
+    const aj = await ar.json() as { name: string; images?: { url: string }[] };
+
+    const albr = await fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=30`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!albr.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${albr.status}` }); return; }
+    const albj = await albr.json() as { items: { id: string; name: string; release_date: string; total_tracks: number; images?: { url: string }[]; artists: { name: string }[]; external_ids?: { upc?: string }; label?: string }[] };
+
+    // Spotify /albums doesn't always include UPC — fetch each album's full payload to extract external_ids.upc and label.
+    const releases = await Promise.all(
+      albj.items.map(async (alb) => {
+        let upc = ""; let label: string | null = null;
+        try {
+          const dr = await fetch(`https://api.spotify.com/v1/albums/${alb.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (dr.ok) {
+            const dj = await dr.json() as { external_ids?: { upc?: string }; label?: string };
+            upc = dj.external_ids?.upc ?? "";
+            label = dj.label ?? null;
+          }
+        } catch { /* fall back to defaults */ }
+        return {
+          upc: upc || `SPOTIFY-${alb.id}`,
+          title: alb.name,
+          artist: alb.artists?.[0]?.name ?? aj.name,
+          label,
+          tracks: alb.total_tracks,
+          coverUrl: alb.images?.[0]?.url ?? null,
+          releaseDate: alb.release_date,
+        };
+      })
+    );
+
+    res.json({
+      artistId,
+      artistName: aj.name,
+      artistImage: aj.images?.[0]?.url ?? null,
+      releases,
+    });
+  } catch (e: any) {
+    res.status(502).json({ error: "spotify_error", message: e?.message ?? "Spotify request failed" });
+  }
 });
 
 router.post("/releases", async (req, res): Promise<void> => {

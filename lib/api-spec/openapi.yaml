@@ -2450,6 +2450,12 @@ components:
           nullable: true
         success:
           type: boolean
+        releaseId:
+          type: integer
+          nullable: true
+        errorReason:
+          type: string
+          nullable: true
       required: [upc, title, artist, tracks, success]
 
     CreateTransferImportBody:

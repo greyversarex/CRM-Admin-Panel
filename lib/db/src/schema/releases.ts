@@ -1,4 +1,5 @@
-import { pgTable, text, serial, integer, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { artistsTable } from "./artists";
@@ -29,7 +30,9 @@ export const releasesTable = pgTable("releases", {
   index("releases_label_idx").on(t.labelId),
   index("releases_status_idx").on(t.status),
   index("releases_release_date_idx").on(t.releaseDate),
-  index("releases_upc_idx").on(t.upc),
+  // Partial unique index: prevents duplicate UPCs at the DB level (race-safe).
+  // NULL/empty UPCs are allowed for drafts that haven't received a barcode yet.
+  uniqueIndex("releases_upc_unique_idx").on(t.upc).where(sql`${t.upc} IS NOT NULL AND ${t.upc} <> ''`),
 ]);
 
 export const insertReleaseSchema = createInsertSchema(releasesTable).omit({ id: true, createdAt: true, updatedAt: true });

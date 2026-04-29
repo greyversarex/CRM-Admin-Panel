@@ -9,6 +9,8 @@ export type TransferImportItem = {
   tracks: number;
   coverUrl: string | null;
   success: boolean;
+  releaseId?: number | null;
+  errorReason?: string | null;
 };
 
 export const transferImportsTable = pgTable("transfer_imports", {
