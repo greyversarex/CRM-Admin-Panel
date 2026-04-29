@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { Layout } from "@/components/layout";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -652,6 +653,7 @@ export default function RightsManagement() {
   const criticalConflicts = conflicts.filter((c) => c.priority === "critical" && c.status !== "resolved" && c.status !== "dismissed").length;
 
   return (
+    <Layout>
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -877,5 +879,6 @@ export default function RightsManagement() {
         onSaved={loadConflicts}
       />
     </div>
+    </Layout>
   );
 }
