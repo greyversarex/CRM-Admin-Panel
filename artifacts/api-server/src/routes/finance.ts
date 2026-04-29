@@ -10,6 +10,8 @@ import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { PLATFORM_FEE_RATE, PAID_PAYOUT_STATUSES, PENDING_PAYOUT_STATUS } from "../lib/finance";
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
+import { fireTriggerAndForget } from "../services/triggers";
+import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 
 const router = Router();
 
@@ -493,6 +495,19 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
   if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
   if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_approved", title: approveTitle, body: approveBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
 
+  fireTriggerAndForget("payout_approved", {
+    artistId: payout.artistId ?? null,
+    labelId: payout.labelId ?? null,
+    vars: { amount: String(payout.amount), currency: payout.currency, payout_id: String(payout.id) },
+    link: "/payouts",
+    entityType: "payout",
+    entityId: payout.id,
+  });
+  fireWebhookAndForget("payout.approved", {
+    payoutId: payout.id, amount: payout.amount, currency: payout.currency,
+    artistId: payout.artistId, labelId: payout.labelId,
+  });
+
   res.json({
     ...formatPayout(payout),
     artistName: null,
@@ -529,6 +544,22 @@ router.patch("/payouts/:id/reject", requireRole("admin", "manager"), async (req,
   const rejectBody = parsed.data.reason ? `Причина: ${parsed.data.reason}` : "";
   if (payout.artistId) void notifyByArtistId(payout.artistId, { type: "payout_rejected", title: rejectTitle, body: rejectBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
   if (payout.labelId)  void notifyByLabelId(payout.labelId,   { type: "payout_rejected", title: rejectTitle, body: rejectBody, entityType: "payout", entityId: payout.id, link: "/payouts" });
+
+  fireTriggerAndForget("payout_rejected", {
+    artistId: payout.artistId ?? null,
+    labelId: payout.labelId ?? null,
+    vars: {
+      amount: String(payout.amount), currency: payout.currency, payout_id: String(payout.id),
+      reason: parsed.data.reason ?? "",
+    },
+    link: "/payouts",
+    entityType: "payout",
+    entityId: payout.id,
+  });
+  fireWebhookAndForget("payout.rejected", {
+    payoutId: payout.id, amount: payout.amount, currency: payout.currency,
+    artistId: payout.artistId, labelId: payout.labelId, reason: parsed.data.reason,
+  });
 
   res.json({
     ...formatPayout(payout),

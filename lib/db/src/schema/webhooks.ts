@@ -9,7 +9,11 @@ export const webhooksTable = pgTable("webhooks", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   url: text("url").notNull(),
-  secretHash: text("secret_hash"),               // sha256 hex подписного секрета (для X-Signature)
+  // Подписной секрет в открытом виде — нужен для HMAC-подписи каждого исходящего
+  // запроса (X-Tajik-Signature: sha256=<hmac(secret, body)>). Получатель должен
+  // знать тот же секрет для верификации. Никогда не возвращается через API,
+  // только флаг `hasSecret` в DTO. Доступ к таблице — admin-only.
+  secret: text("secret"),
   events: jsonb("events").$type<string[]>().notNull().default([]),
   enabled: boolean("enabled").notNull().default(true),
   lastTriggeredAt: timestamp("last_triggered_at", { withTimezone: true }),

@@ -225,7 +225,7 @@ function toWebhookDto(w: typeof webhooksTable.$inferSelect) {
     lastError: w.lastError,
     createdAt: w.createdAt.toISOString(),
     updatedAt: w.updatedAt.toISOString(),
-    hasSecret: !!w.secretHash,
+    hasSecret: !!w.secret,
   };
 }
 
@@ -248,13 +248,10 @@ router.post("/webhooks", async (req, res): Promise<void> => {
   const parsed = WebhookBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const user = getSessionUser(req);
-  const secretHash = parsed.data.secret
-    ? createHash("sha256").update(parsed.data.secret).digest("hex")
-    : null;
   const [row] = await db.insert(webhooksTable).values({
     name: parsed.data.name,
     url: parsed.data.url,
-    secretHash,
+    secret: parsed.data.secret ?? null,
     events: parsed.data.events,
     enabled: parsed.data.enabled,
     retryCount: parsed.data.retryCount,
@@ -271,10 +268,7 @@ router.put("/webhooks/:id", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const update: Partial<typeof webhooksTable.$inferInsert> = { ...parsed.data };
   if ("secret" in parsed.data) {
-    update.secretHash = parsed.data.secret
-      ? createHash("sha256").update(parsed.data.secret).digest("hex")
-      : null;
-    delete (update as Record<string, unknown>).secret;
+    update.secret = parsed.data.secret ?? null;
   }
   const [row] = await db.update(webhooksTable).set(update).where(eq(webhooksTable.id, id)).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }

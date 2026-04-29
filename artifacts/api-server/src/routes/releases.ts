@@ -10,6 +10,8 @@ import {
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
+import { fireTriggerAndForget } from "../services/triggers";
+import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 
 const router = Router();
 
@@ -618,6 +620,31 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
       link: `/releases/${release.id}`,
     });
   }
+
+  // Триггеры автоматизации + outbound webhooks для смены статуса релиза
+  fireTriggerAndForget(`release_${parsed.data.status}`, {
+    artistId: release.artistId,
+    labelId: release.labelId ?? null,
+    vars: {
+      release_title: release.title,
+      release_id: String(release.id),
+      status: parsed.data.status,
+      note: parsed.data.note ?? "",
+      platform_name: "Tajik Music Distribution",
+    },
+    link: `/releases/${release.id}`,
+    entityType: "release",
+    entityId: release.id,
+  });
+  fireWebhookAndForget("release.status_changed", {
+    releaseId: release.id,
+    title: release.title,
+    artistId: release.artistId,
+    labelId: release.labelId,
+    fromStatus: existing.status,
+    toStatus: parsed.data.status,
+    note: parsed.data.note ?? null,
+  });
 
   const enriched = await enrichRelease(release);
   res.json(enriched);

@@ -50,7 +50,14 @@ export function parseAck(raw: string, source: ParsedAck["source"] = "webhook"): 
   if (rootKey === "MessageAcknowledgement" || rootKey === "NewReleaseMessageAcknowledgement") {
     const header = (root.MessageHeader ?? {}) as Record<string, unknown>;
     const ackMessageId = header.MessageId as string | undefined;
-    const inResponseTo = (header.MessageInResponseTo ?? header.OriginalMessageId) as string | undefined;
+    // MessageInResponseTo может лежать как в MessageHeader (DDEX-стандарт),
+    // так и на корневом уровне сообщения (часто встречается в реальных партнёрских dump'ах).
+    const inResponseTo = (
+      header.MessageInResponseTo
+        ?? header.OriginalMessageId
+        ?? root.MessageInResponseTo
+        ?? root.OriginalMessageId
+    ) as string | undefined;
 
     // DDEX 4.x: AcknowledgementOfReleaseMessage / AcknowledgementOfFileMessage / AcknowledgementOfDealMessage
     // Старые форматы: AcknowledgementMessage / Acknowledgement

@@ -253,29 +253,33 @@ export async function createMessage(input: CreateMessageInput): Promise<CreatedM
 
   const initialStatus = allErrors.length > 0 ? "invalid" : "validated";
 
-  const [msg] = await db.insert(ddexMessagesTable).values({
-    messageRef, messageThreadId,
-    releaseId: input.releaseId,
-    deliveryId: input.deliveryId ?? null,
-    partnerCode: input.partnerCode,
-    messageType, updateIndicator: input.updateIndicator,
-    ernVersion: "4.3",
-    profile: release.profile,
-    xmlPayload: xml,
-    xmlHash,
-    xmlSizeBytes: Buffer.byteLength(xml, "utf8"),
-    status: initialStatus,
-    validationErrors: allErrors.length > 0 ? allErrors : null,
-    parentMessageId: parentId,
-  }).returning();
+  // Атомарно: создание ddex_message + audit в одной транзакции,
+  // чтобы не было «есть сообщение, но нет audit-записи» при сбое второго insert'а.
+  const msg = await db.transaction(async (tx) => {
+    const [m] = await tx.insert(ddexMessagesTable).values({
+      messageRef, messageThreadId,
+      releaseId: input.releaseId,
+      deliveryId: input.deliveryId ?? null,
+      partnerCode: input.partnerCode,
+      messageType, updateIndicator: input.updateIndicator,
+      ernVersion: "4.3",
+      profile: release.profile,
+      xmlPayload: xml,
+      xmlHash,
+      xmlSizeBytes: Buffer.byteLength(xml, "utf8"),
+      status: initialStatus,
+      validationErrors: allErrors.length > 0 ? allErrors : null,
+      parentMessageId: parentId,
+    }).returning();
 
-  // Audit
-  await db.insert(auditLogTable).values({
-    userId: input.userId ?? null,
-    action: "create",
-    entityType: "ddex_message",
-    entityId: msg.id,
-    diff: { messageRef, partnerCode: input.partnerCode, updateIndicator: input.updateIndicator, status: initialStatus, errorCount: allErrors.length },
+    await tx.insert(auditLogTable).values({
+      userId: input.userId ?? null,
+      action: "create",
+      entityType: "ddex_message",
+      entityId: m.id,
+      diff: { messageRef, partnerCode: input.partnerCode, updateIndicator: input.updateIndicator, status: initialStatus, errorCount: allErrors.length },
+    });
+    return m;
   });
 
   return {
@@ -445,36 +449,40 @@ export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" 
     if (b) { matchedBatchId = b.id; partnerCode = b.partnerCode; }
   }
 
-  const [ack] = await db.insert(ddexAcknowledgementsTable).values({
-    messageId: matchedMessageId ?? null,
-    batchId: matchedBatchId ?? null,
-    partnerCode,
-    source,
-    ackType: parsed.ackType,
-    status: parsed.status,
-    rawPayload: rawXml.slice(0, 200_000), // cap
-    parsed: parsed.parsed,
-  }).returning();
+  // Атомарно: insert ack + update message + update batch — чтобы не было
+  // «принят ack, но статус сообщения не сдвинулся» (orphan) при сбое посередине.
+  const ack = await db.transaction(async (tx) => {
+    const [a] = await tx.insert(ddexAcknowledgementsTable).values({
+      messageId: matchedMessageId ?? null,
+      batchId: matchedBatchId ?? null,
+      partnerCode,
+      source,
+      ackType: parsed.ackType,
+      status: parsed.status,
+      rawPayload: rawXml.slice(0, 200_000), // cap
+      parsed: parsed.parsed,
+    }).returning();
 
-  // Обновляем статус сообщения / batch'а
-  if (matchedMessageId) {
-    if (parsed.status === "accepted") {
-      await db.update(ddexMessagesTable).set({
-        status: "acked", ackedAt: new Date(), ackPayload: parsed.parsed, rejectionReason: null,
-      }).where(eq(ddexMessagesTable.id, matchedMessageId));
-    } else if (parsed.status === "rejected") {
-      await db.update(ddexMessagesTable).set({
-        status: "rejected", ackedAt: new Date(), ackPayload: parsed.parsed,
-        rejectionReason: parsed.rejectionReason?.slice(0, 500) ?? "Partner rejected",
-      }).where(eq(ddexMessagesTable.id, matchedMessageId));
+    if (matchedMessageId) {
+      if (parsed.status === "accepted") {
+        await tx.update(ddexMessagesTable).set({
+          status: "acked", ackedAt: new Date(), ackPayload: parsed.parsed, rejectionReason: null,
+        }).where(eq(ddexMessagesTable.id, matchedMessageId));
+      } else if (parsed.status === "rejected") {
+        await tx.update(ddexMessagesTable).set({
+          status: "rejected", ackedAt: new Date(), ackPayload: parsed.parsed,
+          rejectionReason: parsed.rejectionReason?.slice(0, 500) ?? "Partner rejected",
+        }).where(eq(ddexMessagesTable.id, matchedMessageId));
+      }
     }
-  }
-  if (matchedBatchId) {
-    await db.update(ddexBatchesTable).set({
-      status: parsed.status === "accepted" ? "acked" : (parsed.status === "rejected" ? "rejected" : "uploaded"),
-      ackReceivedAt: new Date(),
-    }).where(eq(ddexBatchesTable.id, matchedBatchId));
-  }
+    if (matchedBatchId) {
+      await tx.update(ddexBatchesTable).set({
+        status: parsed.status === "accepted" ? "acked" : (parsed.status === "rejected" ? "rejected" : "uploaded"),
+        ackReceivedAt: new Date(),
+      }).where(eq(ddexBatchesTable.id, matchedBatchId));
+    }
+    return a;
+  });
 
   return {
     ok: true, ackId: ack.id,

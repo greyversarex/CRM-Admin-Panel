@@ -35,9 +35,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, emailTemplatesTable, campaignsTable, automationTriggersTable, internalNotesTable, usersTable } from "@workspace/db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import { getSessionUser } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { createNotification } from "../services/notifications";
+import { sendMailAndForget } from "../lib/mail";
 
 const router = Router();
 
@@ -180,28 +182,71 @@ router.post("/communications/campaigns/:id/send", async (req, res): Promise<void
   if (!camp) { res.status(404).json({ error: "Not found" }); return; }
   if (camp.status === "sent") { res.status(409).json({ error: "Campaign already sent" }); return; }
 
-  // Estimate recipient count from audienceFilter
+  // Реальная фильтрация аудитории по ролям и статусу
   const filter = camp.audienceFilter as Record<string, unknown>;
-  const roleFilter = Array.isArray(filter.roles) ? filter.roles as string[] : null;
+  const roleFilter = Array.isArray(filter.roles) ? (filter.roles as string[]) : null;
+  const labelIdFilter = typeof filter.labelId === "number" ? (filter.labelId as number) : null;
 
-  let q = db.select({ id: usersTable.id }).from(usersTable);
-  const rows = await q;
-  const count = roleFilter
-    ? rows.filter((r) => {
-        // We don't have role in this query - approximate
-        return true;
-      }).length
-    : rows.length;
+  const conds = [eq(usersTable.status, "active")];
+  if (roleFilter && roleFilter.length > 0) conds.push(inArray(usersTable.role, roleFilter));
+  if (labelIdFilter !== null) conds.push(eq(usersTable.labelId, labelIdFilter));
+
+  const recipients = await db
+    .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
+    .from(usersTable)
+    .where(and(...conds));
+
+  // Подгружаем шаблон (если задан) — рендерим subject/тело с подстановкой имени
+  let tpl: { subject: string; bodyHtml: string; bodyText: string } | null = null;
+  if (camp.templateId) {
+    const [t] = await db.select().from(emailTemplatesTable).where(eq(emailTemplatesTable.id, camp.templateId));
+    if (t && t.isActive) {
+      tpl = { subject: t.subject || camp.subject || camp.name, bodyHtml: t.bodyHtml, bodyText: t.bodyText };
+    }
+  }
+
+  const subjectBase = tpl?.subject ?? camp.subject ?? camp.name;
+  const errors: string[] = [];
+
+  // Реально создаём notifications + кладём письма в SMTP-очередь
+  for (const r of recipients) {
+    const vars: Record<string, string> = {
+      user_name: r.name ?? r.email,
+      platform_name: "Tajik Music Distribution",
+    };
+    const interp = (s: string) =>
+      Object.entries(vars).reduce((acc, [k, v]) => acc.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g"), v), s);
+
+    const subject = interp(subjectBase);
+    const text = tpl ? interp(tpl.bodyText) : subject;
+    const html = tpl ? interp(tpl.bodyHtml) : undefined;
+
+    void createNotification({
+      userId: r.id,
+      type: "campaign",
+      title: subject,
+      body: text.slice(0, 500),
+      entityType: "general",
+      link: "/communications",
+    }).catch((err) => errors.push(`notification ${r.id}: ${err instanceof Error ? err.message : String(err)}`));
+
+    if (camp.type === "email") {
+      sendMailAndForget({ to: r.email, subject, text: text || subject, html });
+    }
+  }
 
   const [updated] = await db.update(campaignsTable).set({
     status: "sent",
     sentAt: new Date(),
-    recipientCount: count,
+    recipientCount: recipients.length,
+    errors,
     updatedAt: new Date(),
   }).where(eq(campaignsTable.id, id)).returning();
 
-  logger.info({ campaignId: id, recipientCount: count }, "campaign sent (simulated)");
-  res.json({ ok: true, recipientCount: count, campaign: toDto(updated) });
+  logger.info({
+    campaignId: id, recipientCount: recipients.length, type: camp.type, hasTemplate: !!tpl,
+  }, "[campaign] sent");
+  res.json({ ok: true, recipientCount: recipients.length, campaign: toDto(updated) });
 });
 
 router.post("/communications/campaigns/:id/cancel", async (req, res): Promise<void> => {

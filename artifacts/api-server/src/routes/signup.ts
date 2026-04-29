@@ -15,6 +15,8 @@ import { auditMutation } from "../lib/audit";
 import { generateTempPassword } from "../lib/kycUtils";
 import { logger } from "../lib/logger";
 import { sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
+import { fireTriggerAndForget } from "../services/triggers";
+import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 
 const router = Router();
 
@@ -268,6 +270,28 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
     "[signup] approved — onboarding email queued (SMTP_URL=" +
       (process.env.SMTP_URL ? "set" : "noop") + ")",
   );
+
+  // Запускаем настроенные триггеры автоматизации (signup_approved) и outbound webhooks
+  fireTriggerAndForget("signup_approved", {
+    requesterUserId: user.id,
+    artistId: createdArtistId,
+    labelId: createdLabelId,
+    vars: {
+      user_name: user.name,
+      user_email: user.email,
+      platform_name: "Tajik Music Distribution",
+    },
+    link: "/dashboard",
+    entityType: "general",
+  });
+  fireWebhookAndForget("user.signup_approved", {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    artistId: createdArtistId,
+    labelId: createdLabelId,
+  });
 
   // ВНИМАНИЕ: tempPassword возвращается ТОЛЬКО в этом ответе и нигде не логируется.
   // Это out-of-band страховка на случай, если у юзера нет доступа к почте.

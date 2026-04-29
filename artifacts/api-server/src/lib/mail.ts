@@ -1,5 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { logger } from "./logger";
+import { db, platformSettingsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 export interface MailMessage {
   to: string;
@@ -9,24 +11,105 @@ export interface MailMessage {
 }
 
 let cachedTransporter: Transporter | null = null;
-let initialized = false;
+let cachedFromOverride: string | null = null;
+let cachedFingerprint: string | null = null;
+let lastResolveAt = 0;
 
-function getTransporter(): Transporter | null {
-  if (initialized) return cachedTransporter;
-  initialized = true;
+const RESOLVE_TTL_MS = 60_000; // пере-проверка настроек раз в минуту
+
+type SmtpConfig = {
+  url?: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  pass?: string;
+  tls?: boolean;
+  fromAddress?: string;
+};
+
+async function loadDbSettings(): Promise<SmtpConfig | null> {
+  try {
+    const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "notifications"));
+    if (!row) return null;
+    const v = row.value as Record<string, unknown>;
+    if (!v.emailEnabled) return null;
+    const host = typeof v.smtpHost === "string" ? v.smtpHost.trim() : "";
+    if (!host) return null;
+    return {
+      host,
+      port: Number(v.smtpPort) || 587,
+      user: typeof v.smtpUser === "string" ? v.smtpUser : undefined,
+      pass: typeof v.smtpPassword === "string" ? v.smtpPassword : undefined,
+      tls: v.smtpTls !== false,
+      fromAddress: typeof v.smtpFromAddress === "string" ? v.smtpFromAddress : undefined,
+    };
+  } catch (err) {
+    logger.warn({ err }, "[mail] не удалось прочитать platform_settings — fallback на env");
+    return null;
+  }
+}
+
+async function resolveTransport(): Promise<{ transport: Transporter | null; fromOverride: string | null }> {
+  const now = Date.now();
+  if (cachedTransporter && now - lastResolveAt < RESOLVE_TTL_MS) {
+    // Кэш-хит: возвращаем и transport, и сохранённый fromOverride.
+    return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+  }
+
+  // 1) Сначала проверяем БД-настройки (приоритет — UI важнее env)
+  const dbCfg = await loadDbSettings();
+  let fingerprint = "";
+
+  if (dbCfg && dbCfg.host) {
+    fingerprint = `db:${dbCfg.host}:${dbCfg.port}:${dbCfg.user ?? ""}:${dbCfg.tls}`;
+    if (fingerprint !== cachedFingerprint) {
+      try {
+        cachedTransporter = nodemailer.createTransport({
+          host: dbCfg.host,
+          port: dbCfg.port,
+          secure: dbCfg.port === 465,
+          requireTLS: dbCfg.tls && dbCfg.port !== 465,
+          auth: dbCfg.user ? { user: dbCfg.user, pass: dbCfg.pass ?? "" } : undefined,
+        });
+        cachedFingerprint = fingerprint;
+        logger.info({ host: dbCfg.host, port: dbCfg.port }, "[mail] SMTP transport инициализирован из platform_settings");
+      } catch (err) {
+        logger.warn({ err }, "[mail] не удалось создать transport по DB-настройкам — fallback на env");
+        cachedTransporter = null;
+        cachedFingerprint = null;
+      }
+    }
+    if (cachedTransporter) {
+      cachedFromOverride = dbCfg.fromAddress ?? null;
+      lastResolveAt = now;
+      return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+    }
+  }
+
+  // 2) Fallback на ENV
   const url = process.env.SMTP_URL;
   if (!url) {
     cachedTransporter = null;
-    return null;
+    cachedFingerprint = null;
+    cachedFromOverride = null;
+    lastResolveAt = now;
+    return { transport: null, fromOverride: null };
   }
-  try {
-    cachedTransporter = nodemailer.createTransport(url);
-    logger.info("[mail] SMTP transport initialized from SMTP_URL");
-  } catch (err) {
-    logger.warn({ err }, "[mail] failed to init SMTP transport — emails будут пропускаться");
-    cachedTransporter = null;
+  fingerprint = `env:${url}`;
+  if (fingerprint !== cachedFingerprint) {
+    try {
+      cachedTransporter = nodemailer.createTransport(url);
+      cachedFingerprint = fingerprint;
+      logger.info("[mail] SMTP transport initialized from SMTP_URL");
+    } catch (err) {
+      logger.warn({ err }, "[mail] failed to init SMTP transport — emails будут пропускаться");
+      cachedTransporter = null;
+      cachedFingerprint = null;
+    }
   }
-  return cachedTransporter;
+  cachedFromOverride = null; // env-режим использует MAIL_FROM из env
+  lastResolveAt = now;
+  return { transport: cachedTransporter, fromOverride: null };
 }
 
 export function getAdminNotificationEmail(): string | null {
@@ -38,17 +121,17 @@ export function getMailFrom(): string {
 }
 
 export async function sendMail(msg: MailMessage): Promise<{ sent: boolean }> {
-  const transporter = getTransporter();
-  if (!transporter) {
+  const { transport, fromOverride } = await resolveTransport();
+  if (!transport) {
     logger.info(
       { to: msg.to, subject: msg.subject },
-      "[mail] SMTP_URL не задан — письмо записано в лог вместо отправки",
+      "[mail] SMTP не настроен (ни в platform_settings, ни в SMTP_URL) — письмо записано в лог вместо отправки",
     );
     return { sent: false };
   }
   try {
-    await transporter.sendMail({
-      from: getMailFrom(),
+    await transport.sendMail({
+      from: fromOverride ?? getMailFrom(),
       to: msg.to,
       subject: msg.subject,
       text: msg.text,
