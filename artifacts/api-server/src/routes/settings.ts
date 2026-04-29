@@ -20,6 +20,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getSessionUser } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { invalidatePasswordPolicyCache } from "../lib/password-policy";
+import { invalidateSecurityPolicyCache } from "../middlewares/security-policy";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -126,6 +128,13 @@ router.put("/settings/:key", async (req, res): Promise<void> => {
     before: existing?.value ?? {},
     after: merged,
   });
+
+  // Invalidate dependent caches so subsequent requests pick up new policy
+  // values immediately instead of waiting for the 60s TTL to expire.
+  if (key === "security") {
+    invalidatePasswordPolicyCache();
+    invalidateSecurityPolicyCache();
+  }
 
   res.json({ key, value: { ...DEFAULTS[key], ...merged }, updatedAt: row.updatedAt.toISOString() });
 });

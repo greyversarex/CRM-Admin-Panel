@@ -34,6 +34,11 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/admin/kyc":      ["admin", "manager"],
   "/admin/audit":    ["admin", "manager"],
   "/rights":         ["admin", "manager", "label", "artist"],
+  "/catalog":            ["admin", "manager"],
+  "/catalog/assets":     ["admin", "manager"],
+  "/catalog/duplicates": ["admin", "manager"],
+  "/catalog/codes":      ["admin", "manager"],
+  "/automation":         ["admin", "manager"],
 };
 
 export function canAccess(role: Role, path: string): boolean {

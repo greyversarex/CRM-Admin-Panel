@@ -7,6 +7,7 @@ import type { SessionUser, AuthRole, ImpersonatorRef } from "../lib/auth";
 import { requireAuth } from "../lib/auth";
 import { maskBankInfoFor } from "../lib/kycUtils";
 import { auditMutation } from "../lib/audit";
+import { getPasswordPolicy, validatePassword } from "../lib/password-policy";
 
 const router = Router();
 
@@ -395,8 +396,10 @@ router.post("/auth/change-password", requireAuth, changePwdLimiter, async (req, 
     res.status(400).json({ error: "Текущий и новый пароль обязательны" });
     return;
   }
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "Минимум 8 символов в новом пароле" });
+  const policy = await getPasswordPolicy();
+  const policyError = validatePassword(newPassword, policy);
+  if (policyError) {
+    res.status(400).json({ error: policyError });
     return;
   }
 

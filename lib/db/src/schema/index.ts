@@ -30,3 +30,6 @@ export * from "./platform_settings";
 export * from "./api_keys";
 export * from "./webhooks";
 export * from "./communications";
+export * from "./dsp_deals";
+export * from "./content_id_assets";
+export * from "./automation";

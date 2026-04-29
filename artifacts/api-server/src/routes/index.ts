@@ -27,7 +27,10 @@ import supportRouter from "./support";
 import rightsRouter from "./rights";
 import settingsRouter from "./settings";
 import communicationsRouter from "./communications";
+import automationRouter from "./automation";
+import catalogRouter from "./catalog";
 import { requireAuth, requireRole } from "../lib/auth";
+import { securityPolicy } from "../middlewares/security-policy";
 
 const router: IRouter = Router();
 
@@ -44,7 +47,10 @@ router.use(storageUploadRouter);
 // не по cookie — поэтому ДО requireAuth.
 router.use(ddexInboundRouter);
 
-// All other API routes require an active session
+// Apply security policy (ip whitelist + dynamic session timeout) before auth.
+router.use(securityPolicy);
+
+// All other API routes require an active session (or X-API-Key header).
 router.use(requireAuth);
 
 // Org-wide back-office modules — admin/manager only.
@@ -100,5 +106,9 @@ router.use("/webhooks", adminOnly);
 router.use(settingsRouter);
 router.use("/communications", adminOnly);
 router.use(communicationsRouter);
+router.use("/automation", adminOnly);
+router.use(automationRouter);
+router.use("/catalog", adminOnly);
+router.use(catalogRouter);
 
 export default router;

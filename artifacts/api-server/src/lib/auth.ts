@@ -1,4 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { createHash } from "crypto";
+import { db, apiKeysTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 export type AuthRole = "admin" | "manager" | "label" | "artist";
 
@@ -31,12 +34,44 @@ declare module "express-session" {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!req.session?.user) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+/**
+ * Try to authenticate by X-API-Key header. If valid, sets req.session.user
+ * with role="admin" (api keys grant full back-office access; permission scoping
+ * via api_keys.permissions is enforced by individual routes when relevant).
+ */
+async function tryApiKeyAuth(req: Request): Promise<boolean> {
+  const raw = req.header("x-api-key");
+  if (!raw || !raw.startsWith("tjm_")) return false;
+  const hash = createHash("sha256").update(raw).digest("hex");
+  const [row] = await db
+    .select()
+    .from(apiKeysTable)
+    .where(and(eq(apiKeysTable.keyHash, hash), eq(apiKeysTable.enabled, true)));
+  if (!row) return false;
+  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return false;
+  // Update last_used_at (fire-and-forget)
+  void db.update(apiKeysTable).set({ lastUsedAt: new Date() }).where(eq(apiKeysTable.id, row.id));
+  if (req.session) {
+    req.session.user = {
+      id: 0,
+      name: `[api-key] ${row.name}`,
+      email: `apikey-${row.id}@system.local`,
+      role: "admin" as AuthRole,
+      artistId: null,
+      labelId: null,
+    };
   }
-  next();
+  return true;
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (req.session?.user) { next(); return; }
+  try {
+    if (await tryApiKeyAuth(req)) { next(); return; }
+  } catch {
+    // fall through to 401
+  }
+  res.status(401).json({ error: "Unauthorized" });
 }
 
 export function requireRole(...roles: AuthRole[]): RequestHandler {

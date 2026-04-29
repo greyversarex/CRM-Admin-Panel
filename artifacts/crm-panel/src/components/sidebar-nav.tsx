@@ -29,6 +29,8 @@ import {
   ChevronRight,
   ShieldCheck,
   MessageSquare,
+  Workflow,
+  Library,
 } from "lucide-react";
 
 type NavItem = {
@@ -67,6 +69,7 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "catalog",
     items: [
+      { nameKey: "catalog_hub", href: "/catalog", icon: Library,    iconColor: "text-emerald-400" },
       { nameKey: "releases", href: "/releases", icon: Disc3,       iconColor: "text-emerald-400" },
       { nameKey: "artists",  href: "/artists",  icon: Mic2,        iconColor: "text-emerald-400" },
       { nameKey: "labels",   href: "/labels",   icon: Building2,   iconColor: "text-emerald-400" },
@@ -110,8 +113,9 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "system",
     items: [
-      { nameKey: "audit",    href: "/admin/audit", icon: ShieldCheck, iconColor: "text-blue-400" },
-      { nameKey: "settings", href: "/settings",    icon: Settings2,   iconColor: "text-slate-400" },
+      { nameKey: "automation", href: "/automation", icon: Workflow,   iconColor: "text-cyan-400" },
+      { nameKey: "audit",      href: "/admin/audit", icon: ShieldCheck, iconColor: "text-blue-400" },
+      { nameKey: "settings",   href: "/settings",    icon: Settings2,   iconColor: "text-slate-400" },
     ],
   },
 ];

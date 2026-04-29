@@ -14,6 +14,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { Layout } from "@/components/layout";
+import { Globe, Handshake, Youtube } from "lucide-react";
+import { DspDealsTab } from "./dsp-deals-tab";
+import { ContentIdTab } from "./content-id-tab";
+import { TerritoriesTab } from "./territories-tab";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -705,6 +709,15 @@ export default function RightsManagement() {
             <AlertTriangle className="h-3.5 w-3.5" /> Конфликты
             {openConflicts > 0 && <Badge variant="secondary" className="text-[10px] px-1.5 h-4 bg-rose-500/20 text-rose-400">{openConflicts}</Badge>}
           </TabsTrigger>
+          <TabsTrigger value="dsp-deals" className="gap-1.5">
+            <Handshake className="h-3.5 w-3.5" /> Договоры с DSP
+          </TabsTrigger>
+          <TabsTrigger value="content-id" className="gap-1.5">
+            <Youtube className="h-3.5 w-3.5" /> Content ID
+          </TabsTrigger>
+          <TabsTrigger value="territories" className="gap-1.5">
+            <Globe className="h-3.5 w-3.5" /> Территории
+          </TabsTrigger>
         </TabsList>
 
         {/* ── TAB: Holders ──────────────────────────────────────────────── */}
@@ -865,6 +878,10 @@ export default function RightsManagement() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="dsp-deals"  className="mt-4"><DspDealsTab /></TabsContent>
+        <TabsContent value="content-id" className="mt-4"><ContentIdTab /></TabsContent>
+        <TabsContent value="territories" className="mt-4"><TerritoriesTab /></TabsContent>
       </Tabs>
 
       <HolderDialog

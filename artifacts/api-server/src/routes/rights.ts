@@ -21,8 +21,8 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { db, rightsHoldersTable, rightsConflictsTable, releasesTable, tracksTable, artistsTable, labelsTable, usersTable } from "@workspace/db";
-import { eq, and, desc, count, or, inArray } from "drizzle-orm";
+import { db, rightsHoldersTable, rightsConflictsTable, releasesTable, tracksTable, artistsTable, labelsTable, usersTable, dspDealsTable, contentIdAssetsTable } from "@workspace/db";
+import { eq, and, desc, count, or, inArray, sql } from "drizzle-orm";
 import { requireRole, getSessionUser } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import type { Request } from "express";
@@ -392,6 +392,127 @@ router.delete("/rights/conflicts/:id", requireRole("admin", "manager"), async (r
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   void auditMutation(req, { action: "delete", entityType: "rights_conflict", entityId: row.id, before: row, after: null });
   res.sendStatus(204);
+});
+
+// ─── DSP Deals (договоры с DSP) ─────────────────────────────────────────────
+
+const DspDealBody = z.object({
+  dspName:      z.string().min(1).max(120),
+  dealType:     z.enum(["distribution", "publishing", "neighbouring", "sync", "other"]).default("distribution"),
+  status:       z.enum(["draft", "active", "expired", "terminated"]).default("active"),
+  startsAt:     z.string().datetime().nullish(),
+  endsAt:       z.string().datetime().nullish(),
+  revenueShare: z.string().max(40).nullish(),
+  territory:    z.string().max(160).default("WW"),
+  contractRef:  z.string().max(200).nullish(),
+  notes:        z.string().max(4000).nullish(),
+});
+
+router.get("/rights/dsp-deals", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+  const rows = await db.select().from(dspDealsTable).orderBy(desc(dspDealsTable.createdAt));
+  res.json({ deals: rows });
+});
+
+router.post("/rights/dsp-deals", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const parsed = DspDealBody.safeParse(req.body);
+  if (!parsed.success) { badRequest(res, "validation"); return; }
+  const user = getSessionUser(req);
+  const [row] = await db.insert(dspDealsTable).values({
+    ...parsed.data,
+    startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : null,
+    endsAt:   parsed.data.endsAt   ? new Date(parsed.data.endsAt)   : null,
+    createdBy: user?.id ?? null,
+  }).returning();
+  void auditMutation(req, { action: "create", entityType: "dsp_deal", entityId: row.id, before: null, after: row });
+  res.status(201).json(row);
+});
+
+router.patch("/rights/dsp-deals/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const p = IdParam.safeParse(req.params); if (!p.success) { badRequest(res, "Bad id"); return; }
+  const parsed = DspDealBody.partial().safeParse(req.body);
+  if (!parsed.success) { badRequest(res, "validation"); return; }
+  const patch: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
+  if (parsed.data.startsAt !== undefined) patch.startsAt = parsed.data.startsAt ? new Date(parsed.data.startsAt) : null;
+  if (parsed.data.endsAt !== undefined)   patch.endsAt   = parsed.data.endsAt   ? new Date(parsed.data.endsAt)   : null;
+  const [row] = await db.update(dspDealsTable).set(patch).where(eq(dspDealsTable.id, p.data.id)).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  void auditMutation(req, { action: "update", entityType: "dsp_deal", entityId: row.id, before: null, after: row });
+  res.json(row);
+});
+
+router.delete("/rights/dsp-deals/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const p = IdParam.safeParse(req.params); if (!p.success) { badRequest(res, "Bad id"); return; }
+  const [del] = await db.delete(dspDealsTable).where(eq(dspDealsTable.id, p.data.id)).returning();
+  if (!del) { res.status(404).json({ error: "Not found" }); return; }
+  void auditMutation(req, { action: "delete", entityType: "dsp_deal", entityId: del.id, before: del, after: null });
+  res.sendStatus(204);
+});
+
+// ─── Content ID assets (YouTube/UGC) ────────────────────────────────────────
+
+const ContentIdBody = z.object({
+  assetType:    z.enum(["track", "release"]),
+  trackId:      z.number().int().positive().nullish(),
+  releaseId:    z.number().int().positive().nullish(),
+  ytAssetId:    z.string().max(120).nullish(),
+  status:       z.enum(["pending", "registered", "claimed", "released", "rejected"]).default("pending"),
+  claimPolicy:  z.enum(["monetize", "track", "block"]).default("monetize"),
+  ownership:    z.string().max(160).default("WW"),
+  notes:        z.string().max(4000).nullish(),
+});
+
+router.get("/rights/content-id", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+  const rows = await db.select().from(contentIdAssetsTable).orderBy(desc(contentIdAssetsTable.createdAt));
+  res.json({ items: rows });
+});
+
+router.post("/rights/content-id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const parsed = ContentIdBody.safeParse(req.body);
+  if (!parsed.success) { badRequest(res, "validation"); return; }
+  if (parsed.data.assetType === "track" && !parsed.data.trackId)     { badRequest(res, "trackId required");   return; }
+  if (parsed.data.assetType === "release" && !parsed.data.releaseId) { badRequest(res, "releaseId required"); return; }
+  const user = getSessionUser(req);
+  const [row] = await db.insert(contentIdAssetsTable).values({
+    ...parsed.data,
+    registeredBy: user?.id ?? null,
+    registeredAt: parsed.data.status === "registered" ? new Date() : null,
+  }).returning();
+  void auditMutation(req, { action: "create", entityType: "content_id_asset", entityId: row.id, before: null, after: row });
+  res.status(201).json(row);
+});
+
+router.patch("/rights/content-id/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const p = IdParam.safeParse(req.params); if (!p.success) { badRequest(res, "Bad id"); return; }
+  const parsed = ContentIdBody.partial().safeParse(req.body);
+  if (!parsed.success) { badRequest(res, "validation"); return; }
+  const patch: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
+  if (parsed.data.status === "registered") patch.registeredAt = new Date();
+  const [row] = await db.update(contentIdAssetsTable).set(patch).where(eq(contentIdAssetsTable.id, p.data.id)).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  void auditMutation(req, { action: "update", entityType: "content_id_asset", entityId: row.id, before: null, after: row });
+  res.json(row);
+});
+
+router.delete("/rights/content-id/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const p = IdParam.safeParse(req.params); if (!p.success) { badRequest(res, "Bad id"); return; }
+  const [del] = await db.delete(contentIdAssetsTable).where(eq(contentIdAssetsTable.id, p.data.id)).returning();
+  if (!del) { res.status(404).json({ error: "Not found" }); return; }
+  void auditMutation(req, { action: "delete", entityType: "content_id_asset", entityId: del.id, before: del, after: null });
+  res.sendStatus(204);
+});
+
+// ─── Territory rights overview ─────────────────────────────────────────────
+
+router.get("/rights/territories", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+  const rows = await db.execute(sql`
+    SELECT territory, count(*)::int AS holders_count,
+           sum(CASE WHEN exclusive THEN 1 ELSE 0 END)::int AS exclusive_count,
+           array_agg(DISTINCT rights_type) AS rights_types
+    FROM rights_holders
+    GROUP BY territory
+    ORDER BY holders_count DESC
+  `);
+  res.json({ territories: rows.rows });
 });
 
 export default router;
