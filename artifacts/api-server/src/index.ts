@@ -5,6 +5,7 @@ import { startDeliveryWorker, stopDeliveryWorker } from "./workers/delivery-work
 import { startAckPoller, stopAckPoller } from "./workers/ack-poller";
 import { startFraudEngine, stopFraudEngine } from "./services/fraud-engine";
 import { startPaymentAutomation, stopPaymentAutomation } from "./services/payment-automation";
+import { bootstrapManagerPermissions } from "./lib/manager-permissions";
 
 const rawPort = process.env["PORT"];
 
@@ -38,6 +39,8 @@ const server = app.listen(port, async (err) => {
   startFraudEngine();
   // Payment automation scheduler: cron-выражения payment_automation_rules
   startPaymentAutomation();
+  // Manager permissions: гарантируем строки в БД для всех ключей (default enabled=true).
+  bootstrapManagerPermissions().catch((e) => logger.error({ err: e }, "bootstrapManagerPermissions failed"));
 });
 
 // Graceful shutdown: останавливаем воркер до закрытия HTTP, чтобы дать активному

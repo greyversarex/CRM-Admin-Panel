@@ -38,6 +38,7 @@ import analyticsUgcImportRouter from "./analytics-ugc-import";
 import rightsExtrasRouter from "./rights-extras";
 import publishingExtrasRouter from "./publishing-extras";
 import communicationsChannelsRouter from "./communications-channels";
+import managerPermissionsRouter from "./manager-permissions";
 import { requireAuth, requireRole } from "../lib/auth";
 import { securityPolicy } from "../middlewares/security-policy";
 
@@ -133,5 +134,7 @@ router.use(automationExtrasRouter);           // Payment automation rules (admin
 router.use("/catalog", adminOnly);
 router.use(catalogRouter);
 router.use(catalogBulkRouter);                // POST /catalog/bulk-edit (admin-only выше)
+// Manager permissions API — admin-only, гарды внутри router'а (требуется именно admin, не "admin|manager").
+router.use(managerPermissionsRouter);
 
 export default router;

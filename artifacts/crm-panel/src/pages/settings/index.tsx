@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { IntegrationConfigDialog } from "@/components/integration-config-dialog";
+import { TabManagerPermissions } from "./manager-permissions-tab";
 
 // ─── API helper ──────────────────────────────────────────────────────────────
 
@@ -1345,6 +1346,12 @@ export default function Settings() {
             <TabsTrigger value="pros" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               PRO (ASCAP/BMI/…)
             </TabsTrigger>
+            {user?.role === "admin" && (
+              <TabsTrigger value="manager-perms" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Права менеджеров
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="general" className="mt-4"><TabGeneral /></TabsContent>
@@ -1361,6 +1368,7 @@ export default function Settings() {
           <TabsContent value="channels" className="mt-4"><TabChannels /></TabsContent>
           <TabsContent value="acrcloud" className="mt-4"><TabAcrcloud /></TabsContent>
           <TabsContent value="pros" className="mt-4"><TabPros /></TabsContent>
+          <TabsContent value="manager-perms" className="mt-4"><TabManagerPermissions /></TabsContent>
         </Tabs>
 
         <IntegrationConfigDialog

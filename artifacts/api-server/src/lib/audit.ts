@@ -103,6 +103,10 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     "importedCount", "failedCount", "items",
     "createdById", "createdByName", "createdAt",
   ]),
+  // Manager permissions toggle: ключ + флаг + кто переключил.
+  manager_permission: new Set([
+    "key", "enabled", "updatedBy", "updatedAt",
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если

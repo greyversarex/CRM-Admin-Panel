@@ -2,9 +2,10 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
-import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
+import { canAccess, ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
+import { useManagerPermissions, type ManagerPermissionKey } from "@/lib/manager-permissions";
 import { useState, useEffect } from "react";
+import type { Role } from "@/lib/auth";
 import {
   LayoutDashboard,
   BarChart3,
@@ -31,6 +32,7 @@ import {
   MessageSquare,
   Workflow,
   Library,
+  TrendingUp,
 } from "lucide-react";
 
 type NavItem = {
@@ -40,91 +42,221 @@ type NavItem = {
   badge?: string;
   badgeColor?: string;
   iconColor?: string;
-  /**
-   * Per-role override of the displayed translation key.
-   * Used e.g. для роли `label`: пункт /royalties показывается как "Earnings".
-   */
-  nameKeyByRole?: Partial<Record<"admin" | "manager" | "label" | "artist", string>>;
+  /** Per-role override of the displayed translation key. */
+  nameKeyByRole?: Partial<Record<Role, string>>;
 };
 
 type NavGroup = {
   titleKey: string;
+  /** Если задан — для роли manager группа (целиком) скрывается, когда permission disabled. */
+  managerKey?: ManagerPermissionKey;
   items: NavItem[];
 };
 
-const navGroups: NavGroup[] = [
+// ───────────────────────── Конфигурация по ролям ─────────────────────────────
+
+const adminNavGroups: NavGroup[] = [
   {
     titleKey: "overview",
     items: [
-      { nameKey: "dashboard", href: "/",          icon: LayoutDashboard, iconColor: "text-blue-400" },
-      { nameKey: "analytics", href: "/analytics", icon: BarChart3,        iconColor: "text-blue-400" },
+      { nameKey: "dashboard", href: "/", icon: LayoutDashboard, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "catalog_group",
+    managerKey: "catalog",
+    items: [
+      { nameKey: "catalog_hub", href: "/catalog",  icon: Library,    iconColor: "text-emerald-400" },
+      { nameKey: "releases",    href: "/releases", icon: Disc3,      iconColor: "text-emerald-400" },
+      { nameKey: "artists",     href: "/artists",  icon: Mic2,       iconColor: "text-emerald-400" },
+      { nameKey: "labels",      href: "/labels",   icon: Building2,  iconColor: "text-emerald-400" },
+      { nameKey: "videos",      href: "/videos",   icon: Clapperboard, iconColor: "text-emerald-400" },
     ],
   },
   {
     titleKey: "distribution_group",
+    managerKey: "distribution",
     items: [
       { nameKey: "distribution", href: "/distribution", icon: Radio, iconColor: "text-amber-400" },
     ],
   },
   {
-    titleKey: "catalog",
+    titleKey: "finance_group",
+    managerKey: "finance",
     items: [
-      { nameKey: "catalog_hub", href: "/catalog", icon: Library,    iconColor: "text-emerald-400" },
-      { nameKey: "releases", href: "/releases", icon: Disc3,       iconColor: "text-emerald-400" },
-      { nameKey: "artists",  href: "/artists",  icon: Mic2,        iconColor: "text-emerald-400" },
-      { nameKey: "labels",   href: "/labels",   icon: Building2,   iconColor: "text-emerald-400" },
+      { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
+      { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400" },
+      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
+      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+    ],
+  },
+  {
+    titleKey: "analytics_group",
+    managerKey: "analytics",
+    items: [
+      { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "crm_group",
+    managerKey: "crm",
+    items: [
+      { nameKey: "crm", href: "/crm", icon: TrendingUp, iconColor: "text-cyan-400" },
     ],
   },
   {
     titleKey: "users_group",
+    managerKey: "users_kyc",
     items: [
-      { nameKey: "users", href: "/users", icon: UserCog, iconColor: "text-violet-400" },
+      { nameKey: "users",   href: "/users",         icon: UserCog,     iconColor: "text-violet-400" },
+      { nameKey: "signups", href: "/admin/signups", icon: Users2,      iconColor: "text-violet-400" },
+      { nameKey: "kyc",     href: "/admin/kyc",     icon: ShieldCheck, iconColor: "text-violet-400" },
     ],
   },
   {
-    titleKey: "operations",
+    titleKey: "rights_group",
+    managerKey: "rights",
     items: [
-      { nameKey: "publishing",    href: "/publishing",    icon: BookMarked,     iconColor: "text-cyan-400" },
-      { nameKey: "rights",        href: "/rights",        icon: ShieldCheck,    iconColor: "text-violet-400" },
-      { nameKey: "crm",           href: "/crm",           icon: Users2,         iconColor: "text-cyan-400" },
+      { nameKey: "rights",     href: "/rights",     icon: ShieldCheck, iconColor: "text-violet-400" },
+      { nameKey: "publishing", href: "/publishing", icon: BookMarked,  iconColor: "text-violet-400" },
+    ],
+  },
+  {
+    titleKey: "support_comms_group",
+    managerKey: "support_comms",
+    items: [
+      { nameKey: "support",        href: "/support",        icon: LifeBuoy,      iconColor: "text-yellow-400" },
       { nameKey: "communications", href: "/communications", icon: MessageSquare, iconColor: "text-rose-400" },
     ],
   },
   {
-    titleKey: "financials",
+    titleKey: "automation_audit_group",
+    managerKey: "automation_audit",
     items: [
-      {
-        nameKey: "royalties", href: "/royalties", icon: Coins, iconColor: "text-green-400",
-        // MVP-упрощение: для лейбла /royalties — это и есть единый раздел "Доходы".
-        nameKeyByRole: { label: "earnings" },
-      },
-      { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
-      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
-      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+      { nameKey: "automation", href: "/automation",   icon: Workflow,    iconColor: "text-cyan-400" },
+      { nameKey: "audit",      href: "/admin/audit",  icon: ShieldCheck, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "system",
+    items: [
+      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
     ],
   },
   {
     titleKey: "account_group",
     items: [
       { nameKey: "profile", href: "/profile", icon: CircleUser, iconColor: "text-pink-400" },
-      { nameKey: "support", href: "/support", icon: LifeBuoy,   iconColor: "text-yellow-400" },
-    ],
-  },
-  {
-    titleKey: "system",
-    items: [
-      { nameKey: "automation", href: "/automation", icon: Workflow,   iconColor: "text-cyan-400" },
-      { nameKey: "audit",      href: "/admin/audit", icon: ShieldCheck, iconColor: "text-blue-400" },
-      { nameKey: "settings",   href: "/settings",    icon: Settings2,   iconColor: "text-slate-400" },
     ],
   },
 ];
+
+const labelNavGroups: NavGroup[] = [
+  {
+    titleKey: "overview",
+    items: [
+      { nameKey: "dashboard", href: "/", icon: LayoutDashboard, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "my_catalog",
+    items: [
+      { nameKey: "releases", href: "/releases", icon: Disc3, iconColor: "text-emerald-400" },
+      { nameKey: "artists",  href: "/artists",  icon: Mic2,  iconColor: "text-emerald-400" },
+    ],
+  },
+  {
+    titleKey: "analytics_group",
+    items: [
+      { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "earnings_group",
+    items: [
+      // Для лейбла /royalties отображается как «Заработано», /splits — соглашения, /payouts — выплаты.
+      { nameKey: "royalties", href: "/royalties", icon: Coins,   iconColor: "text-green-400", nameKeyByRole: { label: "earnings" } },
+      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
+      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+    ],
+  },
+  {
+    titleKey: "support_group",
+    items: [
+      { nameKey: "support", href: "/support", icon: LifeBuoy, iconColor: "text-yellow-400" },
+    ],
+  },
+  {
+    titleKey: "account_group",
+    items: [
+      { nameKey: "settings", href: "/settings", icon: Settings2,  iconColor: "text-slate-400" },
+      { nameKey: "profile",  href: "/profile",  icon: CircleUser, iconColor: "text-pink-400" },
+    ],
+  },
+];
+
+const artistNavGroups: NavGroup[] = [
+  {
+    titleKey: "overview",
+    items: [
+      { nameKey: "dashboard", href: "/", icon: LayoutDashboard, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "my_catalog",
+    items: [
+      { nameKey: "my_releases", href: "/releases", icon: Disc3, iconColor: "text-emerald-400" },
+    ],
+  },
+  {
+    titleKey: "analytics_group",
+    items: [
+      { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
+    ],
+  },
+  {
+    titleKey: "earnings_group",
+    items: [
+      { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400", nameKeyByRole: { artist: "earnings" } },
+      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
+      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+    ],
+  },
+  {
+    titleKey: "support_group",
+    items: [
+      { nameKey: "support", href: "/support", icon: LifeBuoy, iconColor: "text-yellow-400" },
+    ],
+  },
+  {
+    titleKey: "account_group",
+    items: [
+      { nameKey: "settings", href: "/settings", icon: Settings2,  iconColor: "text-slate-400" },
+      { nameKey: "profile",  href: "/profile",  icon: CircleUser, iconColor: "text-pink-400" },
+    ],
+  },
+];
+
+function pickGroupsForRole(role: Role | undefined): NavGroup[] {
+  switch (role) {
+    case "admin":
+    case "manager":
+      return adminNavGroups;
+    case "label":
+      return labelNavGroups;
+    case "artist":
+      return artistNavGroups;
+    default:
+      return [];
+  }
+}
 
 export function SidebarNav() {
   const [location] = useLocation();
   const { t } = useLang();
   const nav = t.nav as Record<string, string>;
   const { user, logout } = useAuth();
+  const { perms } = useManagerPermissions(user?.role);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
@@ -133,6 +265,8 @@ export function SidebarNav() {
   useEffect(() => {
     try { localStorage.setItem("sidebar-collapsed", String(collapsed)); } catch { /* ignore */ }
   }, [collapsed]);
+
+  const navGroups = pickGroupsForRole(user?.role);
 
   return (
     <div
@@ -147,13 +281,11 @@ export function SidebarNav() {
         collapsed ? "px-3 py-4 justify-center" : "px-4 py-3"
       )}>
         {collapsed ? (
-          /* Collapsed: just the icon badge */
           <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[hsl(271_80%_68%)] flex items-center justify-center shadow-lg shadow-primary/30 shrink-0">
             <Music2 className="h-[18px] w-[18px] text-white" />
             <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
           </div>
         ) : (
-          /* Expanded: logo image */
           <img
             src="/tajikmusic-logo.png"
             alt="Tajik Music"
@@ -166,13 +298,17 @@ export function SidebarNav() {
       {/* Nav groups */}
       <div className="flex-1 overflow-y-auto py-3 space-y-4" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
         {navGroups.map((group) => {
+          // 1. Manager: проверяем permission всей группы.
+          if (user?.role === "manager" && group.managerKey && perms[group.managerKey] === false) {
+            return null;
+          }
+          // 2. Фильтруем items по canAccess (с manager_permissions).
           const visibleItems = user
-            ? group.items.filter(item => canAccess(user.role, item.href))
+            ? group.items.filter((item) => canAccess(user.role, item.href, perms))
             : [];
           if (visibleItems.length === 0) return null;
           return (
           <div key={group.titleKey}>
-            {/* Section label — hidden when collapsed */}
             {!collapsed && (
               <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.14em] text-white/50">
                 {nav[group.titleKey] ?? group.titleKey}
@@ -253,7 +389,6 @@ export function SidebarNav() {
                         </>
                       )}
 
-                      {/* Badge dot in collapsed mode */}
                       {collapsed && item.badge && (
                         <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-amber-500 border border-[hsl(var(--sidebar))]" />
                       )}
@@ -307,7 +442,7 @@ export function SidebarNav() {
         )}
       </div>
 
-      {/* ── Collapse / Expand button — bottom, gradient, embossed ── */}
+      {/* Collapse / Expand */}
       <button
         onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Развернуть меню" : "Свернуть меню"}
@@ -317,7 +452,6 @@ export function SidebarNav() {
           "bg-[hsl(222_40%_6%)]",
           "hover:bg-[hsl(222_40%_8%)]",
           "active:scale-[0.98]",
-          // neon glow border top + outer glow
           "border-t border-primary/30",
           "shadow-[0_-2px_12px_hsl(226_84%_67%/0.25),0_-1px_0_hsl(226_84%_67%/0.3)_inset]",
           "hover:shadow-[0_-2px_20px_hsl(226_84%_67%/0.45),0_-1px_0_hsl(226_84%_67%/0.5)_inset,0_0_30px_hsl(271_80%_68%/0.15)]",
@@ -325,7 +459,6 @@ export function SidebarNav() {
           "overflow-hidden"
         )}
       >
-        {/* Neon top-edge line */}
         <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent pointer-events-none" />
 
         {collapsed ? (
