@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
@@ -8,7 +9,7 @@ import {
   useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
   TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard,
@@ -143,6 +144,8 @@ export default function Dashboard() {
             trend={{ value: d.processing, up: undefined }}
           />
         </div>
+
+        {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
         {/* ── Charts row ── */}
         <div className="grid gap-4 lg:grid-cols-7">
@@ -328,5 +331,34 @@ export default function Dashboard() {
         )}
       </div>
     </Layout>
+  );
+}
+
+function FinanceKpiRow() {
+  const [k, setK] = useState<{
+    revenueToday: number; revenueThisMonth: number;
+    pendingPayouts: { count: number; sum: number };
+    readyToPay: { count: number; sum: number };
+    openFraudAlerts: number; openClaims: number;
+  } | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/dashboard/finance-kpis", { credentials: "same-origin" });
+        if (r.ok) setK(await r.json());
+      } catch {}
+    })();
+  }, []);
+  if (!k) return null;
+  const fmt = (d: number) => `$${d.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+      <KpiCard label="Доход сегодня" value={fmt(k.revenueToday)} icon={DollarSign} iconColor="text-emerald-400" iconBg="bg-emerald-500/12" iconBorder="border-emerald-500/20" />
+      <KpiCard label="Доход за месяц" value={fmt(k.revenueThisMonth)} icon={TrendingUp} iconColor="text-emerald-400" iconBg="bg-emerald-500/12" iconBorder="border-emerald-500/20" />
+      <KpiCard label="Ожидают выплаты" value={`${k.pendingPayouts.count} / ${fmt(k.pendingPayouts.sum)}`} icon={Clock} iconColor="text-amber-400" iconBg="bg-amber-500/12" iconBorder="border-amber-500/20" />
+      <KpiCard label="К выплате" value={`${k.readyToPay.count} / ${fmt(k.readyToPay.sum)}`} icon={Wallet} iconColor="text-sky-400" iconBg="bg-sky-500/12" iconBorder="border-sky-500/20" />
+      <KpiCard label="Открытых сигналов о мошенничестве" value={k.openFraudAlerts.toLocaleString()} icon={AlertTriangle} iconColor="text-rose-400" iconBg="bg-rose-500/12" iconBorder="border-rose-500/20" />
+      <KpiCard label="Открытых претензий" value={k.openClaims.toLocaleString()} icon={ShieldAlert} iconColor="text-orange-400" iconBg="bg-orange-500/12" iconBorder="border-orange-500/20" />
+    </div>
   );
 }

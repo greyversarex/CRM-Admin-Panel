@@ -184,14 +184,7 @@ export default function Payouts() {
                       </TableCell>
                       <TableCell className="text-right">
                         {payout.status === 'pending' && isAdminLike && (
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" title={t.common.approve} aria-label={t.common.approve}>
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" title={t.common.reject} aria-label={t.common.reject}>
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <PayoutApprovalActions payoutId={payout.id} />
                         )}
                         {payout.status === 'pending' && !isAdminLike && (
                           <span className="text-[10px] text-amber-300">{t.payouts.awaiting_review}</span>
@@ -206,5 +199,54 @@ export default function Payouts() {
         </Card>
       </div>
     </Layout>
+  );
+}
+
+function PayoutApprovalActions({ payoutId }: { payoutId: number }) {
+  const [busy, setBusy] = useState(false);
+  const approve = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/finance/payouts/${payoutId}/approve`, {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        toast({ title: "Ошибка", description: (e as { error?: string }).error ?? `HTTP ${r.status}`, variant: "destructive" });
+      } else {
+        const row = await r.json().catch(() => ({})) as { approvalStage?: string };
+        toast({ title: row.approvalStage === "approved_l1" ? "Подтверждение L1" : "Одобрено (L2)" });
+        window.location.reload();
+      }
+    } finally { setBusy(false); }
+  };
+  const reject = async () => {
+    const reason = window.prompt("Причина отклонения:")?.trim();
+    if (!reason) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/finance/payouts/${payoutId}/reject`, {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        toast({ title: "Ошибка", description: (e as { error?: string }).error ?? `HTTP ${r.status}`, variant: "destructive" });
+      } else {
+        toast({ title: "Отклонено" });
+        window.location.reload();
+      }
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button variant="ghost" size="sm" disabled={busy} onClick={approve} className="h-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" data-testid={`button-payout-approve-${payoutId}`}>Подтвердить</Button>
+      <Button variant="ghost" size="icon" disabled={busy} onClick={reject} className="h-8 w-8 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10" data-testid={`button-payout-reject-${payoutId}`}>
+        <XCircle className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

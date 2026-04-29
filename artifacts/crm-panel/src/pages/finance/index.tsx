@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle } from "lucide-react";
 import { PeriodSummaryCard } from "@/components/period-summary-card";
+import { CommissionsTab } from "./commissions-tab";
 
 interface ImportRow {
   id: number;
@@ -389,6 +390,13 @@ export default function Finance() {
             </CardContent>
           </Card>
         </div>
+
+        {isAdminLike && (
+          <Card className="bg-card/50 backdrop-blur border-border/50">
+            <CardHeader><CardTitle className="text-base">Комиссии</CardTitle></CardHeader>
+            <CardContent><CommissionsTab /></CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );

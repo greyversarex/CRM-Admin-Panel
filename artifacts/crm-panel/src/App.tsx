@@ -41,6 +41,7 @@ import CatalogHub from "@/pages/catalog";
 import CatalogAssets from "@/pages/catalog/assets";
 import CatalogDuplicates from "@/pages/catalog/duplicates";
 import CatalogCodes from "@/pages/catalog/codes";
+import CatalogBulkEdit from "@/pages/catalog/bulk-edit";
 import Automation from "@/pages/automation";
 
 const queryClient = new QueryClient();
@@ -121,6 +122,7 @@ function Router() {
       <ProtectedRoute path="/catalog/assets"     component={CatalogAssets} />
       <ProtectedRoute path="/catalog/duplicates" component={CatalogDuplicates} />
       <ProtectedRoute path="/catalog/codes"      component={CatalogCodes} />
+      <ProtectedRoute path="/catalog/bulk-edit"  component={CatalogBulkEdit} />
       <ProtectedRoute path="/automation"         component={Automation} />
 
       {/* Task #6 — admin/manager only (gated через permissions.ts) */}

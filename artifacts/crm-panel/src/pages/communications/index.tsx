@@ -516,7 +516,12 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
                 <label className="text-sm font-medium">Тип канала</label>
                 <Select value={form.type} onValueChange={(v) => setF("type", v)}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="email">Email</SelectItem><SelectItem value="push">Push</SelectItem></SelectContent>
+                  <SelectContent>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="push">Push</SelectItem>
+                    <SelectItem value="telegram">Telegram</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
               <div>

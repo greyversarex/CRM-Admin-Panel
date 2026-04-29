@@ -94,7 +94,7 @@ const DEFAULTS: Record<string, Record<string, unknown>> = {
 
 // ── /api/settings/:key ───────────────────────────────────────────────
 
-const VALID_KEYS = ["general", "security", "storage", "notifications", "currency"] as const;
+const VALID_KEYS = ["general", "security", "storage", "notifications", "currency", "channels", "acrcloud", "pros", "finance", "publishing", "paymentGateways", "tax"] as const;
 
 router.get("/settings/:key", async (req, res): Promise<void> => {
   const key = req.params.key as string;

@@ -209,7 +209,16 @@ export function computeDiff(
 //
 // Возвращаем Promise, чтобы тесты могли при желании await'ить и проверить
 // факт записи (рутины в проде должны передавать `void auditMutation(...)`).
-export type AuditAction = "create" | "update" | "delete" | "login" | "approve" | "reject" | "deliver" | "submit";
+export type AuditAction =
+  | "create" | "update" | "delete" | "login"
+  | "approve" | "reject" | "deliver" | "submit"
+  | "freeze" | "unfreeze"
+  | "approve_payout" | "reject_payout"
+  | "send"
+  | "bulk_edit"
+  | "acr_scan"
+  | "resolve" | "reopen"
+  | "pro_register";
 
 export interface AuditOptions {
   action: AuditAction;

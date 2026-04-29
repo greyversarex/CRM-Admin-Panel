@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Layout } from "@/components/layout";
 import { toast } from "@/hooks/use-toast";
+import { PaymentRulesTab } from "./payment-rules-tab";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, {
@@ -542,11 +543,13 @@ export default function AutomationPage() {
             <TabsTrigger value="scheduled"  className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Scheduled Tasks</TabsTrigger>
             <TabsTrigger value="fraud"      className="gap-1.5"><ShieldAlert className="h-3.5 w-3.5" /> Fraud Detection</TabsTrigger>
             <TabsTrigger value="moderation" className="gap-1.5"><Filter className="h-3.5 w-3.5" /> Content Moderation</TabsTrigger>
+            <TabsTrigger value="payments"   className="gap-1.5">Платежи</TabsTrigger>
           </TabsList>
           <TabsContent value="workflow"   className="mt-4"><WorkflowRulesTab /></TabsContent>
           <TabsContent value="scheduled"  className="mt-4"><ScheduledTab /></TabsContent>
           <TabsContent value="fraud"      className="mt-4"><FraudRulesTab /></TabsContent>
           <TabsContent value="moderation" className="mt-4"><ModerationRulesTab /></TabsContent>
+          <TabsContent value="payments"   className="mt-4"><PaymentRulesTab /></TabsContent>
         </Tabs>
       </div>
     </Layout>

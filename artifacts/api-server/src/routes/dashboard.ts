@@ -675,4 +675,61 @@ router.get("/dashboard/artists-table", async (req, res): Promise<void> => {
   })));
 });
 
+// ─── Finance KPI cards (admin/manager only — guarded in routes/index.ts? Нет — /dashboard открыт всем.
+// Но эта ручка для admin: возвращаем 403 для остальных. Считаем по всему org.) ──
+router.get("/dashboard/finance-kpis", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "admin_only" }); return; }
+
+  const now = new Date();
+  const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  const [revToday] = await db
+    .select({ s: sql<string>`coalesce(sum(${transactionsTable.amount}), 0)::text` })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.type, "credit"), gte(transactionsTable.createdAt, startOfDay)));
+
+  const [revMonth] = await db
+    .select({ s: sql<string>`coalesce(sum(${transactionsTable.amount}), 0)::text` })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.type, "credit"), gte(transactionsTable.createdAt, startOfMonth)));
+
+  const [pending] = await db
+    .select({
+      cnt: sql<number>`count(*)::int`,
+      sum: sql<string>`coalesce(sum(${payoutsTable.amount}), 0)::text`,
+    })
+    .from(payoutsTable)
+    .where(eq(payoutsTable.status, "pending"));
+
+  const [readyToPay] = await db
+    .select({
+      cnt: sql<number>`count(*)::int`,
+      sum: sql<string>`coalesce(sum(${payoutsTable.amount}), 0)::text`,
+    })
+    .from(payoutsTable)
+    .where(eq(payoutsTable.status, "approved"));
+
+  let openFraudAlerts = 0;
+  let openClaims = 0;
+  try {
+    const r = await db.execute(sql`SELECT count(*)::int AS c FROM fraud_alerts WHERE status = 'open'`);
+    openFraudAlerts = Number((r.rows?.[0] as { c?: number } | undefined)?.c ?? 0);
+  } catch { /* table might be empty */ }
+  try {
+    const r = await db.execute(sql`SELECT count(*)::int AS c FROM ownership_claims WHERE status IN ('pending','disputed')`);
+    openClaims = Number((r.rows?.[0] as { c?: number } | undefined)?.c ?? 0);
+  } catch { /* table might be empty */ }
+
+  res.json({
+    revenueToday: parseFloat(revToday?.s ?? "0"),
+    revenueThisMonth: parseFloat(revMonth?.s ?? "0"),
+    pendingPayouts: { count: pending?.cnt ?? 0, sum: parseFloat(pending?.sum ?? "0") },
+    readyToPay: { count: readyToPay?.cnt ?? 0, sum: parseFloat(readyToPay?.sum ?? "0") },
+    openFraudAlerts,
+    openClaims,
+  });
+});
+
 export default router;

@@ -18,6 +18,8 @@ import { Globe, Handshake, Youtube } from "lucide-react";
 import { DspDealsTab } from "./dsp-deals-tab";
 import { ContentIdTab } from "./content-id-tab";
 import { TerritoriesTab } from "./territories-tab";
+import { FreezeTab } from "./freeze-tab";
+import { HistoryTab } from "./history-tab";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -718,6 +720,8 @@ export default function RightsManagement() {
           <TabsTrigger value="territories" className="gap-1.5">
             <Globe className="h-3.5 w-3.5" /> Территории
           </TabsTrigger>
+          <TabsTrigger value="freeze" className="gap-1.5">Заморозка</TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5">История</TabsTrigger>
         </TabsList>
 
         {/* ── TAB: Holders ──────────────────────────────────────────────── */}
@@ -882,6 +886,8 @@ export default function RightsManagement() {
         <TabsContent value="dsp-deals"  className="mt-4"><DspDealsTab /></TabsContent>
         <TabsContent value="content-id" className="mt-4"><ContentIdTab /></TabsContent>
         <TabsContent value="territories" className="mt-4"><TerritoriesTab /></TabsContent>
+        <TabsContent value="freeze" className="mt-4"><FreezeTab /></TabsContent>
+        <TabsContent value="history" className="mt-4"><HistoryTab /></TabsContent>
       </Tabs>
 
       <HolderDialog

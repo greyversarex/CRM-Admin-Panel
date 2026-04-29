@@ -52,6 +52,12 @@ export const rightsHoldersTable = pgTable("rights_holders", {
   endsAt: timestamp("ends_at", { withTimezone: true }),
   notes: text("notes"),
 
+  // Manual override / killswitch — заморозка прав
+  frozen: boolean("frozen").notNull().default(false),
+  frozenReason: text("frozen_reason"),
+  frozenBy: integer("frozen_by").references(() => usersTable.id, { onDelete: "set null" }),
+  frozenAt: timestamp("frozen_at", { withTimezone: true }),
+
   createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

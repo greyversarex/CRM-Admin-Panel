@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { useToast, toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
   ScrollText, Activity as ActivityIcon, Globe2, Copy, RefreshCcw,
@@ -1332,6 +1333,15 @@ export default function Settings() {
             <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <ActivityIcon className="h-3.5 w-3.5" />Активность
             </TabsTrigger>
+            <TabsTrigger value="channels" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              Каналы (Telegram/WhatsApp)
+            </TabsTrigger>
+            <TabsTrigger value="acrcloud" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              ACRCloud
+            </TabsTrigger>
+            <TabsTrigger value="pros" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              PRO (ASCAP/BMI/…)
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="mt-4"><TabGeneral /></TabsContent>
@@ -1345,6 +1355,9 @@ export default function Settings() {
           <TabsContent value="notifications" className="mt-4"><TabNotifications /></TabsContent>
           <TabsContent value="audit" className="mt-4"><TabAudit /></TabsContent>
           <TabsContent value="activity" className="mt-4"><TabActivity /></TabsContent>
+          <TabsContent value="channels" className="mt-4"><TabChannels /></TabsContent>
+          <TabsContent value="acrcloud" className="mt-4"><TabAcrcloud /></TabsContent>
+          <TabsContent value="pros" className="mt-4"><TabPros /></TabsContent>
         </Tabs>
 
         <IntegrationConfigDialog
@@ -1359,3 +1372,175 @@ export default function Settings() {
 }
 
 void Webhook;
+
+// ─── New Tabs (Channels / ACRCloud / PRO) ─────────────────────────────────
+
+function TabChannels() {
+  const [tg, setTg] = useState({ enabled: true, botToken: "", defaultChatId: "" });
+  const [wa, setWa] = useState({ enabled: true, provider: "twilio", accountSid: "", authToken: "", fromNumber: "" });
+  const [status, setStatus] = useState<{ telegram: boolean; whatsapp: boolean } | null>(null);
+  const [tgTestTo, setTgTestTo] = useState("");
+  const [waTestTo, setWaTestTo] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/communications/channels-status", { credentials: "same-origin" });
+        if (r.ok) {
+          const d = await r.json();
+          setStatus({ telegram: d.telegram?.configured, whatsapp: d.whatsapp?.configured });
+        }
+        const a = await fetch("/api/settings/channels", { credentials: "same-origin" });
+        if (a.ok) {
+          const d = await a.json();
+          if (d.value?.telegram) setTg((p) => ({ ...p, ...d.value.telegram }));
+          if (d.value?.whatsapp) setWa((p) => ({ ...p, ...d.value.whatsapp }));
+        }
+      } catch { /* noop */ }
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings/channels", {
+        method: "PUT", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegram: tg, whatsapp: wa }),
+      });
+      toast({ title: "Сохранено" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Ошибка", description: (e as Error).message });
+    } finally { setSaving(false); }
+  };
+
+  const test = async (channel: "telegram" | "whatsapp", to: string) => {
+    if (!to.trim()) {
+      toast({ variant: "destructive", title: "Укажите получателя для проверки" });
+      return;
+    }
+    try {
+      const r = await fetch("/api/communications/test-channel", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel, to: to.trim() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      toast({ variant: r.ok ? "default" : "destructive", title: r.ok ? "Сообщение отправлено" : "Сбой", description: (d as { error?: string; message?: string }).error ?? (d as { message?: string }).message ?? "" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Ошибка", description: (e as Error).message });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-base">Telegram Bot</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs">Статус: {status?.telegram ? <Badge>настроен</Badge> : <Badge variant="destructive">не настроен</Badge>}</div>
+          <div><Label>Bot Token</Label><Input value={tg.botToken} onChange={(e) => setTg((p) => ({ ...p, botToken: e.target.value }))} data-testid="input-tg-token" /></div>
+          <div><Label>Chat ID по умолчанию</Label><Input value={tg.defaultChatId} onChange={(e) => setTg((p) => ({ ...p, defaultChatId: e.target.value }))} data-testid="input-tg-chat" /></div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1"><Label>Тест: Chat ID</Label><Input value={tgTestTo} onChange={(e) => setTgTestTo(e.target.value)} placeholder="например 123456789" data-testid="input-tg-test-to" /></div>
+            <Button variant="outline" size="sm" onClick={() => void test("telegram", tgTestTo)} data-testid="button-test-telegram">Проверить</Button>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle className="text-base">WhatsApp Business (Twilio)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-xs">Статус: {status?.whatsapp ? <Badge>настроен</Badge> : <Badge variant="destructive">не настроен</Badge>}</div>
+          <div><Label>Account SID</Label><Input value={wa.accountSid} onChange={(e) => setWa((p) => ({ ...p, accountSid: e.target.value }))} data-testid="input-wa-sid" /></div>
+          <div><Label>Auth Token</Label><Input type="password" value={wa.authToken} onChange={(e) => setWa((p) => ({ ...p, authToken: e.target.value }))} data-testid="input-wa-token" /></div>
+          <div><Label>From Number (E.164)</Label><Input value={wa.fromNumber} onChange={(e) => setWa((p) => ({ ...p, fromNumber: e.target.value }))} placeholder="+1234567890" data-testid="input-wa-from" /></div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1"><Label>Тест: номер получателя (E.164)</Label><Input value={waTestTo} onChange={(e) => setWaTestTo(e.target.value)} placeholder="+1234567890" data-testid="input-wa-test-to" /></div>
+            <Button variant="outline" size="sm" onClick={() => void test("whatsapp", waTestTo)} data-testid="button-test-whatsapp">Проверить</Button>
+          </div>
+        </CardContent>
+      </Card>
+      <div><Button onClick={() => void save()} disabled={saving} data-testid="button-save-channels">Сохранить</Button></div>
+    </div>
+  );
+}
+
+function TabAcrcloud() {
+  const [form, setForm] = useState({ host: "identify-eu-west-1.acrcloud.com", accessKey: "", accessSecret: "" });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/settings/acrcloud", { credentials: "same-origin" });
+        if (r.ok) { const d = await r.json(); if (d.value) setForm((p) => ({ ...p, ...d.value })); }
+      } catch { /* noop */ }
+    })();
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings/acrcloud", {
+        method: "PUT", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      toast({ title: "Сохранено" });
+    } finally { setSaving(false); }
+  };
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">ACRCloud — учётные данные</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div><Label>Host</Label><Input value={form.host} onChange={(e) => setForm((p) => ({ ...p, host: e.target.value }))} data-testid="input-acr-host" /></div>
+        <div><Label>Access Key</Label><Input value={form.accessKey} onChange={(e) => setForm((p) => ({ ...p, accessKey: e.target.value }))} data-testid="input-acr-key" /></div>
+        <div><Label>Access Secret</Label><Input type="password" value={form.accessSecret} onChange={(e) => setForm((p) => ({ ...p, accessSecret: e.target.value }))} data-testid="input-acr-secret" /></div>
+        <Button onClick={() => void save()} disabled={saving} data-testid="button-save-acr">Сохранить</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TabPros() {
+  const [form, setForm] = useState({
+    ascap: { endpoint: "", apiKey: "" },
+    bmi: { endpoint: "", apiKey: "" },
+    songtrust: { endpoint: "", apiKey: "" },
+    mlc: { endpoint: "", apiKey: "" },
+  });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/settings/pros", { credentials: "same-origin" });
+        if (r.ok) { const d = await r.json(); if (d.value) setForm((p) => ({ ...p, ...d.value })); }
+      } catch { /* noop */ }
+    })();
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch("/api/settings/pros", {
+        method: "PUT", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      toast({ title: "Сохранено" });
+    } finally { setSaving(false); }
+  };
+  const setPro = (k: "ascap" | "bmi" | "songtrust" | "mlc", field: "endpoint" | "apiKey", v: string) =>
+    setForm((p) => ({ ...p, [k]: { ...p[k], [field]: v } }));
+  return (
+    <div className="space-y-6">
+      {(["ascap", "bmi", "songtrust", "mlc"] as const).map((k) => (
+        <Card key={k}>
+          <CardHeader><CardTitle className="text-base">{k.toUpperCase()}</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div><Label>Endpoint</Label><Input value={form[k].endpoint} onChange={(e) => setPro(k, "endpoint", e.target.value)} data-testid={`input-${k}-endpoint`} /></div>
+            <div><Label>API Key</Label><Input type="password" value={form[k].apiKey} onChange={(e) => setPro(k, "apiKey", e.target.value)} data-testid={`input-${k}-key`} /></div>
+          </CardContent>
+        </Card>
+      ))}
+      <div><Button onClick={() => void save()} disabled={saving} data-testid="button-save-pros">Сохранить</Button></div>
+    </div>
+  );
+}

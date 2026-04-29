@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLang } from "@/lib/i18n";
+import { UgcTab } from "./ugc-tab";
+import { RealtimeTab } from "./realtime-tab";
 import { useAuth } from "@/lib/auth";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -234,6 +236,8 @@ export default function AnalyticsPage() {
             <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.revenue}</TabsTrigger>
             <TabsTrigger value="geo" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.geo}</TabsTrigger>
             <TabsTrigger value="tracks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.tracks}</TabsTrigger>
+            <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">UGC</TabsTrigger>
+            <TabsTrigger value="realtime" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Алерты</TabsTrigger>
           </TabsList>
 
           {/* ─── Streams ─── */}
@@ -464,6 +468,9 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="ugc" className="mt-4"><UgcTab /></TabsContent>
+          <TabsContent value="realtime" className="mt-4"><RealtimeTab /></TabsContent>
         </Tabs>
       </div>
     </Layout>

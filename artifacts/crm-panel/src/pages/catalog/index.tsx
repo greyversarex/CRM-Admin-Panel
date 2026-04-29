@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Disc3, Music2, Mic2, Building2, FileBox, Clapperboard, Files, Hash } from "lucide-react";
+import { Disc3, Music2, Mic2, Building2, FileBox, Clapperboard, Files, Hash, Layers } from "lucide-react";
 import { Layout } from "@/components/layout";
 
 type Card = {
@@ -19,6 +19,7 @@ const CARDS: Card[] = [
   { href: "/catalog/assets?kind=video", title: "Видео", description: "Видео-материалы (Music Video, Lyric Video)",     icon: Clapperboard, color: "text-amber-400" },
   { href: "/catalog/duplicates", title: "Дубликаты",  description: "Поиск дублей по имени, ISRC, UPC, sha256",          icon: Files,       color: "text-rose-400" },
   { href: "/catalog/codes",     title: "Генератор кодов", description: "Получить новый ISRC или UPC код",              icon: Hash,        color: "text-violet-400" },
+  { href: "/catalog/bulk-edit", title: "Массовое редактирование", description: "Применить изменения к множеству объектов сразу", icon: Layers,      color: "text-cyan-400" },
 ];
 
 export default function CatalogHub() {

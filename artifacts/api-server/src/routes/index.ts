@@ -28,7 +28,15 @@ import rightsRouter from "./rights";
 import settingsRouter from "./settings";
 import communicationsRouter from "./communications";
 import automationRouter from "./automation";
+import automationExtrasRouter from "./automation-extras";
 import catalogRouter from "./catalog";
+import catalogBulkRouter from "./catalog-bulk";
+import financeExtrasRouter from "./finance-extras";
+import distributionExtrasRouter from "./distribution-extras";
+import analyticsExtrasRouter from "./analytics-extras";
+import rightsExtrasRouter from "./rights-extras";
+import publishingExtrasRouter from "./publishing-extras";
+import communicationsChannelsRouter from "./communications-channels";
 import { requireAuth, requireRole } from "../lib/auth";
 import { securityPolicy } from "../middlewares/security-policy";
 
@@ -76,6 +84,8 @@ router.use("/contacts", adminOnly);
 router.use("/crm", adminOnly);
 router.use(crmRouter);
 router.use(financeRouter);            // scoped per-route inside
+// Финансовые расширения: комиссии + 2-step approval payouts (admin/manager only — гарды внутри).
+router.use(financeExtrasRouter);
 // CSV-импорт DSP-отчётов — admin/manager only (вся монетарная мутация).
 router.use("/finance/ingest", adminOnly);
 router.use("/finance/imports", adminOnly);
@@ -85,12 +95,19 @@ router.use("/splits", adminOnly);
 router.use(splitsRouter);
 router.use("/publishing", adminOnly);
 router.use(publishingRouter);
+// Publishing extras: PRO registration + conflict detection (под /publishing → admin-only выше).
+router.use(publishingExtrasRouter);
 router.use("/analytics", adminOnly);  // currently mock org-wide aggregates
 router.use(analyticsRouter);
+// Analytics extras: UGC metrics + Realtime alerts (под /analytics → admin-only выше).
+router.use(analyticsExtrasRouter);
 // /deliveries/* + POST /releases/:id/deliver — admin/manager only.
 // Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
 router.use("/deliveries", adminOnly);
 router.use(deliveryRouter);
+// Distribution extras: ACRCloud + Disputes — admin/manager only.
+router.use("/distribution", adminOnly);
+router.use(distributionExtrasRouter);
 router.use("/ddex", adminOnly);
 router.use(ddexRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
@@ -100,15 +117,19 @@ router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
 router.use(rightsRouter);               // /rights — scoped per-route inside (label/artist see their assets)
+router.use(rightsExtrasRouter);         // /rights/holders/:id/freeze + /rights/history — admin/manager only (гарды внутри)
 router.use("/settings", adminOnly);
 router.use("/api-keys", adminOnly);
 router.use("/webhooks", adminOnly);
 router.use(settingsRouter);
 router.use("/communications", adminOnly);
 router.use(communicationsRouter);
+router.use(communicationsChannelsRouter);     // Telegram + WhatsApp send/test (admin-only выше)
 router.use("/automation", adminOnly);
 router.use(automationRouter);
+router.use(automationExtrasRouter);           // Payment automation rules (admin-only выше)
 router.use("/catalog", adminOnly);
 router.use(catalogRouter);
+router.use(catalogBulkRouter);                // POST /catalog/bulk-edit (admin-only выше)
 
 export default router;

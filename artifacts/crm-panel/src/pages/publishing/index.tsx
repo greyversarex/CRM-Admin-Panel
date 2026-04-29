@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/layout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ConflictsTab } from "./conflicts-tab";
+import { RegistrationTab } from "./registration-tab";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -219,6 +222,14 @@ export default function Publishing() {
           </Button>
         </div>
 
+        <Tabs defaultValue="works" className="w-full">
+          <TabsList>
+            <TabsTrigger value="works">Произведения</TabsTrigger>
+            <TabsTrigger value="conflicts">Конфликты</TabsTrigger>
+            <TabsTrigger value="registration">Регистрация в PRO</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="works" className="mt-4 space-y-6">
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiTile icon={BookMarked}    label={t.common.status}   value={kpi.total}      color="cyan" />
@@ -382,6 +393,11 @@ export default function Publishing() {
             </div>
           )}
         </Card>
+          </TabsContent>
+
+          <TabsContent value="conflicts" className="mt-4"><ConflictsTab /></TabsContent>
+          <TabsContent value="registration" className="mt-4"><RegistrationTab /></TabsContent>
+        </Tabs>
       </div>
 
       <WorkDialog

@@ -18,6 +18,8 @@ import {
   Plus, Download, Ban, RotateCw,
 } from "lucide-react";
 import { useListReleases, useListIntegrations, type Integration } from "@workspace/api-client-react";
+import { AcrTab } from "./acr-tab";
+import { DisputesTab } from "./disputes-tab";
 
 // ─── Типы DDEX (фронтовые DTO; соответствуют artifacts/api-server/src/routes/ddex.ts)
 
@@ -493,6 +495,8 @@ export default function Distribution() {
             <TabsTrigger value="messages"><FileCode2 className="w-4 h-4 mr-2" />Сообщения</TabsTrigger>
             <TabsTrigger value="batches"><Layers className="w-4 h-4 mr-2" />Батчи</TabsTrigger>
             <TabsTrigger value="acks"><Inbox className="w-4 h-4 mr-2" />Журнал подтверждений</TabsTrigger>
+            <TabsTrigger value="acr">ACRCloud</TabsTrigger>
+            <TabsTrigger value="disputes">Споры</TabsTrigger>
           </TabsList>
 
           {/* ───── Сообщения ───── */}
@@ -669,6 +673,14 @@ export default function Distribution() {
                 <ManualAckTester onIngested={refreshAll} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="acr" className="space-y-4">
+            <Card><CardContent className="pt-6"><AcrTab /></CardContent></Card>
+          </TabsContent>
+
+          <TabsContent value="disputes" className="space-y-4">
+            <Card><CardContent className="pt-6"><DisputesTab /></CardContent></Card>
           </TabsContent>
         </Tabs>
 
