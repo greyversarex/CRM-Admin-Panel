@@ -27,6 +27,7 @@ import {
   disconnectIntegration,
   testConnection,
   getSyncJobs,
+  pollIntegrationAcks,
 } from "../services/integrations-service";
 
 const router = Router();
@@ -155,6 +156,18 @@ router.post("/integrations/:code/test", async (req, res): Promise<void> => {
 
   const result = await testConnection(params.data.code);
   res.status(result.ok ? 200 : 400).json(result);
+});
+
+router.post("/integrations/:code/poll-acks", async (req, res): Promise<void> => {
+  const params = CodeParam.safeParse(req.params);
+  if (!params.success) return badRequest(res, params.error);
+
+  try {
+    const result = await pollIntegrationAcks(params.data.code);
+    res.json(result);
+  } catch (e) {
+    res.status(404).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
 });
 
 router.get("/integrations/:code/jobs", async (req, res): Promise<void> => {

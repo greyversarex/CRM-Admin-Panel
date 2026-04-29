@@ -14,6 +14,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { encryptSecret, decryptSecret, maskSecret } from "../lib/crypto";
 import { getConnector } from "../connectors/registry";
 import type { ConnectorContext } from "../connectors/base";
+import { getTransport } from "../ddex/transports";
+import { ingestAck } from "../ddex/service";
 
 export type IntegrationView = {
   id: number;
@@ -221,4 +223,75 @@ export async function getSyncJobs(integrationCode: string, limit = 20) {
     .where(eq(integrationSyncJobsTable.integrationId, integration.id))
     .orderBy(desc(integrationSyncJobsTable.startedAt))
     .limit(limit);
+}
+
+export type AckPollFileResult = {
+  filename: string;
+  preview: string;       // первые 600 символов тела
+  status: "ingested" | "duplicate" | "error";
+  ackId?: string;
+  messageStatus?: string;
+  errorMessage?: string;
+};
+
+export type AckPollResult = {
+  transport: string;
+  found: number;
+  files: AckPollFileResult[];
+  error?: string;
+};
+
+/**
+ * Разовый ручной опрос SFTP outbox: читает XML-ack'и, удаляет их (как автополлер),
+ * вызывает ingestAck для каждого. Возвращает список файлов с предпросмотром и статусом.
+ * Работает без DDEX_ACK_POLLER_ENABLED=1.
+ */
+export async function pollIntegrationAcks(integrationCode: string): Promise<AckPollResult> {
+  const integration = await getIntegrationByCode(integrationCode);
+  if (!integration) throw new Error(`Интеграция ${integrationCode} не найдена`);
+
+  const cfg = (integration.config ?? {}) as Record<string, string>;
+  const transportName = cfg.transport ?? "local-fs";
+
+  if (transportName !== "sftp") {
+    return {
+      transport: transportName,
+      found: 0,
+      files: [],
+      error: `Опрос outbox доступен только для SFTP-транспорта (текущий: ${transportName})`,
+    };
+  }
+
+  let transport;
+  try { transport = getTransport(transportName); } catch (e) {
+    return { transport: transportName, found: 0, files: [], error: (e as Error).message };
+  }
+  if (!transport.pollAcks) {
+    return { transport: transportName, found: 0, files: [], error: "Транспорт не поддерживает pollAcks" };
+  }
+
+  const credentials = await loadCredentials(integration.id);
+  const ctx = { config: { ...cfg, partnerCode: integrationCode }, credentials };
+
+  let rawFiles: { filename: string; body: string }[];
+  try {
+    rawFiles = await transport.pollAcks(ctx);
+  } catch (e) {
+    return { transport: transportName, found: 0, files: [], error: `SFTP ошибка: ${(e as Error).message}` };
+  }
+
+  const results: AckPollFileResult[] = [];
+  for (const f of rawFiles) {
+    const preview = f.body.slice(0, 600).replace(/\r\n/g, "\n");
+    try {
+      const r = await ingestAck(f.body, "manual", integrationCode);
+      results.push({ filename: f.filename, preview, status: "ingested", ackId: r.ackId != null ? String(r.ackId) : undefined, messageStatus: r.status });
+    } catch (err) {
+      const msg = (err as Error).message;
+      const isDuplicate = msg.includes("duplicate") || msg.includes("уже") || msg.includes("already");
+      results.push({ filename: f.filename, preview, status: isDuplicate ? "duplicate" : "error", errorMessage: msg });
+    }
+  }
+
+  return { transport: transportName, found: rawFiles.length, files: results };
 }

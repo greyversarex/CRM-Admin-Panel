@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, Save, KeyRound } from "lucide-react";
+import { FlaskConical, Save, KeyRound, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
 
 export interface ConfigurableIntegration {
   code: string;
@@ -26,6 +26,22 @@ export interface ConfigurableIntegration {
 
 type Transport = "local-fs" | "sftp";
 type AuthMode = "password" | "private_key";
+
+type AckFileResult = {
+  filename: string;
+  preview: string;
+  status: "ingested" | "duplicate" | "error";
+  ackId?: string;
+  messageStatus?: string;
+  errorMessage?: string;
+};
+
+type PollResult = {
+  transport: string;
+  found: number;
+  files: AckFileResult[];
+  error?: string;
+};
 
 const FALLBACK_DEFAULTS = {
   transport: "local-fs" as Transport,
@@ -48,6 +64,38 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+function AckFileRow({ f }: { f: AckFileResult }) {
+  const [expanded, setExpanded] = useState(false);
+  const statusColor =
+    f.status === "ingested" ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+    : f.status === "duplicate" ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
+    : "bg-rose-500/15 border-rose-500/30 text-rose-300";
+  const statusLabel = f.status === "ingested" ? "принят" : f.status === "duplicate" ? "дубликат" : "ошибка";
+
+  return (
+    <div className={`rounded border p-2 text-xs ${statusColor}`}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="flex items-center gap-1 flex-1 text-left font-mono"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+          <span className="truncate">{f.filename}</span>
+        </button>
+        <Badge variant="outline" className="text-[10px] border-current shrink-0">{statusLabel}</Badge>
+        {f.ackId && <span className="opacity-70 shrink-0">ack {f.ackId}</span>}
+        {f.messageStatus && <span className="opacity-70 shrink-0">→ {f.messageStatus}</span>}
+      </div>
+      {expanded && (
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all opacity-80 leading-relaxed">
+          {f.errorMessage ?? f.preview}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 export function IntegrationConfigDialog({
@@ -82,6 +130,10 @@ export function IntegrationConfigDialog({
   const [busy, setBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  // ── ack-опрос ────────────────────────────────────────────────────────────
+  const [polling, setPolling] = useState(false);
+  const [pollResult, setPollResult] = useState<PollResult | null>(null);
+
   // Каждый раз при открытии диалога — заполняем форму из текущей интеграции.
   useEffect(() => {
     if (!open || !integration) return;
@@ -95,14 +147,13 @@ export function IntegrationConfigDialog({
     setPartyIdSender(cfg.partyIdSender ?? FALLBACK_DEFAULTS.partyIdSender);
     setPartyIdRecipient(cfg.partyIdRecipient ?? "");
 
-    // Креды по умолчанию НЕ загружаются (значения зашифрованы и не возвращаются),
-    // но мы можем угадать выбранный режим по списку credentialFields.
     const fieldKeys = (integration.credentialFields ?? []).map((f) => f.fieldKey);
     setAuthMode(fieldKeys.includes("private_key") ? "private_key" : "password");
     setPassword("");
     setPrivateKey("");
     setPassphrase("");
     setTestResult(null);
+    setPollResult(null);
   }, [open, integration]);
 
   if (!integration) return null;
@@ -111,7 +162,6 @@ export function IntegrationConfigDialog({
 
   const buildConfigPayload = (): Record<string, string | null> => {
     if (transport === "local-fs") {
-      // Сбрасываем все sftp-поля.
       return {
         transport: "local-fs",
         host: null, port: null, username: null,
@@ -135,7 +185,7 @@ export function IntegrationConfigDialog({
   const buildCredentialsPayload = (): Record<string, string> | null => {
     if (transport !== "sftp") return null;
     if (authMode === "password") {
-      if (!password) return {}; // если пусто — не перезаписываем (бэк удалит все, поэтому пропускаем сабмит вообще)
+      if (!password) return {};
       return { password, passphrase: passphrase.trim() };
     }
     if (!privateKey) return {};
@@ -146,7 +196,6 @@ export function IntegrationConfigDialog({
     if (transport === "sftp") {
       if (!host.trim()) return "Заполните host";
       if (!username.trim()) return "Заполните username";
-      // Если в кредах ещё ничего не сохранено и пользователь ничего не ввёл — ошибка.
       const haveSavedCreds = (integration.credentialFields ?? []).length > 0;
       const userTyped = (authMode === "password" ? password : privateKey).length > 0;
       if (!haveSavedCreds && !userTyped) {
@@ -156,24 +205,26 @@ export function IntegrationConfigDialog({
     return null;
   };
 
+  const saveConfigAndCreds = async () => {
+    await api(`/api/integrations/${integration.code}/config`, {
+      method: "PATCH",
+      body: JSON.stringify({ config: buildConfigPayload() }),
+    });
+    const creds = buildCredentialsPayload();
+    if (creds && Object.values(creds).some((v) => v && v.length > 0)) {
+      await api(`/api/integrations/${integration.code}/credentials`, {
+        method: "POST",
+        body: JSON.stringify({ fields: creds }),
+      });
+    }
+  };
+
   const onSave = async () => {
     const err = validateBeforeSave();
     if (err) { toast({ variant: "destructive", title: "Не сохранено", description: err }); return; }
     setBusy(true);
     try {
-      // 1) Конфиг (cleartext)
-      await api(`/api/integrations/${integration.code}/config`, {
-        method: "PATCH",
-        body: JSON.stringify({ config: buildConfigPayload() }),
-      });
-      // 2) Креды (если введены новые) — POST /credentials полностью заменяет набор кредов.
-      const creds = buildCredentialsPayload();
-      if (creds && Object.values(creds).some((v) => v && v.length > 0)) {
-        await api(`/api/integrations/${integration.code}/credentials`, {
-          method: "POST",
-          body: JSON.stringify({ fields: creds }),
-        });
-      }
+      await saveConfigAndCreds();
       toast({ title: "Сохранено", description: `Конфигурация ${integration.name} обновлена` });
       onSaved();
       onOpenChange(false);
@@ -188,24 +239,28 @@ export function IntegrationConfigDialog({
     setBusy(true);
     setTestResult(null);
     try {
-      // Для теста сначала сохраним свежий конфиг — иначе тест прогонит старый.
-      await api(`/api/integrations/${integration.code}/config`, {
-        method: "PATCH",
-        body: JSON.stringify({ config: buildConfigPayload() }),
-      });
-      const creds = buildCredentialsPayload();
-      if (creds && Object.values(creds).some((v) => v && v.length > 0)) {
-        await api(`/api/integrations/${integration.code}/credentials`, {
-          method: "POST",
-          body: JSON.stringify({ fields: creds }),
-        });
-      }
+      await saveConfigAndCreds();
       const r = await api<{ ok: boolean; message?: string }>(`/api/integrations/${integration.code}/test`, { method: "POST" });
       setTestResult({ ok: r.ok, message: r.message ?? (r.ok ? "OK" : "Ошибка") });
     } catch (e) {
       setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onPollAcks = async () => {
+    setPolling(true);
+    setPollResult(null);
+    try {
+      // Сначала сохраняем свежий конфиг, чтобы опрос шёл по актуальным настройкам.
+      await saveConfigAndCreds().catch(() => { /* Если ошибка сохранения — продолжаем с тем, что в БД */ });
+      const r = await api<PollResult>(`/api/integrations/${integration.code}/poll-acks`, { method: "POST" });
+      setPollResult(r);
+    } catch (e) {
+      setPollResult({ transport, found: 0, files: [], error: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setPolling(false);
     }
   };
 
@@ -238,7 +293,7 @@ export function IntegrationConfigDialog({
             )}
           </div>
 
-          {/* Party IDs (нужны для обоих транспортов — ставятся в DDEX-заголовок) */}
+          {/* Party IDs */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="party-sender">Sender PartyId (DPID отправителя)</Label>
@@ -276,8 +331,15 @@ export function IntegrationConfigDialog({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="sftp-outbox">Outbox path (для опроса ack, опционально)</Label>
-                <Input id="sftp-outbox" value={outboxPath} onChange={(e) => setOutboxPath(e.target.value)} placeholder="/outbox (по умолчанию — параллельно с remote base)" />
+                <Label htmlFor="sftp-outbox">
+                  Outbox path <span className="text-[10px] text-muted-foreground">(опционально — если партнёр кладёт ack в отдельную папку)</span>
+                </Label>
+                <Input
+                  id="sftp-outbox"
+                  value={outboxPath}
+                  onChange={(e) => setOutboxPath(e.target.value)}
+                  placeholder="/outbox (по умолчанию — ../outbox относительно remote base)"
+                />
               </div>
 
               <div className="border-t border-border/50 pt-3">
@@ -325,6 +387,53 @@ export function IntegrationConfigDialog({
                   </div>
                 </>
               )}
+
+              {/* ── Ручной опрос outbox ──────────────────────────────────── */}
+              <div className="border-t border-border/50 pt-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Опрос outbox (ack)</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Подключается к SFTP, читает XML-файлы подтверждений из <code>{outboxPath || "../outbox"}</code>, импортирует их в систему.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={polling || busy}
+                    onClick={onPollAcks}
+                    className="shrink-0 ml-3"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${polling ? "animate-spin" : ""}`} />
+                    {polling ? "Опрашиваю…" : "Опросить outbox"}
+                  </Button>
+                </div>
+
+                {pollResult && (
+                  <div className="mt-3 space-y-2">
+                    {pollResult.error ? (
+                      <div className="rounded border border-rose-500/30 bg-rose-500/10 text-rose-300 p-2.5 text-xs">
+                        <p className="font-medium">Ошибка опроса</p>
+                        <p className="opacity-90 mt-1">{pollResult.error}</p>
+                      </div>
+                    ) : pollResult.found === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">Новых ack-файлов не найдено — outbox пуст или недоступен.</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Найдено файлов: <strong className="text-foreground">{pollResult.found}</strong>
+                        </p>
+                        <div className="space-y-1.5">
+                          {pollResult.files.map((f) => (
+                            <AckFileRow key={f.filename} f={f} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -338,12 +447,12 @@ export function IntegrationConfigDialog({
         </div>
 
         <DialogFooter className="flex sm:justify-between gap-2">
-          <Button variant="outline" disabled={busy} onClick={onTest}>
+          <Button variant="outline" disabled={busy || polling} onClick={onTest}>
             <FlaskConical className="h-3.5 w-3.5 mr-1.5" /> Сохранить и проверить
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>Отмена</Button>
-            <Button disabled={busy} onClick={onSave}>
+            <Button variant="ghost" disabled={busy || polling} onClick={() => onOpenChange(false)}>Отмена</Button>
+            <Button disabled={busy || polling} onClick={onSave}>
               <Save className="h-3.5 w-3.5 mr-1.5" /> Сохранить
             </Button>
           </div>
