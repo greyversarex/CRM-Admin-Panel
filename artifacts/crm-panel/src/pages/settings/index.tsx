@@ -19,10 +19,12 @@ import {
   CheckCircle2, AlertTriangle, Unplug, FlaskConical, Settings2, Lock,
   FileCode2, Key, Webhook, CreditCard, DollarSign, ShieldCheck,
   HardDrive, Bell, Plus, Trash2, Eye, EyeOff, Save,
+  User as UserIcon, KeyRound, BellRing, ExternalLink,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { IntegrationConfigDialog } from "@/components/integration-config-dialog";
 import { TabManagerPermissions } from "./manager-permissions-tab";
+import { useLocation } from "wouter";
 
 // ─── API helper ──────────────────────────────────────────────────────────────
 
@@ -1233,7 +1235,206 @@ function TabActivity() {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Personal settings (for label / artist roles) ───────────────────────────
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Администратор",
+  manager: "Менеджер",
+  label: "Лейбл",
+  artist: "Артист",
+};
+
+function PersonalPasswordTab() {
+  const { toast } = useToast();
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [conf, setConf] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showCur, setShowCur] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!cur || !next) { toast({ variant: "destructive", title: "Заполните все поля" }); return; }
+    if (next !== conf) { toast({ variant: "destructive", title: "Пароли не совпадают" }); return; }
+    if (next.length < 8) { toast({ variant: "destructive", title: "Пароль должен содержать не менее 8 символов" }); return; }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword: cur, newPassword: next }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); msg = j?.error ?? msg; } catch {}
+        throw new Error(msg);
+      }
+      toast({ title: "Пароль изменён" });
+      setCur(""); setNext(""); setConf("");
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Ошибка", description: e?.message ?? "Неизвестная ошибка" });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Card className="card-surface border-border/60 max-w-lg">
+      <CardHeader>
+        <CardTitle className="text-base">Смена пароля</CardTitle>
+        <CardDescription>Минимум 8 символов. Рекомендуем использовать цифры и спецсимволы.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Текущий пароль</Label>
+          <div className="relative">
+            <Input type={showCur ? "text" : "password"} value={cur} onChange={(e) => setCur(e.target.value)} className="pr-10" />
+            <button type="button" className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground" onClick={() => setShowCur((v) => !v)}>
+              {showCur ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Новый пароль</Label>
+          <div className="relative">
+            <Input type={showNext ? "text" : "password"} value={next} onChange={(e) => setNext(e.target.value)} className="pr-10" />
+            <button type="button" className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground" onClick={() => setShowNext((v) => !v)}>
+              {showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Подтверждение нового пароля</Label>
+          <Input type="password" value={conf} onChange={(e) => setConf(e.target.value)} />
+        </div>
+        <Button onClick={() => void handleSubmit()} disabled={busy}>
+          <Save className="mr-2 h-4 w-4" />
+          {busy ? "Сохранение…" : "Сохранить пароль"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersonalNotificationsTab() {
+  const [prefs, setPrefs] = useState({
+    emailNewRelease: true,
+    emailRoyalty: true,
+    emailDelivery: true,
+    emailReports: false,
+  });
+  const [saved, setSaved] = useState(false);
+  const toggle = (k: keyof typeof prefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
+
+  const save = () => {
+    localStorage.setItem("notif_prefs", JSON.stringify(prefs));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  useEffect(() => {
+    const raw = localStorage.getItem("notif_prefs");
+    if (raw) { try { setPrefs(JSON.parse(raw)); } catch {} }
+  }, []);
+
+  return (
+    <Card className="card-surface border-border/60 max-w-lg">
+      <CardHeader>
+        <CardTitle className="text-base">Уведомления</CardTitle>
+        <CardDescription>Выберите, о чём получать email-оповещения.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {([
+          ["emailNewRelease", "Новый релиз одобрен / отклонён"],
+          ["emailRoyalty", "Начисление роялти"],
+          ["emailDelivery", "Статус доставки на площадки"],
+          ["emailReports", "Ежемесячные финансовые отчёты"],
+        ] as const).map(([k, label]) => (
+          <div key={k} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
+            <Label className="text-sm cursor-pointer" htmlFor={`notif-${k}`}>{label}</Label>
+            <Switch id={`notif-${k}`} checked={prefs[k]} onCheckedChange={() => toggle(k)} />
+          </div>
+        ))}
+        <Button onClick={save} variant={saved ? "outline" : "default"} className="mt-2">
+          {saved ? <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" /> : <Save className="mr-2 h-4 w-4" />}
+          {saved ? "Сохранено" : "Сохранить"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersonalSettings() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  return (
+    <Layout>
+      <div className="flex flex-col gap-6">
+        <div className="relative pl-4">
+          <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-gradient-to-b from-primary to-[hsl(271_80%_68%)]" />
+          <h1 className="text-2xl font-bold tracking-tight">Настройки</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">Личные настройки аккаунта</p>
+        </div>
+
+        <Tabs defaultValue="profile">
+          <TabsList className="bg-card border border-border h-auto p-1 gap-0.5">
+            <TabsTrigger value="profile" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              <UserIcon className="h-3.5 w-3.5" />Профиль
+            </TabsTrigger>
+            <TabsTrigger value="password" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              <KeyRound className="h-3.5 w-3.5" />Смена пароля
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              <BellRing className="h-3.5 w-3.5" />Уведомления
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="mt-4">
+            <Card className="card-surface border-border/60 max-w-lg">
+              <CardHeader>
+                <CardTitle className="text-base">Профиль</CardTitle>
+                <CardDescription>Просмотр и редактирование персональных данных, KYC и банковских реквизитов.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-1.5 border-b border-border/30">
+                    <span className="text-muted-foreground">Email</span>
+                    <span className="font-medium">{user?.email}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-border/30">
+                    <span className="text-muted-foreground">Роль</span>
+                    <Badge variant="outline">{ROLE_LABELS[user?.role ?? ""] ?? user?.role}</Badge>
+                  </div>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-muted-foreground">KYC-статус</span>
+                    <Badge variant={user?.kycStatus === "approved" ? "default" : "secondary"}>
+                      {user?.kycStatus === "approved" ? "Одобрен" :
+                       user?.kycStatus === "pending"  ? "На проверке" :
+                       user?.kycStatus === "rejected" ? "Отклонён" : "Не пройден"}
+                    </Badge>
+                  </div>
+                </div>
+                <Button onClick={() => setLocation("/profile")}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Перейти в полный профиль
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="password" className="mt-4">
+            <PersonalPasswordTab />
+          </TabsContent>
+
+          <TabsContent value="notifications" className="mt-4">
+            <PersonalNotificationsTab />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </Layout>
+  );
+}
+
+// ─── Main settings page ──────────────────────────────────────────────────────
 
 export default function Settings() {
   const { user, isLoading } = useAuth();
@@ -1280,6 +1481,9 @@ export default function Settings() {
 
   if (isLoading) return <Layout><div className="p-6"><Skeleton className="h-32 w-full" /></div></Layout>;
   if (!canView) {
+    if (user?.role === "label" || user?.role === "artist") {
+      return <PersonalSettings />;
+    }
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center py-24 text-center gap-3">

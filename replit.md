@@ -403,3 +403,22 @@ URL sync через wouter `useSearch()` + `useLocation()`: `/crm` = overview, `
 ## Theme
 
 Dark navy/slate background with electric indigo (#6366f1) accent. Dense, professional admin cockpit aesthetic designed for music industry professionals.
+
+## Stage 4 — Role-aware UX (Settings split + Release wizard for artist)
+
+**Stage 4.1 — Settings split per role:**
+- `settings/index.tsx`: `canView = role==="admin"||"manager"` — система не изменялась.
+- Для `label`/`artist`: вместо locked screen рендерится `<PersonalSettings>` — лёгкий Tabs с 3 вкладками:
+  1. **Профиль** — read-only карточка (email, роль, KYC-статус) + кнопка «Перейти в полный профиль» → `/profile`.
+  2. **Смена пароля** — inline форма → `POST /api/auth/change-password`.
+  3. **Уведомления** — Switch-переключатели (emailNewRelease/Royalty/Delivery/Reports), persisted в `localStorage`.
+- Системные табы (Общие, DDEX, API, Оплата, DSP, Безопасность, Хранилище, Аудит, ACRCloud, PRO, Права менеджеров) видны только admin/manager — не изменялись.
+
+**Stage 4.2 — Форма создания релиза для артиста:**
+- `/releases/new.tsx` уже существовал и был достижим для всех ролей.
+- Добавлен `useAuth()` → вычисляется `isArtist`/`isLabel`.
+- **Artist**: `artistId` автоматически берётся из `user.artistId` (useEffect), артист показывается read-only Badge, dropdown лейбла скрыт (сервер дерайвит labelId из artistsTable).
+- **Label**: фильтрует `visibleArtists` по `a.labelId === user.labelId`, лейбл показывается read-only Badge с кнопкой «Ваш лейбл», dropdown лейбла скрыт.
+- **Admin/Manager**: видят полные dropdown'ы исполнителей и лейблов.
+- Весь UI переведён на русский: «Создать релиз», типы (Сингл/Альбом/EP/Сборник), языки (Таджикский/Русский/…), кнопки «Сохранить релиз»/«Отмена», «Назад к релизам», жанры, «Explicit-контент».
+- Backend auth без изменений (artist → 403 при чужом artistId, label → 403 при чужом labelId/artist).
