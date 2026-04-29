@@ -147,7 +147,7 @@ Smoke-тесты (curl, проверены в dev):
 - **`components/dashboard-sections.tsx`** очищен: удалены `GeoStreamsCard`, `WorldStreamsMap`, `UgcOverviewCard`, `SocialViewsCard` (все на моках из удалённого `data/dashboard-extras.ts`). Оставлены 6 секций для admin/manager — все на `useQuery` к реальным `/api/dashboard/*` эндпоинтам: `TopDspCard`, `TopTerritoriesCard`, `LatestReleasesGridCard`, `TopTracksCard`, `RoyaltySummaryCard`, `ArtistsStatsTableCard`.
 - **Удалён файл** `data/dashboard-extras.ts` (вся фабрика моков). Папка `data/` пуста — её можно удалить целиком при следующей чистке.
 - **Orphan dependency**: `react-simple-maps` теперь не используется (был только в `WorldStreamsMap`). Можно убрать из `artifacts/crm-panel/package.json` отдельным проходом.
-- **`/distribution` и `/videos`** оставлены как есть (полные моки) — они будут переписаны на реальный API в задачах DDEX ERN 4.3 и Videos соответственно.
+- **`/distribution`** полностью переписана на реальный API DDEX ERN-4.3 пайплайна (сообщения, батчи, ack-журнал). Смотри секцию «DDEX ERN-4.3 pipeline» ниже.
 
 ## CRM page (контакты + задачи)
 

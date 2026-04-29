@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NewReleaseMessage xmlns:ern="http://ddex.net/xml/ern/43" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" MessageSchemaVersionId="ern/43" LanguageAndScriptCode="en">
+  <MessageHeader>
+    <MessageThreadId>THREAD-ddex_main-R1-moj9k63n</MessageThreadId>
+    <MessageId>MSG-ddex_main-mojf3i1c-lg</MessageId>
+    <MessageSender>
+      <PartyId>PADPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music Distribution</FullName>
+      </PartyName>
+    </MessageSender>
+    <MessageRecipient>
+      <PartyId>PADPIDA-DDEX-MAIN</PartyId>
+      <PartyName>
+        <FullName>DDEX SFTP (универсальный)</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>2026-04-29T02:10:01.105Z</MessageCreatedDateTime>
+    <MessageControlType>OriginalMessage</MessageControlType>
+  </MessageHeader>
+  <PartyList>
+    <Party>
+      <PartyReference>P_MAIN_ARTIST</PartyReference>
+      <PartyName>
+        <FullName>Daler Nazarov</FullName>
+      </PartyName>
+    </Party>
+    <Party>
+      <PartyReference>P_LABEL</PartyReference>
+      <PartyName>
+        <FullName>Tajik Sounds Records</FullName>
+      </PartyName>
+    </Party>
+  </PartyList>
+  <ResourceList>
+    <SoundRecording>
+      <ResourceReference>A1</ResourceReference>
+      <Type>MusicalWorkSoundRecording</Type>
+      <ResourceId>
+        <ISRC>TJSND2400101</ISRC>
+      </ResourceId>
+      <DisplayTitleText>Bahor (Spring)</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Bahor (Spring)</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <Duration>PT4M5S</Duration>
+      <LanguageOfPerformance>tg</LanguageOfPerformance>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_A1</TechnicalResourceDetailsReference>
+        <AudioCodecType>WAV</AudioCodecType>
+        <BitsPerSample>16</BitsPerSample>
+        <SamplingRate>44100</SamplingRate>
+        <NumberOfChannels>2</NumberOfChannels>
+        <File>
+          <URI>TJSND2400101.wav</URI>
+        </File>
+      </TechnicalDetails>
+    </SoundRecording>
+    <SoundRecording>
+      <ResourceReference>A2</ResourceReference>
+      <Type>MusicalWorkSoundRecording</Type>
+      <ResourceId>
+        <ISRC>TJSND2400102</ISRC>
+      </ResourceId>
+      <DisplayTitleText>Dar Dil</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Dar Dil</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <Duration>PT3M18S</Duration>
+      <LanguageOfPerformance>tg</LanguageOfPerformance>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_A2</TechnicalResourceDetailsReference>
+        <AudioCodecType>WAV</AudioCodecType>
+        <BitsPerSample>16</BitsPerSample>
+        <SamplingRate>44100</SamplingRate>
+        <NumberOfChannels>2</NumberOfChannels>
+        <File>
+          <URI>TJSND2400102.wav</URI>
+        </File>
+      </TechnicalDetails>
+    </SoundRecording>
+    <Image>
+      <ResourceReference>IMG_COVER</ResourceReference>
+      <Type>FrontCoverImage</Type>
+      <ResourceId>
+        <ProprietaryId Namespace="TJM">COVER-7908000000001</ProprietaryId>
+      </ResourceId>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_IMG</TechnicalResourceDetailsReference>
+        <File>
+          <URI>cover_7908000000001.jpg</URI>
+          <HashSum>
+            <HashSum/>
+            <HashSumAlgorithmType>SHA1</HashSumAlgorithmType>
+          </HashSum>
+        </File>
+      </TechnicalDetails>
+    </Image>
+  </ResourceList>
+  <ReleaseList>
+    <Release>
+      <ReleaseReference>R0</ReleaseReference>
+      <ReleaseType>Album</ReleaseType>
+      <ReleaseId>
+        <ICPN isEan="false">7908000000001</ICPN>
+      </ReleaseId>
+      <DisplayTitleText>Bahor</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Bahor</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <ReleaseLabelReference>P_LABEL</ReleaseLabelReference>
+      <Genre>
+        <GenreText>Folk Pop</GenreText>
+      </Genre>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <OriginalReleaseDate>2024-03-21</OriginalReleaseDate>
+      <OriginalDigitalReleaseDate>2024-03-21</OriginalDigitalReleaseDate>
+      <ResourceGroup>
+        <Title>
+          <TitleText>Bahor</TitleText>
+        </Title>
+        <ResourceGroupContentItem>
+          <SequenceNumber>1</SequenceNumber>
+          <ReleaseResourceReference>A1</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+        <ResourceGroupContentItem>
+          <SequenceNumber>2</SequenceNumber>
+          <ReleaseResourceReference>A2</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+        <ResourceGroupContentItem>
+          <ReleaseResourceReference>IMG_COVER</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+      </ResourceGroup>
+    </Release>
+  </ReleaseList>
+  <DealList>
+    <ReleaseDeal>
+      <DealReleaseReference>R0</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>SubscriptionModel</CommercialModelType>
+          <Usage>
+            <UseType>OnDemandStream</UseType>
+          </Usage>
+          <Usage>
+            <UseType>PermanentDownload</UseType>
+          </Usage>
+          <TerritoryCode>Worldwide</TerritoryCode>
+          <ValidityPeriod>
+            <StartDate>2024-03-21</StartDate>
+          </ValidityPeriod>
+        </DealTerms>
+      </Deal>
+    </ReleaseDeal>
+  </DealList>
+</NewReleaseMessage>
