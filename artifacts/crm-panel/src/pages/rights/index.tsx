@@ -658,10 +658,10 @@ export default function RightsManagement() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Shield className="h-6 w-6 text-violet-400" />
-            Rights Management
+            Управление правами
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Управление правами собственности и отслеживание конфликтов по треки и релизам
+            Учёт владельцев прав и отслеживание конфликтов по трекам и релизам
           </p>
         </div>
         <div className="flex gap-2">
