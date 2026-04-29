@@ -26,6 +26,7 @@ import notificationsRouter from "./notifications";
 import supportRouter from "./support";
 import rightsRouter from "./rights";
 import settingsRouter from "./settings";
+import communicationsRouter from "./communications";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -97,5 +98,7 @@ router.use("/settings", adminOnly);
 router.use("/api-keys", adminOnly);
 router.use("/webhooks", adminOnly);
 router.use(settingsRouter);
+router.use("/communications", adminOnly);
+router.use(communicationsRouter);
 
 export default router;

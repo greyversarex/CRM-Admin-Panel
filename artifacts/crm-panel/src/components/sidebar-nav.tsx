@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  MessageSquare,
 } from "lucide-react";
 
 type NavItem = {
@@ -80,9 +81,10 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "operations",
     items: [
-      { nameKey: "publishing", href: "/publishing", icon: BookMarked,  iconColor: "text-cyan-400" },
-      { nameKey: "rights",     href: "/rights",     icon: ShieldCheck, iconColor: "text-violet-400" },
-      { nameKey: "crm",        href: "/crm",        icon: Users2,      iconColor: "text-cyan-400" },
+      { nameKey: "publishing",    href: "/publishing",    icon: BookMarked,     iconColor: "text-cyan-400" },
+      { nameKey: "rights",        href: "/rights",        icon: ShieldCheck,    iconColor: "text-violet-400" },
+      { nameKey: "crm",           href: "/crm",           icon: Users2,         iconColor: "text-cyan-400" },
+      { nameKey: "communications", href: "/communications", icon: MessageSquare, iconColor: "text-rose-400" },
     ],
   },
   {

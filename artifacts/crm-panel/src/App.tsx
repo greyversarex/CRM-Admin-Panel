@@ -36,6 +36,7 @@ import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import ProfilePage from "@/pages/profile";
 import SupportPage from "@/pages/support";
+import Communications from "@/pages/communications";
 
 const queryClient = new QueryClient();
 
@@ -106,9 +107,10 @@ function Router() {
       <ProtectedRoute path="/finance"        component={Finance} />
       <ProtectedRoute path="/splits"         component={Splits} />
       <ProtectedRoute path="/payouts"        component={Payouts} />
-      <ProtectedRoute path="/settings"       component={Settings} />
+      <ProtectedRoute path="/settings"        component={Settings} />
       <ProtectedRoute path="/profile"        component={ProfilePage} />
       <ProtectedRoute path="/support"        component={SupportPage} />
+      <ProtectedRoute path="/communications" component={Communications} />
 
       {/* Task #6 — admin/manager only (gated через permissions.ts) */}
       <ProtectedRoute path="/admin/signups"  component={AdminSignups} />
