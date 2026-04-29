@@ -29,6 +29,7 @@ import Royalties from "@/pages/royalties";
 import Splits from "@/pages/splits";
 import Payouts from "@/pages/payouts";
 import Publishing from "@/pages/publishing";
+import Rights from "@/pages/rights";
 import Analytics from "@/pages/analytics";
 import Distribution from "@/pages/distribution";
 import Users from "@/pages/users";
@@ -97,6 +98,7 @@ function Router() {
       <ProtectedRoute path="/labels"         component={Labels} />
       <ProtectedRoute path="/users"          component={Users} />
       <ProtectedRoute path="/publishing"     component={Publishing} />
+      <ProtectedRoute path="/rights"         component={Rights} />
       <ProtectedRoute path="/crm"            component={CRM} />
       <ProtectedRoute path="/royalties"      component={Royalties} />
       <ProtectedRoute path="/finance/import"    component={FinanceImport} />

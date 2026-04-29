@@ -80,8 +80,9 @@ const navGroups: NavGroup[] = [
   {
     titleKey: "operations",
     items: [
-      { nameKey: "publishing", href: "/publishing", icon: BookMarked, iconColor: "text-cyan-400" },
-      { nameKey: "crm",        href: "/crm",        icon: Users2,     iconColor: "text-cyan-400" },
+      { nameKey: "publishing", href: "/publishing", icon: BookMarked,  iconColor: "text-cyan-400" },
+      { nameKey: "rights",     href: "/rights",     icon: ShieldCheck, iconColor: "text-violet-400" },
+      { nameKey: "crm",        href: "/crm",        icon: Users2,      iconColor: "text-cyan-400" },
     ],
   },
   {

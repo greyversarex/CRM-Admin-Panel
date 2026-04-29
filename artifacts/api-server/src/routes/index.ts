@@ -24,6 +24,7 @@ import signupRouter from "./signup";
 import kycRouter from "./kyc";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
+import rightsRouter from "./rights";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -90,5 +91,6 @@ router.use(supportRouter);               // /support — customer scoped or staf
 router.use("/integrations", adminOnly);
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
+router.use(rightsRouter);               // /rights — scoped per-route inside (label/artist see their assets)
 
 export default router;
