@@ -40,6 +40,14 @@ const TAB_TO_STATUS: Record<StatusFilter, string | undefined> = {
 };
 
 export default function Releases() {
+  return (
+    <Layout>
+      <ReleasesPanel />
+    </Layout>
+  );
+}
+
+export function ReleasesPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
@@ -139,8 +147,7 @@ export default function Releases() {
     : t.releases.export_csv;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -402,7 +409,6 @@ export default function Releases() {
           </div>
         </Card>
       </div>
-    </Layout>
   );
 }
 

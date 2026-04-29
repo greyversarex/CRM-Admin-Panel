@@ -1,18 +1,22 @@
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { useListTransactions, useListBalances, getListTransactionsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle } from "lucide-react";
+import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle, Banknote, Coins, PieChart } from "lucide-react";
 import { PeriodSummaryCard } from "@/components/period-summary-card";
 import { CommissionsTab } from "./commissions-tab";
+import { RoyaltiesPanel } from "@/pages/royalties";
+import { SplitsPanel } from "@/pages/splits";
+import { PayoutsPanel } from "@/pages/payouts";
 
 interface ImportRow {
   id: number;
@@ -49,7 +53,92 @@ const TYPE_LABELS: Record<string, string> = {
   payout: "Payout",
 };
 
+type FinanceTab = "overview" | "royalties" | "splits" | "payouts";
+
+const VALID_FIN_TABS: FinanceTab[] = ["overview", "royalties", "splits", "payouts"];
+
+function parseFinanceTab(search: string): FinanceTab {
+  const params = new URLSearchParams(search.startsWith("?") ? search : `?${search}`);
+  const t = params.get("tab");
+  return (t && (VALID_FIN_TABS as string[]).includes(t) ? t : "overview") as FinanceTab;
+}
+
 export default function Finance() {
+  const { t } = useLang();
+  const { user } = useAuth();
+  const nav = t.nav as Record<string, string>;
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const tab = useMemo(() => parseFinanceTab(search), [search]);
+
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const isEarningsRole = user?.role === "label" || user?.role === "artist";
+
+  const onTabChange = (next: string) => {
+    if (next === "overview") setLocation("/finance");
+    else setLocation(`/finance?tab=${next}`);
+  };
+
+  return (
+    <Layout>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-3">
+          <Banknote className="h-7 w-7 text-green-400" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {nav.finance_group ?? "Финансы"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {isAdminLike
+                ? "Транзакции, балансы, роялти, сплиты и выплаты"
+                : "Ваши доходы, сплиты и выплаты"}
+            </p>
+          </div>
+        </div>
+
+        <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
+          <TabsList className="bg-card/50 backdrop-blur flex-wrap h-auto justify-start">
+            {isAdminLike && (
+              <TabsTrigger value="overview" data-testid="finance-tab-overview">
+                <Banknote className="h-4 w-4 mr-2" />
+                {nav.finance ?? "Финансы"}
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="royalties" data-testid="finance-tab-royalties">
+              <Coins className="h-4 w-4 mr-2" />
+              {isEarningsRole ? (nav.earnings ?? "Доходы") : (nav.royalties ?? "Роялти")}
+            </TabsTrigger>
+            <TabsTrigger value="splits" data-testid="finance-tab-splits">
+              <PieChart className="h-4 w-4 mr-2" />
+              {nav.splits ?? "Сплиты"}
+            </TabsTrigger>
+            <TabsTrigger value="payouts" data-testid="finance-tab-payouts">
+              <Wallet className="h-4 w-4 mr-2" />
+              {nav.payouts ?? "Выплаты"}
+            </TabsTrigger>
+          </TabsList>
+
+          {isAdminLike && (
+            <TabsContent value="overview" className="space-y-0">
+              <FinanceOverviewPanel />
+            </TabsContent>
+          )}
+          <TabsContent value="royalties" className="space-y-0">
+            <RoyaltiesPanel />
+          </TabsContent>
+          <TabsContent value="splits" className="space-y-0">
+            <SplitsPanel />
+          </TabsContent>
+          <TabsContent value="payouts" className="space-y-0">
+            <PayoutsPanel />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </Layout>
+  );
+}
+
+export function FinanceOverviewPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [search, setSearch] = useState("");
@@ -126,8 +215,7 @@ export default function Finance() {
   ) ?? [];
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{titleByRole}</h1>
@@ -398,6 +486,5 @@ export default function Finance() {
           </Card>
         )}
       </div>
-    </Layout>
   );
 }

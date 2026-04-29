@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -66,11 +66,11 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "catalog_group",
     managerKey: "catalog",
     items: [
-      { nameKey: "catalog_hub", href: "/catalog",  icon: Library,    iconColor: "text-emerald-400" },
-      { nameKey: "releases",    href: "/releases", icon: Disc3,      iconColor: "text-emerald-400" },
-      { nameKey: "artists",     href: "/artists",  icon: Mic2,       iconColor: "text-emerald-400" },
-      { nameKey: "labels",      href: "/labels",   icon: Building2,  iconColor: "text-emerald-400" },
-      { nameKey: "videos",      href: "/videos",   icon: Clapperboard, iconColor: "text-emerald-400" },
+      { nameKey: "catalog_hub", href: "/catalog",                icon: Library,      iconColor: "text-emerald-400" },
+      { nameKey: "releases",    href: "/catalog?tab=releases",   icon: Disc3,        iconColor: "text-emerald-400" },
+      { nameKey: "artists",     href: "/catalog?tab=artists",    icon: Mic2,         iconColor: "text-emerald-400" },
+      { nameKey: "labels",      href: "/catalog?tab=labels",     icon: Building2,    iconColor: "text-emerald-400" },
+      { nameKey: "videos",      href: "/catalog?tab=videos",     icon: Clapperboard, iconColor: "text-emerald-400" },
     ],
   },
   {
@@ -84,10 +84,10 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "finance_group",
     managerKey: "finance",
     items: [
-      { nameKey: "finance",   href: "/finance",   icon: Banknote, iconColor: "text-green-400" },
-      { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400" },
-      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
-      { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
+      { nameKey: "finance",   href: "/finance",                icon: Banknote, iconColor: "text-green-400" },
+      { nameKey: "royalties", href: "/finance?tab=royalties",  icon: Coins,    iconColor: "text-green-400" },
+      { nameKey: "splits",    href: "/finance?tab=splits",     icon: PieChart, iconColor: "text-green-400" },
+      { nameKey: "payouts",   href: "/finance?tab=payouts",    icon: Wallet,   iconColor: "text-green-400" },
     ],
   },
   {
@@ -253,6 +253,7 @@ function pickGroupsForRole(role: Role | undefined): NavGroup[] {
 
 export function SidebarNav() {
   const [location] = useLocation();
+  const search = useSearch();
   const { t } = useLang();
   const nav = t.nav as Record<string, string>;
   const { user, logout } = useAuth();
@@ -319,9 +320,22 @@ export function SidebarNav() {
             <div className="space-y-0.5">
               {visibleItems.map((item) => {
                 const Icon = item.icon;
-                const isActive =
-                  location === item.href ||
-                  (item.href !== "/" && location.startsWith(item.href));
+                // Поддержка ссылок вида "/catalog?tab=releases": активность учитывает
+                // и pathname, и query-часть. Без query — считаем активным любой child path,
+                // НО только если на текущей странице нет таба (иначе хаб подсвечивался бы
+                // одновременно с конкретным табом).
+                const [itemPath, itemQuery = ""] = item.href.split("?");
+                const currentSearch = (search ?? "").replace(/^\?/, "");
+                let isActive: boolean;
+                if (itemQuery) {
+                  isActive = location === itemPath && currentSearch === itemQuery;
+                } else if (itemPath === "/") {
+                  isActive = location === "/";
+                } else if (location === itemPath) {
+                  isActive = !currentSearch;
+                } else {
+                  isActive = location.startsWith(itemPath + "/");
+                }
                 const labelKey =
                   (user && item.nameKeyByRole?.[user.role]) ?? item.nameKey;
                 const labelText = nav[labelKey] ?? labelKey;

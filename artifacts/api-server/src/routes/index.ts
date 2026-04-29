@@ -40,6 +40,7 @@ import publishingExtrasRouter from "./publishing-extras";
 import communicationsChannelsRouter from "./communications-channels";
 import managerPermissionsRouter from "./manager-permissions";
 import { requireAuth, requireRole } from "../lib/auth";
+import { requireManagerPermission } from "../lib/manager-permissions";
 import { securityPolicy } from "../middlewares/security-policy";
 
 const router: IRouter = Router();
@@ -70,7 +71,7 @@ const adminOnly = requireRole("admin", "manager");
 
 router.use(dashboardRouter);          // scoped per-route inside (artist/label get filtered widgets)
 router.use(artistsRouter);            // scoped per-route inside
-router.use("/labels", adminOnly);     // labels mgmt is admin-only (own label info comes via /me + embeds)
+router.use("/labels", adminOnly, requireManagerPermission("catalog"));     // labels mgmt is admin/manager only
 router.use(labelsRouter);
 router.use(releasesRouter);           // scoped per-route inside
 router.use(tracksRouter);             // scoped per-route inside
@@ -82,56 +83,56 @@ router.use(usersRouter);
 // любой не-admin запрос — включая /users/me/kyc-* и /storage/objects/uploads/*
 // для скачивания собственных cover/audio артистом или KYC-документа owner'ом).
 router.use(kycRouter);                   // KYC docs + admin review (per-route guards inside)
-router.use("/contacts", adminOnly);
-router.use("/crm", adminOnly);
+router.use("/contacts", adminOnly, requireManagerPermission("crm"));
+router.use("/crm", adminOnly, requireManagerPermission("crm"));
 router.use(crmRouter);
 router.use(financeRouter);            // scoped per-route inside
 // Финансовые расширения: комиссии + 2-step approval payouts (admin/manager only — гарды внутри).
 router.use(financeExtrasRouter);
 // CSV-импорт DSP-отчётов — admin/manager only (вся монетарная мутация).
-router.use("/finance/ingest", adminOnly);
-router.use("/finance/imports", adminOnly);
+router.use("/finance/ingest", adminOnly, requireManagerPermission("finance"));
+router.use("/finance/imports", adminOnly, requireManagerPermission("finance"));
 router.use(ingestionRouter);
 router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id forced from session)
-router.use("/splits", adminOnly);
+router.use("/splits", adminOnly, requireManagerPermission("finance"));
 router.use(splitsRouter);
-router.use("/publishing", adminOnly);
+router.use("/publishing", adminOnly, requireManagerPermission("rights"));
 router.use(publishingRouter);
 // Publishing extras: PRO registration + conflict detection (под /publishing → admin-only выше).
 router.use(publishingExtrasRouter);
-router.use("/analytics", adminOnly);  // currently mock org-wide aggregates
+router.use("/analytics", adminOnly, requireManagerPermission("analytics"));  // currently mock org-wide aggregates
 router.use(analyticsRouter);
 // Analytics extras: UGC metrics + Realtime alerts (под /analytics → admin-only выше).
 router.use(analyticsExtrasRouter);
 router.use(analyticsUgcImportRouter);
 // /deliveries/* + POST /releases/:id/deliver — admin/manager only.
 // Гард на /releases/:id/deliver навешан в самом routes/releases.ts (под requireRole).
-router.use("/deliveries", adminOnly);
+router.use("/deliveries", adminOnly, requireManagerPermission("distribution"));
 router.use(deliveryRouter);
 // Distribution extras: ACRCloud + Disputes — admin/manager only.
-router.use("/distribution", adminOnly);
+router.use("/distribution", adminOnly, requireManagerPermission("distribution"));
 router.use(distributionExtrasRouter);
-router.use("/ddex", adminOnly);
+router.use("/ddex", adminOnly, requireManagerPermission("distribution"));
 router.use(ddexRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
 router.use(notificationsRouter);         // /notifications — scoped to current user inside (BEFORE integrationsRouter, у которого глобальный requireRole)
 router.use(supportRouter);               // /support — customer scoped or staff inbox (per-route guards inside) — также ДО integrationsRouter
-router.use("/integrations", adminOnly);
+router.use("/integrations", adminOnly);  // системный admin-only без manager_permission ключа
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)
 router.use(rightsRouter);               // /rights — scoped per-route inside (label/artist see their assets)
 router.use(rightsExtrasRouter);         // /rights/holders/:id/freeze + /rights/history — admin/manager only (гарды внутри)
-router.use("/settings", adminOnly);
+router.use("/settings", adminOnly);     // системный — без manager_permission ключа
 router.use("/api-keys", adminOnly);
 router.use("/webhooks", adminOnly);
 router.use(settingsRouter);
-router.use("/communications", adminOnly);
+router.use("/communications", adminOnly, requireManagerPermission("support_comms"));
 router.use(communicationsRouter);
 router.use(communicationsChannelsRouter);     // Telegram + WhatsApp send/test (admin-only выше)
-router.use("/automation", adminOnly);
+router.use("/automation", adminOnly, requireManagerPermission("automation_audit"));
 router.use(automationRouter);
 router.use(automationExtrasRouter);           // Payment automation rules (admin-only выше)
-router.use("/catalog", adminOnly);
+router.use("/catalog", adminOnly, requireManagerPermission("catalog"));
 router.use(catalogRouter);
 router.use(catalogBulkRouter);                // POST /catalog/bulk-edit (admin-only выше)
 // Manager permissions API — admin-only, гарды внутри router'а (требуется именно admin, не "admin|manager").

@@ -29,8 +29,17 @@ function formatSize(b: number): string {
 }
 
 export default function CatalogAssets() {
+  return (
+    <Layout>
+      <CatalogAssetsPanel />
+    </Layout>
+  );
+}
+
+export function CatalogAssetsPanel({ initialKindOverride }: { initialKindOverride?: string } = {}) {
   const [location] = useLocation();
   const initialKind = (() => {
+    if (initialKindOverride) return initialKindOverride;
     const m = location.match(/[?&]kind=([^&]+)/);
     return m ? decodeURIComponent(m[1]) : "all";
   })();
@@ -61,12 +70,8 @@ export default function CatalogAssets() {
   );
 
   return (
-    <Layout>
-      <div className="space-y-4 p-6 max-w-7xl mx-auto">
+    <div className="space-y-4 p-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => history.back()}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Назад
-          </Button>
           <h1 className="text-xl font-semibold">Ассеты каталога</h1>
         </div>
 
@@ -131,6 +136,5 @@ export default function CatalogAssets() {
           </table>
         </div>
       </div>
-    </Layout>
   );
 }

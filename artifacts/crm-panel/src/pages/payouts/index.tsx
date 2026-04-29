@@ -14,6 +14,14 @@ import { exportPayoutsCsv } from "@/lib/export-payouts";
 import { useLang } from "@/lib/i18n";
 
 export default function Payouts() {
+  return (
+    <Layout>
+      <PayoutsPanel />
+    </Layout>
+  );
+}
+
+export function PayoutsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,8 +78,7 @@ export default function Payouts() {
   const subtitle = isAdminLike ? t.payouts.subtitle_admin : t.payouts.subtitle_other;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
@@ -198,7 +205,6 @@ export default function Payouts() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
   );
 }
 

@@ -24,6 +24,14 @@ const COLORS = [
 const BAR_COLORS = ["bg-violet-500", "bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500"];
 
 export default function Splits() {
+  return (
+    <Layout>
+      <SplitsPanel />
+    </Layout>
+  );
+}
+
+export function SplitsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [page, setPage] = useState(1);
@@ -57,7 +65,7 @@ export default function Splits() {
   });
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
@@ -183,6 +191,6 @@ export default function Splits() {
         </Card>
       </div>
       <NewSplitDialog open={newOpen} onClose={() => setNewOpen(false)} />
-    </Layout>
+    </>
   );
 }

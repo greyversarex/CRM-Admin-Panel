@@ -15,6 +15,14 @@ import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 
 export default function Artists() {
+  return (
+    <Layout>
+      <ArtistsPanel />
+    </Layout>
+  );
+}
+
+export function ArtistsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,8 +45,7 @@ export default function Artists() {
   const subtitle = isAdminLike ? t.artists.subtitle_admin : isLabel ? t.artists.subtitle_label : t.artists.subtitle_artist;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
@@ -149,6 +156,5 @@ export default function Artists() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
   );
 }

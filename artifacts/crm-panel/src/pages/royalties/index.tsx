@@ -60,6 +60,14 @@ function pct(curr: number, prev: number) {
 }
 
 export default function Royalties() {
+  return (
+    <Layout>
+      <RoyaltiesPanel />
+    </Layout>
+  );
+}
+
+export function RoyaltiesPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const nav = t.nav as Record<string, string>;
@@ -167,14 +175,15 @@ export default function Royalties() {
     return new Date(2000, parseInt(m, 10) - 1, 1).toLocaleString("en-US", { month: "short" });
   };
 
+  const isEarningsRole = user?.role === "label" || user?.role === "artist";
+
   return (
-    <Layout>
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              {user?.role === "label" ? nav.earnings : nav.royalties}
+              {isEarningsRole ? nav.earnings : nav.royalties}
             </h1>
             <p className="text-muted-foreground mt-1">
               {entityParams.entity_type ? t.royalties.subtitle : t.royalties.subtitle_full}
@@ -757,6 +766,5 @@ export default function Royalties() {
           </TabsContent>
         </Tabs>
       </div>
-    </Layout>
   );
 }

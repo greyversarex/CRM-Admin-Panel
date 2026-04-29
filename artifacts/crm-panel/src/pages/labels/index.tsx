@@ -13,6 +13,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useLang } from "@/lib/i18n";
 
 export default function Labels() {
+  return (
+    <Layout>
+      <LabelsPanel />
+    </Layout>
+  );
+}
+
+export function LabelsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,8 +40,7 @@ export default function Labels() {
   const subtitle = isAdminLike ? t.labels.subtitle_admin : t.labels.subtitle_label;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
@@ -139,6 +146,5 @@ export default function Labels() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
   );
 }
