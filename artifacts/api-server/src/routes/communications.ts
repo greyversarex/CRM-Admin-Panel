@@ -257,6 +257,88 @@ router.post("/communications/campaigns/:id/cancel", async (req, res): Promise<vo
   res.json(toDto(row));
 });
 
+// ── Quick-send: создать кампанию и сразу отправить ───────────────────────────
+// POST /api/communications/campaigns/quick-send
+// Body: { name?, subject, bodyHtml, bodyText?, audienceFilter?, type? }
+// Returns: { ok, recipientCount, campaign }
+
+const QuickSendBody = z.object({
+  name: z.string().max(200).optional(),
+  subject: z.string().min(1).max(500),
+  bodyHtml: z.string().min(1),
+  bodyText: z.string().optional().default(""),
+  type: z.enum(["email", "push", "telegram", "whatsapp"]).default("email"),
+  audienceFilter: z.record(z.unknown()).optional().default({}),
+});
+
+router.post("/communications/campaigns/quick-send", async (req, res): Promise<void> => {
+  const parsed = QuickSendBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { name, subject, bodyHtml, bodyText, type, audienceFilter } = parsed.data;
+  const campaignName = name?.trim() || `Рассылка от ${new Date().toLocaleDateString("ru-RU")}`;
+
+  const [camp] = await db.insert(campaignsTable).values({
+    name: campaignName,
+    type,
+    status: "sending",
+    subject,
+    audienceFilter,
+    templateId: null,
+  }).returning();
+
+  const filter = audienceFilter as Record<string, unknown>;
+  const roleFilter = Array.isArray(filter.roles) ? (filter.roles as string[]) : null;
+  const labelIdFilter = typeof filter.labelId === "number" ? (filter.labelId as number) : null;
+
+  const conds = [eq(usersTable.status, "active")];
+  if (roleFilter && roleFilter.length > 0) conds.push(inArray(usersTable.role, roleFilter));
+  if (labelIdFilter !== null) conds.push(eq(usersTable.labelId, labelIdFilter));
+
+  const recipients = await db
+    .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
+    .from(usersTable)
+    .where(and(...conds));
+
+  const errors: string[] = [];
+  for (const r of recipients) {
+    const vars: Record<string, string> = {
+      user_name: r.name ?? r.email,
+      platform_name: "Tajik Music Distribution",
+    };
+    const interp = (s: string) =>
+      Object.entries(vars).reduce((acc, [k, v]) => acc.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g"), v), s);
+
+    const subjInterp = interp(subject);
+    const htmlInterp = interp(bodyHtml);
+    const textInterp = interp(bodyText || subject);
+
+    void createNotification({
+      userId: r.id,
+      type: "campaign",
+      title: subjInterp,
+      body: textInterp.slice(0, 500),
+      entityType: "general",
+      link: "/communications",
+    }).catch((err) => errors.push(`notification ${r.id}: ${err instanceof Error ? err.message : String(err)}`));
+
+    if (type === "email") {
+      sendMailAndForget({ to: r.email, subject: subjInterp, text: textInterp || subjInterp, html: htmlInterp });
+    }
+  }
+
+  const [updated] = await db.update(campaignsTable).set({
+    status: "sent",
+    sentAt: new Date(),
+    recipientCount: recipients.length,
+    errors,
+    updatedAt: new Date(),
+  }).where(eq(campaignsTable.id, camp.id)).returning();
+
+  logger.info({ campaignId: camp.id, recipientCount: recipients.length }, "[quick-send] campaign sent");
+  res.status(201).json({ ok: true, recipientCount: recipients.length, campaign: toDto(updated) });
+});
+
 // ── Automation Triggers ──────────────────────────────────────────────────────
 
 const TriggerBody = z.object({

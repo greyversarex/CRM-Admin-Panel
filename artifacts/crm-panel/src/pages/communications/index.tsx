@@ -19,6 +19,7 @@ import {
   Plus, Trash2, Pencil, Send, Eye, Pin, PinOff, RefreshCcw, Copy,
   CheckCircle2, Clock, XCircle, AlertTriangle, Play, Ban,
   BarChart3, Users, FileText, Layers,
+  Sparkles, ArrowLeft, Monitor, ChevronDown,
 } from "lucide-react";
 
 // ─── API helper ──────────────────────────────────────────────────────────────
@@ -390,6 +391,98 @@ function TabTemplates() {
 
 // ─── Tab: Campaigns ───────────────────────────────────────────────────────────
 
+const NEWSLETTER_TEMPLATE = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>{{subject}}</title>
+</head>
+<body style="margin:0;padding:0;background:#0d1117;font-family:Inter,'Segoe UI',Arial,sans-serif;color:#e6edf3;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#161b27 0%,#0d1117 100%);border-radius:12px 12px 0 0;padding:40px 40px 32px;text-align:center;border-bottom:1px solid #21262d;">
+              <div style="font-size:10px;letter-spacing:4px;text-transform:uppercase;color:#6e7681;margin-bottom:12px;font-weight:600;">TAJIK MUSIC DISTRIBUTION</div>
+              <h1 style="margin:0;font-size:30px;font-weight:800;color:#ffffff;line-height:1.25;">{{title}}</h1>
+            </td>
+          </tr>
+
+          <!-- Intro -->
+          <tr>
+            <td style="background:#161b27;padding:24px 40px;text-align:center;border-bottom:1px solid #21262d;">
+              <p style="margin:0;font-size:15px;color:#8b949e;line-height:1.7;">{{intro}}</p>
+            </td>
+          </tr>
+
+          <!-- Content block -->
+          <tr>
+            <td style="background:#0d1117;padding:32px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background:#161b27;border:1px solid #21262d;border-radius:10px;padding:28px;">
+                    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#f78166;margin-bottom:10px;font-weight:700;">Новость</div>
+                    <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#e6edf3;line-height:1.3;">{{news_title}}</h2>
+                    <p style="margin:0 0 20px;font-size:14px;color:#8b949e;line-height:1.7;">{{news_body}}</p>
+                    <a href="{{news_link}}" style="display:inline-block;background:#238636;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:13px;font-weight:600;letter-spacing:0.3px;">Узнать больше</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Tips section -->
+          <tr>
+            <td style="background:#0d1117;padding:0 40px 32px;">
+              <h3 style="margin:0 0 20px;font-size:18px;font-weight:700;color:#e6edf3;text-align:center;">Советы и рекомендации</h3>
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td width="48%" valign="top" style="background:#161b27;border:1px solid #21262d;border-radius:10px;padding:20px;">
+                    <h4 style="margin:0 0 8px;font-size:15px;font-weight:700;color:#e6edf3;">{{tip1_title}}</h4>
+                    <p style="margin:0 0 14px;font-size:13px;color:#8b949e;line-height:1.6;">{{tip1_body}}</p>
+                    <a href="{{tip1_link}}" style="font-size:12px;color:#58a6ff;text-decoration:none;font-weight:600;">Читать далее &rarr;</a>
+                  </td>
+                  <td width="4%"></td>
+                  <td width="48%" valign="top" style="background:#161b27;border:1px solid #21262d;border-radius:10px;padding:20px;">
+                    <h4 style="margin:0 0 8px;font-size:15px;font-weight:700;color:#e6edf3;">{{tip2_title}}</h4>
+                    <p style="margin:0 0 14px;font-size:13px;color:#8b949e;line-height:1.6;">{{tip2_body}}</p>
+                    <a href="{{tip2_link}}" style="font-size:12px;color:#58a6ff;text-decoration:none;font-weight:600;">Читать далее &rarr;</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#161b27;border-radius:0 0 12px 12px;padding:28px 40px;text-align:center;border-top:1px solid #21262d;">
+              <p style="margin:0 0 6px;font-size:13px;color:#8b949e;">Привет, {{user_name}}! Это письмо отправлено от <strong style="color:#e6edf3;">{{platform_name}}</strong>.</p>
+              <p style="margin:0;font-size:11px;color:#484f58;">
+                Вы получили это письмо как пользователь платформы.
+                <a href="#" style="color:#58a6ff;text-decoration:none;">Отписаться от рассылки</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+const AUDIENCE_OPTIONS = [
+  { value: "all",     label: "Все пользователи",  filter: {} },
+  { value: "artist",  label: "Только артисты",    filter: { roles: ["artist"] } },
+  { value: "label",   label: "Только лейблы",     filter: { roles: ["label"] } },
+  { value: "manager", label: "Только менеджеры",  filter: { roles: ["manager"] } },
+  { value: "admin",   label: "Только админы",     filter: { roles: ["admin"] } },
+];
+
 const emptyCampaign = () => ({ name: "", type: "email", templateId: null as number | null, subject: "", audienceFilter: {} as Record<string, unknown>, scheduledAt: "" });
 
 function TabCampaigns({ templates }: { templates: Template[] }) {
@@ -401,6 +494,43 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
   const [form, setForm] = useState(emptyCampaign());
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
+
+  // ── Compose mode ─────────────────────────────────────────────────
+  const [compose, setCompose] = useState(false);
+  const [cSubject, setCSubject] = useState("");
+  const [cAudience, setCAudience] = useState("all");
+  const [cHtml, setCHtml] = useState("");
+  const [cSending, setCsending] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (iframeRef.current) {
+      const doc = iframeRef.current.contentDocument ?? iframeRef.current.contentWindow?.document;
+      if (doc) {
+        doc.open(); doc.write(cHtml || "<html><body style='background:#0d1117;color:#8b949e;font-family:sans-serif;padding:32px;text-align:center;'><p>Превью появится здесь</p></body></html>"); doc.close();
+      }
+    }
+  }, [cHtml]);
+
+  const quickSend = async () => {
+    if (!cSubject.trim() || !cHtml.trim()) {
+      toast({ variant: "destructive", title: "Заполните тему и текст письма" }); return;
+    }
+    setCsending(true);
+    try {
+      const audienceOpt = AUDIENCE_OPTIONS.find((a) => a.value === cAudience) ?? AUDIENCE_OPTIONS[0];
+      const r = await api<{ ok: boolean; recipientCount: number; campaign: Campaign }>(
+        "/api/communications/campaigns/quick-send",
+        { method: "POST", body: JSON.stringify({ subject: cSubject, bodyHtml: cHtml, audienceFilter: audienceOpt.filter }) },
+      );
+      toast({ title: "Рассылка отправлена", description: `Получателей: ${r.recipientCount}` });
+      setCompose(false); setCSubject(""); setCHtml(""); setCAudience("all");
+      void load();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Ошибка отправки", description: (e as Error).message });
+    } finally { setCsending(false); }
+  };
+  // ─────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -450,14 +580,113 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
 
   const setF = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
+  // ── Compose view ──────────────────────────────────────────────────
+  if (compose) {
+    return (
+      <div className="flex flex-col gap-4">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <button
+            onClick={() => setCompose(false)}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/40"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Назад к списку рассылок
+          </button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCHtml(NEWSLETTER_TEMPLATE)}
+            >
+              <Sparkles className="w-3.5 h-3.5 mr-1.5" />Вставить шаблон Newsletter
+            </Button>
+            <Button size="sm" onClick={() => void quickSend()} disabled={cSending || !cSubject.trim() || !cHtml.trim()}>
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              {cSending ? "Отправка…" : "Создать и отправить"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Fields row */}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_220px] gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Тема письма *</label>
+            <Input
+              value={cSubject}
+              onChange={(e) => setCSubject(e.target.value)}
+              placeholder="Обновления платформы Tajik Music Distribution — апрель 2026"
+              className="bg-background/50"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Аудитория</label>
+            <Select value={cAudience} onValueChange={setCAudience}>
+              <SelectTrigger className="bg-background/50"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {AUDIENCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Split pane: editor + preview */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 rounded-xl border border-border/60 overflow-hidden" style={{ height: "65vh" }}>
+          {/* Editor */}
+          <div className="flex flex-col border-r border-border/60">
+            <div className="flex items-center gap-2 px-4 py-2 bg-background/50 border-b border-border/60 shrink-0">
+              <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">HTML-редактор</span>
+              <span className="ml-auto text-[10px] text-muted-foreground/60">Переменные: &#123;&#123;user_name&#125;&#125;, &#123;&#123;platform_name&#125;&#125;</span>
+            </div>
+            <Textarea
+              value={cHtml}
+              onChange={(e) => setCHtml(e.target.value)}
+              placeholder={"<!DOCTYPE html>\n<html>\n<body>\n  <p>Привет, {{user_name}}!</p>\n</body>\n</html>"}
+              className="flex-1 resize-none rounded-none border-0 font-mono text-xs bg-background/30 focus-visible:ring-0 focus-visible:ring-offset-0"
+              style={{ minHeight: 0 }}
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 px-4 py-2 bg-background/50 border-b border-border/60 shrink-0">
+              <Monitor className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Превью письма</span>
+            </div>
+            <iframe
+              ref={iframeRef}
+              className="flex-1 w-full border-0 bg-[#0d1117]"
+              title="Email preview"
+              sandbox="allow-same-origin"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Для реальной отправки необходимо настроить SMTP в разделе Настройки → Уведомления.
+          Переменные <code className="font-mono bg-muted px-1 rounded">&#123;&#123;user_name&#125;&#125;</code> и <code className="font-mono bg-muted px-1 rounded">&#123;&#123;platform_name&#125;&#125;</code> заменяются автоматически при отправке.
+        </p>
+      </div>
+    );
+  }
+
+  // ── List view ──────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Новая рассылка</Button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-muted-foreground">Рассылки отправляются через SMTP (Настройки → Уведомления) или push/Telegram/WhatsApp.</p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openNew}><Plus className="w-4 h-4 mr-2" />Черновик рассылки</Button>
+          <Button onClick={() => setCompose(true)}><Send className="w-4 h-4 mr-2" />Новая рассылка</Button>
+        </div>
       </div>
 
       {loading ? <Skeleton className="h-48 w-full" /> : rows.length === 0 ? (
-        <div className="text-center py-12 text-sm text-muted-foreground">Рассылок ещё нет</div>
+        <div className="text-center py-16 text-sm text-muted-foreground">
+          <Megaphone className="w-8 h-8 mx-auto mb-3 opacity-30" />
+          <p>Рассылок ещё нет.</p>
+          <Button className="mt-4" onClick={() => setCompose(true)}><Send className="w-4 h-4 mr-2" />Создать первую рассылку</Button>
+        </div>
       ) : (
         <div className="rounded-md border border-border/60 overflow-hidden">
           <Table>
@@ -476,7 +705,7 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
                 return (
                   <TableRow key={c.id} className="hover:bg-accent/20">
                     <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px]">{c.type === "email" ? "Email" : "Push"}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className="text-[10px]">{c.type === "email" ? "Email" : c.type}</Badge></TableCell>
                     <TableCell><span className={`text-xs font-medium ${st.color}`}>{st.label}</span></TableCell>
                     <TableCell className="text-sm">{c.recipientCount > 0 ? c.recipientCount.toLocaleString() : "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{fmtDate(c.scheduledAt)}</TableCell>
@@ -485,13 +714,13 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
                       <div className="flex items-center justify-end gap-1">
                         {(c.status === "draft" || c.status === "scheduled") && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => sendNow(c.id)} disabled={busy}>
+                            <Button variant="ghost" size="sm" title="Отправить сейчас" onClick={() => sendNow(c.id)} disabled={busy}>
                               <Send className="w-3.5 h-3.5 text-primary" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
+                            <Button variant="ghost" size="sm" title="Редактировать" onClick={() => openEdit(c)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => cancel(c.id)}>
+                            <Button variant="ghost" size="sm" title="Отменить" onClick={() => cancel(c.id)}>
                               <Ban className="w-3.5 h-3.5 text-muted-foreground" />
                             </Button>
                           </>
@@ -508,7 +737,7 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>{editRow ? "Редактировать рассылку" : "Новая рассылка"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editRow ? "Редактировать рассылку" : "Новая рассылка (черновик)"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><label className="text-sm font-medium">Название</label><Input className="mt-1" value={form.name} onChange={(e) => setF("name", e.target.value)} /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -535,17 +764,14 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
                 </Select>
               </div>
             </div>
-            <div><label className="text-sm font-medium">Тема письма (переопределить)</label><Input className="mt-1" value={form.subject} onChange={(e) => setF("subject", e.target.value)} /></div>
+            <div><label className="text-sm font-medium">Тема письма</label><Input className="mt-1" value={form.subject} onChange={(e) => setF("subject", e.target.value)} /></div>
             <div>
               <label className="text-sm font-medium">Аудитория</label>
               <div className="mt-1">
                 <Select value={(form.audienceFilter.roles as string[] | undefined)?.[0] ?? "all"} onValueChange={(v) => setF("audienceFilter", v === "all" ? {} : { roles: [v] })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Все пользователи</SelectItem>
-                    <SelectItem value="artist">Только артисты</SelectItem>
-                    <SelectItem value="label">Только лейблы</SelectItem>
-                    <SelectItem value="manager">Только менеджеры</SelectItem>
+                    {AUDIENCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -557,7 +783,7 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Отмена</Button>
-            <Button onClick={save} disabled={saving || !form.name.trim()}>{saving ? "Сохраняем…" : "Сохранить"}</Button>
+            <Button onClick={save} disabled={saving || !form.name.trim()}>{saving ? "Сохраняем…" : "Сохранить черновик"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
