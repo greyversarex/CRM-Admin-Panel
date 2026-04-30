@@ -967,10 +967,6 @@ export default function CRM() {
             </Card>
           </TabsContent>
 
-          {/* ─── Analytics ────────────────────────────────────────────────── */}
-          <TabsContent value="analytics" className="mt-4">
-            <CrmAnalytics />
-          </TabsContent>
         </Tabs>
       </div>
 
