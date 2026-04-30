@@ -19,11 +19,12 @@ import {
   CheckCircle2, AlertTriangle, Unplug, FlaskConical, Settings2, Lock,
   FileCode2, Key, Webhook, CreditCard, DollarSign, ShieldCheck,
   HardDrive, Bell, Plus, Trash2, Eye, EyeOff, Save,
-  User as UserIcon, KeyRound, BellRing, ExternalLink,
+  User as UserIcon, KeyRound, BellRing, ExternalLink, Plug,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { IntegrationConfigDialog } from "@/components/integration-config-dialog";
 import { TabManagerPermissions } from "./manager-permissions-tab";
+import { TabIntegrations } from "./integrations-tab";
 import { useLocation } from "wouter";
 
 // ─── API helper ──────────────────────────────────────────────────────────────
@@ -1508,6 +1509,9 @@ export default function Settings() {
 
         <Tabs defaultValue="general">
           <TabsList className="bg-card border border-border h-auto p-1 gap-0.5 flex-wrap">
+            <TabsTrigger value="integrations" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+              <Unplug className="h-3.5 w-3.5" />Интеграции
+            </TabsTrigger>
             <TabsTrigger value="general" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <Settings2 className="h-3.5 w-3.5" />Общие
             </TabsTrigger>
@@ -1558,6 +1562,7 @@ export default function Settings() {
             )}
           </TabsList>
 
+          <TabsContent value="integrations" className="mt-4"><TabIntegrations /></TabsContent>
           <TabsContent value="general" className="mt-4"><TabGeneral /></TabsContent>
           <TabsContent value="ddex" className="mt-4"><TabDdex {...intProps} /></TabsContent>
           <TabsContent value="api" className="mt-4"><TabApiKeys /></TabsContent>
