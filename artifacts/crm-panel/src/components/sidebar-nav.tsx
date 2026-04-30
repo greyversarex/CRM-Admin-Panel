@@ -93,7 +93,7 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "crm_group",
     managerKey: "crm",
     items: [
-      { nameKey: "crm_overview", href: "/crm", icon: BarChart3, iconColor: "text-cyan-400" },
+      { nameKey: "crm", href: "/crm", icon: BarChart3, iconColor: "text-cyan-400" },
     ],
   },
   {
@@ -302,7 +302,7 @@ export function SidebarNav() {
           if (visibleItems.length === 0) return null;
           return (
           <div key={group.titleKey}>
-            {!collapsed && (
+            {!collapsed && visibleItems.length > 1 && (
               <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.14em] text-white/50">
                 {nav[group.titleKey] ?? group.titleKey}
               </p>
