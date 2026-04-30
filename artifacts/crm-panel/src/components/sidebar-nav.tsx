@@ -32,7 +32,6 @@ import {
   MessageSquare,
   Workflow,
   Library,
-  TrendingUp,
 } from "lucide-react";
 
 type NavItem = {
@@ -66,11 +65,7 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "catalog_group",
     managerKey: "catalog",
     items: [
-      { nameKey: "catalog_hub", href: "/catalog",                icon: Library,      iconColor: "text-emerald-400" },
-      { nameKey: "releases",    href: "/catalog?tab=releases",   icon: Disc3,        iconColor: "text-emerald-400" },
-      { nameKey: "artists",     href: "/catalog?tab=artists",    icon: Mic2,         iconColor: "text-emerald-400" },
-      { nameKey: "labels",      href: "/catalog?tab=labels",     icon: Building2,    iconColor: "text-emerald-400" },
-      { nameKey: "videos",      href: "/catalog?tab=videos",     icon: Clapperboard, iconColor: "text-emerald-400" },
+      { nameKey: "catalog_hub", href: "/catalog", icon: Library, iconColor: "text-emerald-400" },
     ],
   },
   {
@@ -84,10 +79,7 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "finance_group",
     managerKey: "finance",
     items: [
-      { nameKey: "finance",   href: "/finance",                icon: Banknote, iconColor: "text-green-400" },
-      { nameKey: "royalties", href: "/finance?tab=royalties",  icon: Coins,    iconColor: "text-green-400" },
-      { nameKey: "splits",    href: "/finance?tab=splits",     icon: PieChart, iconColor: "text-green-400" },
-      { nameKey: "payouts",   href: "/finance?tab=payouts",    icon: Wallet,   iconColor: "text-green-400" },
+      { nameKey: "finance", href: "/finance", icon: Banknote, iconColor: "text-green-400" },
     ],
   },
   {
@@ -101,11 +93,7 @@ const adminNavGroups: NavGroup[] = [
     titleKey: "crm_group",
     managerKey: "crm",
     items: [
-      { nameKey: "crm_overview", href: "/crm",                icon: BarChart3,  iconColor: "text-cyan-400" },
-      { nameKey: "crm_activity", href: "/crm?tab=activity",   icon: Users2,     iconColor: "text-cyan-400" },
-      { nameKey: "crm_arpu",     href: "/crm?tab=arpu",       icon: Coins,      iconColor: "text-cyan-400" },
-      { nameKey: "crm_growth",   href: "/crm?tab=growth",     icon: TrendingUp, iconColor: "text-cyan-400" },
-      { nameKey: "crm_funnel",   href: "/crm?tab=funnel",     icon: Workflow,   iconColor: "text-cyan-400" },
+      { nameKey: "crm_overview", href: "/crm", icon: BarChart3, iconColor: "text-cyan-400" },
     ],
   },
   {
