@@ -155,6 +155,71 @@ const SERVICES: ServiceDef[] = [
       { key: "api_key", label: "API Key", type: "password", required: true },
     ],
   },
+  // DSP — аналитика и доставка через API/SFTP
+  {
+    code: "spotify", name: "Spotify for Artists", category: "dsp", authType: "oauth2",
+    description: "Аналитика стримов, данные слушателей, управление профилем артиста. Client ID + Secret из Spotify Developer Dashboard.",
+    fields: [
+      { key: "client_id",     label: "Client ID",     required: true, hint: "developer.spotify.com → Приложение → Client ID" },
+      { key: "client_secret", label: "Client Secret", type: "password", required: true },
+    ],
+  },
+  {
+    code: "apple_music", name: "Apple Music / MusicKit", category: "dsp", authType: "bearer",
+    description: "Аналитика и метаданные через MusicKit API. Требует Team ID + Key ID + .p8 ключ из Apple Developer.",
+    fields: [
+      { key: "team_id",    label: "Team ID",            required: true, hint: "10-символьный ID из Apple Developer Account" },
+      { key: "key_id",     label: "Key ID",             required: true, hint: "ID ключа MusicKit" },
+      { key: "private_key", label: "Private Key (.p8)", type: "password", required: true, hint: "Содержимое скачанного .p8 файла" },
+    ],
+  },
+  {
+    code: "youtube_music", name: "YouTube Music / Content ID", category: "dsp", authType: "oauth2",
+    description: "Content ID для монетизации треков на YouTube. OAuth2 через Google Cloud Console.",
+    fields: [
+      { key: "client_id",     label: "Client ID",     required: true },
+      { key: "client_secret", label: "Client Secret", type: "password", required: true },
+    ],
+  },
+  {
+    code: "tiktok_music", name: "TikTok Music", category: "dsp", authType: "oauth2",
+    description: "Дистрибуция и аналитика на TikTok. Используется TikTok for Business API.",
+    fields: [
+      { key: "client_key",    label: "Client Key",    required: true },
+      { key: "client_secret", label: "Client Secret", type: "password", required: true },
+    ],
+  },
+  {
+    code: "deezer", name: "Deezer", category: "dsp", authType: "oauth2",
+    description: "Дистрибуция и аналитика на Deezer. Популярен в России и Европе.",
+    fields: [
+      { key: "app_id",    label: "App ID",     required: true, hint: "developers.deezer.com → Моё приложение" },
+      { key: "secret_key", label: "Secret Key", type: "password", required: true },
+    ],
+  },
+  {
+    code: "vk_music", name: "VK Музыка", category: "dsp", authType: "api_key",
+    description: "Дистрибуция на ВКонтакте. Актуально для русскоязычной аудитории.",
+    fields: [
+      { key: "api_key",   label: "API Key",    type: "password", required: true },
+      { key: "group_id",  label: "Group ID",   hint: "ID группы-издателя ВКонтакте" },
+    ],
+  },
+  {
+    code: "yandex_music", name: "Яндекс Музыка", category: "dsp", authType: "api_key",
+    description: "Дистрибуция на Яндекс Музыке. Крупнейшая русскоязычная стриминговая платформа.",
+    fields: [
+      { key: "api_key",  label: "API Key",  type: "password", required: true },
+      { key: "label_id", label: "Label ID", hint: "ID лейбла в системе Яндекса" },
+    ],
+  },
+  {
+    code: "zvuk", name: "Звук (SberSound)", category: "dsp", authType: "api_key",
+    description: "Российская стриминговая платформа от Сбера. Растущая аудитория в СНГ.",
+    fields: [
+      { key: "api_key", label: "API Key", type: "password", required: true },
+    ],
+  },
 ];
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
