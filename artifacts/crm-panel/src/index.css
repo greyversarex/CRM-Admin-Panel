@@ -300,82 +300,72 @@
     inset: -1px;
   }
 
-  /* ─── Sidebar nav item base ─── */
+  /* ─── Sidebar nav button base ─── */
   .nav-item {
-    transition:
-      background-color 180ms ease,
-      color 180ms ease,
-      box-shadow 180ms ease;
-    will-change: background-color, color;
+    transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
   }
 
-  /* Active row: gradient fill, slightly raised */
+  /* Active button: glass gradient + glowing border */
   .nav-item-active {
     background: linear-gradient(
-      to right,
-      hsl(var(--primary) / 0.18) 0%,
-      hsl(var(--primary) / 0.08) 60%,
-      transparent 100%
+      135deg,
+      hsl(var(--primary) / 0.20) 0%,
+      hsl(271 80% 68% / 0.10) 100%
     );
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    border-color: hsl(var(--primary) / 0.28);
+    box-shadow:
+      0 0 18px hsl(var(--primary) / 0.12),
+      0 1px 0 hsl(var(--primary) / 0.10) inset,
+      0 0 0 1px hsl(var(--primary) / 0.06) inset;
   }
 
-  /* Inactive row: hover state */
+  /* Shimmer overlay on active */
+  .nav-item-active::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      rgba(255,255,255,0.025) 45%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Inactive button */
   .nav-item-inactive {
     background: transparent;
   }
   .nav-item-inactive:hover {
-    background: hsl(var(--sidebar-accent));
-    color: hsl(var(--sidebar-foreground));
-  }
-
-  /* ─── Left accent bar ─── */
-  .nav-active-bar {
-    position: relative;
-  }
-  .nav-active-bar::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 18%;
-    bottom: 18%;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--primary)) 0%,
-      hsl(271 80% 68%) 100%
-    );
-    box-shadow:
-      0 0 6px hsl(var(--primary) / 0.7),
-      0 0 12px hsl(var(--primary) / 0.3);
+    background: rgba(255, 255, 255, 0.055);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
   }
 
   /* ─── Nav icon container ─── */
   .nav-icon-wrap {
-    transition:
-      background-color 180ms ease,
-      box-shadow 180ms ease,
-      color 180ms ease;
+    transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Active icon: tinted bg + soft glow */
+  /* Active icon: glass slab with color glow */
   .nav-icon-active {
-    background-color: hsl(var(--primary) / 0.15);
+    background: rgba(255, 255, 255, 0.08);
     box-shadow:
-      0 0 0 1px hsl(var(--primary) / 0.2),
-      0 0 8px hsl(var(--primary) / 0.15);
-    color: hsl(var(--primary));
+      0 0 0 1px rgba(255, 255, 255, 0.10),
+      0 2px 4px rgba(0, 0, 0, 0.30);
   }
 
-  /* Idle icon: invisible container, dims the icon, brightens on row hover */
+  /* Idle icon: dims, brightens on hover */
   .nav-icon-idle {
     background-color: transparent;
-    color: hsl(var(--muted-foreground) / 0.6);
   }
   .nav-item-inactive:hover .nav-icon-idle {
-    background-color: hsl(var(--sidebar-foreground) / 0.05);
-    color: hsl(var(--sidebar-foreground) / 0.75);
+    background-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
   /* ─── Global input: use theme variables ─── */

@@ -335,24 +335,22 @@ export function SidebarNav() {
                 const iconEl = (
                   <span
                     className={cn(
-                      "flex items-center justify-center rounded-lg transition-all duration-150",
-                      collapsed ? "h-[34px] w-[34px]" : "h-[26px] w-[26px] mr-2.5",
-                      isActive
-                        ? "bg-primary/20 shadow-sm shadow-primary/20"
-                        : "group-hover:bg-white/[0.06]"
+                      "nav-icon-wrap flex items-center justify-center rounded-lg shrink-0",
+                      collapsed ? "h-[36px] w-[36px]" : "h-[28px] w-[28px] mr-2.5",
+                      isActive ? "nav-icon-active" : "nav-icon-idle"
                     )}
                   >
                     <Icon
                       className={cn(
-                        "transition-colors duration-150",
-                        collapsed ? "h-[17px] w-[17px]" : "h-[15px] w-[15px]",
+                        "transition-all duration-220",
+                        collapsed ? "h-[18px] w-[18px]" : "h-[15px] w-[15px]",
                         isActive
-                          ? "text-primary drop-shadow-[0_0_6px_hsl(var(--primary)/0.7)]"
+                          ? cn(item.iconColor ?? "text-primary", "opacity-100 drop-shadow-[0_0_8px_currentColor]")
                           : item.iconColor
-                            ? cn(item.iconColor, "opacity-70 group-hover:opacity-100")
-                            : "text-muted-foreground/60 group-hover:text-muted-foreground"
+                            ? cn(item.iconColor, "opacity-55 group-hover:opacity-90")
+                            : "text-white/40 group-hover:text-white/75"
                       )}
-                      strokeWidth={1.8}
+                      strokeWidth={1.9}
                     />
                   </span>
                 );
@@ -362,11 +360,9 @@ export function SidebarNav() {
                     <span
                       title={collapsed ? labelText : undefined}
                       className={cn(
-                        "nav-item group relative flex items-center rounded-lg cursor-pointer transition-all duration-150",
-                        collapsed ? "px-0 py-0 justify-center" : "px-2 py-[6px]",
-                        isActive
-                          ? "nav-active-bar nav-item-active"
-                          : "nav-item-inactive"
+                        "nav-item group relative flex items-center rounded-xl cursor-pointer",
+                        collapsed ? "px-0 py-0 justify-center h-[44px]" : "px-2.5 py-[7px]",
+                        isActive ? "nav-item-active" : "nav-item-inactive"
                       )}
                     >
                       {iconEl}
@@ -375,8 +371,10 @@ export function SidebarNav() {
                         <>
                           <span
                             className={cn(
-                              "flex-1 truncate text-[13px] font-medium transition-colors",
-                              isActive ? "text-white" : "text-white/75 group-hover:text-white"
+                              "flex-1 truncate text-[13px] transition-colors duration-200",
+                              isActive
+                                ? "text-white font-semibold"
+                                : "text-white/65 font-medium group-hover:text-white/95"
                             )}
                           >
                             {labelText}
