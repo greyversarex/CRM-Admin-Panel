@@ -45,7 +45,7 @@ const CodeParam = z.object({
 
 const RegisterBody = z.object({
   name: z.string().min(1).max(120),
-  category: z.enum(["dsp", "delivery", "publishing", "social", "analytics", "payments", "storage", "other"]),
+  category: z.enum(["dsp", "delivery", "publishing", "social", "analytics", "payments", "storage", "email", "communications", "other"]),
   authType: z.enum(["api_key", "oauth2", "basic", "bearer", "none"]),
 }).strict();
 
