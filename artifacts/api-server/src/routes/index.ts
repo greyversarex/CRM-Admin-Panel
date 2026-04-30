@@ -39,6 +39,10 @@ import rightsExtrasRouter from "./rights-extras";
 import publishingExtrasRouter from "./publishing-extras";
 import communicationsChannelsRouter from "./communications-channels";
 import managerPermissionsRouter from "./manager-permissions";
+import takedownsRouter from "./takedowns";
+import labelMembersRouter from "./label-members";
+import marketingRouter from "./marketing";
+import analyticsMarketingRouter from "./analytics-marketing";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireManagerPermission } from "../lib/manager-permissions";
 import { securityPolicy } from "../middlewares/security-policy";
@@ -100,7 +104,10 @@ router.use("/publishing", adminOnly, requireManagerPermission("rights"));
 router.use(publishingRouter);
 // Publishing extras: PRO registration + conflict detection (под /publishing → admin-only выше).
 router.use(publishingExtrasRouter);
-router.use("/analytics", adminOnly, requireManagerPermission("analytics"));  // currently mock org-wide aggregates
+// Analytics — playlists + TikTok (scoped inside, allowed to label/artist too).
+// Must be BEFORE the /analytics adminOnly guard so label/artist users can access it.
+router.use(analyticsMarketingRouter);
+router.use("/analytics", adminOnly, requireManagerPermission("analytics"));  // org-wide aggregates — admin/manager only
 router.use(analyticsRouter);
 // Analytics extras: UGC metrics + Realtime alerts (под /analytics → admin-only выше).
 router.use(analyticsExtrasRouter);
@@ -117,6 +124,12 @@ router.use(ddexRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter
 router.use(notificationsRouter);         // /notifications — scoped to current user inside (BEFORE integrationsRouter, у которого глобальный requireRole)
 router.use(supportRouter);               // /support — customer scoped or staff inbox (per-route guards inside) — также ДО integrationsRouter
+// Marketing — presave, smart links, promo assets (scoped per label/artist inside)
+router.use(marketingRouter);
+// Takedowns — scoped per label/artist inside
+router.use(takedownsRouter);
+// Label members — team management for label role (scoped inside)
+router.use(labelMembersRouter);
 router.use("/integrations", adminOnly);  // системный admin-only без manager_permission ключа
 router.use(integrationsRouter);
 router.use(auditRouter);                 // /audit — admin/manager only (guarded inside)

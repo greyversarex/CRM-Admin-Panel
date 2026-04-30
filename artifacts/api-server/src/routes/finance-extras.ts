@@ -19,7 +19,9 @@ import { auditMutation } from "../lib/audit";
 import { requireRole } from "../lib/auth";
 
 const router = Router();
-router.use(requireRole("admin", "manager"));
+// Scope guard to specific paths — prevents this router's requireRole from
+// firing as a catch-all that blocks label/artist users on unrelated routes.
+router.use(["/finance/commissions", "/finance/payouts"], requireRole("admin", "manager"));
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 

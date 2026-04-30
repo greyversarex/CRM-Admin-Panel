@@ -33,7 +33,9 @@ import {
 const router = Router();
 
 // Defence-in-depth — same guard as in routes/index.ts.
-router.use(requireRole("admin", "manager"));
+// Scoped to /integrations path so the middleware doesn't fire as a catch-all
+// on unrelated routes when this router is mounted without a path prefix.
+router.use("/integrations", requireRole("admin", "manager"));
 
 // :code is used in DB lookups (integrations.code, an arbitrary text PK from the
 // caller's perspective). We restrict it to a safe alphabet so it can never be a

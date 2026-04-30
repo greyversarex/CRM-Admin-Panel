@@ -1784,8 +1784,9 @@ type Member = {
   name: string;
   email: string;
   role: "owner" | "manager" | "viewer";
-  joinedAt: string;
-  status: "active" | "invited";
+  invitedAt: string;
+  joinedAt: string | null;
+  status: "active" | "pending";
 };
 
 const MEMBER_ROLE_LABELS = {
@@ -1796,39 +1797,63 @@ const MEMBER_ROLE_LABELS = {
 
 function LabelMembersTab() {
   const { toast } = useToast();
-  const [members, setMembers] = useState<Member[]>([
-    { id: 1, name: "Akbar Rahimov",     email: "akbar@tajikmusic.com",  role: "owner",   joinedAt: "2024-01-10", status: "active"  },
-    { id: 2, name: "Zulfiya Nazarova",  email: "zulfiya@tajikmusic.com", role: "manager", joinedAt: "2024-03-20", status: "active"  },
-    { id: 3, name: "Jamshid Karimov",   email: "jamshid@tajikmusic.com", role: "viewer",  joinedAt: "2024-07-05", status: "active"  },
-    { id: 4, name: "(ожидает приглашения)", email: "rashid@mail.com",   role: "viewer",  joinedAt: "2025-04-28", status: "invited" },
-  ]);
-  const [open, setOpen] = useState(false);
+  const [members, setMembers]   = useState<Member[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [open, setOpen]         = useState(false);
+  const [saving, setSaving]     = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<Member["role"]>("viewer");
+  const [inviteName, setInviteName]   = useState("");
+  const [inviteRole, setInviteRole]   = useState<"manager" | "viewer">("viewer");
 
-  const handleInvite = () => {
-    if (!inviteEmail.includes("@")) {
-      toast({ variant: "destructive", title: "Введите корректный email" });
+  useEffect(() => {
+    api<Member[]>("/api/label-members")
+      .then(setMembers)
+      .catch(e => toast({ variant: "destructive", title: "Ошибка загрузки команды", description: e.message }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleInvite = async () => {
+    if (!inviteEmail.includes("@") || !inviteName.trim()) {
+      toast({ variant: "destructive", title: "Введите имя и корректный email" });
       return;
     }
-    const newMember: Member = {
-      id: Date.now(), name: "(ожидает приглашения)",
-      email: inviteEmail, role: inviteRole,
-      joinedAt: new Date().toISOString().slice(0, 10), status: "invited",
-    };
-    setMembers(p => [...p, newMember]);
-    setInviteEmail(""); setOpen(false);
-    toast({ title: "Приглашение отправлено", description: inviteEmail });
+    setSaving(true);
+    try {
+      const created = await api<Member>("/api/label-members/invite", {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail, name: inviteName, role: inviteRole }),
+      });
+      setMembers(p => [...p, created]);
+      setInviteEmail(""); setInviteName(""); setOpen(false);
+      toast({ title: "Приглашение отправлено", description: inviteEmail });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemove = (id: number) => {
-    setMembers(p => p.filter(m => m.id !== id));
-    toast({ title: "Участник удалён" });
+  const handleRemove = async (id: number) => {
+    try {
+      await api("/api/label-members/" + id, { method: "DELETE" });
+      setMembers(p => p.filter(m => m.id !== id));
+      toast({ title: "Участник удалён" });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : String(e) });
+    }
   };
 
-  const handleRoleChange = (id: number, role: Member["role"]) => {
-    setMembers(p => p.map(m => m.id === id ? { ...m, role } : m));
-    toast({ title: "Роль обновлена" });
+  const handleRoleChange = async (id: number, role: Member["role"]) => {
+    try {
+      await api("/api/label-members/" + id + "/role", {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      setMembers(p => p.map(m => m.id === id ? { ...m, role } : m));
+      toast({ title: "Роль обновлена" });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : String(e) });
+    }
   };
 
   return (
@@ -1844,18 +1869,27 @@ function LabelMembersTab() {
           </Button>
         </CardHeader>
         <CardContent className="p-0">
+          {loading ? (
+            <div className="p-4 flex flex-col gap-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Участник</TableHead>
                 <TableHead>Роль</TableHead>
-                <TableHead>Добавлен</TableHead>
+                <TableHead>Приглашён</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map(m => (
+              {members.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Нет участников команды
+                  </TableCell>
+                </TableRow>
+              ) : members.map(m => (
                 <TableRow key={m.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -1888,7 +1922,7 @@ function LabelMembersTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {new Date(m.joinedAt).toLocaleDateString("ru-RU")}
+                    {new Date(m.invitedAt).toLocaleDateString("ru-RU")}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-xs ${m.status === "active"
@@ -1909,6 +1943,7 @@ function LabelMembersTab() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -1917,13 +1952,18 @@ function LabelMembersTab() {
           <DialogHeader><DialogTitle>Пригласить участника</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-3 py-2">
             <div className="grid gap-1.5">
-              <Label>Email</Label>
+              <Label>Имя <span className="text-red-400">*</span></Label>
+              <Input placeholder="Имя участника" value={inviteName}
+                onChange={e => setInviteName(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Email <span className="text-red-400">*</span></Label>
               <Input type="email" placeholder="name@company.com" value={inviteEmail}
                 onChange={e => setInviteEmail(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
               <Label>Уровень доступа</Label>
-              <Select value={inviteRole} onValueChange={v => setInviteRole(v as Member["role"])}>
+              <Select value={inviteRole} onValueChange={v => setInviteRole(v as "manager" | "viewer")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Менеджер — полный доступ к релизам</SelectItem>
@@ -1934,7 +1974,7 @@ function LabelMembersTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Отмена</Button>
-            <Button onClick={handleInvite}>Отправить приглашение</Button>
+            <Button onClick={handleInvite} disabled={saving}>{saving ? "Отправка..." : "Отправить приглашение"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
