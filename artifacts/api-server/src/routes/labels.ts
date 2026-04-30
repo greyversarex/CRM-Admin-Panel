@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, labelsTable, artistsTable, releasesTable } from "@workspace/db";
 import { count, eq, desc } from "drizzle-orm";
 import { CreateLabelBody, UpdateLabelBody, GetLabelParams, UpdateLabelParams, DeleteLabelParams } from "@workspace/api-zod";
+import { requireAuth, requireRole, getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 
 const router = Router();
@@ -11,13 +12,19 @@ function parseId(raw: string | string[]): number {
   return parseInt(str, 10);
 }
 
-router.get("/labels", async (req, res): Promise<void> => {
+router.get("/labels", requireAuth, async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
   const page = parseInt(req.query.page as string ?? "1", 10) || 1;
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const labels = await db.select().from(labelsTable).limit(limit).offset(offset).orderBy(desc(labelsTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(labelsTable);
+  // Label users only see their own label; artist users see the label of their artist.
+  const whereClause = !scope.fullAccess && scope.labelId
+    ? eq(labelsTable.id, scope.labelId)
+    : undefined;
+
+  const labels = await db.select().from(labelsTable).where(whereClause).limit(limit).offset(offset).orderBy(desc(labelsTable.createdAt));
+  const [totalResult] = await db.select({ count: count() }).from(labelsTable).where(whereClause);
 
   const artistCounts = await db.select({ labelId: artistsTable.labelId, count: count() })
     .from(artistsTable).groupBy(artistsTable.labelId);
@@ -47,7 +54,7 @@ router.get("/labels", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/labels", async (req, res): Promise<void> => {
+router.post("/labels", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const parsed = CreateLabelBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -93,7 +100,7 @@ router.get("/labels/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.put("/labels/:id", async (req, res): Promise<void> => {
+router.put("/labels/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = UpdateLabelParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -126,7 +133,7 @@ router.put("/labels/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.delete("/labels/:id", async (req, res): Promise<void> => {
+router.delete("/labels/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const params = DeleteLabelParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
