@@ -8,6 +8,7 @@
 
 import type { IConnector } from "./base";
 import { spotifyConnector } from "./spotify";
+import { acrcloudConnector } from "./acrcloud";
 import { createDdexSftpConnector } from "./ddex-sftp";
 
 const REGISTRY: Map<string, IConnector> = new Map();
@@ -18,6 +19,7 @@ function register(c: IConnector) {
 
 // ── Реальные API-коннекторы ──
 register(spotifyConnector);
+register(acrcloudConnector);
 
 // ── Универсальные DDEX-SFTP коннекторы (для площадок без публичного API) ──
 [
