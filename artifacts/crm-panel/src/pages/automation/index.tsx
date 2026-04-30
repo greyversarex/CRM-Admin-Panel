@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Workflow, Clock, ShieldAlert, Filter, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Workflow, Clock, ShieldAlert, Filter, Plus, Pencil, Trash2, RefreshCw, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -328,6 +328,226 @@ const MOD_KIND_LABELS: Record<string, string> = {
   min_length: "Минимальная длина", max_length: "Максимальная длина",
   blocklist: "Чёрный список слов",
 };
+
+// ─── Fraud Alerts ────────────────────────────────────────────────────────────
+
+type FraudAlert = {
+  id: number;
+  ruleId: number | null;
+  ruleName: string;
+  severity: "low" | "medium" | "high" | "critical";
+  status: "open" | "investigating" | "resolved" | "dismissed";
+  releaseId: number | null;
+  trackId: number | null;
+  userId: number | null;
+  description: string;
+  meta: Record<string, unknown>;
+  resolvedBy: number | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+};
+
+const ALERT_SEVERITY_LABELS: Record<string, string> = {
+  low: "Низкая", medium: "Средняя", high: "Высокая", critical: "Критическая",
+};
+const ALERT_STATUS_LABELS: Record<string, string> = {
+  open: "Открыт", investigating: "Расследование", resolved: "Решён", dismissed: "Снят",
+};
+const ALERT_SEVERITY_COLORS: Record<string, string> = {
+  low: "bg-slate-500/15 text-slate-400 border-slate-500/25",
+  medium: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+  high: "bg-orange-500/15 text-orange-400 border-orange-500/25",
+  critical: "bg-red-500/15 text-red-400 border-red-500/25",
+};
+const ALERT_STATUS_COLORS: Record<string, string> = {
+  open: "bg-red-500/15 text-red-400 border-red-500/25",
+  investigating: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+  resolved: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  dismissed: "bg-slate-500/15 text-slate-400 border-slate-500/25",
+};
+
+function FraudAlertRow({ alert, onUpdated }: { alert: FraudAlert; onUpdated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState(alert.status);
+  const [note, setNote] = useState(alert.resolutionNote ?? "");
+  const [busy, setBusy] = useState(false);
+  const isClosed = alert.status === "resolved" || alert.status === "dismissed";
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api(`/api/automation/fraud-alerts/${alert.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus, resolutionNote: note || null }),
+      });
+      toast({ title: "Алерт обновлён" });
+      onUpdated();
+      setOpen(false);
+    } catch (e) {
+      toast({ title: "Ошибка", description: String((e as Error).message), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <tr
+        className="border-t border-border/30 hover:bg-card/30 cursor-pointer"
+        onClick={() => setOpen(true)}
+      >
+        <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(alert.createdAt).toLocaleDateString("ru")}</td>
+        <td className="px-3 py-2 font-medium max-w-[200px] truncate">{alert.ruleName}</td>
+        <td className="px-3 py-2">{alert.description}</td>
+        <td className="px-3 py-2">
+          <Badge variant="outline" className={`text-xs ${ALERT_SEVERITY_COLORS[alert.severity] ?? ""}`}>
+            {ALERT_SEVERITY_LABELS[alert.severity] ?? alert.severity}
+          </Badge>
+        </td>
+        <td className="px-3 py-2">
+          <Badge variant="outline" className={`text-xs ${ALERT_STATUS_COLORS[alert.status] ?? ""}`}>
+            {ALERT_STATUS_LABELS[alert.status] ?? alert.status}
+          </Badge>
+        </td>
+        <td className="px-3 py-2 text-xs text-muted-foreground">
+          {alert.releaseId ? `Релиз #${alert.releaseId}` : alert.trackId ? `Трек #${alert.trackId}` : alert.userId ? `Польз. #${alert.userId}` : "—"}
+        </td>
+      </tr>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Алерт: {alert.ruleName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="text-muted-foreground">{alert.description}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><span className="text-muted-foreground">Серьёзность:</span> {ALERT_SEVERITY_LABELS[alert.severity] ?? alert.severity}</div>
+              <div><span className="text-muted-foreground">Создан:</span> {new Date(alert.createdAt).toLocaleString("ru")}</div>
+              {alert.releaseId && <div><span className="text-muted-foreground">Релиз:</span> #{alert.releaseId}</div>}
+              {alert.trackId && <div><span className="text-muted-foreground">Трек:</span> #{alert.trackId}</div>}
+              {alert.userId && <div><span className="text-muted-foreground">Пользователь:</span> #{alert.userId}</div>}
+            </div>
+            {Object.keys(alert.meta).length > 0 && (
+              <pre className="text-xs bg-muted/30 rounded p-2 overflow-auto max-h-32">
+                {JSON.stringify(alert.meta, null, 2)}
+              </pre>
+            )}
+            {!isClosed && (
+              <>
+                <div className="space-y-1">
+                  <Label>Изменить статус</Label>
+                  <Select value={newStatus} onValueChange={(v) => setNewStatus(v as FraudAlert["status"])}>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Открыт</SelectItem>
+                      <SelectItem value="investigating">Расследование</SelectItem>
+                      <SelectItem value="resolved">Решён</SelectItem>
+                      <SelectItem value="dismissed">Снят</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Заметка о решении</Label>
+                  <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Описание принятых мер..." />
+                </div>
+              </>
+            )}
+            {isClosed && alert.resolutionNote && (
+              <div className="text-muted-foreground text-xs">Заметка: {alert.resolutionNote}</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Закрыть</Button>
+            {!isClosed && (
+              <Button onClick={save} disabled={busy}>{busy ? "Сохранение..." : "Сохранить"}</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function FraudAlertsTab() {
+  const [alerts, setAlerts] = useState<FraudAlert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = statusFilter !== "all" ? `?status=${statusFilter}` : "";
+      const r = await api<{ alerts: FraudAlert[] }>(`/api/automation/fraud-alerts${qs}`);
+      setAlerts(r.alerts);
+    } catch (e) {
+      toast({ title: "Ошибка", description: String((e as Error).message), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const openCount = alerts.filter((a) => a.status === "open").length;
+  const criticalCount = alerts.filter((a) => a.severity === "critical" && a.status === "open").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <div className="flex gap-3 text-sm">
+          <span className="text-muted-foreground">Всего: <strong className="text-foreground">{alerts.length}</strong></span>
+          {openCount > 0 && <span className="text-red-400">Открытых: <strong>{openCount}</strong></span>}
+          {criticalCount > 0 && <span className="text-red-500 font-semibold">Критических: {criticalCount}</span>}
+        </div>
+        <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все статусы</SelectItem>
+              <SelectItem value="open">Открытые</SelectItem>
+              <SelectItem value="investigating">Расследование</SelectItem>
+              <SelectItem value="resolved">Решённые</SelectItem>
+              <SelectItem value="dismissed">Снятые</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? "animate-spin" : ""}`} /> Обновить
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/50 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-card/50 border-b border-border/50">
+            <tr className="text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2 w-24">Дата</th>
+              <th className="px-3 py-2">Правило</th>
+              <th className="px-3 py-2">Описание</th>
+              <th className="px-3 py-2 w-28">Серьёзность</th>
+              <th className="px-3 py-2 w-32">Статус</th>
+              <th className="px-3 py-2 w-28">Объект</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alerts.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-xs text-muted-foreground">
+                  {loading ? "Загрузка..." : "Алертов нет"}
+                </td>
+              </tr>
+            )}
+            {alerts.map((a) => (
+              <FraudAlertRow key={a.id} alert={a} onUpdated={load} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const MOD_SEVERITY_LABELS: Record<string, string> = {
   info: "Инфо", warning: "Предупреждение", error: "Ошибка",
 };
@@ -542,12 +762,14 @@ export default function AutomationPage() {
             <TabsTrigger value="workflow"   className="gap-1.5"><Workflow className="h-3.5 w-3.5" /> Workflow Rules</TabsTrigger>
             <TabsTrigger value="scheduled"  className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Scheduled Tasks</TabsTrigger>
             <TabsTrigger value="fraud"      className="gap-1.5"><ShieldAlert className="h-3.5 w-3.5" /> Fraud Detection</TabsTrigger>
+            <TabsTrigger value="alerts"     className="gap-1.5"><Bell className="h-3.5 w-3.5" /> Fraud Alerts</TabsTrigger>
             <TabsTrigger value="moderation" className="gap-1.5"><Filter className="h-3.5 w-3.5" /> Content Moderation</TabsTrigger>
             <TabsTrigger value="payments"   className="gap-1.5">Платежи</TabsTrigger>
           </TabsList>
           <TabsContent value="workflow"   className="mt-4"><WorkflowRulesTab /></TabsContent>
           <TabsContent value="scheduled"  className="mt-4"><ScheduledTab /></TabsContent>
           <TabsContent value="fraud"      className="mt-4"><FraudRulesTab /></TabsContent>
+          <TabsContent value="alerts"     className="mt-4"><FraudAlertsTab /></TabsContent>
           <TabsContent value="moderation" className="mt-4"><ModerationRulesTab /></TabsContent>
           <TabsContent value="payments"   className="mt-4"><PaymentRulesTab /></TabsContent>
         </Tabs>
