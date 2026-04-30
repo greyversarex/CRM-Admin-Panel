@@ -238,6 +238,8 @@ export default function AnalyticsPage() {
             <TabsTrigger value="tracks" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.tracks}</TabsTrigger>
             <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">UGC</TabsTrigger>
             <TabsTrigger value="realtime" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Алерты</TabsTrigger>
+            <TabsTrigger value="playlists" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Плейлисты</TabsTrigger>
+            <TabsTrigger value="tiktok" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">TikTok</TabsTrigger>
           </TabsList>
 
           {/* ─── Streams ─── */}
@@ -471,9 +473,206 @@ export default function AnalyticsPage() {
 
           <TabsContent value="ugc" className="mt-4"><UgcTab /></TabsContent>
           <TabsContent value="realtime" className="mt-4"><RealtimeTab /></TabsContent>
+
+          {/* ─── Playlist Analytics ─── */}
+          <TabsContent value="playlists" className="mt-4">
+            <PlaylistAnalyticsTab />
+          </TabsContent>
+
+          {/* ─── TikTok ─── */}
+          <TabsContent value="tiktok" className="mt-4">
+            <TikTokAnalyticsTab />
+          </TabsContent>
         </Tabs>
       </div>
     </Layout>
+  );
+}
+
+// ─── Playlist Analytics Tab ──────────────────────────────────────────────────
+
+const DEMO_PLAYLISTS = [
+  { id: 1, name: "Tajik Hits 2025",        curator: "Spotify Editorial",   followers: 142000, added: "2025-04-01", streams: 48200, trend: 12 },
+  { id: 2, name: "Central Asia Music",     curator: "Apple Music",         followers: 83400,  added: "2025-03-15", streams: 29100, trend: 5  },
+  { id: 3, name: "Дорога домой",           curator: "Яндекс Музыка",       followers: 61200,  added: "2025-04-10", streams: 21400, trend: -3 },
+  { id: 4, name: "World Sounds",           curator: "Deezer",              followers: 38700,  added: "2025-02-20", streams: 14800, trend: 8  },
+  { id: 5, name: "Новая Центральная Азия", curator: "VK Музыка",           followers: 22100,  added: "2025-04-20", streams: 8900,  trend: 22 },
+  { id: 6, name: "Традиции и Ритмы",       curator: "User Playlist",       followers: 5400,   added: "2025-03-01", streams: 3200,  trend: 0  },
+];
+
+function PlaylistAnalyticsTab() {
+  const totalStreams   = DEMO_PLAYLISTS.reduce((s, p) => s + p.streams, 0);
+  const totalFollowers = DEMO_PLAYLISTS.reduce((s, p) => s + p.followers, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-500/10"><Play className="w-4 h-4 text-green-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Плейлистов</p>
+              <p className="text-2xl font-bold">{DEMO_PLAYLISTS.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10"><Music className="w-4 h-4 text-blue-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Стримов с плейлистов</p>
+              <p className="text-2xl font-bold">{fmtCompact(totalStreams)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-violet-500/10"><Globe2 className="w-4 h-4 text-violet-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Подписчиков (всего)</p>
+              <p className="text-2xl font-bold">{fmtCompact(totalFollowers)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Плейлисты с вашими треками</CardTitle>
+          <CardDescription>Список плейлистов на всех платформах, включающих ваши релизы</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/50 bg-background/30">
+                <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Плейлист</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Куратор / Платформа</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Подписчики</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Стримов</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Добавлен</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Тренд</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DEMO_PLAYLISTS.map(p => (
+                <tr key={p.id} className="border-b border-border/50 hover:bg-accent/20">
+                  <td className="px-6 py-3 text-sm font-medium">{p.name}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{p.curator}</td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtCompact(p.followers)}</td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtCompact(p.streams)}</td>
+                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">{new Date(p.added).toLocaleDateString("ru-RU")}</td>
+                  <td className="px-6 py-3 text-right">
+                    {p.trend === 0 ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <span className={`text-xs font-medium flex items-center justify-end gap-0.5 ${p.trend > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                        {p.trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        {Math.abs(p.trend)}%
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── TikTok Analytics Tab ────────────────────────────────────────────────────
+
+const DEMO_TIKTOK = [
+  { id: 1, title: "Дил Дил",    artist: "Jahongir Ortiqov", uses: 24800, views: 3_120_000, likes: 892000, reposts: 41200, trend: 34 },
+  { id: 2, title: "Шаби Мехр",  artist: "Navo Ensemble",    uses: 8400,  views: 1_045_000, likes: 312000, reposts: 18700, trend: 12 },
+  { id: 3, title: "Осмон",      artist: "Sitora",           uses: 5100,  views: 640000,    likes: 178000, reposts: 9200,  trend: -5 },
+  { id: 4, title: "Тирамох",    artist: "DJ Farrukhbek",    uses: 1200,  views: 148000,    likes: 41000,  reposts: 3100,  trend: 8  },
+];
+
+const fmtK = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(n);
+
+function TikTokAnalyticsTab() {
+  const totalUses  = DEMO_TIKTOK.reduce((s, t) => s + t.uses, 0);
+  const totalViews = DEMO_TIKTOK.reduce((s, t) => s + t.views, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-pink-500/10"><Music className="w-4 h-4 text-pink-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Использований треков</p>
+              <p className="text-2xl font-bold">{fmtK(totalUses)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10"><Play className="w-4 h-4 text-blue-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Просмотров видео</p>
+              <p className="text-2xl font-bold">{fmtK(totalViews)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-500/10"><TrendingUp className="w-4 h-4 text-emerald-400" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground">Треков в тренде</p>
+              <p className="text-2xl font-bold">{DEMO_TIKTOK.filter(t => t.trend > 10).length}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">TikTok — Использование треков</CardTitle>
+          <CardDescription>Статистика видео, созданных с вашими треками на TikTok</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/50 bg-background/30">
+                <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Трек</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Использований</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Просмотров</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Лайков</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Репостов</th>
+                <th className="text-right text-xs font-medium text-muted-foreground px-6 py-3">Тренд</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DEMO_TIKTOK.map(tr => (
+                <tr key={tr.id} className="border-b border-border/50 hover:bg-accent/20">
+                  <td className="px-6 py-3">
+                    <div className="text-sm font-medium">{tr.title}</div>
+                    <div className="text-xs text-muted-foreground">{tr.artist}</div>
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtK(tr.uses)}</td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtK(tr.views)}</td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtK(tr.likes)}</td>
+                  <td className="px-4 py-3 text-right text-sm tabular-nums">{fmtK(tr.reposts)}</td>
+                  <td className="px-6 py-3 text-right">
+                    {tr.trend === 0 ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <span className={`text-xs font-medium flex items-center justify-end gap-0.5 ${tr.trend > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                        {tr.trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        {Math.abs(tr.trend)}%
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

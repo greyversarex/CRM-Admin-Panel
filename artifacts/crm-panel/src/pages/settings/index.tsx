@@ -20,6 +20,7 @@ import {
   FileCode2, Key, Webhook, CreditCard, DollarSign, ShieldCheck,
   HardDrive, Bell, Plus, Trash2, Eye, EyeOff, Save,
   User as UserIcon, KeyRound, BellRing, ExternalLink, Plug,
+  Users, UserPlus, Mail, MoreHorizontal, Pencil,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { IntegrationConfigDialog } from "@/components/integration-config-dialog";
@@ -1377,7 +1378,7 @@ function PersonalSettings() {
         </div>
 
         <Tabs defaultValue="profile">
-          <TabsList className="bg-card border border-border h-auto p-1 gap-0.5">
+          <TabsList className="bg-card border border-border h-auto p-1 gap-0.5 flex-wrap">
             <TabsTrigger value="profile" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <UserIcon className="h-3.5 w-3.5" />Профиль
             </TabsTrigger>
@@ -1387,6 +1388,11 @@ function PersonalSettings() {
             <TabsTrigger value="notifications" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <BellRing className="h-3.5 w-3.5" />Уведомления
             </TabsTrigger>
+            {user?.role === "label" && (
+              <TabsTrigger value="members" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
+                <Users className="h-3.5 w-3.5" />Команда
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="profile" className="mt-4">
@@ -1429,6 +1435,12 @@ function PersonalSettings() {
           <TabsContent value="notifications" className="mt-4">
             <PersonalNotificationsTab />
           </TabsContent>
+
+          {user?.role === "label" && (
+            <TabsContent value="members" className="mt-4">
+              <LabelMembersTab />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </Layout>
@@ -1761,6 +1773,171 @@ function TabPros() {
         </Card>
       ))}
       <div><Button onClick={() => void save()} disabled={saving} data-testid="button-save-pros">Сохранить</Button></div>
+    </div>
+  );
+}
+
+// ─── Label Members Tab ────────────────────────────────────────────────────────
+
+type Member = {
+  id: number;
+  name: string;
+  email: string;
+  role: "owner" | "manager" | "viewer";
+  joinedAt: string;
+  status: "active" | "invited";
+};
+
+const MEMBER_ROLE_LABELS = {
+  owner:   "Владелец",
+  manager: "Менеджер",
+  viewer:  "Просмотр",
+};
+
+function LabelMembersTab() {
+  const { toast } = useToast();
+  const [members, setMembers] = useState<Member[]>([
+    { id: 1, name: "Akbar Rahimov",     email: "akbar@tajikmusic.com",  role: "owner",   joinedAt: "2024-01-10", status: "active"  },
+    { id: 2, name: "Zulfiya Nazarova",  email: "zulfiya@tajikmusic.com", role: "manager", joinedAt: "2024-03-20", status: "active"  },
+    { id: 3, name: "Jamshid Karimov",   email: "jamshid@tajikmusic.com", role: "viewer",  joinedAt: "2024-07-05", status: "active"  },
+    { id: 4, name: "(ожидает приглашения)", email: "rashid@mail.com",   role: "viewer",  joinedAt: "2025-04-28", status: "invited" },
+  ]);
+  const [open, setOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Member["role"]>("viewer");
+
+  const handleInvite = () => {
+    if (!inviteEmail.includes("@")) {
+      toast({ variant: "destructive", title: "Введите корректный email" });
+      return;
+    }
+    const newMember: Member = {
+      id: Date.now(), name: "(ожидает приглашения)",
+      email: inviteEmail, role: inviteRole,
+      joinedAt: new Date().toISOString().slice(0, 10), status: "invited",
+    };
+    setMembers(p => [...p, newMember]);
+    setInviteEmail(""); setOpen(false);
+    toast({ title: "Приглашение отправлено", description: inviteEmail });
+  };
+
+  const handleRemove = (id: number) => {
+    setMembers(p => p.filter(m => m.id !== id));
+    toast({ title: "Участник удалён" });
+  };
+
+  const handleRoleChange = (id: number, role: Member["role"]) => {
+    setMembers(p => p.map(m => m.id === id ? { ...m, role } : m));
+    toast({ title: "Роль обновлена" });
+  };
+
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <Card className="card-surface border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base">Участники команды</CardTitle>
+            <CardDescription>Управляйте доступом к аккаунту лейбла</CardDescription>
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+            <UserPlus className="h-3.5 w-3.5" /> Пригласить
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Участник</TableHead>
+                <TableHead>Роль</TableHead>
+                <TableHead>Добавлен</TableHead>
+                <TableHead>Статус</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map(m => (
+                <TableRow key={m.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <UserIcon className="h-3.5 w-3.5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{m.name}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Mail className="h-3 w-3" />{m.email}
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {m.role === "owner" ? (
+                      <Badge variant="outline" className="text-xs text-amber-400 border-amber-500/30 bg-amber-500/10">
+                        {MEMBER_ROLE_LABELS[m.role]}
+                      </Badge>
+                    ) : (
+                      <Select value={m.role} onValueChange={(v) => handleRoleChange(m.id, v as Member["role"])}>
+                        <SelectTrigger className="h-7 text-xs w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manager">Менеджер</SelectItem>
+                          <SelectItem value="viewer">Просмотр</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {new Date(m.joinedAt).toLocaleDateString("ru-RU")}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`text-xs ${m.status === "active"
+                      ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                      : "text-amber-400 border-amber-500/30 bg-amber-500/10"}`}>
+                      {m.status === "active" ? "Активен" : "Приглашён"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {m.role !== "owner" && (
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemove(m.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Пригласить участника</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label>Email</Label>
+              <Input type="email" placeholder="name@company.com" value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Уровень доступа</Label>
+              <Select value={inviteRole} onValueChange={v => setInviteRole(v as Member["role"])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manager">Менеджер — полный доступ к релизам</SelectItem>
+                  <SelectItem value="viewer">Просмотр — только чтение</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Отмена</Button>
+            <Button onClick={handleInvite}>Отправить приглашение</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

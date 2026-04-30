@@ -43,6 +43,11 @@ import CatalogDuplicates from "@/pages/catalog/duplicates";
 import CatalogCodes from "@/pages/catalog/codes";
 import CatalogBulkEdit from "@/pages/catalog/bulk-edit";
 import Automation from "@/pages/automation";
+import PresaveCampaigns from "@/pages/marketing/presave";
+import SmartLinks from "@/pages/marketing/links";
+import PromoAssets from "@/pages/marketing/assets";
+import ReleaseCalendar from "@/pages/releases/calendar";
+import TakedownRequests from "@/pages/releases/takedown";
 
 const queryClient = new QueryClient();
 
@@ -124,6 +129,11 @@ function Router() {
       <ProtectedRoute path="/catalog/codes"      component={CatalogCodes} />
       <ProtectedRoute path="/catalog/bulk-edit"  component={CatalogBulkEdit} />
       <ProtectedRoute path="/automation"         component={Automation} />
+      <ProtectedRoute path="/marketing/presave" component={PresaveCampaigns} />
+      <ProtectedRoute path="/marketing/links"   component={SmartLinks} />
+      <ProtectedRoute path="/marketing/assets"  component={PromoAssets} />
+      <ProtectedRoute path="/releases/calendar" component={ReleaseCalendar} />
+      <ProtectedRoute path="/releases/takedown" component={TakedownRequests} />
 
       {/* Task #6 — admin/manager only (gated через permissions.ts) */}
       <ProtectedRoute path="/admin/signups"  component={AdminSignups} />

@@ -301,15 +301,21 @@ Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` �
 - `/artists/:id` — Artist profile with stats
 - `/labels` — Label management
 - `/crm` — CRM: contacts + tasks board + **Business Analytics** tab (Overview KPIs, Revenue per artist, User activity, Growth chart, Release/Delivery/Task funnels). Backed by 5 new API endpoints: `/api/crm/analytics/overview`, `/user-activity`, `/revenue-per-user`, `/growth`, `/funnel`.
-- `/royalties` — User-facing royalty hub (6 tabs: summary, statements PDF/CSV, by release, by DSP, request payment, history)
+- `/royalties` — User-facing royalty hub (7 tabs: summary, statements PDF/CSV, by release, by DSP, request payment, history, **По артистам** for label role with CSV export)
 - `/finance` — Admin financial overview: transaction ledger + artist balances
 - `/splits` — Revenue split management with visual distribution bars
 - `/payouts` — Admin payout requests with approve/reject workflow
 - `/publishing` — DB-backed publishing works (admin/manager only). CRUD via `/api/publishing/works` (POST/PUT, no DELETE — works are IP). Editor dialog with dynamic writers list (name/role/share/CAE-IPI), share-sum-100% validation, ASCAP/BMI/Songtrust toggles, territory list. Server-side `validateWriters()` enforces share bounds 0–100, no duplicates by `(name, caeIpi)`, sum=100%; client mirrors same checks.
-- `/analytics` — Real analytics dashboard (admin/manager only). Backed by `/api/analytics/{streams,platforms,geography,top-tracks}` aggregating from `usage_reports` table. Period selector: 7d/30d/90d/180d/1y. Daily bar/area chart on short periods, monthly bins on long ones. Pie chart by platform with brand colours, geography progress bars by country with flags, top-tracks table with prior-period trend %. Removed legacy mock UGC/TikTok/Alerts/Playlists tabs (no real data sources). `usage_reports` is seeded deterministically (~52K rows, 6 months × 6 platforms × 8 countries × all tracks) — re-seed via raw SQL if needed (TRUNCATE + INSERT in scratchpad).
+- `/analytics` — Real analytics dashboard (accessible to all roles). 8 tabs: Streams, Revenue, Geo, Top Tracks, UGC, Алерты, **Плейлисты** (playlist analytics with follower/stream KPIs), **TikTok** (uses/views/likes/reposts per track). Backed by `/api/analytics/{streams,platforms,geography,top-tracks}`. `usage_reports` seeded deterministically (~52K rows, 6 months × 6 platforms × 8 countries × all tracks).
+- `/marketing/presave` — Pre-save campaign manager (label/artist). Create campaigns with DSP selection, track saves/clicks KPIs, copy link.
+- `/marketing/links` — Smart Links manager (label/artist). Auto-redirect by country/device, copy link, platform badges.
+- `/marketing/assets` — Promo Assets (label/artist). Auto-generate Instagram Post/Story, YouTube Banner, press-kit PDFs by release.
+- `/releases/calendar` — Release Calendar (label). Interactive monthly grid with coloured dots per release status; right panel shows day/month lists.
+- `/releases/takedown` — Takedown Requests (label/artist). Multi-step form (DSP selection → confirmation dialog), status tracking (pending/processing/completed/rejected).
 - `/delivery` — DDEX delivery queue
 - `/users` — User management with roles
-- `/settings` — Admin-only system settings (6 tabs). **Live tabs**: DDEX & DSP (real `/api/integrations` filtered to `dsp`+`delivery` categories with enable/disable Switch via POST `/integrations/:code/enable` and Test button via POST `/integrations/:code/test`, optimistic updates with rollback), Audit Logs (real `/api/dashboard/recent-activity` with client-side filter, severity inferred from event type). **Demo tabs** (clearly marked with amber `Demo data` badge): General/Branding, API Keys (no `api_keys` table yet), Security (2FA/IP rules), Backup History.
+- `/settings` — Role-based. Admin/manager: full system settings (integrations, DDEX, API keys, etc). Label/artist: personal settings (profile/password/notifications). Label additionally gets **Команда** tab — invite members by email with role (manager/viewer), change roles, remove members.
+- Personal settings (label/artist) — `PersonalSettings` component within `/settings`. 3 tabs + label-only 4th tab: Профиль, Смена пароля, Уведомления, **Команда** (team management: invite/remove/role-change for label members).
 
 ## Transfer Track (`/releases/transfer`) — Hardened Battle-Ready State
 

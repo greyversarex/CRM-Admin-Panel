@@ -258,13 +258,16 @@ export function RoyaltiesPanel() {
 
         {/* Tabs */}
         <Tabs defaultValue="summary" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 bg-card/50 backdrop-blur">
+          <TabsList className={`grid w-full bg-card/50 backdrop-blur ${user?.role === "label" ? "grid-cols-4 lg:grid-cols-7" : "grid-cols-3 lg:grid-cols-6"}`}>
             <TabsTrigger value="summary"><Wallet className="h-4 w-4 mr-2" /> {t.royalties.tabs.summary}</TabsTrigger>
             <TabsTrigger value="statements"><FileText className="h-4 w-4 mr-2" /> {t.royalties.tabs.statements}</TabsTrigger>
             <TabsTrigger value="releases"><Disc3 className="h-4 w-4 mr-2" /> {t.royalties.tabs.releases}</TabsTrigger>
             <TabsTrigger value="dsp"><Radio className="h-4 w-4 mr-2" /> {t.royalties.tabs.dsp}</TabsTrigger>
             <TabsTrigger value="request"><Send className="h-4 w-4 mr-2" /> {t.royalties.tabs.request}</TabsTrigger>
             <TabsTrigger value="history"><History className="h-4 w-4 mr-2" /> {t.royalties.tabs.history}</TabsTrigger>
+            {user?.role === "label" && (
+              <TabsTrigger value="by_artist"><Banknote className="h-4 w-4 mr-2" /> По артистам</TabsTrigger>
+            )}
           </TabsList>
 
           {/* ─── 1. Royalty Summary ───────────────────────── */}
@@ -764,6 +767,92 @@ export function RoyaltiesPanel() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ─── 7. By Artist (label only) ────────────────── */}
+          {user?.role === "label" && (
+            <TabsContent value="by_artist" className="space-y-4">
+              <Card className="bg-card/50 backdrop-blur border-border/50">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Разбивка по артистам</CardTitle>
+                    <CardDescription>Доходы и стримы по каждому артисту лейбла</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" className="gap-1.5"
+                    onClick={() => {
+                      const rows = byReleaseQ.data ?? [];
+                      const byArtist = new Map<string, { streams: number; gross: number; net: number; currency: string; count: number }>();
+                      for (const r of rows) {
+                        const a = byArtist.get(r.artistName) ?? { streams: 0, gross: 0, net: 0, currency: r.currency, count: 0 };
+                        a.streams += r.streams; a.gross += r.gross; a.net += r.net; a.count += 1;
+                        byArtist.set(r.artistName, a);
+                      }
+                      const csv = ["Артист,Релизов,Стримов,Gross,Net,Валюта",
+                        ...Array.from(byArtist.entries()).map(([n, v]) =>
+                          `"${n}",${v.count},${v.streams},${v.gross.toFixed(2)},${v.net.toFixed(2)},${v.currency}`)
+                      ].join("\n");
+                      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+                      const a = document.createElement("a"); a.href = url; a.download = "artists-royalties.csv"; a.click();
+                      URL.revokeObjectURL(url);
+                    }}>
+                    <Download className="h-3.5 w-3.5" /> CSV
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {byReleaseQ.isLoading ? (
+                    <div className="p-6 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
+                  ) : byReleaseQ.isError ? (
+                    <div className="p-6"><Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Ошибка загрузки данных</AlertDescription></Alert></div>
+                  ) : (() => {
+                    const rows = byReleaseQ.data ?? [];
+                    if (rows.length === 0) return <div className="p-6 text-center text-muted-foreground">Нет данных</div>;
+                    const byArtist = new Map<string, { streams: number; gross: number; net: number; currency: string; count: number }>();
+                    for (const r of rows) {
+                      const a = byArtist.get(r.artistName) ?? { streams: 0, gross: 0, net: 0, currency: r.currency, count: 0 };
+                      a.streams += r.streams; a.gross += r.gross; a.net += r.net; a.count += 1;
+                      byArtist.set(r.artistName, a);
+                    }
+                    const sorted = Array.from(byArtist.entries()).sort((a, b) => b[1].net - a[1].net);
+                    const totalNet = sorted.reduce((s, [, v]) => s + v.net, 0);
+                    return (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Артист</TableHead>
+                            <TableHead className="text-right">Релизов</TableHead>
+                            <TableHead className="text-right">Стримов</TableHead>
+                            <TableHead className="text-right">Gross</TableHead>
+                            <TableHead className="text-right">Net</TableHead>
+                            <TableHead className="text-right">Доля</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sorted.map(([name, v]) => (
+                            <TableRow key={name}>
+                              <TableCell className="font-medium">{name}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">{v.count}</TableCell>
+                              <TableCell className="text-right">{fmtNum(v.streams)}</TableCell>
+                              <TableCell className="text-right">{fmtMoney(v.gross, v.currency)}</TableCell>
+                              <TableCell className="text-right font-semibold text-primary">{fmtMoney(v.net, v.currency)}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary rounded-full" style={{ width: `${totalNet ? (v.net / totalNet) * 100 : 0}%` }} />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground w-8 text-right">
+                                    {totalNet ? ((v.net / totalNet) * 100).toFixed(0) : 0}%
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
   );
