@@ -105,20 +105,27 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       ctx.fillRect(0, 0, W, H);
 
       // ── 1. Background ambient glows ──
-      const g1 = ctx.createRadialGradient(W * 0.75, H * 0.2, 0, W * 0.75, H * 0.2, W * 0.45);
-      g1.addColorStop(0, "hsla(226,84%,67%,0.06)");
+      const g1 = ctx.createRadialGradient(W * 0.75, H * 0.2, 0, W * 0.75, H * 0.2, W * 0.55);
+      g1.addColorStop(0, "hsla(226,84%,67%,0.10)");
+      g1.addColorStop(0.5, "hsla(226,84%,67%,0.04)");
       g1.addColorStop(1, "transparent");
       ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
 
-      const g2 = ctx.createRadialGradient(W * 0.15, H * 0.8, 0, W * 0.15, H * 0.8, W * 0.4);
-      g2.addColorStop(0, "hsla(271,80%,68%,0.07)");
+      const g2 = ctx.createRadialGradient(W * 0.15, H * 0.8, 0, W * 0.15, H * 0.8, W * 0.45);
+      g2.addColorStop(0, "hsla(271,80%,68%,0.11)");
+      g2.addColorStop(0.5, "hsla(271,80%,68%,0.04)");
       g2.addColorStop(1, "transparent");
       ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
 
-      const g3 = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, W * 0.35);
-      g3.addColorStop(0, "hsla(200,80%,60%,0.035)");
+      const g3 = ctx.createRadialGradient(W * 0.5, H * 0.1, 0, W * 0.5, H * 0.1, W * 0.4);
+      g3.addColorStop(0, "hsla(200,85%,62%,0.07)");
       g3.addColorStop(1, "transparent");
       ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H);
+
+      const g4 = ctx.createRadialGradient(W * 0.85, H * 0.75, 0, W * 0.85, H * 0.75, W * 0.35);
+      g4.addColorStop(0, "hsla(196,80%,58%,0.07)");
+      g4.addColorStop(1, "transparent");
+      ctx.fillStyle = g4; ctx.fillRect(0, 0, W, H);
 
       // ── 2. Vinyl record — top-right ──
       vinylAngle += 0.004;
@@ -150,54 +157,87 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       ctx.beginPath(); ctx.arc(0, 80, 4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
 
-      // ── 3. Music staff lines — top-left ──
+      // ── 3. Music staff lines — top-left (more vivid) ──
       for (let s = 0; s < 5; s++) {
         const sy = 90 + s * 16;
-        const sg = ctx.createLinearGradient(0, sy, W * 0.28, sy);
-        sg.addColorStop(0, "rgba(255,255,255,0)");
-        sg.addColorStop(0.3, "rgba(255,255,255,0.08)");
-        sg.addColorStop(0.8, "rgba(255,255,255,0.06)");
-        sg.addColorStop(1, "rgba(255,255,255,0)");
+        const pulse = 0.08 + 0.04 * Math.sin(t * 0.6 + s * 0.7);
+        const sg = ctx.createLinearGradient(0, sy, W * 0.32, sy);
+        sg.addColorStop(0,    "rgba(255,255,255,0)");
+        sg.addColorStop(0.15, `hsla(226,84%,67%,${pulse})`);
+        sg.addColorStop(0.55, `rgba(255,255,255,${pulse * 0.9})`);
+        sg.addColorStop(0.85, `hsla(271,80%,68%,${pulse * 0.7})`);
+        sg.addColorStop(1,    "rgba(255,255,255,0)");
         ctx.strokeStyle = sg;
-        ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W * 0.28, sy); ctx.stroke();
+        ctx.lineWidth = s === 2 ? 1.1 : 0.9;
+        ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W * 0.32, sy); ctx.stroke();
       }
       // Staff — bottom right
       for (let s = 0; s < 5; s++) {
         const sy = H - 80 + s * 14;
-        const sg = ctx.createLinearGradient(W * 0.72, sy, W, sy);
-        sg.addColorStop(0, "rgba(255,255,255,0)");
-        sg.addColorStop(0.2, "rgba(255,255,255,0.07)");
-        sg.addColorStop(1, "rgba(255,255,255,0)");
+        const pulse = 0.07 + 0.04 * Math.sin(t * 0.5 + s * 0.8 + 1.5);
+        const sg = ctx.createLinearGradient(W * 0.68, sy, W, sy);
+        sg.addColorStop(0,   "rgba(255,255,255,0)");
+        sg.addColorStop(0.15, `hsla(271,80%,68%,${pulse})`);
+        sg.addColorStop(0.6,  `rgba(255,255,255,${pulse * 0.9})`);
+        sg.addColorStop(0.9,  `hsla(226,84%,67%,${pulse * 0.7})`);
+        sg.addColorStop(1,   "rgba(255,255,255,0)");
         ctx.strokeStyle = sg;
-        ctx.lineWidth = 0.7;
-        ctx.beginPath(); ctx.moveTo(W * 0.72, sy); ctx.lineTo(W, sy); ctx.stroke();
+        ctx.lineWidth = s === 2 ? 1.0 : 0.8;
+        ctx.beginPath(); ctx.moveTo(W * 0.68, sy); ctx.lineTo(W, sy); ctx.stroke();
       }
 
-      // ── 4. Wave layers ──
+      // ── 4. Wave layers — more sensuous ──
+      const beat = 0.5 + 0.5 * Math.sin(t * 4.2) * Math.sin(t * 2.7);
       const waveLayers = [
-        { amp: H * 0.07, freq: 0.010, phase: 0,    speed: 0.5,  cy: H * 0.30, lw: 1.5, color1: "226,84%,67%", color2: "271,80%,68%", alpha: 0.55, glow: 8 },
-        { amp: H * 0.06, freq: 0.014, phase: 1.1,  speed: 0.7,  cy: H * 0.52, lw: 2.0, color1: "226,84%,67%", color2: "196,80%,60%", alpha: 0.75, glow: 12 },
-        { amp: H * 0.05, freq: 0.009, phase: 2.2,  speed: 0.35, cy: H * 0.72, lw: 1.2, color1: "271,80%,68%", color2: "226,84%,67%", alpha: 0.45, glow: 6 },
-        { amp: H * 0.03, freq: 0.020, phase: 3.5,  speed: 0.9,  cy: H * 0.45, lw: 0.8, color1: "196,80%,60%", color2: "271,80%,68%", alpha: 0.30, glow: 4 },
+        { amp: H * 0.09, freq: 0.010, phase: 0,    speed: 0.45, cy: H * 0.28, lw: 2.2, color1: "226,84%,67%", color2: "271,80%,68%", alpha: 0.70, glow: 18 },
+        { amp: H * 0.08, freq: 0.013, phase: 1.1,  speed: 0.65, cy: H * 0.50, lw: 2.8, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 0.88, glow: 22 },
+        { amp: H * 0.07, freq: 0.009, phase: 2.2,  speed: 0.30, cy: H * 0.70, lw: 1.8, color1: "271,80%,68%", color2: "226,84%,67%", alpha: 0.60, glow: 14 },
+        { amp: H * 0.05, freq: 0.018, phase: 3.5,  speed: 0.85, cy: H * 0.42, lw: 1.2, color1: "196,85%,62%", color2: "271,80%,68%", alpha: 0.42, glow: 8 },
+        { amp: H * 0.04, freq: 0.022, phase: 0.8,  speed: 1.1,  cy: H * 0.60, lw: 0.9, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 0.28, glow: 5 },
       ];
 
-      waveLayers.forEach(wl => {
+      waveLayers.forEach((wl, idx) => {
+        const dynamicAlpha = wl.alpha + (idx === 1 ? beat * 0.12 : 0);
+
+        // Outer glow pass
         ctx.save();
-        ctx.shadowColor = `hsla(${wl.color1},${wl.alpha})`;
+        ctx.shadowColor = `hsla(${wl.color1},${dynamicAlpha * 0.8})`;
+        ctx.shadowBlur  = wl.glow * 1.5;
+        ctx.lineWidth   = wl.lw * 2.2;
+        ctx.globalAlpha = 0.18;
+
+        const wgOuter = ctx.createLinearGradient(0, 0, W, 0);
+        wgOuter.addColorStop(0,    `hsla(${wl.color1},0)`);
+        wgOuter.addColorStop(0.12, `hsla(${wl.color1},${dynamicAlpha})`);
+        wgOuter.addColorStop(0.5,  `hsla(${wl.color2},${dynamicAlpha})`);
+        wgOuter.addColorStop(0.88, `hsla(${wl.color1},${dynamicAlpha})`);
+        wgOuter.addColorStop(1,    `hsla(${wl.color1},0)`);
+        ctx.strokeStyle = wgOuter;
+
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 4) {
+          const y = wl.cy + Math.sin(x * wl.freq + t * wl.speed + wl.phase) * wl.amp;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Core line pass
+        ctx.save();
+        ctx.shadowColor = `hsla(${wl.color1},${dynamicAlpha})`;
         ctx.shadowBlur  = wl.glow;
         ctx.lineWidth   = wl.lw;
 
         const wg = ctx.createLinearGradient(0, 0, W, 0);
-        wg.addColorStop(0,   `hsla(${wl.color1},0)`);
-        wg.addColorStop(0.15, `hsla(${wl.color1},${wl.alpha})`);
-        wg.addColorStop(0.5, `hsla(${wl.color2},${wl.alpha})`);
-        wg.addColorStop(0.85,`hsla(${wl.color1},${wl.alpha})`);
-        wg.addColorStop(1,   `hsla(${wl.color1},0)`);
+        wg.addColorStop(0,    `hsla(${wl.color1},0)`);
+        wg.addColorStop(0.12, `hsla(${wl.color1},${dynamicAlpha})`);
+        wg.addColorStop(0.5,  `hsla(${wl.color2},${dynamicAlpha})`);
+        wg.addColorStop(0.88, `hsla(${wl.color1},${dynamicAlpha})`);
+        wg.addColorStop(1,    `hsla(${wl.color1},0)`);
         ctx.strokeStyle = wg;
 
         ctx.beginPath();
-        for (let x = 0; x <= W; x += 3) {
+        for (let x = 0; x <= W; x += 2) {
           const y = wl.cy + Math.sin(x * wl.freq + t * wl.speed + wl.phase) * wl.amp;
           x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
@@ -212,7 +252,6 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       const BAR_MAX_H = H * 0.22;
 
       // Evolve bar energies (simulate music beat)
-      const beat = 0.5 + 0.5 * Math.sin(t * 4.2) * Math.sin(t * 2.7);
       for (let i = 0; i < BAR_COUNT; i++) {
         const targetBase = 0.08 + Math.sin(i * 0.18 + t * 1.1) * 0.18 + Math.cos(i * 0.31 + t * 0.7) * 0.12;
         const beatBoost = (i < 8 || (i > 40 && i < 52)) ? beat * 0.35 : beat * 0.12;
