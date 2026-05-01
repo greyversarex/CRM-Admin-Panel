@@ -23,6 +23,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 
 const router = Router();
 
@@ -33,8 +34,27 @@ interface AcrCloudConfig {
   enabled?: boolean;
 }
 
+/**
+ * Загружает конфиг ACRCloud из двух источников:
+ * 1. Таблица integrations (Настройки → Интеграции) — приоритет
+ *    Ключи: access_key, access_secret, host
+ * 2. platformSettingsTable key="acrcloud" (устаревший Настройки → ACRCloud)
+ *    Ключи: accessKey, accessSecret, host
+ */
 async function loadAcrConfig(): Promise<AcrCloudConfig> {
   try {
+    // Приоритет: интеграции (куда обычно сохраняет пользователь через UI)
+    const integration = await getIntegrationByCode("acrcloud");
+    if (integration && integration.status !== "disconnected") {
+      const creds = await loadCredentials(integration.id);
+      const host = creds["host"] || "identify-eu-west-1.acrcloud.com";
+      const accessKey = creds["access_key"] || creds["accessKey"];
+      const accessSecret = creds["access_secret"] || creds["accessSecret"];
+      if (accessKey && accessSecret) {
+        return { host, accessKey, accessSecret, enabled: true };
+      }
+    }
+    // Fallback: старый путь через platformSettings
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "acrcloud"));
     return (row?.value ?? {}) as AcrCloudConfig;
   } catch { return {}; }
