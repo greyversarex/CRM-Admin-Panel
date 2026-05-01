@@ -100,6 +100,21 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
+/** Convert a stored objectPath (e.g. /objects/uploads/<uuid>) to an absolute URL. */
+function resolveAudioUrl(rawUrl: string): string {
+  // Already absolute — return as-is
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+  // Relative object path — build absolute using server's own public origin
+  const origin = process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : `http://localhost:${process.env.PORT ?? 8080}`;
+  // objectPath starts with /objects/... → served at /api/storage/objects/...
+  const apiPath = rawUrl.startsWith("/objects/")
+    ? `/api/storage${rawUrl}`
+    : `/api/storage/objects/${rawUrl.replace(/^\/+/, "")}`;
+  return `${origin}${apiPath}`;
+}
+
 async function assertSafeAudioUrl(rawUrl: string): Promise<URL> {
   let u: URL;
   try { u = new URL(rawUrl); } catch { throw new Error("invalid_audio_url"); }
@@ -299,7 +314,7 @@ router.post("/distribution/acr/scan", async (req, res) => {
   }).returning();
   void auditMutation(req, { action: "acr_scan", entityType: "acr_check", entityId: row.id, before: null, after: row });
 
-  void processAcrCheck(row.id, track.audioUrl, cfg as Required<AcrCloudConfig>);
+  void processAcrCheck(row.id, resolveAudioUrl(track.audioUrl), cfg as Required<AcrCloudConfig>);
   res.status(202).json(row);
 });
 
