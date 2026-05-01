@@ -31,54 +31,58 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        "card-surface rounded-xl border border-border/60 p-5 flex flex-col gap-3",
+        "card-surface rounded-xl border border-border/60 p-4 flex flex-col gap-2.5",
+        "relative overflow-hidden",
         className
       )}
     >
-      <div className="flex items-start justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 leading-none pt-0.5">
+      {/* Label + icon row */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/85 leading-none">
           {label}
         </p>
         <span
           className={cn(
-            "h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border",
+            "h-7 w-7 rounded-md flex items-center justify-center shrink-0 border",
             iconBg,
             iconBorder ?? "border-transparent"
           )}
         >
-          <Icon className={cn("h-[18px] w-[18px]", iconColor)} />
+          <Icon className={cn("h-3.5 w-3.5", iconColor)} />
         </span>
       </div>
 
-      <p className="text-[2rem] font-bold tracking-tight text-foreground leading-none">
+      {/* Value */}
+      <p className="text-[1.6rem] font-bold tracking-tight text-foreground leading-none truncate">
         {value}
       </p>
 
+      {/* Trend */}
       {trend && (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 mt-0.5">
           {trend.up === true && (
-            <TrendingUp className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <TrendingUp className="h-3 w-3 text-emerald-500 shrink-0" />
           )}
           {trend.up === false && (
-            <TrendingDown className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+            <TrendingDown className="h-3 w-3 text-rose-500 shrink-0" />
           )}
           {trend.up === undefined && (
-            <Minus className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+            <Minus className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
           )}
           <span
             className={cn(
-              "text-[12px] font-semibold",
+              "text-[11.5px] font-semibold leading-none",
               trend.up === true
                 ? "text-emerald-500"
                 : trend.up === false
                 ? "text-rose-500"
-                : "text-muted-foreground"
+                : "text-muted-foreground/75"
             )}
           >
             {trend.value}
           </span>
           {trend.label && (
-            <span className="text-[11px] text-muted-foreground/50">
+            <span className="text-[10.5px] text-muted-foreground/55 leading-none">
               {trend.label}
             </span>
           )}
