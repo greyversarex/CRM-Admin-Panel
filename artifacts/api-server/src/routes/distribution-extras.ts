@@ -24,6 +24,9 @@ import { createHmac } from "node:crypto";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+
+const storage = new ObjectStorageService();
 
 const router = Router();
 
@@ -100,66 +103,60 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
-/** Convert a stored objectPath (e.g. /objects/uploads/<uuid>) to an absolute URL. */
-function resolveAudioUrl(rawUrl: string): string {
-  // Already absolute — return as-is
-  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
-  // Relative object path — build absolute using server's own public origin
-  const origin = process.env.REPLIT_DEV_DOMAIN
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : `http://localhost:${process.env.PORT ?? 8080}`;
-  // objectPath starts with /objects/... → served at /api/storage/objects/...
-  const apiPath = rawUrl.startsWith("/objects/")
-    ? `/api/storage${rawUrl}`
-    : `/api/storage/objects/${rawUrl.replace(/^\/+/, "")}`;
-  return `${origin}${apiPath}`;
-}
-
-async function assertSafeAudioUrl(rawUrl: string): Promise<URL> {
-  let u: URL;
-  try { u = new URL(rawUrl); } catch { throw new Error("invalid_audio_url"); }
-  if (u.protocol !== "https:" && u.protocol !== "http:") {
-    throw new Error(`scheme_not_allowed:${u.protocol}`);
+/**
+ * Читаем первые maxBytes байт аудиофайла.
+ * Если audioUrl — локальный objectPath (/objects/...) — читаем напрямую из хранилища.
+ * Если это внешний https URL — скачиваем через HTTP с SSRF-guard.
+ */
+async function fetchSample(audioUrl: string, maxBytes = 1_048_576): Promise<Buffer> {
+  // ── Локальный файл хранилища ───────────────────────────────────────────────
+  if (audioUrl.startsWith("/objects/")) {
+    let file;
+    try {
+      file = await storage.getObjectEntityFile(audioUrl);
+    } catch (e) {
+      if (e instanceof ObjectNotFoundError) throw new Error("audio_file_not_found");
+      throw e;
+    }
+    const stream = file.createReadStream({ start: 0, end: maxBytes - 1 });
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("end", resolve);
+      stream.on("error", reject);
+    });
+    return Buffer.concat(chunks).subarray(0, maxBytes);
   }
+
+  // ── Внешний URL — SSRF-guard + HTTP fetch ─────────────────────────────────
+  let u: URL;
+  try { u = new URL(audioUrl); } catch { throw new Error("invalid_audio_url"); }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error(`scheme_not_allowed:${u.protocol}`);
   const host = u.hostname.toLowerCase();
-  // Блок локальных hostnames
-  if (host === "localhost" || host === "ip6-localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
     throw new Error("internal_host_not_allowed");
   }
-  // IPv6 — блокируем как класс (Timeweb VPS обычно IPv4)
-  if (host.includes(":")) {
-    throw new Error("ipv6_not_allowed");
-  }
-  // Если host — это IPv4 literal, проверяем напрямую
+  if (host.includes(":")) throw new Error("ipv6_not_allowed");
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
     if (isPrivateIPv4(host)) throw new Error(`private_ip_not_allowed:${host}`);
-    return u;
+  } else {
+    const { lookup } = await import("dns/promises");
+    const records = await lookup(host, { all: true }).catch(() => [] as Array<{ address: string; family: number }>);
+    if (records.length === 0) throw new Error("dns_resolve_failed");
+    for (const r of records) {
+      if (r.family === 6) throw new Error("ipv6_resolution_not_allowed");
+      if (isPrivateIPv4(r.address)) throw new Error(`private_ip_not_allowed:${r.address}`);
+    }
   }
-  // Иначе резолвим DNS и проверяем все A-записи
-  const { lookup } = await import("dns/promises");
-  const records = await lookup(host, { all: true }).catch(() => [] as Array<{ address: string; family: number }>);
-  if (records.length === 0) throw new Error("dns_resolve_failed");
-  for (const r of records) {
-    if (r.family === 6) throw new Error("ipv6_resolution_not_allowed");
-    if (isPrivateIPv4(r.address)) throw new Error(`private_ip_not_allowed:${r.address}`);
-  }
-  return u;
-}
 
-async function fetchSample(url: string, maxBytes = 1_048_576): Promise<Buffer> {
-  await assertSafeAudioUrl(url); // SSRF guard
-  const resp = await fetch(url, {
+  const resp = await fetch(audioUrl, {
     method: "GET",
     headers: { Range: `bytes=0-${maxBytes - 1}` },
     signal: AbortSignal.timeout(15_000),
-    redirect: "manual", // не следуем редиректам — иначе SSRF check можно обойти
+    redirect: "manual",
   });
-  if (resp.status >= 300 && resp.status < 400) {
-    throw new Error(`audio_redirect_blocked_${resp.status}`);
-  }
-  if (!resp.ok && resp.status !== 206) {
-    throw new Error(`audio_fetch_${resp.status}`);
-  }
+  if (resp.status >= 300 && resp.status < 400) throw new Error(`audio_redirect_blocked_${resp.status}`);
+  if (!resp.ok && resp.status !== 206) throw new Error(`audio_fetch_${resp.status}`);
   const ab = await resp.arrayBuffer();
   return Buffer.from(ab).subarray(0, maxBytes);
 }
@@ -314,7 +311,7 @@ router.post("/distribution/acr/scan", async (req, res) => {
   }).returning();
   void auditMutation(req, { action: "acr_scan", entityType: "acr_check", entityId: row.id, before: null, after: row });
 
-  void processAcrCheck(row.id, resolveAudioUrl(track.audioUrl), cfg as Required<AcrCloudConfig>);
+  void processAcrCheck(row.id, track.audioUrl, cfg as Required<AcrCloudConfig>);
   res.status(202).json(row);
 });
 
