@@ -674,7 +674,7 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-muted-foreground">Рассылки отправляются через SMTP (Настройки → Уведомления) или push/Telegram/WhatsApp.</p>
+        <p className="text-sm text-muted-foreground">Рассылки отправляются через Email (SMTP) или Push-уведомления.</p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={openNew}><Plus className="w-4 h-4 mr-2" />Черновик рассылки</Button>
           <Button onClick={() => setCompose(true)}><Send className="w-4 h-4 mr-2" />Новая рассылка</Button>
@@ -748,8 +748,6 @@ function TabCampaigns({ templates }: { templates: Template[] }) {
                   <SelectContent>
                     <SelectItem value="email">Email</SelectItem>
                     <SelectItem value="push">Push</SelectItem>
-                    <SelectItem value="telegram">Telegram</SelectItem>
-                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

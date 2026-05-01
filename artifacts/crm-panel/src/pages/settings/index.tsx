@@ -1557,9 +1557,6 @@ export default function Settings() {
             <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <ActivityIcon className="h-3.5 w-3.5" />Активность
             </TabsTrigger>
-            <TabsTrigger value="channels" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
-              Каналы (Telegram/WhatsApp)
-            </TabsTrigger>
             <TabsTrigger value="acrcloud" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               ACRCloud
             </TabsTrigger>
@@ -1586,7 +1583,7 @@ export default function Settings() {
           <TabsContent value="notifications" className="mt-4"><TabNotifications /></TabsContent>
           <TabsContent value="audit" className="mt-4"><TabAudit /></TabsContent>
           <TabsContent value="activity" className="mt-4"><TabActivity /></TabsContent>
-          <TabsContent value="channels" className="mt-4"><TabChannels /></TabsContent>
+          {/* channels tab hidden */}
           <TabsContent value="acrcloud" className="mt-4"><TabAcrcloud /></TabsContent>
           <TabsContent value="pros" className="mt-4"><TabPros /></TabsContent>
           <TabsContent value="manager-perms" className="mt-4"><TabManagerPermissions /></TabsContent>

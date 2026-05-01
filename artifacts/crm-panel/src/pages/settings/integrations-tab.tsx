@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   CheckCircle2, AlertTriangle, CircleDashed, Settings2, FlaskConical,
   RefreshCcw, Eye, EyeOff, HardDrive, Mail, BarChart2,
-  CreditCard, MessageSquare, Music2, BookOpen, Unplug,
+  CreditCard, Music2, BookOpen, Unplug,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,7 +37,7 @@ interface FieldDef {
 interface ServiceDef {
   code: string;
   name: string;
-  category: "storage" | "email" | "analytics" | "payments" | "communications" | "dsp" | "publishing";
+  category: "storage" | "email" | "analytics" | "payments" | "dsp" | "publishing";
   authType: "api_key" | "oauth2" | "basic" | "bearer" | "sftp" | "none";
   description: string;
   fields: FieldDef[];
@@ -111,24 +111,6 @@ const SERVICES: ServiceDef[] = [
     fields: [
       { key: "secret_key",     label: "Secret Key",     type: "password", required: true, placeholder: "sk_live_..." },
       { key: "webhook_secret", label: "Webhook Secret", type: "password", placeholder: "whsec_..." },
-    ],
-  },
-  // Communications
-  {
-    code: "telegram_bot", name: "Telegram Bot", category: "communications", authType: "api_key",
-    description: "Отправка уведомлений артистам и менеджерам через Telegram.",
-    fields: [
-      { key: "bot_token",      label: "Bot Token",       type: "password", required: true, hint: "Получить у @BotFather" },
-      { key: "default_chat_id", label: "Chat ID по умолч.", hint: "ID чата для системных уведомлений" },
-    ],
-  },
-  {
-    code: "twilio_whatsapp", name: "WhatsApp (Twilio)", category: "communications", authType: "basic",
-    description: "Уведомления через WhatsApp Business API.",
-    fields: [
-      { key: "account_sid", label: "Account SID",   required: true },
-      { key: "auth_token",  label: "Auth Token",    type: "password", required: true },
-      { key: "from_number", label: "From (E.164)",  placeholder: "+1234567890" },
     ],
   },
   // Publishing
@@ -227,7 +209,6 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
   email:          { label: "Email",        icon: Mail },
   analytics:      { label: "Аналитика",   icon: BarChart2 },
   payments:       { label: "Выплаты",     icon: CreditCard },
-  communications: { label: "Каналы",      icon: MessageSquare },
   dsp:            { label: "DSP",          icon: Music2 },
   publishing:     { label: "Publishing",  icon: BookOpen },
 };
