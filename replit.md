@@ -1,510 +1,77 @@
 # Tajik Music Distribution CRM
 
-> ## ⚠️ READ FIRST — для AI-ассистентов и любых новых разработчиков
->
-> **Этот Replit — это исключительно dev/staging-окружение для доработки кода.**
-> **Прод-сайт работает НЕ на Replit, а на VPS-сервере Timeweb (Ubuntu).**
->
-> ### Что это значит для AI-ассистента, который видит проект впервые
->
-> 1. **НЕ предлагать пользователю «Publish» / «Deploy» через Replit Deployments.** Прод там не живёт. Кнопка `Publish` в Replit для этого проекта бесполезна — она создаст вторую копию приложения в облаке Replit, которая никому не нужна и будет тратить деньги.
-> 2. **НЕ устанавливать Replit Object Storage / GCS / S3 / Yandex Object Storage.** Файлы (обложки, аудио, KYC) хранятся на локальной ФС VPS — см. секцию `Asset storage & uploads` ниже. На Replit для разработки оно само работает в `<repo>/.local-storage` без какой-либо настройки.
-> 3. **НЕ предлагать Replit Database / Replit Auth / Replit AI Integrations.** PostgreSQL стоит локально на VPS (см. `deploy/1_setup.sh`), аутентификация — собственная (bcrypt + сессии в БД), внешние API-интеграции не используются.
-> 4. **Workflow на Replit** должны просто запускать дев-серверы (`pnpm --filter ... run dev`). Не надо менять их под `pnpm build && pnpm start` или прод-режим — это нарушит preview.
-> 5. **Деплой делается ТОЛЬКО так:** разработчик пушит в `main` на GitHub → заходит по SSH на VPS → запускает `bash /var/www/tajikmusic/deploy/2_deploy.sh`. Никакой автоматизации между Replit и VPS нет и не нужно. Подробности — в секции «Production deployment» ниже и в `deploy/README.md`.
-> 6. **Git push с Replit** делается через персональный токен в `GITHUB_TOKEN` (Replit Secrets). Это не Replit-OAuth — у него были проблемы с правами. Если push не идёт — токен в Secrets, скорее всего, нужно обновить (classic PAT с галочкой `repo`).
-> 7. **Язык общения с пользователем — русский.** Пользователь — нетехнический (владелец лейбла), не использовать жаргон, не использовать эмодзи. Объяснять последствия любых действий простыми словами.
->
-> ### Если пользователь говорит «выложи» / «опубликуй» / «обнови сайт»
->
-> Он имеет в виду «обнови код на GitHub и задеплой на Timeweb», а не «нажми кнопку Publish в Replit». Корректная последовательность:
->
-> 1. Прогнать `pnpm run typecheck` (он же стоит в pre-push hook через simple-git-hooks).
-> 2. `git push origin main` (с `GITHUB_TOKEN` в env, см. p.6 выше).
-> 3. Сказать пользователю запустить на сервере одну команду: `cd /var/www/tajikmusic && bash deploy/2_deploy.sh`.
-
 ## Overview
 
-A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. Full-stack application with catalog management, CRM, analytics, financial management, DDEX delivery, and publishing rights management.
-
-## Stack
-
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-- **Frontend**: React + Vite + Wouter + Tailwind CSS + shadcn/ui
-- **Charts**: Recharts
-- **Forms**: react-hook-form + zod
-
-## Artifacts
-
-- `artifacts/api-server` — Express 5 API server (port 8080, served at `/api`)
-- `artifacts/crm-panel` — React + Vite frontend (previewPath `/`)
-
-## Production deployment
-
-Прод живёт **не на Replit** — на VPS (Таймвеб, далее возможен AWS). Replit = только разработка.
-Деплой-обвязка лежит в `deploy/` и `Dockerfile` / `docker-compose.yml` в корне.
-
-### Текущий прод-сервер (Timeweb, Ubuntu, pm2 + nginx)
-
-| Что | Где / как |
-| --- | --- |
-| OS | Ubuntu 22.04/24.04, root-аккаунт |
-| Каталог приложения | `/var/www/tajikmusic` (git checkout репо `greyversarex/CRM-Admin-Panel`) |
-| API-процесс | pm2-приложение `tajikmusic-api`, слушает `127.0.0.1:3001`, точка входа `artifacts/api-server/dist/index.mjs` |
-| Reverse proxy | nginx, конфиг `/etc/nginx/sites-available/tajikmusic` (HTTPS через certbot, `client_max_body_size 250M`, `proxy_request_buffering off` для аплоадов) |
-| База данных | PostgreSQL 16, локально на той же машине, `tajikmusic_user@localhost:5432/tajikmusic`, креды в `/root/db_credentials.txt` (создаются `1_setup.sh`) |
-| Файлы пользователей (обложки, аудио, KYC) | `/var/lib/tajikmusic/uploads/private/uploads/<uuid>` (named-каталог ВНЕ `/var/www/...`, переживает любые `git pull` / пересборки) |
-| Конфиг приложения / секреты | `/var/www/tajikmusic/.env` (шаблон — `deploy/.env.example`) |
-| Логи | `pm2 logs tajikmusic-api --lines 100`, плюс `/var/log/tajikmusic/*.log`, плюс `/var/log/nginx/tajikmusic_*.log` |
-| Бэкапы БД | `sudo -u postgres pg_dump tajikmusic | gzip > tajikmusic_$(date +%F).sql.gz` |
-
-### Цикл деплоя (как сейчас живём)
-
-1. Локально / на Replit — внести изменения, прогнать `pnpm run typecheck`, закоммитить, `git push origin main` (см. п.6 секции «READ FIRST»).
-2. На сервере один раз `ssh root@<server-ip>` → `cd /var/www/tajikmusic && bash deploy/2_deploy.sh`. Скрипт сам:
-   - `git fetch && git reset --hard origin/main`,
-   - `pnpm install --frozen-lockfile`,
-   - `pnpm --filter @workspace/db run migrate` (drizzle versioned migrations),
-   - `pnpm --filter @workspace/api-server run build` (esbuild) и `pnpm --filter @workspace/crm-panel run build` (vite, `NODE_OPTIONS=--max-old-space-size=3072`),
-   - удаляет и заново стартует pm2-процесс (для гарантии свежего env),
-   - `nginx -t && systemctl reload nginx`.
-3. Если впервые на новом сервере — сначала `bash deploy/1_setup.sh` (Node 20, pnpm, pm2, postgres, nginx, certbot, UFW + создание БД). А потом `bash deploy/setup_storage.sh` для каталога загрузок (или просто `2_deploy.sh` — он его теперь сам создаёт).
-4. Сидинг тестовых данных — только при первом запуске: `SEED=1 bash deploy/2_deploy.sh`. **Никогда не запускать с SEED=1 на работающем проде** — перепишет реальные данные.
-
-### Альтернатива (Docker Compose, не используется на текущем проде)
-
-`docker compose up -d --build`, миграции через `docker compose exec api pnpm --filter @workspace/db run migrate`. См. `docker-compose.yml` — uploads вынесены на named-volume `uploads`, переменная `LOCAL_STORAGE_ROOT` уже прописана.
-
-### Чисто-кодовые правила, которые держат прод рабочим
-
-- Никаких Replit-специфичных импортов в боевом коде нет; vite-плагины Replit подключаются только при `NODE_ENV !== "production" && REPL_ID !== undefined`.
-- Cookie сессий: `secure: true` в production, `sameSite: lax`. Express `trust-proxy=1`, чтобы за nginx работал HTTPS и rate-limit видел правильный IP.
-- Все секреты — только через env. `SESSION_SECRET` обязателен в проде (используется и для подписи сессионных cookie, и как fallback-ключ для HMAC presigned-URL хранилища).
-- `WEB_ORIGINS` в `.env` обязан содержать боевой домен (CSV без слэшей и схем) — иначе фронт получит CORS-403.
-
-## Security baseline
-
-Полный набор P0-защит для прод-релиза (Task #2 апр-2026):
-
-- **Helmet** — X-Frame-Options=SAMEORIGIN, X-Content-Type-Options=nosniff, HSTS, Referrer-Policy и пр.
-- **CSP** — включён в `helmet({ contentSecurityPolicy })` **только в `NODE_ENV=production`**. Директивы: `default-src 'self'`, `img-src 'self' data: blob: https:`, `style-src 'self' 'unsafe-inline'` (shadcn/Tailwind инжектят inline `<style>`), `script-src 'self'`, `frame-ancestors 'self'`, `object-src 'none'`. В dev отключён, чтобы не ломать Vite HMR-WebSocket и Replit-баннеры.
-- **CORS whitelist** — `WEB_ORIGINS` env (CSV доменов). В dev fallback на `https://${REPLIT_DEV_DOMAIN}` + `http://localhost:5173`. Запрос с чужого Origin отклоняется как `403 {error: "CORS: origin not allowed"}` (есть error-handler middleware в `app.ts`, который мапит throw из cors() в чистый JSON-ответ).
-- **Глобальный rate-limit на `/api`** — 300 req/60s в prod, 3000 в dev. Ключ — `req.ip` (через `trust proxy=1`). Проверки `/health` исключены из лимита.
-- **Login limiter** — 10 попыток/5 мин на IP (prod) / 100 (dev) на `POST /auth/login`, `skipSuccessfulRequests:true`.
-- **Change-password limiter** — 5 попыток/15 мин на IP (prod) / 100 (dev) на `POST /auth/change-password`.
-- **Per-account lockout** (защита от distributed brute-force, который IP-лимит не ловит): таблица `users` имеет `failed_login_attempts integer DEFAULT 0` + `locked_until timestamptz`. После 5 неудач подряд → блокировка на 15 мин (HTTP 429 + сообщение «Аккаунт временно заблокирован, попробуй через X мин»). Успешный логин ИЛИ смена пароля обнуляют счётчик. Lockout-чек выполняется ДО bcrypt-сравнения (не жжём CPU и не отдаём сессию атакующему, узнавшему пароль внутри окна). Поля `failed_login_attempts` / `locked_until` исключены из всех API-ответов (`buildProfilePayload` в `routes/auth.ts` whitelisted; `formatUser` в `routes/users.ts` явно destructures их прочь вместе с `passwordHash`).
-- **Integrations API защищён двойным guard'ом**: `routes/index.ts` ставит `requireRole("admin","manager")` на префикс `/integrations`, а `routes/integrations.ts` повторяет `router.use(requireRole("admin","manager"))` внутри файла (defence-in-depth — если префикс пропадёт при рефакторинге, доступ остаётся закрыт). Все мутирующие эндпоинты валидируют тело через Zod (`RegisterBody`, `CredentialsBody`, `EnableBody`, `TestBody`, `JobsQuery`), параметр `:code` ограничен `^[a-z0-9-]+$`.
-- **На проде API должен слушать только за nginx** (UFW в `deploy/1_setup.sh` блокирует все порты кроме SSH/Nginx) — иначе rate-limit обходится через прямые запросы с подменой `X-Forwarded-For`.
-
-Smoke-тесты (curl, проверены в dev):
-- Чужой Origin → 403 `{"error":"CORS: origin not allowed"}`.
-- Replit dev origin → 200/401, заголовок `Access-Control-Allow-Origin` присутствует.
-- Артист на `/api/integrations` → 403 `{"error":"Forbidden: insufficient role"}`.
-- Bad `:code` (`/integrations/BAD_CODE/enable`) → 400 с описанием Zod-ошибки.
-- Bad body (`{"enabled":"yes"}`) → 400 с описанием Zod-ошибки.
-- Manager: 4 неверных пароля → 401, 5-й → 429 (lockout), DB подтверждает `failed_login_attempts=5` и `locked_until > now()`. После сброса + правильного логина — 200 и счётчик 0.
-
-## Audit log (Task #3, апр-2026)
-
-Структурированный compliance-журнал изменений (§14 #1, §4.12 ТЗ) — отдельная таблица `audit_log`, параллельно существующему `activity_log` (который остался для дашборд-виджета «Recent activity»).
-
-**Схема** (`lib/db/src/schema/audit_log.ts`, миграция `0002_audit_log.sql`):
-- Поля: `id serial PK`, `user_id integer FK→users.id ON DELETE SET NULL`, `user_email text`, `user_role text` (роль на момент действия — для исторической точности), `action text` (`create|update|delete|login|approve|reject|deliver`), `entity_type text`, `entity_id integer NULL` (login не привязан к сущности), `before jsonb`, `after jsonb`, `diff jsonb` (массив `{field, old, new}` только изменённых полей), `ip text`, `user_agent text`, `request_id text`, `created_at timestamptz`.
-- Индексы: `(entity_type, entity_id, created_at)`, `(user_id, created_at)`, `(created_at)`, `(action)`.
-
-**Helper** (`artifacts/api-server/src/lib/audit.ts`):
-- `auditMutation(req, {action, entityType, entityId, before, after})` — fire-and-forget. Никогда не ждём перед `res.json()`. Ошибки записи логируются в pino, пользователь не страдает.
-- `computeDiff(before, after)` — shallow diff с `JSON.stringify` для вложенных объектов.
-- `sanitizeFields()` — строгий blocklist: `passwordHash, password, cipherText, secret, token, accessToken, refreshToken, apiKey, privateKey, failedLoginAttempts, lockedUntil`. Date → ISO для стабильного diff.
-
-**Интеграция в роуты**: `releases` (POST/PUT/PATCH status/DELETE), `tracks` (POST/PUT/DELETE), `artists` (POST/PUT/DELETE), `labels` (POST/PUT/DELETE), `finance` (POST /payouts, /approve, /reject), `splits` (POST/PUT/DELETE), `users` (POST/PUT/DELETE/PATCH /me). Везде где не было pre-fetch — добавлен `SELECT before UPDATE/DELETE` для diff.
-
-**API**: `GET /api/audit?entity_type=&entity_id=&user_id=&action=&from=&to=&limit=50&offset=0` (admin/manager only), `GET /api/audit/facets` (entityTypes/actions/users для фильтров UI).
-
-**UI**: вкладка «Audit Logs» в `pages/settings/index.tsx` — фильтры (сущность/действие/пользователь), таблица с expand-row для diff (red/green side-by-side, с user-agent внизу). Старый activity feed оставлен ниже отдельной карточкой как информация для дашборда.
-
-**Не путать**: `activity_log` пишет одну строку «человекочитаемого события» (например `release_status_changed`) — её читает виджет дашборда. `audit_log` — структурированный before/after для расследований/compliance. Релиз-роуты сейчас пишут в обе таблицы.
-
-**Bonus fix в этой же задаче**: `app.ts` rate-limit использовал `req.ip` напрямую → express-rate-limit v8 валидатор `ipKeyGenerator` падал при старте. Заменил на `ipKeyGenerator(req.ip ?? "unknown")` — теперь IPv6-клиенты не могут обходить лимит за счёт многих /64-адресов.
-
-## Mock cleanup (Polish task #1, апр-2026)
-
-Перед фазой DDEX/Self-Signup убрали из CRM-панели мок-разделы и мок-данные с дашборда:
-
-- **Удалённые страницы** (были чистые моки, не подвязаны к API): `pages/marketing/`, `pages/automation/`, `pages/integrations/`. Соответствующие импорты, `<ProtectedRoute>` и записи в `permissions.ts ROUTE_ROLES` тоже удалены. **Внимание**: настоящий API-функционал по интеграциям DSP остался — он живёт в `pages/settings/index.tsx` под `/api/integrations` (это таблица `integrations` из `lib/db/src/schema/integrations.ts`, 29 записей реестра). Удалена только дубликат-страница `/integrations` с моками.
-- **`pages/communications/` — РЕАЛИЗОВАНА** (§10 ТЗ): полноценный раздел коммуникаций на `/communications`. DB: `email_templates`, `campaigns`, `automation_triggers`, `internal_notes`. API: CRUD для шаблонов (с preview), рассылок (с отправкой), триггеров автоматизации (с toggle), внутренних заметок (с pin), overview-summary. Вкладки: Обзор / Inbox / Шаблоны / Рассылки / Автоматизация / Заметки. Доступ: admin/manager only. Компонент `InternalNotesPanel` экспортирован — встраивается в другие страницы.
-  - **`POST /api/communications/campaigns/:id/send`** — реальная фильтрация аудитории через `audienceFilter.roles[]` и `audienceFilter.labelId`, рендеринг шаблона с переменными `user_name` / `platform_name`, создание `notifications` (колокольчик) для каждого получателя, постановка письма в SMTP-очередь через `sendMailAndForget`. Список ошибок пишется в `campaigns.errors[]`.
-  - **`services/triggers.ts`** — runtime-движок автоматизации. `fireTriggerAndForget(event, ctx)` вызывается из бизнес-роутов (`signup_approved` в `routes/signup.ts`, `release_<status>` в `routes/releases.ts`, `payout_approved/rejected` в `routes/finance.ts`). Внутри: ищет enabled-триггеры по событию, рендерит шаблон с context.vars, резолвит получателей (`requester|admins|managers|all|assignee`), создаёт notification + email, инкрементит `fireCount` и `lastFiredAt`.
-  - **`services/webhook-dispatcher.ts`** — реальная отправка outbound webhooks. `fireWebhookAndForget(event, payload)` ищет enabled-webhooks подписанные на событие или `*`, шлёт `POST` с заголовками `X-Tajik-Event`, `X-Tajik-Signature: sha256=<hmac>` (если задан секрет). Обновляет `lastTriggeredAt`/`lastStatus`/`lastError`. Вызывается из тех же мест что и триггеры: `user.signup_approved`, `release.status_changed`, `payout.approved`, `payout.rejected`. Подтверждено: HTTP 200 от httpbin.org.
-  - **`lib/mail.ts`** — SMTP теперь читается ИЗ БД (`platform_settings.notifications`) с приоритетом, fallback на `process.env.SMTP_URL`. Кэш transporter с TTL 60 секунд + fingerprint для пере-инициализации при смене настроек. Поле `smtpFromAddress` из настроек используется как `from` в письмах.
-- **`pages/rights/` — РЕАЛИЗОВАНА** (ранее была удалена как мок): полноценный раздел управления правами на `/rights`. DB: `rights_holders` + `rights_conflicts`. API: `GET/POST/PUT/DELETE /api/rights/holders`, `GET/POST/PATCH/DELETE /api/rights/conflicts`. Вкладки: Владельцы прав / Конфликты. Доступ: admin/manager (полный), label/artist (только свои активы через scoping). Навигация: пункт "Управление правами" (`ShieldCheck`, violet) в секции Operations сайдбара, доступен всем ролям.
-- **`components/sidebar-nav.tsx`** — убраны 5 пунктов навигации, fake badge "3" с `/distribution`, неиспользуемые иконки (`Megaphone`, `MessageSquare`, `ShieldCheck`, `Zap`, `PlugZap`).
-- **`lib/i18n.tsx`** — убраны nav-ключи и `subtitle`-блоки (`marketing`, `communications`, `automation`, `rights`, `integrations`) в EN и RU словарях.
-- **`pages/dashboard.tsx`** переписан: удалены константы `DATA_ADMIN`/`DATA_LABEL`/`DATA_ARTIST` и все мок-фолбэки `?? roleData.xxx`. KPI-карточек 4 (Revenue / Artists / Releases / Active Deliveries) — все тянутся из `useGetDashboardSummary`. Графики (`AreaChart` revenue, `BarChart` releases-by-status, top artists, recent activity) — на реальных хуках (`useGetDashboardRevenueByMonth`, `useGetDashboardReleasesByStatus`, `useGetDashboardTopArtists`, `useGetDashboardRecentActivity`). Если данных нет — показывается `<EmptyChart>` плейсхолдер. Убраны мок-секции Geo/UGC/Social и Label-only trends/labelTracks/playlists.
-- **`components/dashboard-sections.tsx`** очищен: удалены `GeoStreamsCard`, `WorldStreamsMap`, `UgcOverviewCard`, `SocialViewsCard` (все на моках из удалённого `data/dashboard-extras.ts`). Оставлены 6 секций для admin/manager — все на `useQuery` к реальным `/api/dashboard/*` эндпоинтам: `TopDspCard`, `TopTerritoriesCard`, `LatestReleasesGridCard`, `TopTracksCard`, `RoyaltySummaryCard`, `ArtistsStatsTableCard`.
-- **Удалён файл** `data/dashboard-extras.ts` (вся фабрика моков). Папка `data/` пуста — её можно удалить целиком при следующей чистке.
-- **Orphan dependency**: `react-simple-maps` теперь не используется (был только в `WorldStreamsMap`). Можно убрать из `artifacts/crm-panel/package.json` отдельным проходом.
-- **`/distribution`** полностью переписана на реальный API DDEX ERN-4.3 пайплайна (сообщения, батчи, ack-журнал). Смотри секцию «DDEX ERN-4.3 pipeline» ниже.
-
-## CRM page (контакты + задачи)
-
-`pages/crm/index.tsx` полностью на реальном API:
-- Источники: `GET /api/crm/contacts`, `GET /api/crm/tasks`, `GET /api/users` (для дропдауна «Ответственный»). Все эндпоинты `/crm/*` и `/users` доступны только `admin/manager` (guard в `routes/index.ts`).
-- Создание/редактирование/удаление контактов и задач — через `Dialog` + `AlertDialog`, реальные `POST/PUT/DELETE`. Все CRUD протестированы curl'ом + права (`artist → 403`).
-- Toggle статуса задачи (todo↔done) — оптимистичный апдейт **с per-task lock** (`pendingTaskIds`) и реконсиляцией от ответа сервера, чтобы не было «потерянных апдейтов» при двойном клике или out-of-order ответах.
-- Фронт-гейт: `useEffect` ждёт `authLoading` и `isAdmin`, иначе не делает fetch (не плодит 403 + тосты для не-админов). Не-админу показывается «доступно только админам/менеджерам».
-- Telegram-ссылки прогоняются через `safeTelegramHref()` — принимаем только `@username`, чистый username, или `https://t.me|telegram.me/...`. Иначе ссылка не рендерится. Защита от хранимого open-redirect/фишинга.
-- Все icon-only кнопки имеют `aria-label`; экшены раскрываются по `group-hover` **и** `group-focus-within` (доступны с клавиатуры). Anchor-кнопки сделаны через `<Button asChild>`, чтобы не было невалидного `<a><button>`.
-- Вкладку «Заметки» из старого мока убрал — таблицы для заметок нет, есть только поле `notes` на контакте.
-
-## Revenue Ingestion (Task #5, апр-2026)
-
-CSV-импорт DSP-отчётов от Spotify/Apple Music/YouTube Music/TikTok → парсинг → preview/commit → запись в `transactions` + `usage_reports`.
-
-- **DB:** `ingestion_imports` (журнал загрузок, UNIQUE на `idempotency_key` = sha256(file)+":"+dsp+":"+period — защита от двойного импорта) + `ingestion_unmatched` (строки CSV, ISRC которых не найден в `tracks` — ручной разбор админом). Оба `id serial` (сохраняем pattern всех 20 таблиц). FKs: `uploaded_by → users.id` SET NULL, `import_id → ingestion_imports.id` CASCADE. Migration `0004_eager_black_crow.sql`.
-- **Парсеры:** `artifacts/api-server/src/services/ingestion/{spotify,apple,youtube,tiktok}.ts` — каждый делает `csv-parse/sync` и возвращает унифицированный `ParsedRow[]`. Apple авто-детектит TSV по `\t` в первой строке. Хедеры ищутся по нескольким алиасам — DSP меняют названия колонок в зависимости от версии отчёта. `utils.ts` — общие helpers: `normIsrc` (cleanup + либеральная regex `^[A-Z]{2}[A-Z0-9]{8,18}$` — стандарт ISO 3901 — 12 chars, но реальные seed/DSP-данные часто 13), `normCountry` (ISO-2, агрегаты WORLD/WW/ZZ → null), `parseNumber` (терпит запятые, скобки=отрицательное, символы валюты), `normPeriod` (YYYY-MM из 5+ форматов), `dominantValue` (mode по массиву).
-- **Service** (`services/ingestion/service.ts`): `previewImport` — парсит, матчит ISRC → `tracks`, возвращает 10-row sample + counts + warnings БЕЗ записи в БД. `commitImport` — одной `db.transaction`: вставляет `ingestion_imports` (UNIQUE catches race), раскладывает matched-строки в `usage_reports` (artistId/releaseId/trackId/platform/period/streams/revenue/countryCode), unmatched в `ingestion_unmatched`, агрегирует доход per `(release, period)` в `transactions(type='dsp_revenue', platform=dsp, period)`. Вставка чанками по 500 строк. Idempotency check ДО парсинга — повторный POST того же файла вернёт `{importId, duplicate: true}` с HTTP 200, без побочных эффектов.
-- **Routes** (`routes/ingestion.ts`): `POST /api/finance/ingest/preview`, `POST /api/finance/ingest/commit` (multipart, multer.memoryStorage 50MB), `GET /api/finance/imports?limit=N`. Все три замаунчены под `adminOnly = requireRole("admin","manager")` в `routes/index.ts`. Артист/лейбл получают 403. Audit-log пишется ТОЛЬКО при non-duplicate commit, `idempotencyKey` редактится в `[redacted-hash]` чтобы не светить sha256.
-- **UI** (`pages/finance/import.tsx`): drag-drop dropzone + DSP-select + period (auto из preview) → preview-карточка с counts (total/valid/matched/unmatched/revenue), 10-row sample-таблицей и warnings → Commit. Список последних 20 импортов внизу. Обновлена `pages/finance/index.tsx` — убрана хардкод-таблица 5 моков, заменена на real `GET /finance/imports?limit=10` + кнопка-link «Загрузить CSV». Маршрут `/finance/import` в `App.tsx` + `/finance/import: ["admin","manager"]` в `permissions.ts`.
-- **Test fixtures** (`artifacts/api-server/test-fixtures/ingestion/`): `spotify.csv`, `apple_music.csv` (TSV), `youtube_music.csv`, `tiktok.csv` — каждый с реальными seeded ISRC + 1 unmatched (`TJSND9999...`) для проверки fallback-пути. Smoke-test (curl multipart) подтвердил: matched/unmatched counts корректны, idempotency duplicate=true работает, artist→403, audit-log пишется.
-
-## Asset storage & uploads (Task #1)
-
-Хранилище — **локальная ФС** (`artifacts/api-server/src/lib/objectStorage.ts`). Корень — `LOCAL_STORAGE_ROOT` (по умолчанию `<cwd>/.local-storage`), внутри — каталог `PRIVATE_OBJECT_DIR` (по умолчанию `private`) и подкаталог `uploads/<uuid>`. Рядом с каждым файлом лежит `<uuid>.meta.json` с content-type. Прод на Timeweb VPS: задать `LOCAL_STORAGE_ROOT=/var/lib/tajikmusic/uploads` (вне каталога деплоя, права на запись приложению), в nginx — `client_max_body_size 250m;`. Внешние объектные хранилища (S3/Yandex) не используются.
-
-- Таблица `assets` (`lib/db/src/schema/assets.ts`): `kind` (audio/cover/image/document), уникальный `storageKey`, `objectPath` (вида `/objects/uploads/<uuid>`), `sha256` (уникальный когда не null → дедуп при повторной заливке того же файла), `durationSeconds` (для аудио), FK на `release/track/artist/label`, `uploadedBy`.
-- API (`POST /api/assets/presign` → `PUT` на `/api/storage/upload/<uuid>?exp=&max=&sig=` (HMAC через `SESSION_SECRET`, лимит зашит в подпись) → `POST /api/assets/confirm`):
-  - presign: лимиты — audio 200 МБ, cover/image/document 25 МБ; scope-чек по `release/track/artist/label`. `maxBytes` зашивается в HMAC, поэтому клиент не может его поднять.
-  - PUT-роут (`routes/storage-upload.ts`): стрим через `pipeline(req, SizeLimiter, createWriteStream)` — настоящий backpressure; на любой ошибке/aborte/пустом теле частичный файл и sidecar чистятся; mounts ДО `requireAuth`.
-  - confirm: читает файл с локальной ФС, считает sha256, для аудио вытаскивает длительность через `music-metadata.parseStream`. При совпадении sha256 возвращает существующий `assets` ряд (дедуп). Если `attach: true` (default) — пишет URL в `release.coverUrl` / `track.audioUrl`.
-- Чтение в браузере: `GET /api/storage/objects/uploads/:id` — стримит файл с диска под session-cookie со scope-чеком (без подписанных URL для UI). «Скачать оригинал» через `GET /api/assets/:id` отдаёт тот же путь.
-- Frontend: `components/asset-uploader.tsx` — `useAssetUpload()` (XHR с прогрессом), `<CoverUploader>` (квадратный превью), `<AudioUploader>` (HTML5 `<audio controls>` после загрузки). На `/releases/new` и `/releases/[id]` обложка теперь грузится файл-инпутом, не URL'ом. На `/releases/[id]` появилась форма «Добавить трек» + per-track audio uploader + удаление трека.
-- `coverUrl` / `audioUrl` хранят `objectPath`; в UI рендерится через `assetHref()` → `/api/storage{objectPath}`. Старые внешние URL (если попадутся) проходят без обёртки.
-
-## Profile / Self-service users API
-
-Колонки в таблице `users`, добавленные для страницы `/profile`:
-`phone, address, country, region, city, zip_code, about, dsp_profiles (jsonb), social_links (jsonb)`.
-
-Self-service эндпоинты (НЕ требуют admin):
-- `GET  /api/auth/me`             — возвращает полный профиль (берётся из БД, не из сессии). Заодно ре-синкает `req.session.user.role/name/scope` из БД и завершает сессию, если статус ≠ active.
-- `PATCH /api/users/me`           — апдейт собственных полей. **Whitelist** через `UpdateMyProfileBody` (`.strict()` + `.strict()` на nested `dspProfiles`/`socialLinks`). НЕЛЬЗЯ изменить: `role, status, email, artistId, labelId, passwordHash`.
-- `POST /api/auth/change-password` — `currentPassword` + `newPassword` (≥8 символов), bcrypt-проверка текущего, ratelimit 5/15мин (prod).
-
-Админские user-эндпоинты (`GET /users`, `POST /users`, `GET/PUT/DELETE /users/:id`) защищены **per-route** middleware `adminOnly = requireRole("admin","manager")` внутри `routes/users.ts`. Глобальный `router.use("/users", adminOnly)` в `routes/index.ts` снят, чтобы `/users/me` был доступен всем аутентифицированным.
-
-`formatUser()` всегда вырезает `passwordHash` через деструктуризацию — он не уйдёт ни в одном /users-ответе. `/auth/me` и `/auth/login` используют отдельный `buildProfilePayload()`, тоже без хеша.
-
-Таблица `session` (от `connect-pg-simple`) явно описана в `lib/db/src/schema/sessions.ts`, чтобы `drizzle-kit push` не пытался её снести при следующих миграциях.
-
-## Auth & Data Scoping (Phase 1.1 + 1.2)
-
-- Real session auth: `express-session` + `connect-pg-simple`, bcrypt password hashes, session ID regen on login.
-- Roles: `admin`, `manager` — full access. `label` — scoped by `users.labelId`. `artist` — scoped by `users.artistId`.
-- Helpers in `artifacts/api-server/src/lib/auth.ts`:
-  - `requireAuth`, `requireRole(...roles)`
-  - `getDataScope(req) → { fullAccess, role, artistId, labelId }`
-  - `resolveScopeFilter(table, scope, { artistCol, labelCol })` — returns Drizzle SQL fragment or `false` for "no rows".
-- Admin/manager-only routers (mounted in `routes/index.ts` behind `requireRole("admin","manager")`): `/labels`, `/users`, `/contacts`, `/crm`, `/splits`, `/publishing`, `/analytics`, `/deliveries`, `/integrations`.
-- `/rights` — доступен всем ролям, но CREATE/DELETE только admin/manager; label/artist видят только свои активы (scoped внутри роутера через `getSessionUser`).
-- `/artists` — POST и PUT разрешены `admin`, `manager`, `label`. Для `label` сервер принудительно ставит `labelId = scope.labelId` (нельзя подписать чужого артиста или переместить артиста в чужой лейбл). DELETE — только admin/manager.
-- All read endpoints in `artists`, `releases`, `tracks`, `finance`, `royalties`, `dashboard` apply scope filters server-side; mutations include pre-flight scope checks. For non-privileged users, `query.artist_id` / `label_id` overrides are ignored.
-- Test users (seeded): `admin@tajikmusic.com / admin123`, `manager@tajikmusic.com / manager123`, `label@tajikmusic.com / label123` (labelId=1), `artist@tajikmusic.com / artist123` (artistId=1).
-- Known gaps: activity log has no entity-scope columns → `/dashboard/recent-activity` returns `[]` for non-admin/manager. CSRF deferred (sameSite=lax used).
-
-## Key Commands
-
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only, no history)
-- `pnpm --filter @workspace/db run generate` — generate a versioned SQL migration from schema diff
-- `pnpm --filter @workspace/db run migrate` — apply pending migrations (use this in prod / CI)
-- `pnpm --filter @workspace/db run seed` — seed the database with sample data
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-
-## Database Schema (22 business tables + `session`)
-
-**Task #5 additions (migrations 0004 + 0005, auto-generated):**
-- `ingestion_imports` (id serial, dsp, period, filename, totalRows, insertedRows, unmatchedRows, totalRevenue, currency, idempotencyKey UNIQUE, createdAt) — каждая успешная заливка CSV.
-- `ingestion_unmatched` (id serial, FK → ingestion_imports CASCADE, rawIsrc, rawTitle, rawArtist, country, period, streams, revenue, currency, resolved, createdAt) — строки CSV без сматчиния по ISRC.
-- `usage_reports`: добавлен UNIQUE INDEX `usage_reports_dedup_uniq` на (platform, period, track_id, COALESCE(country_code,'_')) для DB-level dedup при ON CONFLICT DO NOTHING.
-- `transactions`: добавлены `source TEXT NOT NULL DEFAULT 'manual'` (значения: manual/ingestion/system) и `import_id INTEGER REFERENCES ingestion_imports(id) ON DELETE SET NULL` для трассировки проводок к импорту-родителю.
-
-All ID columns are `serial`. Every `*_id` column has a `FOREIGN KEY` constraint with an explicit `ON DELETE` strategy, and hot read paths are indexed. Schema is migrations-based (`lib/db/migrations/` + `lib/db/src/migrate.ts` runner) — `drizzle-kit push` is dev-only.
-
-- `labels` — record labels with parent/sub-label hierarchy (parent_label_id → labels, SET NULL)
-- `artists` — artists with genre, label, social links (label_id → labels, SET NULL)
-- `releases` — albums/singles/EPs (artist_id RESTRICT, label_id SET NULL); idx on artist/label/status/release_date/upc
-- `tracks` — individual tracks (release_id CASCADE, artist_id RESTRICT); idx on release/artist/isrc
-- `users` — system users with roles admin/label/artist/manager (artist_id, label_id SET NULL); idx on role/artist/label
-- `contacts` — CRM contacts (no FKs — standalone); idx on type/email
-- `crm_tasks` — CRM tasks (assigned_to_id → users SET NULL); polymorphic related_entity (idx on status/assignee/related)
-- `transactions` — financial ledger (artist_id, label_id, release_id all RESTRICT — finance is forever); idx on period/artist/label/release/type/(period+artist)
-- `splits` — revenue split definitions (release_id, track_id CASCADE)
-- `payouts` — payout requests (artist_id, label_id RESTRICT); idx on artist/label/status
-- `publishing_works` — publishing rights ASCAP/BMI/Songtrust/MLC (track_id SET NULL — work outlives track); idx on track/status/iswc
-- `usage_reports` — streaming usage reports (artist/release/track all SET NULL — history survives deletes); idx on period/track/release/artist/platform/(period+track)
-- `deliveries` — DDEX delivery queue (release_id CASCADE); idx on release/status/target. Сохранена для обратной совместимости — каждая job из этой очереди теперь создаёт `ddex_message` через `createMessage()` и проходит через сервисный слой `ddex/service.ts`.
-- `ddex_messages` — DDEX ERN-4.3 сообщения (release_id CASCADE, batch_id SET NULL, parent_message_id self SET NULL); поля `messageRef` UNIQUE, `messageThreadId`, `messageType` (NewReleaseMessage/PurgeReleaseMessage/CatalogTransferMessage), `updateIndicator` (OriginalMessage/UpdateMessage/TakedownMessage), `ernVersion`, `profile`, `status` (draft/validated/invalid/queued/sent/acked/rejected/cancelled), `xmlPayload`, `validationErrors` jsonb, `ackPayload` jsonb, `sentAt`, `ackedAt`; idx по release/partner/status/thread.
-- `ddex_batches` — упаковка сообщений в batch для отправки (FK partner_code → integrations.code RESTRICT); поля `batchRef` UNIQUE, `partyIdSender/Recipient`, `transport` (local-fs/sftp/s3/...), `remotePath`, `manifestFilename`, `status` (pending/uploading/uploaded/acked/rejected/failed), `attempts`, `lastError`, `uploadedAt`, `ackReceivedAt`.
-- `ddex_acknowledgements` — журнал ack от партнёров (message_id, batch_id SET NULL); `source` (webhook/sftp-poll/manual), `ackType`, `status` (accepted/rejected/warning), `rawPayload` (cap 200KB), `parsed` jsonb, `receivedAt`.
-- `activity_log` — system activity (user_id SET NULL — logs survive user deletion); idx on (entity_type+entity_id)/user/created
-- `assets` — uploaded files in object storage (release/track/artist/label/uploaded_by all SET NULL); idx on release/track/artist/sha256
-- `integrations`, `integration_credentials`, `integration_sync_jobs` — DSP/delivery connectors registry with AES-256-GCM encrypted creds (CASCADE FK from creds/jobs to integrations)
-- `ingestion_imports` — журнал импортов CSV (uploaded_by → users SET NULL); UNIQUE на `idempotency_key`; idx (dsp,period)/created
-- `ingestion_unmatched` — строки CSV с ISRC, не найденным в tracks (import_id CASCADE); idx import/raw_isrc/resolved
-
-Migration workflow: `pnpm --filter @workspace/db run generate --name <change>` → review/edit `lib/db/migrations/0NNN_<name>.sql` to make it idempotent (`CREATE TABLE/INDEX IF NOT EXISTS`, FK constraints wrapped in `DO $$ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '...') THEN ALTER TABLE ... ADD CONSTRAINT ... NOT VALID; ALTER TABLE ... VALIDATE CONSTRAINT ...; END IF; END $$;`) → commit → deploy runs `migrate` automatically. Idempotent SQL means the same migration is safe to run against pristine, previously-pushed, or already-migrated databases. `NOT VALID` + `VALIDATE` ensures FK creation never blocks on existing data — if `VALIDATE` fails because of orphan rows, the operator gets a clear error pointing to the offending constraint and can clean up before re-running. Test legacy/virgin scenarios with `lib/db/scripts/test-migrations.sh`.
-
-## API Routes
-
-- `GET/POST /api/dashboard/*` — dashboard summary, activity, top artists, revenue, release status
-- `GET/POST/PUT/DELETE /api/artists/*` — artist CRUD + stats
-- `GET/POST/PUT/DELETE /api/labels/*` — label CRUD
-- `GET/POST/PUT/DELETE/PATCH /api/releases/*` — release CRUD + status changes + UPC import
-- `GET/POST/PUT/DELETE /api/tracks/*` — track CRUD
-- `GET/POST/PUT/DELETE /api/users/*` — user management
-- `GET/POST/PUT/DELETE /api/crm/contacts/*` — CRM contacts
-- `GET/POST/PUT/DELETE /api/crm/tasks/*` — CRM tasks
-- `GET/POST /api/finance/transactions` — transaction ledger
-- `GET /api/finance/balances` — artist/label balances
-- `GET/POST/PATCH /api/payouts/*` — payout management with approve/reject (filterable by artist_id/label_id/status)
-- `GET /api/royalties/summary|statements|by-release|by-dsp` — user-facing royalty aggregates (entity-scoped)
-- `GET /api/royalties/statements/:period/download?format=pdf|csv` — statement download
-- `GET/POST/PUT/DELETE /api/splits/*` — revenue splits
-- `GET/POST/PUT /api/publishing/works/*` — publishing rights
-- `GET /api/analytics/*` — streams, platform breakdown, geography
-- `GET/POST/GET /api/delivery/*` — DDEX delivery queue (legacy, обратная совместимость)
-- `GET/POST /api/ddex/messages`, `GET /:id`, `GET /:id/xml`, `POST /:id/send`, `POST /:id/cancel` — управление DDEX ERN-сообщениями
-- `GET /api/ddex/batches`, `GET /:id` — журнал батчей с remotePath/transport/manifest
-- `GET /api/ddex/acknowledgements` — журнал ack от партнёров
-- `POST /api/ddex/acknowledgements/inbound` — webhook приёма ack (без cookie-auth, HMAC через `X-DDEX-Signature: sha256=<hex>` от тела + `DDEX_INBOUND_SECRET`; в dev без секрета — открыто). Парсит DDEX 4.x `MessageAcknowledgement` с блоком `AcknowledgementOf*` (RelatedMessageId/MessageThreadId/Status), также `FtpAcknowledgementMessage` и партнёрские кастомные форматы. Поле `MessageInResponseTo` ищется и в `MessageHeader` (DDEX-стандарт), и на корневом уровне (часто встречается в реальных партнёрских dump'ах). Связка с нашим сообщением: messageRef → fallback messageThreadId → fallback batchRef.
-- `GET /api/ddex/transports` — список доступных транспортов (local-fs всегда, sftp если `ssh2-sftp-client` установлен)
-- `PATCH /api/integrations/:code/config` — частичный merge JSON-конфига интеграции (transport, host/port/username/remotePath/outboxPath/partyIdSender/partyIdRecipient). Пустые строки и null трактуются как сброс ключа. Используется мастером в `/settings → DDEX & DSP → Настроить`. Для DDEX-партнёров `testConnection` теперь читает host/port/username из config (cleartext) + password/private_key/passphrase из зашифрованных credentials, при наличии `ssh2-sftp-client` делает реальный SFTP-handshake.
-- `POST /api/integrations/:code/poll-acks` — ручной разовый опрос SFTP outbox без необходимости включать `DDEX_ACK_POLLER_ENABLED=1`. Подключается к SFTP, читает XML-ack'и из `outboxPath` (или `../outbox`), вызывает `ingestAck` для каждого, возвращает `{ transport, found, files: [{ filename, preview, status, ackId?, messageStatus?, errorMessage? }] }`. Для `transport=local-fs` возвращает `error` с объяснением. Доступно в диалоге «Настроить» кнопкой «Опросить outbox».
-
-## Frontend Pages (16 pages)
-
-- `/` — Dashboard with KPIs, revenue chart, top artists, recent activity
-- `/catalog` — Music catalog browse (releases + tracks)
-- `/releases` — Release management with status badges and delivery triggers
-- `/releases/:id` — Release detail with tracks, metadata
-- `/artists` — Artist roster management
-- `/artists/:id` — Artist profile with stats
-- `/labels` — Label management
-- `/crm` — CRM: contacts + tasks board + **Business Analytics** tab (Overview KPIs, Revenue per artist, User activity, Growth chart, Release/Delivery/Task funnels). Backed by 5 new API endpoints: `/api/crm/analytics/overview`, `/user-activity`, `/revenue-per-user`, `/growth`, `/funnel`.
-- `/royalties` — User-facing royalty hub (7 tabs: summary, statements PDF/CSV, by release, by DSP, request payment, history, **По артистам** for label role with CSV export)
-- `/finance` — Admin financial overview: transaction ledger + artist balances
-- `/splits` — Revenue split management with visual distribution bars
-- `/payouts` — Admin payout requests with approve/reject workflow
-- `/publishing` — DB-backed publishing works (admin/manager only). CRUD via `/api/publishing/works` (POST/PUT, no DELETE — works are IP). Editor dialog with dynamic writers list (name/role/share/CAE-IPI), share-sum-100% validation, ASCAP/BMI/Songtrust toggles, territory list. Server-side `validateWriters()` enforces share bounds 0–100, no duplicates by `(name, caeIpi)`, sum=100%; client mirrors same checks.
-- `/analytics` — Real analytics dashboard (accessible to all roles). 8 tabs: Streams, Revenue, Geo, Top Tracks, UGC, Алерты, **Плейлисты** (playlist analytics with follower/stream KPIs), **TikTok** (uses/views/likes/reposts per track). Backed by `/api/analytics/{streams,platforms,geography,top-tracks}`. `usage_reports` seeded deterministically (~52K rows, 6 months × 6 platforms × 8 countries × all tracks).
-- `/marketing/presave` — Pre-save campaign manager (label/artist). Create campaigns with DSP selection, track saves/clicks KPIs, copy link.
-- `/marketing/links` — Smart Links manager (label/artist). Auto-redirect by country/device, copy link, platform badges.
-- `/marketing/assets` — Promo Assets (label/artist). Auto-generate Instagram Post/Story, YouTube Banner, press-kit PDFs by release.
-- `/releases/calendar` — Release Calendar (label). Interactive monthly grid with coloured dots per release status; right panel shows day/month lists.
-- `/releases/takedown` — Takedown Requests (label/artist). Multi-step form (DSP selection → confirmation dialog), status tracking (pending/processing/completed/rejected).
-- `/delivery` — DDEX delivery queue
-- `/users` — User management with roles
-- `/settings` — Role-based. Admin/manager: full system settings (integrations, DDEX, API keys, etc). Label/artist: personal settings (profile/password/notifications). Label additionally gets **Команда** tab — invite members by email with role (manager/viewer), change roles, remove members.
-- Personal settings (label/artist) — `PersonalSettings` component within `/settings`. 3 tabs + label-only 4th tab: Профиль, Смена пароля, Уведомления, **Команда** (team management: invite/remove/role-change for label members).
-
-## Transfer Track (`/releases/transfer`) — Hardened Battle-Ready State
-
-Полностью русскоязычный модуль импорта чужого каталога (Spotify → наша платформа). Завершён до боевой готовности с PASS-вердиктом архитектора.
-
-**Backend (`artifacts/api-server/src/routes/releases.ts`)**:
-- `GET /api/releases/transfer-imports/spotify-search?query=...` — реальный Spotify Web API через Client Credentials. Принимает `https://open.spotify.com/artist/<id>` или имя артиста. Кэширует токен в памяти. Чёткое разделение ошибок: 503 `spotify_not_configured` (нет ключей) vs 502 `spotify_upstream_error` с deталями upstream (network failure, неверные creds → embeds Spotify "invalid_client"). Реализовано через типизированные `SpotifyNotConfiguredError` / `SpotifyUpstreamError` классы внутри `getSpotifyToken()`.
-- `POST /api/releases/transfer-imports` — admin/manager only. Принимает `{spotifyArtistId, spotifyArtistName, labelName?, items: [{upc, title, artist, tracks, label?, coverUrl?}]}`. Каждый item обрабатывается в **отдельной DB-транзакции**: lookup-or-create label + lookup-or-create artist (case-insensitive `ilike`) + insert release (`status=draft`, releaseType single|album по числу треков) + insert N placeholder tracks (1..50). При исключении весь item откатывается, errorReason записывается в журнал.
-- **UPC race-safe**: партиальный uniqueIndex `releases_upc_unique_idx ON releases(upc) WHERE upc IS NOT NULL AND upc <> ''` (миграция 0009). При конфликте 23505 walks `error.cause` цепочку, ставит дружелюбное `Релиз с UPC X уже существует`.
-- **Audit-log буферизация**: внутри транзакций audit-события собираются в `pendingAudits[]` и отправляются только после commit, чтобы не было записей о rolled-back операциях.
-
-**Frontend**:
-- `pages/releases/transfer/index.tsx` + `transfer/new.tsx` полностью на русском через `useLang()` + `t.transfer.*` namespace в `lib/i18n.tsx` (~60 ключей EN+RU).
-- Иконка Music2 вместо `♫` emoji (соответствует "no emojis" политике).
-
-**Settings**:
-- `settings.spotify` (clientId, clientSecret) с дефолтами в `DEFAULTS` объекта `routes/settings.ts` — GET всегда возвращает object-shape для корректного binding в форме.
-- В VALID_KEYS allowlist.
-
-**Migration 0009 (`lib/db/migrations/0009_releases_upc_unique.sql`)**:
-- Полностью идемпотентна: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP INDEX IF EXISTS`, `ADD COLUMN IF NOT EXISTS`, все `ADD CONSTRAINT` обёрнуты в `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;` блоки.
-- Содержит: UPC unique index + dropped старый non-unique releases_upc_idx + догоняет всю G1-схему (commission_rules, payment_automation_rules, ugc_metrics, realtime_alerts, publishing_conflicts, acr_checks, payouts approval columns, rights_holders frozen columns) — всё ранее было только `db push`'нуто.
-- Verified: на drifted prod-DB `psql -v ON_ERROR_STOP=1 -f migrations/0009_*.sql` exit 0, 0 errors, 77 graceful skip notices.
-
-## Stage 2 Menu Refactor (catalog/finance hubs)
-
-Список-страницы (releases / artists / labels / splits / payouts / royalties / finance / catalog-assets) разделены на пары:
-- `default export` — тонкая обёртка `return <Layout><XxxPanel /></Layout>` для backward-compat прямых URL.
-- `export function XxxPanel()` — тело без `<Layout>`, чтобы хабы могли монтировать его внутри своего layout.
-
-Хабы:
-- `pages/catalog/index.tsx` — `<Tabs>` синхронизирован с `?tab=`. Табы: hub (сетка карточек на assets/duplicates/codes/bulk-edit/treki) | releases | artists | labels (admin/manager) | videos (admin/manager, монтирует `CatalogAssetsPanel initialKindOverride="video"`).
-- `pages/finance/index.tsx` — `<Tabs>` синхронизирован с `?tab=`. Табы: overview (FinanceOverviewPanel — admin/manager) | royalties (RoyaltiesPanel — заголовок «Доходы» для label/artist, «Роялти» для admin/manager) | splits | payouts.
-
-Sidebar (`components/sidebar-nav.tsx`):
-- adminNavGroups → catalog group: ссылки ведут на `/catalog?tab=releases|artists|labels|videos`, `/catalog` без query — таб hub.
-- adminNavGroups → finance group: ссылки на `/finance?tab=royalties|splits|payouts`, `/finance` без query — overview.
-- isActive обновлён: парсит `[itemPath, itemQuery]` из href; для tabbed item активность = `pathname === itemPath && currentSearch === itemQuery`; для нетабовых items — старая `startsWith` логика, но с защитой «не подсвечиваться, если на текущей странице есть `?tab=`».
-- Группы label/artist (`my_catalog`, `earnings_group`) — без изменений, прямые URL `/releases /artists /royalties /splits /payouts` работают как раньше через тонкие default-обёртки.
-
-Backend `routes/index.ts` — `requireManagerPermission(KEY)` навешан после `adminOnly` на admin-only mount paths:
-- `/labels`, `/catalog` → key `catalog`
-- `/contacts`, `/crm` → `crm`
-- `/finance/ingest`, `/finance/imports`, `/splits` → `finance`
-- `/publishing` → `rights`
-- `/analytics` → `analytics`
-- `/deliveries`, `/distribution`, `/ddex` → `distribution`
-- `/communications` → `support_comms`
-- `/automation` → `automation_audit`
-- `/integrations`, `/settings`, `/api-keys`, `/webhooks` — admin-only без manager permission key (системные).
-- Per-route scoped routers (artists, releases, tracks, finance, royalties, kyc, support, audit, rights, users) НЕ оборачиваются — у них собственные guard'ы внутри обработчиков, иначе label/artist получили бы 403 на свои собственные данные.
-
-Демо-аккаунты (засеяны в `users` table): `admin@tajikmusic.com / admin123`, `manager@tajikmusic.com / manager123`, `label@tajikmusic.com / label123`, `artist@tajikmusic.com / artist123`. Если БД пустая — пересоздать через `pnpm exec tsx /tmp/seed_demo.ts` (генерирует bcrypt-хэши и `INSERT ... ON CONFLICT DO NOTHING`).
-
-## Stage 3 — CRM Business Analytics hub
-
-`/crm` превращён из single-tab analytics+contacts+tasks в полноценный хаб **бизнес-аналитики платформы** с 7 табами:
-- **overview** — KPI plate (треки/артисты/релизы/пользователи/выручка/доставки) + 2 pie chart (релизы по статусу, контакты по типу). Default tab.
-- **activity** — таблица User Activity: задачи назначены/завершены/% по каждому участнику команды, badge с ролью.
-- **arpu** — Revenue per artist: 3 KPI (общая выручка / выплачено / ARPU = total royalty / artist count) + сортированная по нетто таблица (роялти/аванс/выплачено/нетто).
-- **growth** — 3 KPI (новые артисты/релизы/пользователи за 12 месяцев) + bar chart по месяцам.
-- **funnel** — 3 воронки (релизы / доставки / задачи) с FunnelBar по статусам.
-- **contacts** / **tasks** — оригинальные working tools (CRUD контактов и задач), сохранены без изменений.
-
-URL sync через wouter `useSearch()` + `useLocation()`: `/crm` = overview, `/crm?tab=activity|arpu|growth|funnel|contacts|tasks`. `onTabChange` пушит state в адресную строку.
-
-**Архитектура расщепления `CrmAnalytics`:**
-- Старый монолит на 5 секций в одном компоненте → 5 отдельных panel-компонентов (`CrmOverviewPanel`, `CrmActivityPanel`, `CrmArpuPanel`, `CrmGrowthPanel`, `CrmFunnelPanel`).
-- Каждый fetches только свой endpoint при mount (через хелпер `useAnalyticsFetch<T>(url)` с alive-флагом для cancellation).
-- `<AnalyticsLoader />` и `<AnalyticsEmpty />` — общие плейсхолдеры.
-- Helpers (`KpiTile`, `FunnelBar`, `fmt`, `fmtMoney`, `STATUS_RU`, `ROLE_RU`, `PIE_COLORS`) переиспользуются между панелями.
-- Radix Tabs unmount'ает inactive `<TabsContent>`, поэтому переключение табов перезапрашивает данные — это OK для admin-аналитики (свежесть важнее).
-
-**Backend (без изменений):**
-- 5 endpoints уже существовали и оставлены без изменений: `/api/crm/analytics/{overview,user-activity,revenue-per-user,growth,funnel}`.
-- Mount: `router.use("/crm", adminOnly, requireManagerPermission("crm")); router.use(crmRouter)` — admin/manager-only, manager обязан иметь `crm` permission.
-- Smoke verified: admin → 200×5, manager(perm=on) → 200×5, label → 403×5.
-
-**Sidebar:**
-- В `adminNavGroups` группа `crm_group` (titleKey «CRM-аналитика») развёрнута: 5 ссылок — Обзор `/crm`, Активность `/crm?tab=activity`, ARPU `/crm?tab=arpu`, Рост `/crm?tab=growth`, Воронки `/crm?tab=funnel`. Контакты и задачи доступны через табы внутри страницы (не в sidebar — не загромождать).
-- isActive logic из Stage 2 правильно различает `/crm` (no query) и `/crm?tab=...`.
-
-**i18n:**
-- `t.crm.title` = «CRM — Аналитика бизнеса», `t.crm.subtitle` = «Бизнес-метрики платформы…».
-- Новые tab keys: `tab_overview/tab_activity/tab_arpu/tab_growth/tab_funnel`.
-- Новые nav keys: `crm_overview/crm_activity/crm_arpu/crm_growth/crm_funnel` + `crm_group` обновлён.
-- `crm_hub` зарезервирован, не используется (overview-тaб служит landing'ом).
-
-**Гочча:** в `useSearch()` от wouter возвращает строку без `?`. Внутри page-компонента переменная переименована в `urlSearch`, потому что был конфликт с `const [search, setSearch] = useState("")` для contact search input.
-
-## Theme
-
-Dark navy/slate background with electric indigo (#6366f1) accent. Dense, professional admin cockpit aesthetic designed for music industry professionals.
-
-## Stage 4 — Role-aware UX (Settings split + Release wizard for artist)
-
-**Stage 4.1 — Settings split per role:**
-- `settings/index.tsx`: `canView = role==="admin"||"manager"` — система не изменялась.
-- Для `label`/`artist`: вместо locked screen рендерится `<PersonalSettings>` — лёгкий Tabs с 3 вкладками:
-  1. **Профиль** — read-only карточка (email, роль, KYC-статус) + кнопка «Перейти в полный профиль» → `/profile`.
-  2. **Смена пароля** — inline форма → `POST /api/auth/change-password`.
-  3. **Уведомления** — Switch-переключатели (emailNewRelease/Royalty/Delivery/Reports), persisted в `localStorage`.
-- Системные табы (Общие, DDEX, API, Оплата, DSP, Безопасность, Хранилище, Аудит, ACRCloud, PRO, Права менеджеров) видны только admin/manager — не изменялись.
-
-**Stage 4.2 — Форма создания релиза для артиста:**
-- `/releases/new.tsx` уже существовал и был достижим для всех ролей.
-- Добавлен `useAuth()` → вычисляется `isArtist`/`isLabel`.
-- **Artist**: `artistId` автоматически берётся из `user.artistId` (useEffect), артист показывается read-only Badge, dropdown лейбла скрыт (сервер дерайвит labelId из artistsTable).
-- **Label**: фильтрует `visibleArtists` по `a.labelId === user.labelId`, лейбл показывается read-only Badge с кнопкой «Ваш лейбл», dropdown лейбла скрыт.
-- **Admin/Manager**: видят полные dropdown'ы исполнителей и лейблов.
-- Весь UI переведён на русский: «Создать релиз», типы (Сингл/Альбом/EP/Сборник), языки (Таджикский/Русский/…), кнопки «Сохранить релиз»/«Отмена», «Назад к релизам», жанры, «Explicit-контент».
-- Backend auth без изменений (artist → 403 при чужом artistId, label → 403 при чужом labelId/artist).
-
-## Stage 5 — Полный аудит и закрытие критических дыр (май 2026)
-
-Проведён сквозной аудит всех ролей (admin/manager/label/artist). Закрыты критические дыры —
-фейк-данные, сломанные уведомления, dead-кнопки, отсутствующий flow согласования сплитов и
-инвайта артистов. Зачищен лишний scope.
-
-### Что убрано (мок-данные / фейки)
-- `royalties.ts`: удалены ветки `ALLOW_SEED` и синтетика на `Math.sin` в `/summary`,
-  `/statements`, `/by-release`, `/by-dsp`. CSV `/statements/:period/download?format=csv`
-  генерируется из реальных строк `royaltyLineItemsTable`. PDF возвращает 501 с явным сообщением
-  «PDF-экспорт пока не реализован».
-- `dashboard.ts /revenue-by-month`: список последних 12 месяцев генерируется программно от
-  `new Date()` — никаких хардкод-меток.
-- `automation.ts /scheduled`: возвращает реальные scheduled задачи из БД (или `[]`).
-
-### Уведомления
-- `notifications-service.ts` — единая точка `createNotification`, `notifyAdmins`,
-  `notifyByArtistId`, `notifyByLabelId`. Используется во всех новых триггерах.
-- KYC: при approve/reject документа и глобального юзера — `createNotification` соответствующему
-  пользователю (link `/kyc`).
-- Signup: при approve нового signup — in-app уведомление новому юзеру (link `/kyc`); reject
-  оставляет `emitAlertAndForget` для админов (как было).
-- Takedowns: смена статуса (`processing/completed/rejected/pending`) — уведомление инициатору
-  через `notifyByArtistId`/`notifyByLabelId`.
-- Support: новое сообщение в тикете — уведомление противоположной стороне (staff↔customer);
-  смена статуса staff'ом — уведомление requester'у. Все nullable `requesterUserId` корректно
-  чекаются.
-
-### Splits acceptance flow
-- БД-схема не менялась — статус акцепта хранится прямо в `participants` jsonb массиве:
-  `acceptanceStatus: "pending"|"accepted"|"rejected"`, `acceptanceAt: ISO`. Это позволяет
-  обойтись без миграции и поддерживает per-participant подпись.
-- Backend `POST /splits/:id/accept` и `/reject`: матчит участника по `getDataScope` →
-  `role`/`artistId`/`labelId`, обновляет в jsonb, шлёт `notifyAdmins` об акцепте/отклонении.
-- UI `splits/index.tsx`: badge общего статуса (`pending`/`partial`/`accepted`/`rejected`),
-  иконки per-participant (Check/X/Clock), кнопки **Принять**/**Отклонить** появляются у того
-  участника, чей scope совпадает с текущим юзером и `acceptanceStatus === "pending"`.
-
-### Artist invite flow
-- Backend `POST /artists/:id/invite-user` (admin/manager/label): создаёт `User role=artist` с
-  bcrypt-хешем временного пароля, привязывает `user.artistId`, отправляет letter c кредами через
-  `sendMail`, шлёт `createNotification` приглашающему («Артист X получил доступ»). Возвращает
-  `{ user, tempPassword }`.
-- UI `artist-form-dialog.tsx` (только в режиме создания): чекбокс «Создать аккаунт для артиста»
-  + поле email; после `createArtist` вызывает `/invite-user` и показывает toast с временным
-  паролем.
-
-### Payouts page
-- Кнопка «Запросить выплату» теперь открывает `RequestPayoutDialog` (`useCreatePayoutRequest`)
-  с полями amount/currency/method/details, валидацией и invalidate-ом списка после успеха.
-- Поиск `searchQuery` теперь реально фильтрует по `artistName`/`labelName`/`method` через
-  client-side `filteredPayouts` useMemo.
-- Backend `POST /payouts` уже был — он по-прежнему форсит KYC + bank-info + 2-step-confirmation
-  + `notifyAdmins`.
-
-### Scope cleanup
-- **Blacklist** убран:
-  - `users/index.tsx`: удалена вкладка `blacklist`, KPI «Suspended» и весь связанный state.
-  - Файл `_blacklist-tab.tsx` удалён.
-  - i18n-строки `blacklist_*` остались (мёртвые) — на UI не используются.
-- **Telegram/WhatsApp** убраны из мульти-канальной отправки:
-  - `communications-channels.ts`: оставлены только `email` + `push`. `loadChannels`,
-    `sendTelegram`, `sendWhatsapp`, ветки в `/send` и `/test-channel` удалены.
-  - `connectors/registry.ts` и `connectors/api-validators.ts`: `telegramBotConnector` и
-    `twilioWhatsappConnector` удалены полностью.
-  - `settings/index.tsx`: удалён мёртвый компонент `TabChannels` (он не был замаунчен).
-  - i18n contact-fields `telegram`/`whatsapp` для CRM-клиентов оставлены — это просто контакты
-    юзеров, не каналы.
-
-### Audit-actions расширены
-- `lib/audit.ts AuditAction`: добавлены `accept` (для splits) и `invite` (для artist-invite).
-
-### Принципиальные правила, которые соблюдались
-- Без эмодзи во всех новых строках (UI и notifications).
-- Все новые фичи работают только от БД — никаких моков/фолбэков.
-- Schema field name `kind` (не `docType`) для `kycDocumentsTable`.
-- Все nullable FK (`requesterUserId`, `assigneeUserId`) явно чекаются перед использованием в
-  `createNotification`.
+A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. This full-stack application provides catalog management, CRM functionalities, analytics, financial management, DDEX delivery, and publishing rights management. The project aims to streamline operations for music labels, offering tools for managing artists, releases, royalties, and external DSP integrations.
+
+## User Preferences
+
+- **Workflow on Replit**: Should simply run dev-servers (`pnpm --filter ... run dev`). Do not change them to `pnpm build && pnpm start` or production mode, as this will break the preview.
+- **Deployment**: Deployment is done ONLY by pushing to `main` on GitHub, then accessing the VPS via SSH, and running `bash /var/www/tajikmusic/deploy/2_deploy.sh`. There is no automation between Replit and VPS, and none is needed.
+- **Git Push from Replit**: This is done via a personal token in `GITHUB_TOKEN` (Replit Secrets). If a push fails, the token in Secrets likely needs to be updated (classic PAT with `repo` scope).
+- **Communication Language**: Russian.
+- **Communication Style**: The user is non-technical (label owner). Do not use jargon or emojis. Explain the consequences of any actions in simple terms.
+- **Deployment Requests**: If the user says "publish" or "update the website," they mean "update the code on GitHub and deploy to Timeweb," not "click the Publish button in Replit." The correct sequence is:
+    1. Run `pnpm run typecheck` (also set as a pre-push hook via simple-git-hooks).
+    2. `git push origin main` (with `GITHUB_TOKEN` in env).
+    3. Instruct the user to run one command on the server: `cd /var/www/tajikmusic && bash deploy/2_deploy.sh`.
+- **Replit Features**: Do NOT suggest Replit-specific features like "Publish" / "Deploy" through Replit Deployments, Replit Object Storage / GCS / S3 / Yandex Object Storage, Replit Database / Replit Auth / Replit AI Integrations.
+- **File Storage**: Do NOT install Replit Object Storage / GCS / S3 / Yandex Object Storage. Files (covers, audio, KYC) are stored on the local filesystem of the VPS.
+
+## System Architecture
+
+The application is built as a monorepo using `pnpm workspaces` and Node.js 24. It utilizes TypeScript 5.9, with an Express 5 API server and a React frontend built with Vite, Wouter, Tailwind CSS, and shadcn/ui.
+
+**Core Features & Components:**
+
+-   **Catalog Management**: CRUD operations for artists, labels, releases, and tracks. Includes an artist invitation flow and a release creation wizard with role-based UI adjustments.
+-   **CRM**: Comprehensive contacts and task management. Features a dedicated business analytics hub with overview KPIs, user activity, revenue per artist, growth charts, and release/delivery/task funnels.
+-   **Financial Management**: Transaction ledger, artist/label balances, payout management with approval/rejection workflows, and revenue split definitions.
+-   **Royalty Hub**: User-facing royalty summaries, statements (PDF/CSV), and breakdowns by release and DSP.
+-   **DDEX Delivery**: Full DDEX ERN-4.3 pipeline for message creation, batching, and acknowledgement processing. Includes SFTP transport and a robust inbound acknowledgement webhook.
+-   **Publishing Rights**: Management of publishing works with dynamic writer lists and share validation.
+-   **Revenue Ingestion**: CSV import functionality for DSP reports (Spotify, Apple Music, YouTube Music, TikTok) with parsing, preview, and commitment to the `transactions` and `usage_reports` tables. Includes idempotency checks and unmatched ISRC handling.
+-   **Analytics**: Real analytics dashboard covering streams, revenue, geography, top tracks, UGC, alerts, playlists, and TikTok performance, all backed by real data.
+-   **Communication & Automation**: Implemented communications section with email templates, campaigns, automation triggers, internal notes, and outbound webhooks.
+-   **User Management & Authentication**: Role-based access control (`admin`, `manager`, `label`, `artist`) with `express-session` and `connect-pg-simple`. Data scoping is applied server-side for non-privileged users. Passwords are hashed with bcrypt.
+-   **Security**: Implements Helmet for HTTP headers, CSP for production, CORS whitelist, global and specific rate limiting (e.g., login, password change), per-account lockout for brute-force protection, and role-based API endpoint protection. All secrets are managed via environment variables.
+-   **Asset Storage**: Uses local filesystem storage for uploaded files (audio, covers, documents). Uploads leverage a presigned URL mechanism with HMAC signatures for security and size limits. Deduplication based on SHA256 hashes is implemented.
+-   **Audit Log**: Structured compliance journal (`audit_log` table) recording detailed changes (who, what, when, before/after states, diffs) for releases, tracks, artists, labels, finance, splits, and users.
+-   **UI/UX**: Features a dark navy/slate background with electric indigo accent, designed for a professional admin cockpit aesthetic. Components are built with shadcn/ui. The frontend dynamically adjusts UI elements (e.g., release creation form, settings) based on the user's role. Internationalization (i18n) is supported, primarily in Russian.
+-   **Transfer Track Module**: A fully localized module for importing existing music catalogs from Spotify, including artist search and robust release/track insertion with UPC conflict resolution and buffered audit logging.
+-   **CRM Business Analytics Hub**: Enhanced `/crm` page with multiple tabs for detailed business analytics, including user activity, ARPU, growth metrics, and funnels.
+-   **Role-aware UX**: Settings page dynamically renders content based on user roles. Release creation wizard adapts form fields and options for artists and labels.
+
+**Technical Implementations:**
+
+-   **API Framework**: Express 5.
+-   **Database**: PostgreSQL with Drizzle ORM.
+-   **Validation**: Zod for schema validation.
+-   **API Codegen**: Orval for generating API hooks from OpenAPI specs.
+-   **Frontend**: React, Vite, Wouter for routing, Tailwind CSS for styling, Recharts for charts, react-hook-form for forms.
+-   **Build System**: esbuild for backend, Vite for frontend.
+-   **Migrations**: Drizzle versioned migrations for database schema changes, designed to be idempotent.
+
+## External Dependencies
+
+-   **PostgreSQL**: Primary database for all application data.
+-   **Express.js**: Backend API framework.
+-   **React**: Frontend UI library.
+-   **Vite**: Frontend build tool.
+-   **Tailwind CSS**: Utility-first CSS framework.
+-   **shadcn/ui**: UI component library.
+-   **Recharts**: Charting library for data visualization.
+-   **react-hook-form**: Form management library.
+-   **Zod**: Schema validation library.
+-   **Drizzle ORM**: TypeScript ORM for PostgreSQL.
+-   **Orval**: OpenAPI spec code generator.
+-   **esbuild**: Fast JavaScript bundler.
+-   **Wouter**: Small routing library for React.
+-   **pm2**: Production process manager for Node.js applications (on VPS).
+-   **nginx**: Reverse proxy server (on VPS).
+-   **certbot**: For HTTPS certificate management (on VPS).
+-   **Spotify Web API**: For searching artists and releases during catalog transfer.
+-   **music-metadata**: Library for parsing audio file metadata (duration).
+-   **csv-parse/sync**: For parsing CSV files during revenue ingestion.
+-   **multer**: Middleware for handling multipart/form-data, used for file uploads.
+-   **ssh2-sftp-client**: (Conditional) For SFTP transport in DDEX deliveries and polling acknowledgements.
