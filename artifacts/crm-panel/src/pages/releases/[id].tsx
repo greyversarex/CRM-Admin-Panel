@@ -188,6 +188,7 @@ export default function ReleaseDetail() {
                 <EditReleaseDialog
                   releaseId={id}
                   title={release.title}
+                  currentStatus={release.status}
                   onClose={() => { setEditOpen(false); invalidateAll(); }}
                 />
               </Dialog>
@@ -536,50 +537,72 @@ function DspPill({ name }: { name: string }) {
 }
 
 // ─── Edit Release dialog ──────────────────────────────────────────────────
-function EditReleaseDialog({ releaseId, title, onClose }: { releaseId: number; title: string; onClose: () => void }) {
+// ВАЖНО: для черновика (status=draft) сам PATCH /status не вызывается —
+// иначе сервер вернёт 409 "уже в статусе draft". Черновик и так редактируется
+// прямо на этой странице. Для rejected — выполняем переход rejected → draft.
+function EditReleaseDialog({
+  releaseId, title, currentStatus, onClose,
+}: { releaseId: number; title: string; currentStatus: string; onClose: () => void }) {
   const updateStatus = useUpdateReleaseStatus();
   const [confirmed, setConfirmed] = useState(false);
+  const isAlreadyDraft = currentStatus === "draft";
 
   return (
     <DialogContent className="bg-card border-border max-w-lg">
       <DialogHeader>
-        <DialogTitle>Edit Your Release</DialogTitle>
-        <DialogDescription>Putting "{title}" into Edit state allows you to:</DialogDescription>
+        <DialogTitle>{isAlreadyDraft ? "Редактирование черновика" : "Перевести релиз в редактирование"}</DialogTitle>
+        <DialogDescription>
+          {isAlreadyDraft
+            ? `Релиз «${title}» уже в статусе черновика — все поля можно править прямо на этой странице.`
+            : `Перевод «${title}» в режим редактирования позволит:`}
+        </DialogDescription>
       </DialogHeader>
-      <ul className="text-sm space-y-1.5 list-disc pl-5 text-muted-foreground">
-        <li>Include new metadata (contributors, etc.)</li>
-        <li>Fix metadata mistakes</li>
-        <li>Correct corrupt audio / artwork</li>
-        <li>Add DSPs</li>
-      </ul>
+      {!isAlreadyDraft && (
+        <ul className="text-sm space-y-1.5 list-disc pl-5 text-muted-foreground">
+          <li>Внести новые метаданные (контрибьюторы и пр.)</li>
+          <li>Исправить ошибки в метаданных</li>
+          <li>Заменить повреждённое аудио / обложку</li>
+          <li>Добавить DSP-площадки</li>
+        </ul>
+      )}
       <div className="text-xs bg-amber-500/10 border border-amber-500/30 rounded p-3 text-amber-300/90">
-        <span className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Note:</span>
-        Primary Artist name is permanent and cannot change. To change it, take down the release and create a new one.
+        <span className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Важно:</span>
+        Имя основного артиста изменить нельзя. Чтобы поменять его, снимите релиз с публикации и создайте новый.
       </div>
       <div className="text-xs text-muted-foreground space-y-1">
-        <div className="font-semibold text-foreground">Your Responsibilities:</div>
+        <div className="font-semibold text-foreground">Ваша ответственность:</div>
         <ol className="list-decimal pl-5 space-y-0.5">
-          <li>Make any necessary changes to the release.</li>
-          <li>Re-upload audio files / album art if Tajik Music no longer has access.</li>
-          <li>Submit your edited release. Once approved we'll deliver to all DSPs.</li>
+          <li>Внести нужные правки в релиз.</li>
+          <li>Перезалить аудио / обложку, если Tajik Music больше не имеет к ним доступа.</li>
+          <li>Отправить отредактированный релиз на модерацию. После одобрения мы доставим его на все DSP.</li>
         </ol>
       </div>
-      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-        <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} />
-        Confirm Edit Release
-      </label>
+      {!isAlreadyDraft && (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} />
+          Подтверждаю перевод в редактирование
+        </label>
+      )}
       <DialogFooter className="gap-2">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button
-          disabled={!confirmed || updateStatus.isPending}
-          onClick={async () => {
-            await updateStatus.mutateAsync({ id: releaseId, data: { status: "draft", note: "Edit requested" } });
-            toast({ title: "Release moved to edit state", description: "You can now make changes." });
-            onClose();
-          }}
-        >
-          Edit Release
-        </Button>
+        <Button variant="outline" onClick={onClose}>{isAlreadyDraft ? "Закрыть" : "Отмена"}</Button>
+        {isAlreadyDraft ? (
+          <Button onClick={onClose}>Понятно, редактирую</Button>
+        ) : (
+          <Button
+            disabled={!confirmed || updateStatus.isPending}
+            onClick={async () => {
+              try {
+                await updateStatus.mutateAsync({ id: releaseId, data: { status: "draft", note: "Edit requested" } });
+                toast({ title: "Релиз переведён в редактирование", description: "Можете вносить изменения." });
+                onClose();
+              } catch (e) {
+                toast({ variant: "destructive", title: "Не удалось перевести релиз", description: (e as Error).message });
+              }
+            }}
+          >
+            Перевести в редактирование
+          </Button>
+        )}
       </DialogFooter>
     </DialogContent>
   );
