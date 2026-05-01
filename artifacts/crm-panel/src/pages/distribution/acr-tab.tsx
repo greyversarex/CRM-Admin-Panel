@@ -19,6 +19,9 @@ interface AcrCheck {
   confidence: string | null;
   matchedTitle: string | null;
   matchedArtist: string | null;
+  matchedIsrc: string | null;
+  matchedLabel: string | null;
+  resultJson: Record<string, unknown> | null;
   errorMessage: string | null;
   scannedAt: string;
 }
@@ -200,36 +203,96 @@ export function AcrTab() {
             Проверок ещё не было.
             <span className="block mt-1 text-xs opacity-60">Найдите релиз выше и нажмите «Запустить».</span>
           </div>
-        ) : checks.map((c) => (
-          <div key={c.id} className="p-3 flex items-center justify-between" data-testid={`row-acr-${c.id}`}>
-            <div className="flex items-center gap-3">
-              {c.status === "matched"
-                ? <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0" />
-                : c.status === "clean"
-                ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                : c.status === "error"
-                ? <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-                : <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />}
-              <div className="text-sm">
-                <div className="font-medium">
-                  {releases.find((r) => r.id === c.releaseId)?.title ?? `Релиз #${c.releaseId}`}
-                  {c.trackId ? <span className="text-muted-foreground"> · Трек #{c.trackId}</span> : null}
-                  <Badge
-                    variant={c.status === "matched" ? "destructive" : c.status === "error" ? "secondary" : "outline"}
-                    className="ml-2"
-                  >
-                    {c.status === "matched" ? "совпадение" : c.status === "clean" ? "чисто" : c.status === "error" ? "ошибка" : c.status}
-                  </Badge>
+        ) : checks.map((c) => {
+          const releaseTitle = releases.find((r) => r.id === c.releaseId)?.title ?? `Релиз #${c.releaseId}`;
+          const costTime = (c.resultJson as Record<string, unknown> | null)?.["cost_time"];
+          const acrMsg = ((c.resultJson as Record<string, unknown> | null)?.["status"] as Record<string, unknown> | undefined)?.["msg"];
+          return (
+            <div key={c.id} className="p-4" data-testid={`row-acr-${c.id}`}>
+              {/* Header row */}
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 shrink-0">
+                  {c.status === "matched"
+                    ? <AlertTriangle className="h-5 w-5 text-orange-400" />
+                    : c.status === "clean"
+                    ? <CheckCircle2 className="h-5 w-5 text-green-400" />
+                    : c.status === "error"
+                    ? <AlertTriangle className="h-5 w-5 text-destructive" />
+                    : <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {c.matchedTitle ? `Найдено: «${c.matchedTitle}» — ${c.matchedArtist ?? "?"} (совпадение ${c.confidence ?? "?"}%) · ` : ""}
-                  {c.errorMessage ? `${c.errorMessage} · ` : ""}
-                  {fmtDate(c.scannedAt)}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">{releaseTitle}</span>
+                    {c.trackId && <span className="text-xs text-muted-foreground">· Трек #{c.trackId}</span>}
+                    <Badge
+                      variant={c.status === "matched" ? "destructive" : c.status === "error" ? "secondary" : "outline"}
+                      className={c.status === "clean" ? "border-green-500/40 text-green-400" : ""}
+                    >
+                      {c.status === "matched" ? "совпадение" : c.status === "clean" ? "чисто" : c.status === "error" ? "ошибка" : c.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground ml-auto shrink-0">{fmtDate(c.scannedAt)}</span>
+                  </div>
+
+                  {/* Clean — объяснение */}
+                  {c.status === "clean" && (
+                    <div className="mt-2 rounded-md bg-green-500/8 border border-green-500/20 p-2.5 text-xs text-green-300 space-y-0.5">
+                      <div className="font-medium">Совпадений не найдено в базе ACRCloud</div>
+                      <div className="text-green-400/70">
+                        Аудиофайл был проверен по глобальной базе авторских прав и не обнаружен ни в одной из записей.
+                        {typeof costTime === "number" && <span> Время анализа: {costTime.toFixed(2)} с.</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Matched — детали совпадения */}
+                  {c.status === "matched" && (
+                    <div className="mt-2 rounded-md bg-orange-500/8 border border-orange-500/20 p-2.5 text-xs space-y-1.5">
+                      <div className="font-medium text-orange-300">Обнаружено совпадение с существующей записью</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                        {c.matchedTitle && (
+                          <><span className="text-white/50">Название</span><span className="text-foreground font-medium">«{c.matchedTitle}»</span></>
+                        )}
+                        {c.matchedArtist && (
+                          <><span className="text-white/50">Исполнитель</span><span className="text-foreground">{c.matchedArtist}</span></>
+                        )}
+                        {c.matchedIsrc && (
+                          <><span className="text-white/50">ISRC</span><span className="font-mono text-foreground">{c.matchedIsrc}</span></>
+                        )}
+                        {c.matchedLabel && (
+                          <><span className="text-white/50">Лейбл</span><span className="text-foreground">{c.matchedLabel}</span></>
+                        )}
+                        {c.confidence && (
+                          <><span className="text-white/50">Уверенность</span>
+                          <span className={Number(c.confidence) >= 80 ? "text-orange-400 font-bold" : "text-foreground"}>
+                            {Number(c.confidence).toFixed(1)}%
+                          </span></>
+                        )}
+                        {typeof costTime === "number" && (
+                          <><span className="text-white/50">Время анализа</span><span className="text-foreground">{costTime.toFixed(2)} с</span></>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {c.status === "error" && c.errorMessage && (
+                    <div className="mt-2 rounded-md bg-destructive/10 border border-destructive/25 p-2.5 text-xs text-destructive/90">
+                      {c.errorMessage}
+                      {acrMsg && typeof acrMsg === "string" && acrMsg !== c.errorMessage && (
+                        <span className="opacity-60"> · {acrMsg}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pending */}
+                  {c.status === "pending" && (
+                    <div className="mt-2 text-xs text-muted-foreground">Идёт проверка, обновите страницу через несколько секунд…</div>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
