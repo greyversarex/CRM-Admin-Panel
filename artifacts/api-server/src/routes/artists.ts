@@ -1,5 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import { randomUUID } from "crypto";
 import { z } from "zod/v4";
 import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable, transactionsTable, usageReportsTable } from "@workspace/db";
 import { count, eq, ilike, and, desc, sql } from "drizzle-orm";
@@ -10,8 +12,71 @@ import { generateTempPassword } from "../lib/kycUtils";
 import { sendMailAndForget } from "../lib/mail";
 import { logger } from "../lib/logger";
 import { createNotification } from "../services/notifications";
+import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
 
 const router = Router();
+
+// Загрузка фото артиста из формы. Файл уходит в GCS под
+// `${PRIVATE_OBJECT_DIR}/uploads/avatars/<uuid>` и отдаётся через тот же
+// GET /api/users/avatars/:objectId, что и юзер-аватары — он гейтит выдачу
+// через requireAuth, так что любой залогиненный пользователь увидит фото
+// (для публичных страниц — то, что нам и нужно для UI).
+const artistImageStorage = new ObjectStorageService();
+const artistImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+const ALLOWED_IMAGE_MIME = /^image\/(png|jpe?g|gif|webp)$/i;
+const IMAGE_PATH_PREFIX = "/api/users/avatars/";
+
+// Чистая обёртка над multer: переводим LIMIT_FILE_SIZE в 413, остальные multer-ошибки
+// → 400 с понятным русскоязычным текстом, а не дефолтная HTML-страница 500.
+function handleArtistImageUpload(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {
+  artistImageUpload.single("file")(req, res, (err: unknown) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        res.status(413).json({ error: "Файл превышает 5 МБ" }); return;
+      }
+      res.status(400).json({ error: `Ошибка загрузки: ${err.message}` }); return;
+    }
+    next(err);
+  });
+}
+
+router.post(
+  "/artists/upload-image",
+  requireRole("admin", "manager", "label"),
+  handleArtistImageUpload,
+  async (req, res): Promise<void> => {
+    const file = req.file;
+    if (!file) { res.status(400).json({ error: "Файл не передан" }); return; }
+    if (!ALLOWED_IMAGE_MIME.test(file.mimetype)) {
+      res.status(400).json({ error: "Только PNG, JPEG, GIF, WEBP" }); return;
+    }
+
+    const objectId = randomUUID();
+    const privateDir = artistImageStorage.getPrivateObjectDir();
+    const storageKey = `${privateDir}/uploads/avatars/${objectId}`;
+    const path = storageKey.startsWith("/") ? storageKey.slice(1) : storageKey;
+    const [bucketName, ...rest] = path.split("/");
+    const objectName = rest.join("/");
+
+    try {
+      await objectStorageClient.bucket(bucketName).file(objectName).save(file.buffer, {
+        contentType: file.mimetype,
+        resumable: false,
+        metadata: { contentType: file.mimetype },
+      });
+    } catch (err) {
+      req.log?.error({ err }, "[artist-image] upload failed");
+      res.status(500).json({ error: "Не удалось сохранить файл" });
+      return;
+    }
+
+    res.status(201).json({ imageUrl: `${IMAGE_PATH_PREFIX}${objectId}` });
+  },
+);
 
 function parseId(raw: string | string[]): number {
   const str = Array.isArray(raw) ? raw[0] : raw;
@@ -49,6 +114,7 @@ router.get("/artists", async (req, res): Promise<void> => {
     genre: artistsTable.genre,
     bio: artistsTable.bio,
     country: artistsTable.country,
+    phone: artistsTable.phone,
     labelId: artistsTable.labelId,
     spotifyId: artistsTable.spotifyId,
     appleId: artistsTable.appleId,

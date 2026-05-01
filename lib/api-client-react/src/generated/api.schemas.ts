@@ -72,6 +72,7 @@ export interface Artist {
   genre?: string | null;
   bio?: string | null;
   country?: string | null;
+  phone?: string | null;
   labelId?: number | null;
   labelName?: string | null;
   spotifyId?: string | null;
@@ -251,6 +252,7 @@ export interface CreateArtistBody {
   genre?: string | null;
   bio?: string | null;
   country?: string | null;
+  phone?: string | null;
   labelId?: number | null;
   spotifyId?: string | null;
   appleId?: string | null;

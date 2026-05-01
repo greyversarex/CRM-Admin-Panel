@@ -360,7 +360,13 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  // ВСЕГДА шлём session-cookie. Дефолт `same-origin` ломается в prod-сборках,
+  // где SPA и API могут жить на разных доменах (api.foo.com vs panel.foo.com),
+  // и тогда login проходит, а POST отдаёт 401. На бэке CORS уже настроен
+  // с credentials:true, так что это безопасно для известных origin'ов
+  // (CORS-whitelist всё равно блокирует чужие origin'ы).
+  const credentials: RequestCredentials = init.credentials ?? "include";
+  const response = await fetch(input, { ...init, method, headers, credentials });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

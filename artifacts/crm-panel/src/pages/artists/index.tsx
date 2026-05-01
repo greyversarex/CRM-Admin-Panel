@@ -153,6 +153,7 @@ export function ArtistsPanel() {
                                     country: artist.country,
                                     bio: artist.bio,
                                     imageUrl: artist.imageUrl,
+                                    phone: artist.phone,
                                     labelId: artist.labelId,
                                     spotifyId: artist.spotifyId,
                                     appleId: artist.appleId,

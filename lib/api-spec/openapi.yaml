@@ -2041,6 +2041,9 @@ components:
         country:
           type: string
           nullable: true
+        phone:
+          type: string
+          nullable: true
         labelId:
           type: integer
           nullable: true
@@ -2112,6 +2115,9 @@ components:
           type: string
           nullable: true
         country:
+          type: string
+          nullable: true
+        phone:
           type: string
           nullable: true
         labelId:

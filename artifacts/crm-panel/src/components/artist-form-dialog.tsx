@@ -9,8 +9,8 @@
  *  - label          — может создавать только артиста под свой лейбл (labelId fixed)
  *  - artist         — диалог не показывается
  */
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Upload, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "@/hooks/use-toast";
 import {
   useCreateArtist, useUpdateArtist, useListLabels,
@@ -33,6 +34,7 @@ export interface ArtistFormValues {
   country?: string | null;
   bio?: string | null;
   imageUrl?: string | null;
+  phone?: string | null;
   labelId?: number | null;
   spotifyId?: string | null;
   appleId?: string | null;
@@ -52,6 +54,7 @@ const EMPTY: ArtistFormValues = {
   country: "",
   bio: "",
   imageUrl: "",
+  phone: "",
   labelId: null,
   spotifyId: "",
   appleId: "",
@@ -67,14 +70,74 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const [createAccount, setCreateAccount] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
+  // Локальный preview-URL свежевыбранного файла + сам File до отправки.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (open) {
       setForm(initial ? { ...EMPTY, ...initial } : { ...EMPTY, labelId: isLabel ? user?.labelId ?? null : null });
       setCreateAccount(false);
       setInviteEmail("");
+      setPhotoFile(null);
+      setPhotoPreview(null);
     }
   }, [open, initial, isLabel, user?.labelId]);
+
+  // Освобождаем blob URL при unmount/смене.
+  useEffect(() => {
+    return () => {
+      if (photoPreview && photoPreview.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
+  function handlePickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!["image/jpeg", "image/png", "image/gif", "image/webp"].includes(f.type)) {
+      toast({ title: "Неверный формат", description: "PNG, JPEG, GIF или WEBP", variant: "destructive" });
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      toast({ title: "Файл слишком большой", description: "Максимум 5 МБ", variant: "destructive" });
+      return;
+    }
+    if (photoPreview && photoPreview.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(f);
+    setPhotoPreview(URL.createObjectURL(f));
+  }
+
+  function handleClearPhoto() {
+    if (photoPreview && photoPreview.startsWith("blob:")) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setField("imageUrl", null);
+  }
+
+  async function uploadPhoto(): Promise<string | null> {
+    if (!photoFile) return null;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", photoFile);
+      const r = await fetch("/api/artists/upload-image", {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err?.error ?? `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      return data.imageUrl as string;
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const labelsQ = useListLabels({ limit: 200 });
   const labels = labelsQ.data?.data ?? [];
@@ -82,7 +145,7 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const queryClient = useQueryClient();
   const createM = useCreateArtist();
   const updateM = useUpdateArtist();
-  const isSaving = createM.isPending || updateM.isPending || inviting;
+  const isSaving = createM.isPending || updateM.isPending || inviting || uploadingPhoto;
 
   const invalidateLists = (artistId?: number) => {
     queryClient.invalidateQueries({ queryKey: getListArtistsQueryKey() });
@@ -97,12 +160,21 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
       toast({ title: "Укажите имя артиста", variant: "destructive" });
       return;
     }
+    let uploadedImageUrl: string | null | undefined;
+    try {
+      uploadedImageUrl = await uploadPhoto();
+    } catch (e) {
+      toast({ title: "Не удалось загрузить фото", description: (e as Error).message, variant: "destructive" });
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       genre: form.genre?.trim() || null,
       country: form.country?.trim() || null,
       bio: form.bio?.trim() || null,
-      imageUrl: form.imageUrl?.trim() || null,
+      // Приоритет: новый файл → существующий imageUrl (после edit/без изменений).
+      imageUrl: uploadedImageUrl ?? (form.imageUrl?.trim() || null),
+      phone: form.phone?.trim() || null,
       labelId: isLabel ? user?.labelId ?? null : (form.labelId ?? null),
       spotifyId: form.spotifyId?.trim() || null,
       appleId: form.appleId?.trim() || null,
@@ -219,12 +291,59 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
           )}
 
           <div className="grid gap-1.5">
-            <Label htmlFor="art-image">Ссылка на фото</Label>
+            <Label>Фото артиста</Label>
+            <div className="flex items-center gap-3">
+              <Avatar className="h-16 w-16 ring-2 ring-border">
+                {(photoPreview || form.imageUrl) ? (
+                  <AvatarImage src={photoPreview ?? form.imageUrl ?? ""} alt="Превью" />
+                ) : null}
+                <AvatarFallback>{form.name?.slice(0, 1).toUpperCase() || "?"}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  className="hidden"
+                  onChange={handlePickPhoto}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    {photoPreview || form.imageUrl ? "Заменить" : "Загрузить с устройства"}
+                  </Button>
+                  {(photoPreview || form.imageUrl) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearPhoto}
+                      disabled={uploadingPhoto}
+                    >
+                      <X className="h-3.5 w-3.5 mr-1.5" />
+                      Убрать
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">PNG, JPEG, GIF, WEBP — до 5 МБ</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="art-phone">Телефон</Label>
             <Input
-              id="art-image"
-              value={form.imageUrl ?? ""}
-              onChange={(e) => setField("imageUrl", e.target.value)}
-              placeholder="https://…"
+              id="art-phone"
+              type="tel"
+              value={form.phone ?? ""}
+              onChange={(e) => setField("phone", e.target.value)}
+              placeholder="+992 …"
             />
           </div>
 

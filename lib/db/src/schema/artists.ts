@@ -11,6 +11,7 @@ export const artistsTable = pgTable("artists", {
   genre: text("genre"),
   bio: text("bio"),
   country: text("country"),
+  phone: text("phone"),
   labelId: integer("label_id").references(() => labelsTable.id, { onDelete: "set null" }),
   spotifyId: text("spotify_id"),
   appleId: text("apple_id"),
