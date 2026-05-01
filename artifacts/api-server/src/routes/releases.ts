@@ -3,7 +3,7 @@ import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTa
 import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
-  DeleteReleaseParams, UpdateReleaseStatusParams, UpdateReleaseStatusBody, ImportReleaseByUpcBody,
+  DeleteReleaseParams, UpdateReleaseStatusParams, UpdateReleaseStatusBody,
   CreateTransferImportBody, SpotifySearchReleasesQueryParams,
   DeliverReleaseParams, DeliverReleaseBody,
 } from "@workspace/api-zod";
@@ -713,7 +713,7 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
   // Audit: action='submit' — отдельный action для отчётов «кто и когда отправил».
   void auditMutation(req, { action: "submit", entityType: "release", entityId: release.id, before: existing, after: release });
 
-  // Уведомляем модераторов (admin + manager). Артист сам в курсе — кнопку нажал он же.
+  // Уведомляем модераторов (admin + manager).
   const sessionUser = req.session?.user;
   const submitterName = sessionUser?.name ?? sessionUser?.email ?? "артист";
   void notifyAdmins({
@@ -724,6 +724,26 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
     entityId: release.id,
     link: `/distribution`,
   });
+
+  // Уведомляем самого автора и его лейбл — подтверждение приёма заявки.
+  void notifyByArtistId(release.artistId, {
+    type: "release_submitted",
+    title: `Релиз «${release.title}» отправлен на модерацию`,
+    body: "Мы сообщим, как только модератор примет решение.",
+    entityType: "release",
+    entityId: release.id,
+    link: `/releases/${release.id}`,
+  });
+  if (release.labelId) {
+    void notifyByLabelId(release.labelId, {
+      type: "release_submitted",
+      title: `Релиз «${release.title}» отправлен на модерацию`,
+      body: `Отправил: ${submitterName}.`,
+      entityType: "release",
+      entityId: release.id,
+      link: `/releases/${release.id}`,
+    });
+  }
 
   const enriched = await enrichRelease(release);
   res.json(enriched);
@@ -942,6 +962,27 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
     await db.update(releasesTable)
       .set({ status: "delivering" })
       .where(and(eq(releasesTable.id, release.id), eq(releasesTable.status, "approved")));
+
+    // Уведомляем артиста и лейбл, что доставка началась.
+    const targetsList = uniqueTargets.join(", ");
+    void notifyByArtistId(release.artistId, {
+      type: "release_delivering",
+      title: `🚀 Релиз «${release.title}» отправляется в DSP`,
+      body: `Поставили в очередь: ${targetsList}. Статус доставки можно отслеживать в карточке релиза.`,
+      entityType: "release",
+      entityId: release.id,
+      link: `/releases/${release.id}`,
+    });
+    if (release.labelId) {
+      void notifyByLabelId(release.labelId, {
+        type: "release_delivering",
+        title: `🚀 Релиз «${release.title}» отправляется в DSP`,
+        body: `Поставили в очередь: ${targetsList}.`,
+        entityType: "release",
+        entityId: release.id,
+        link: `/releases/${release.id}`,
+      });
+    }
   }
 
   res.status(201).json({
@@ -959,38 +1000,19 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
   });
 });
 
-router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {
-  const parsed = ImportReleaseByUpcBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  // Mock UPC import - in production would call Spotify/Apple/MusicBrainz API
-  const mockRelease = {
-    title: `Imported Release (UPC: ${parsed.data.upc})`,
-    releaseType: "album" as const,
-    upc: parsed.data.upc,
-    status: "draft",
-    artistId: 1,
-    isExplicit: false,
-    territories: ["WW"],
-  };
-
-  const artists = await db.select().from(artistsTable).limit(1);
-  if (artists.length === 0) {
-    res.status(400).json({ error: "No artists found. Please create an artist first." });
-    return;
-  }
-
-  const [release] = await db.insert(releasesTable).values({
-    ...mockRelease,
-    artistId: artists[0].id,
-  }).returning();
-  void auditMutation(req, { action: "create", entityType: "release", entityId: release.id, before: null, after: release });
-
-  const enriched = await enrichRelease(release);
-  res.json(enriched);
+// Импорт релиза по UPC из внешних DSP-каталогов.
+// Сейчас функциональность не реализована: для честного импорта нужен подключённый
+// API одного из источников (Spotify catalog API, Apple Music API, MusicBrainz).
+// Пока возвращаем 501 чтобы НЕ создавать в БД фантомных «Imported Release (UPC: …)»
+// записей. Импорт каталога из Spotify через OAuth-аккаунт реализован отдельно
+// в /api/transfer-imports (см. routes/transfer-imports.ts).
+router.post("/releases/import-upc", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+  res.status(501).json({
+    error: "not_implemented",
+    message:
+      "Импорт по UPC ещё не подключён. Чтобы импортировать каталог, используйте раздел " +
+      "«Перенос каталога» (Transfer) — он уже работает через подключённый Spotify API.",
+  });
 });
 
 export default router;

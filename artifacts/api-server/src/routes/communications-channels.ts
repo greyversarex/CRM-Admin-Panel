@@ -32,7 +32,10 @@ async function loadNotifications(): Promise<NotificationsConfig> {
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "notifications"));
     return (row?.value ?? {}) as NotificationsConfig;
-  } catch { return {}; }
+  } catch (e) {
+    logger.error({ err: e }, "[communications] loadNotifications: read platform_settings failed");
+    return {};
+  }
 }
 
 /**

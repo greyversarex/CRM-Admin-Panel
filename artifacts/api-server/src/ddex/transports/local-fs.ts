@@ -49,23 +49,27 @@ export const localFsTransport: ITransport = {
         await fs.writeFile(dest, f.content.data);
         totalBytes += f.content.data.length;
       } else {
-        // В production отсутствие исходного файла — фатальная ошибка (доставка прервана).
-        // В dev — пишем заглушку и продолжаем, чтобы упростить локальную проверку структуры.
+        // Отсутствие исходного файла — фатальная ошибка доставки (и в dev, и в prod).
+        // Мы НЕ подменяем тихо текстовой заглушкой — это привело бы к доставке
+        // в DSP «релиза» с битым аудио/обложкой. Только если разработчик ЯВНО
+        // выставил DDEX_LOCAL_FS_STUB_MISSING=1, мы записываем placeholder-буфер
+        // (только для локального теста структуры пакета).
         try {
           await fs.copyFile(f.content.localPath, dest);
           const st = await fs.stat(dest);
           totalBytes += st.size;
         } catch (copyErr) {
-          if (process.env["NODE_ENV"] === "production") {
+          const allowStub = process.env["DDEX_LOCAL_FS_STUB_MISSING"] === "1"
+            && process.env["NODE_ENV"] !== "production";
+          if (!allowStub) {
             throw new Error(
               `DDEX local-fs: исходный файл недоступен ${f.content.localPath} (${(copyErr as Error).message}). Доставка прервана.`,
             );
           }
-          // dev: stub + видимый warning через console (logger в этом модуле не используется)
           const stub = Buffer.from(`[STUB-DEV] missing source: ${f.content.localPath}`, "utf8");
           await fs.writeFile(dest, stub);
           totalBytes += stub.length;
-          console.warn(`[ddex/local-fs] dev-stub: ${f.content.localPath} → ${dest}`);
+          console.warn(`[ddex/local-fs] dev-stub (DDEX_LOCAL_FS_STUB_MISSING=1): ${f.content.localPath} → ${dest}`);
         }
       }
       written.push(f.filename);

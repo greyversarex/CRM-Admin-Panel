@@ -85,6 +85,13 @@
       "when": 1777485100980,
       "tag": "0011_shocking_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777643971485,
+      "tag": "0012_great_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

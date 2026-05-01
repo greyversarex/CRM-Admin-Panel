@@ -478,6 +478,32 @@ router.post("/payouts", async (req, res): Promise<void> => {
     link: "/payouts",
   });
 
+  // Подтверждение самому заявителю — артисту и/или лейблу — что заявка принята.
+  const ackTitle = `Заявка на выплату принята: ${payout.amount} ${payout.currency}`;
+  const ackBody  = payout.twoStepRequired
+    ? "Сумма требует двухступенчатого согласования. Мы уведомим вас о решении."
+    : "Заявка передана администратору на рассмотрение.";
+  if (payout.artistId) {
+    void notifyByArtistId(payout.artistId, {
+      type: "payout_requested_ack",
+      title: ackTitle,
+      body: ackBody,
+      entityType: "payout",
+      entityId: payout.id,
+      link: "/payouts",
+    });
+  }
+  if (payout.labelId) {
+    void notifyByLabelId(payout.labelId, {
+      type: "payout_requested_ack",
+      title: ackTitle,
+      body: ackBody,
+      entityType: "payout",
+      entityId: payout.id,
+      link: "/payouts",
+    });
+  }
+
   res.status(201).json({
     ...formatPayout(payout),
     artistName: null,

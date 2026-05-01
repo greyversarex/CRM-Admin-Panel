@@ -24,7 +24,7 @@ import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
 import { emitAlertAndForget } from "../services/alerts-emitter";
-import { createNotification } from "../services/notifications";
+import { createNotification, notifyAdmins } from "../services/notifications";
 import {
   ObjectStorageService, ObjectNotFoundError, objectStorageClient,
 } from "../lib/objectStorage";
@@ -281,6 +281,17 @@ router.post("/users/me/submit-kyc", async (req, res): Promise<void> => {
     before: { id: me.id, kycStatus: me.kycStatus, kycCompletedAt: me.kycCompletedAt },
     after:  { id: updated.id, kycStatus: updated.kycStatus, kycCompletedAt: updated.kycCompletedAt },
   });
+
+  // Уведомляем модераторов: пользователь подал KYC на проверку.
+  void notifyAdmins({
+    type: "kyc_submitted",
+    title: `🪪 Новый KYC на проверку: ${me.name}`,
+    body: `Email: ${me.email}. Документов: ${docs.length}. Откройте раздел KYC.`,
+    entityType: "general",
+    entityId: me.id,
+    link: "/users?tab=kyc",
+  });
+
   res.json({ ok: true, kycStatus: updated.kycStatus });
 });
 

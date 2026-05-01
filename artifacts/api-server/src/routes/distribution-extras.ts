@@ -60,11 +60,23 @@ async function loadAcrConfig(): Promise<AcrCloudConfig> {
     // Fallback: старый путь через platformSettings
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "acrcloud"));
     return (row?.value ?? {}) as AcrCloudConfig;
-  } catch { return {}; }
+  } catch (e) {
+    logger.error({ err: e }, "[distribution-extras] loadAcrConfig: read integration/settings failed");
+    return {};
+  }
 }
 
-router.get("/distribution/acr/checks", async (req, res) => {
-  const releaseId = req.query.releaseId ? Number(req.query.releaseId) : null;
+const AcrChecksQuery = z.object({
+  releaseId: z.coerce.number().int().positive().optional(),
+});
+
+router.get("/distribution/acr/checks", async (req, res): Promise<void> => {
+  const parsed = AcrChecksQuery.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_query", message: parsed.error.message });
+    return;
+  }
+  const releaseId = parsed.data.releaseId ?? null;
   let q = db.select().from(acrChecksTable).$dynamic();
   if (releaseId) q = q.where(eq(acrChecksTable.releaseId, releaseId));
   const rows = await q.orderBy(desc(acrChecksTable.scannedAt)).limit(200);

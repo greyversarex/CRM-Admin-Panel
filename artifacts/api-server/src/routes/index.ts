@@ -41,7 +41,7 @@ import publishingExtrasRouter from "./publishing-extras";
 import communicationsChannelsRouter from "./communications-channels";
 import managerPermissionsRouter from "./manager-permissions";
 import takedownsRouter from "./takedowns";
-import labelMembersRouter from "./label-members";
+import labelMembersRouter, { labelMembersPublicRouter } from "./label-members";
 import marketingRouter from "./marketing";
 import analyticsMarketingRouter from "./analytics-marketing";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -56,6 +56,8 @@ router.use(authRouter);
 // Public signup endpoint (POST /signup-requests). Admin endpoints в этом
 // router'е защищены своим requireRole внутри хендлеров.
 router.use(signupRouter);
+// Публичные эндпоинты приёма приглашения в команду лейбла (без сессии — токен достаточно).
+router.use(labelMembersPublicRouter);
 // Streaming PUT-приёмник presigned-загрузок. Аутентификация по HMAC-токену
 // в query, не по cookie — поэтому стоит ДО requireAuth.
 router.use(storageUploadRouter);

@@ -8,6 +8,7 @@ import { canAccess } from "@/lib/permissions";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import InviteAccept from "@/pages/invite";
 import AdminSignups from "@/pages/admin/signups";
 import AdminKyc from "@/pages/admin/kyc";
 import AdminAudit from "@/pages/admin/audit";
@@ -95,6 +96,12 @@ function Router() {
           путал интерфейс. */}
       <Route path="/signup">
         {user ? <Redirect to="/" /> : <Signup />}
+      </Route>
+
+      {/* Public — приём приглашения в команду лейбла. Авторизованных
+          пользователей не редиректим: им тоже может понадобиться открыть ссылку. */}
+      <Route path="/invite/:token">
+        <InviteAccept />
       </Route>
 
       <ProtectedRoute path="/"               component={Dashboard} />

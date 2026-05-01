@@ -75,3 +75,15 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24. I
 -   **csv-parse/sync**: For parsing CSV files during revenue ingestion.
 -   **multer**: Middleware for handling multipart/form-data, used for file uploads.
 -   **ssh2-sftp-client**: (Conditional) For SFTP transport in DDEX deliveries and polling acknowledgements.
+
+## Recent Changes
+
+### 2026-05-01 — Audit fixes (no fakes/mocks/stubs, cross-role workflows closed)
+- **Honest artist stats**: `GET /api/artists/:id/stats` теперь агрегирует реальные `usage_reports` + `transactions`. Никаких Math.random.
+- **import-upc — честный 501**: Эндпоинт больше не создаёт мусорных релизов; возвращает понятное сообщение и направляет в Transfer-модуль.
+- **TikTok/playlists analytics — без фейков**: `ensureTiktokSeedData`/`ensurePlaylistSeedData` удалены. Эндпоинты возвращают пустой массив, если данных нет.
+- **DDEX local-fs**: stub-буфер на отсутствующие файлы доступен только при явном `DDEX_LOCAL_FS_STUB_MISSING=1`. Без этого флага доставка падает с понятной ошибкой.
+- **Cross-role notifications**: добавлены уведомления при submit/deliver релиза (артисту и лейблу), при создании заявки на выплату (заявителю + админам), при сабмите KYC (модераторам).
+- **Полный сценарий приглашения участника лейбла**: схема `label_members` дополнена `invite_token`/`invite_expires_at`/`user_id`. Новые эндпоинты `GET/POST /api/label-members/invite/:token` (публичные). Новая страница `/invite/:token` на фронте. Email-приглашение шлётся через существующий `sendMail` (best-effort, fallback на in-app notification, если у пользователя уже есть аккаунт). Цикл «лейбл пригласил → приглашённый создал пароль → вошёл и видит лейбл» работает end-to-end.
+- **Тихие ошибки видны**: `loadNotifications`, `loadAcrConfig`, `loadSpotifyConfig` теперь логируют ошибку перед возвратом дефолта.
+- **Zod-валидация**: `POST /api/analytics/ugc/import-spotify` (body) и `GET /api/distribution/acr/checks` (query) принимают только валидные параметры; иначе 400 с понятным сообщением.

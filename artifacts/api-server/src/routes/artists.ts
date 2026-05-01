@@ -1,8 +1,8 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod/v4";
-import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable } from "@workspace/db";
-import { count, eq, ilike, and, desc } from "drizzle-orm";
+import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable, transactionsTable, usageReportsTable } from "@workspace/db";
+import { count, eq, ilike, and, desc, sql } from "drizzle-orm";
 import { CreateArtistBody, UpdateArtistBody, GetArtistParams, UpdateArtistParams, DeleteArtistParams, GetArtistStatsParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
@@ -239,23 +239,49 @@ router.get("/artists/:id/stats", async (req, res): Promise<void> => {
     }
   }
 
-  const platforms = ["Spotify", "Apple Music", "YouTube", "Yandex Music", "VK Music", "Tidal"];
-  const total = Math.floor(Math.random() * 10000000) + 100000;
-  const streamsByPlatform = platforms.map((p, i) => {
-    const streams = Math.floor(Math.random() * (total / 2)) + 10000;
-    return {
-      platform: p,
-      streams,
-      revenue: parseFloat((streams * 0.004).toFixed(2)),
-      percentage: parseFloat(((streams / total) * 100).toFixed(1)),
-    };
-  });
+  // Реальная статистика из БД: usage_reports (стримы по платформам) + transactions (выручка).
+  // Если данных нет — отдаём честные нули, без выдуманных миллионов.
+  const platformRows = await db
+    .select({
+      platform: usageReportsTable.platform,
+      streams:  sql<number>`coalesce(sum(${usageReportsTable.streams}), 0)::int`,
+      revenue:  sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)::text`,
+    })
+    .from(usageReportsTable)
+    .where(eq(usageReportsTable.artistId, params.data.id))
+    .groupBy(usageReportsTable.platform);
+
+  const totalStreams = platformRows.reduce((acc, r) => acc + Number(r.streams || 0), 0);
+
+  // Доход берём из transactions (источник правды по деньгам), а не из revenue в usage_reports.
+  const [txAgg] = await db
+    .select({
+      revenue: sql<string>`coalesce(sum(case when ${transactionsTable.type} = 'dsp_revenue' then ${transactionsTable.amount} else 0 end), 0)::text`,
+    })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.artistId, params.data.id));
+  const totalRevenue = parseFloat(txAgg?.revenue ?? "0");
+
+  // Monthly listeners — из последнего отчёта по периодам. Если нет данных — 0.
+  // (Точное значение требует отдельного отчёта DSP; пока используем стримы / 30 как приближение.)
+  const monthlyListeners = totalStreams > 0 ? Math.round(totalStreams / 30) : 0;
+
+  const streamsByPlatform = platformRows
+    .map((r) => {
+      const streams = Number(r.streams || 0);
+      const revenue = parseFloat(r.revenue || "0");
+      const percentage = totalStreams > 0 ? parseFloat(((streams / totalStreams) * 100).toFixed(1)) : 0;
+      return { platform: r.platform, streams, revenue, percentage };
+    })
+    .sort((a, b) => b.streams - a.streams);
+
+  const topPlatform = streamsByPlatform[0]?.platform ?? null;
 
   res.json({
-    totalStreams: total,
-    totalRevenue: parseFloat((total * 0.004).toFixed(2)),
-    monthlyListeners: Math.floor(total / 12),
-    topPlatform: "Spotify",
+    totalStreams,
+    totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+    monthlyListeners,
+    topPlatform,
     streamsByPlatform,
   });
 });

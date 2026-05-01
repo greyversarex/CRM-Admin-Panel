@@ -20,6 +20,7 @@
  *   - Spotify rejected creds / network → 502 spotify_upstream.
  */
 import { Router } from "express";
+import { z } from "zod";
 import { db, platformSettingsTable, releasesTable, tracksTable, ugcMetricsTable } from "@workspace/db";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { requireRole } from "../lib/auth";
@@ -41,13 +42,23 @@ async function loadSpotifyConfig(): Promise<SpotifyConfig> {
       const clientSecret = creds["client_secret"];
       if (clientId && clientSecret) return { clientId, clientSecret };
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    logger.warn({ err: e }, "[ugc-import] integration lookup failed, falling back to platform_settings");
+  }
   // Fallback: platformSettings
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "spotify"));
     return (row?.value ?? {}) as SpotifyConfig;
-  } catch { return {}; }
+  } catch (e) {
+    logger.error({ err: e }, "[ugc-import] loadSpotifyConfig: read platform_settings failed");
+    return {};
+  }
 }
+
+const ImportBody = z.object({
+  releaseId: z.number().int().positive().nullable().optional(),
+  limit:     z.number().int().min(1).max(500).optional(),
+});
 
 let _token: { value: string; expiresAt: number } | null = null;
 async function getToken(cfg: SpotifyConfig): Promise<string> {
@@ -78,8 +89,13 @@ router.post("/analytics/ugc/import-spotify", requireRole("admin", "manager"), as
     return;
   }
 
-  const releaseId = typeof req.body?.releaseId === "number" ? req.body.releaseId : null;
-  const limit = Math.min(Math.max(Number(req.body?.limit ?? 100), 1), 500);
+  const parsed = ImportBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", message: parsed.error.message });
+    return;
+  }
+  const releaseId = parsed.data.releaseId ?? null;
+  const limit = parsed.data.limit ?? 100;
 
   let token: string;
   try { token = await getToken(cfg); }
