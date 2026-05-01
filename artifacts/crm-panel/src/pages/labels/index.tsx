@@ -11,6 +11,8 @@ import { Search, Plus, Filter, Building2, MoreHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useLang } from "@/lib/i18n";
+import { LabelFormDialog, type LabelFormValues } from "@/components/label-form-dialog";
+import { FileEdit } from "lucide-react";
 
 export default function Labels() {
   return (
@@ -24,6 +26,8 @@ export function LabelsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<LabelFormValues | null>(null);
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
   const isLabel     = user?.role === "label";
@@ -47,7 +51,7 @@ export function LabelsPanel() {
             <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
           {isAdminLike && (
-            <Button>
+            <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               {t.labels.new_label}
             </Button>
@@ -134,7 +138,25 @@ export function LabelsPanel() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border">
                             <DropdownMenuLabel>{t.labels.actions}</DropdownMenuLabel>
-                            <DropdownMenuItem>{t.labels.edit_label}</DropdownMenuItem>
+                            {isAdminLike && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditing({
+                                    id: label.id,
+                                    name: label.name,
+                                    country: label.country,
+                                    website: label.website,
+                                    logoUrl: label.logoUrl,
+                                    parentLabelId: label.parentLabelId,
+                                    status: label.status as "active" | "inactive",
+                                  });
+                                  setDialogOpen(true);
+                                }}
+                              >
+                                <FileEdit className="mr-2 h-4 w-4" />
+                                {t.labels.edit_label}
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -145,6 +167,14 @@ export function LabelsPanel() {
             </Table>
           </CardContent>
         </Card>
+
+        {isAdminLike && (
+          <LabelFormDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            initial={editing}
+          />
+        )}
       </div>
   );
 }

@@ -11,8 +11,8 @@ import { Search, Plus, Filter, Users as UsersIcon, MoreHorizontal, FileEdit } fr
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
+import { ArtistFormDialog, type ArtistFormValues } from "@/components/artist-form-dialog";
 
 export default function Artists() {
   return (
@@ -26,11 +26,13 @@ export function ArtistsPanel() {
   const { user } = useAuth();
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
-  const [, setLocation] = useLocation();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<ArtistFormValues | null>(null);
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
   const isArtist    = user?.role === "artist";
   const isLabel     = user?.role === "label";
+  const canCreate   = isAdminLike || isLabel;
 
   const { data: artistsDataRaw, isLoading } = useListArtists({
     search: searchQuery || undefined,
@@ -51,8 +53,8 @@ export function ArtistsPanel() {
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
             <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
-          {(isAdminLike || isLabel) && (
-            <Button>
+          {canCreate && (
+            <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               {isLabel ? t.artists.sign_artist : t.artists.new_artist}
             </Button>
@@ -141,10 +143,28 @@ export function ArtistsPanel() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border">
                             <DropdownMenuLabel>{t.artists.actions}</DropdownMenuLabel>
-                            <DropdownMenuItem>
-                              <FileEdit className="mr-2 h-4 w-4" />
-                              {t.artists.edit_profile}
-                            </DropdownMenuItem>
+                            {canCreate && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditing({
+                                    id: artist.id,
+                                    name: artist.name,
+                                    genre: artist.genre,
+                                    country: artist.country,
+                                    bio: artist.bio,
+                                    imageUrl: artist.imageUrl,
+                                    labelId: artist.labelId,
+                                    spotifyId: artist.spotifyId,
+                                    appleId: artist.appleId,
+                                    status: artist.status as "active" | "inactive",
+                                  });
+                                  setDialogOpen(true);
+                                }}
+                              >
+                                <FileEdit className="mr-2 h-4 w-4" />
+                                {t.artists.edit_profile}
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -155,6 +175,14 @@ export function ArtistsPanel() {
             </Table>
           </CardContent>
         </Card>
+
+        {canCreate && (
+          <ArtistFormDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            initial={editing}
+          />
+        )}
       </div>
   );
 }

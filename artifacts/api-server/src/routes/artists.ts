@@ -80,15 +80,23 @@ router.get("/artists", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/artists", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.post("/artists", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
   const parsed = CreateArtistBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const slug = parsed.data.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-  const [artist] = await db.insert(artistsTable).values({ ...parsed.data, slug }).returning();
+  // Label users can sign artists only under their own label.
+  const scope = getDataScope(req);
+  const data = { ...parsed.data };
+  if (scope.role === "label") {
+    if (scope.labelId == null) { res.status(403).json({ error: "Label scope missing" }); return; }
+    data.labelId = scope.labelId;
+  }
+
+  const slug = data.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const [artist] = await db.insert(artistsTable).values({ ...data, slug }).returning();
   void auditMutation(req, { action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist });
 
   const [totalReleases] = await db.select({ count: count() }).from(releasesTable).where(eq(releasesTable.artistId, artist.id));
@@ -142,7 +150,7 @@ router.get("/artists/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.put("/artists/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.put("/artists/:id", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
   const params = UpdateArtistParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -158,7 +166,18 @@ router.put("/artists/:id", requireRole("admin", "manager"), async (req, res): Pr
   const [existing] = await db.select().from(artistsTable).where(eq(artistsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Artist not found" }); return; }
 
-  const [artist] = await db.update(artistsTable).set(parsed.data).where(eq(artistsTable.id, params.data.id)).returning();
+  // Label users can edit only artists under their label, and cannot move artist to another label.
+  const scope = getDataScope(req);
+  const updateData = { ...parsed.data };
+  if (scope.role === "label") {
+    if (scope.labelId == null || existing.labelId !== scope.labelId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    updateData.labelId = scope.labelId;
+  }
+
+  const [artist] = await db.update(artistsTable).set(updateData).where(eq(artistsTable.id, params.data.id)).returning();
   if (!artist) {
     res.status(404).json({ error: "Artist not found" });
     return;

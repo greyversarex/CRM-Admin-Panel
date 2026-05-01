@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Save } from "lucide-react";
+import { ChevronLeft, Save, Plus } from "lucide-react";
 import { CoverUploader } from "@/components/asset-uploader";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
@@ -17,6 +17,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { ArtistFormDialog } from "@/components/artist-form-dialog";
+import { LabelFormDialog } from "@/components/label-form-dialog";
 
 const RELEASE_TYPES = ["single", "album", "ep", "compilation"] as const;
 const RELEASE_TYPE_LABELS: Record<string, string> = {
@@ -43,9 +45,15 @@ export default function CreateRelease() {
 
   const isArtist = user?.role === "artist";
   const isLabel  = user?.role === "label";
+  const isAdminLike = user?.role === "admin" || user?.role === "manager";
+  const canCreateArtist = isAdminLike || isLabel;
+  const canCreateLabel  = isAdminLike;
 
   const { data: artistsData } = useListArtists({ limit: 200 });
   const { data: labelsData }  = useListLabels({ limit: 100 });
+
+  const [artistDialogOpen, setArtistDialogOpen] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen]   = useState(false);
 
   const [form, setForm] = useState({
     title: "",
@@ -183,32 +191,60 @@ export default function CreateRelease() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Исполнитель *">
-                    <Select
-                      value={form.artistId ? String(form.artistId) : ""}
-                      onValueChange={(v) => set("artistId", Number(v))}
-                    >
-                      <SelectTrigger className="bg-background/40"><SelectValue placeholder="Выберите исполнителя…" /></SelectTrigger>
-                      <SelectContent>
-                        {visibleArtists.map((a: any) => (
-                          <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  {!isLabel && (
-                    <Field label="Лейбл">
+                    <div className="flex items-center gap-2">
                       <Select
-                        value={form.labelId ? String(form.labelId) : "none"}
-                        onValueChange={(v) => set("labelId", v === "none" ? null : Number(v))}
+                        value={form.artistId ? String(form.artistId) : ""}
+                        onValueChange={(v) => set("artistId", Number(v))}
                       >
-                        <SelectTrigger className="bg-background/40"><SelectValue placeholder="Независимый" /></SelectTrigger>
+                        <SelectTrigger className="bg-background/40"><SelectValue placeholder="Выберите исполнителя…" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Независимый</SelectItem>
-                          {labelsData?.data.map((l: any) => (
-                            <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                          {visibleArtists.map((a: any) => (
+                            <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {canCreateArtist && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0 bg-background/40"
+                          title="Создать нового артиста"
+                          onClick={() => setArtistDialogOpen(true)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </Field>
+                  {!isLabel && (
+                    <Field label="Лейбл">
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={form.labelId ? String(form.labelId) : "none"}
+                          onValueChange={(v) => set("labelId", v === "none" ? null : Number(v))}
+                        >
+                          <SelectTrigger className="bg-background/40"><SelectValue placeholder="Независимый" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Независимый</SelectItem>
+                            {labelsData?.data.map((l: any) => (
+                              <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {canCreateLabel && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0 bg-background/40"
+                            title="Создать новый лейбл"
+                            onClick={() => setLabelDialogOpen(true)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </Field>
                   )}
                 </div>
@@ -301,6 +337,21 @@ export default function CreateRelease() {
             {createRelease.isPending ? "Сохранение…" : "Сохранить релиз"}
           </Button>
         </div>
+
+        {canCreateArtist && (
+          <ArtistFormDialog
+            open={artistDialogOpen}
+            onOpenChange={setArtistDialogOpen}
+            onSaved={(id) => set("artistId", id)}
+          />
+        )}
+        {canCreateLabel && (
+          <LabelFormDialog
+            open={labelDialogOpen}
+            onOpenChange={setLabelDialogOpen}
+            onSaved={(id) => set("labelId", id)}
+          />
+        )}
       </div>
     </Layout>
   );

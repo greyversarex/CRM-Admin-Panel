@@ -215,6 +215,7 @@ Self-service эндпоинты (НЕ требуют admin):
   - `resolveScopeFilter(table, scope, { artistCol, labelCol })` — returns Drizzle SQL fragment or `false` for "no rows".
 - Admin/manager-only routers (mounted in `routes/index.ts` behind `requireRole("admin","manager")`): `/labels`, `/users`, `/contacts`, `/crm`, `/splits`, `/publishing`, `/analytics`, `/deliveries`, `/integrations`.
 - `/rights` — доступен всем ролям, но CREATE/DELETE только admin/manager; label/artist видят только свои активы (scoped внутри роутера через `getSessionUser`).
+- `/artists` — POST и PUT разрешены `admin`, `manager`, `label`. Для `label` сервер принудительно ставит `labelId = scope.labelId` (нельзя подписать чужого артиста или переместить артиста в чужой лейбл). DELETE — только admin/manager.
 - All read endpoints in `artists`, `releases`, `tracks`, `finance`, `royalties`, `dashboard` apply scope filters server-side; mutations include pre-flight scope checks. For non-privileged users, `query.artist_id` / `label_id` overrides are ignored.
 - Test users (seeded): `admin@tajikmusic.com / admin123`, `manager@tajikmusic.com / manager123`, `label@tajikmusic.com / label123` (labelId=1), `artist@tajikmusic.com / artist123` (artistId=1).
 - Known gaps: activity log has no entity-scope columns → `/dashboard/recent-activity` returns `[]` for non-admin/manager. CSRF deferred (sameSite=lax used).
