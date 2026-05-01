@@ -34,6 +34,7 @@
     "pino-http": "^10",
     "ssh2-sftp-client": "^12.1.1",
     "web-push": "^3.6.7",
+    "xlsx": "^0.18.5",
     "xmlbuilder2": "^4.0.3",
     "zod": "catalog:"
   },

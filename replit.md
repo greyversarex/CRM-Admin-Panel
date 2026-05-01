@@ -26,7 +26,7 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24. I
 
 -   **Catalog Management**: CRUD operations for artists, labels, releases, and tracks. Includes an artist invitation flow and a release creation wizard with role-based UI adjustments.
 -   **CRM**: Comprehensive contacts and task management. Features a dedicated business analytics hub with overview KPIs, user activity, revenue per artist, growth charts, and release/delivery/task funnels.
--   **Financial Management**: Transaction ledger, artist/label balances, payout management with approval/rejection workflows, and revenue split definitions.
+-   **Financial Management**: Transaction ledger, artist/label balances, payout management with approval/rejection workflows, and revenue split definitions. Includes server-side export of transactions and payouts in Excel (.xlsx) and CSV (.csv) formats via `GET /api/finance/transactions/export` and `GET /api/finance/payouts/export`. Export buttons with format dropdown are available in the Finance Overview and Payouts panels.
 -   **Royalty Hub**: User-facing royalty summaries, statements (PDF/CSV), and breakdowns by release and DSP.
 -   **DDEX Delivery**: Full DDEX ERN-4.3 pipeline for message creation, batching, and acknowledgement processing. Includes SFTP transport and a robust inbound acknowledgement webhook.
 -   **Publishing Rights**: Management of publishing works with dynamic writer lists and share validation.

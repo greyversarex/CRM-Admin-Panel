@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle, Banknote, Coins, PieChart } from "lucide-react";
+import { Search, DollarSign, TrendingUp, TrendingDown, Wallet, Upload, FileSpreadsheet, AlertTriangle, Banknote, Coins, PieChart, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportTransactions } from "@/lib/export-finance";
 import { PeriodSummaryCard } from "@/components/period-summary-card";
 import { CommissionsTab } from "./commissions-tab";
 import { RoyaltiesPanel } from "@/pages/royalties";
@@ -361,16 +363,46 @@ export function FinanceOverviewPanel() {
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2 bg-card/50 backdrop-blur border-border/50 flex flex-col">
             <CardHeader className="pb-3 border-b border-border/50">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Transaction Ledger</CardTitle>
-                <div className="relative w-64">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search transactions..."
-                    className="pl-8 h-8 bg-background/50"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-base shrink-0">Transaction Ledger</CardTitle>
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <div className="relative w-56">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search transactions..."
+                      className="pl-8 h-8 bg-background/50"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                        <Download className="h-3.5 w-3.5" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Экспорт транзакций</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => exportTransactions({
+                        format: "xlsx",
+                        ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+                        ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
+                      })}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-500" />
+                        Excel (.xlsx)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportTransactions({
+                        format: "csv",
+                        ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+                        ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
+                      })}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2 text-blue-500" />
+                        CSV (.csv)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </CardHeader>

@@ -11,11 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download, Loader2 } from "lucide-react";
+import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download, Loader2, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { exportPayoutsCsv } from "@/lib/export-payouts";
+import { exportPayouts } from "@/lib/export-finance";
 import { useLang } from "@/lib/i18n";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default function Payouts() {
   return (
@@ -121,10 +123,34 @@ export function PayoutsPanel() {
                 className="h-9 w-[140px] bg-background/50"
               />
             </div>
-            <Button variant="outline" onClick={onExport} disabled={exporting}>
-              <Download className="mr-2 h-4 w-4" />
-              {exporting ? `${t.payouts.exporting} ${exportLoaded}` : t.payouts.export_csv}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={exporting}>
+                  {exporting
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t.payouts.exporting} {exportLoaded}</>
+                    : <><Download className="mr-2 h-4 w-4" />Export</>
+                  }
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Экспорт выплат</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => exportPayouts({
+                  format: "xlsx",
+                  ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
+                  ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
+                  from: fromDate || undefined,
+                  to:   toDate   || undefined,
+                })}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-500" />
+                  Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onExport}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-blue-500" />
+                  CSV (.csv)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {!isAdminLike && (
               <Button onClick={() => setRequestOpen(true)} data-testid="button-request-payout">
                 <Plus className="mr-2 h-4 w-4" /> {t.payouts.request_payout}

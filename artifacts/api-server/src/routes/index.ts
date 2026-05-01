@@ -32,6 +32,7 @@ import automationExtrasRouter from "./automation-extras";
 import catalogRouter from "./catalog";
 import catalogBulkRouter from "./catalog-bulk";
 import financeExtrasRouter from "./finance-extras";
+import financeExportRouter from "./finance-export";
 import distributionExtrasRouter from "./distribution-extras";
 import analyticsExtrasRouter from "./analytics-extras";
 import analyticsUgcImportRouter from "./analytics-ugc-import";
@@ -93,6 +94,8 @@ router.use(crmRouter);
 router.use(financeRouter);            // scoped per-route inside
 // Финансовые расширения: комиссии + 2-step approval payouts (admin/manager only — гарды внутри).
 router.use(financeExtrasRouter);
+// Экспорт транзакций и выплат в Excel/CSV (scoped per-route inside).
+router.use(financeExportRouter);
 // CSV-импорт DSP-отчётов — admin/manager only (вся монетарная мутация).
 router.use("/finance/ingest", adminOnly, requireManagerPermission("finance"));
 router.use("/finance/imports", adminOnly, requireManagerPermission("finance"));
