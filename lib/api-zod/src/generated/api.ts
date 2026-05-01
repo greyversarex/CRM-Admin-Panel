@@ -164,6 +164,9 @@ export const GetArtistParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getArtistResponseTwoReleasesItemRiskScoreMin = 0;
+export const getArtistResponseTwoReleasesItemRiskScoreMax = 100;
+
 export const GetArtistResponse = zod
   .object({
     id: zod.number(),
@@ -257,6 +260,24 @@ export const GetArtistResponse = zod
               .boolean()
               .describe(
                 "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
+              ),
+            riskScore: zod
+              .number()
+              .min(getArtistResponseTwoReleasesItemRiskScoreMin)
+              .max(getArtistResponseTwoReleasesItemRiskScoreMax)
+              .describe(
+                "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+              ),
+            riskFactors: zod
+              .array(
+                zod.object({
+                  code: zod.string(),
+                  message: zod.string(),
+                  severity: zod.enum(["low", "medium", "high"]),
+                }),
+              )
+              .describe(
+                "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
               ),
           }),
         )
@@ -506,6 +527,9 @@ export const ListReleasesQueryParams = zod.object({
   limit: zod.coerce.number().default(listReleasesQueryLimitDefault),
 });
 
+export const listReleasesResponseDataItemRiskScoreMin = 0;
+export const listReleasesResponseDataItemRiskScoreMax = 100;
+
 export const ListReleasesResponse = zod.object({
   data: zod.array(
     zod.object({
@@ -579,6 +603,24 @@ export const ListReleasesResponse = zod.object({
         .describe(
           "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
         ),
+      riskScore: zod
+        .number()
+        .min(listReleasesResponseDataItemRiskScoreMin)
+        .max(listReleasesResponseDataItemRiskScoreMax)
+        .describe(
+          "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+        ),
+      riskFactors: zod
+        .array(
+          zod.object({
+            code: zod.string(),
+            message: zod.string(),
+            severity: zod.enum(["low", "medium", "high"]),
+          }),
+        )
+        .describe(
+          "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
+        ),
     }),
   ),
   pagination: zod.object({
@@ -619,6 +661,9 @@ export const CreateReleaseBody = zod.object({
 export const GetReleaseParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const getReleaseResponseOneRiskScoreMin = 0;
+export const getReleaseResponseOneRiskScoreMax = 100;
 
 export const GetReleaseResponse = zod
   .object({
@@ -692,6 +737,24 @@ export const GetReleaseResponse = zod
       .describe(
         "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
       ),
+    riskScore: zod
+      .number()
+      .min(getReleaseResponseOneRiskScoreMin)
+      .max(getReleaseResponseOneRiskScoreMax)
+      .describe(
+        "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+      ),
+    riskFactors: zod
+      .array(
+        zod.object({
+          code: zod.string(),
+          message: zod.string(),
+          severity: zod.enum(["low", "medium", "high"]),
+        }),
+      )
+      .describe(
+        "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
+      ),
   })
   .and(
     zod.object({
@@ -749,6 +812,9 @@ export const UpdateReleaseBody = zod.object({
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
 });
+
+export const updateReleaseResponseRiskScoreMin = 0;
+export const updateReleaseResponseRiskScoreMax = 100;
 
 export const UpdateReleaseResponse = zod.object({
   id: zod.number(),
@@ -821,6 +887,24 @@ export const UpdateReleaseResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  riskScore: zod
+    .number()
+    .min(updateReleaseResponseRiskScoreMin)
+    .max(updateReleaseResponseRiskScoreMax)
+    .describe(
+      "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+    ),
+  riskFactors: zod
+    .array(
+      zod.object({
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["low", "medium", "high"]),
+      }),
+    )
+    .describe(
+      "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
+    ),
 });
 
 /**
@@ -836,6 +920,9 @@ export const DeleteReleaseParams = zod.object({
 export const SubmitReleaseForReviewParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const submitReleaseForReviewResponseRiskScoreMin = 0;
+export const submitReleaseForReviewResponseRiskScoreMax = 100;
 
 export const SubmitReleaseForReviewResponse = zod.object({
   id: zod.number(),
@@ -908,6 +995,24 @@ export const SubmitReleaseForReviewResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  riskScore: zod
+    .number()
+    .min(submitReleaseForReviewResponseRiskScoreMin)
+    .max(submitReleaseForReviewResponseRiskScoreMax)
+    .describe(
+      "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+    ),
+  riskFactors: zod
+    .array(
+      zod.object({
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["low", "medium", "high"]),
+      }),
+    )
+    .describe(
+      "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
+    ),
 });
 
 /**
@@ -932,6 +1037,9 @@ export const UpdateReleaseStatusBody = zod.object({
   ]),
   note: zod.string().nullish(),
 });
+
+export const updateReleaseStatusResponseRiskScoreMin = 0;
+export const updateReleaseStatusResponseRiskScoreMax = 100;
 
 export const UpdateReleaseStatusResponse = zod.object({
   id: zod.number(),
@@ -1004,6 +1112,24 @@ export const UpdateReleaseStatusResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  riskScore: zod
+    .number()
+    .min(updateReleaseStatusResponseRiskScoreMin)
+    .max(updateReleaseStatusResponseRiskScoreMax)
+    .describe(
+      "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+    ),
+  riskFactors: zod
+    .array(
+      zod.object({
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["low", "medium", "high"]),
+      }),
+    )
+    .describe(
+      "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
+    ),
 });
 
 /**
@@ -1017,6 +1143,9 @@ export const ImportReleaseByUpcBody = zod.object({
     .enum(["spotify", "apple", "musicbrainz"])
     .default(importReleaseByUpcBodySourceDefault),
 });
+
+export const importReleaseByUpcResponseRiskScoreMin = 0;
+export const importReleaseByUpcResponseRiskScoreMax = 100;
 
 export const ImportReleaseByUpcResponse = zod.object({
   id: zod.number(),
@@ -1088,6 +1217,24 @@ export const ImportReleaseByUpcResponse = zod.object({
     .boolean()
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
+    ),
+  riskScore: zod
+    .number()
+    .min(importReleaseByUpcResponseRiskScoreMin)
+    .max(importReleaseByUpcResponseRiskScoreMax)
+    .describe(
+      "Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом\nна основе ACR-результатов, страйков лейбла, регионального жанра и т.п.\n",
+    ),
+  riskFactors: zod
+    .array(
+      zod.object({
+        code: zod.string(),
+        message: zod.string(),
+        severity: zod.enum(["low", "medium", "high"]),
+      }),
+    )
+    .describe(
+      "Факторы, поднявшие riskScore. Каждый — {code, message, severity}.\nПоказываются модератору в карточке релиза.\n",
     ),
 });
 
@@ -2731,6 +2878,7 @@ export const DeliverReleaseParams = zod.object({
 });
 
 export const deliverReleaseBodyDdexVersionDefault = `4.3`;
+export const deliverReleaseBodyForceDefault = false;
 
 export const DeliverReleaseBody = zod.object({
   targets: zod
@@ -2754,6 +2902,12 @@ export const DeliverReleaseBody = zod.object({
     )
     .min(1),
   ddexVersion: zod.enum(["4.3"]).default(deliverReleaseBodyDdexVersionDefault),
+  force: zod
+    .boolean()
+    .default(deliverReleaseBodyForceDefault)
+    .describe(
+      "Если true — обходит блокировку лейбла с накопленными копирайт-страйками.\nБэкенд аудитит факт ручного подтверждения. Используется только админом\nиз UI после явного предупреждения.\n",
+    ),
 });
 
 /**

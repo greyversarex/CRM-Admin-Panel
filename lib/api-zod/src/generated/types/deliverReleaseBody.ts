@@ -12,4 +12,9 @@ export interface DeliverReleaseBody {
   /** @minItems 1 */
   targets: DeliveryTarget[];
   ddexVersion?: DeliverReleaseBodyDdexVersion;
+  /** Если true — обходит блокировку лейбла с накопленными копирайт-страйками.
+Бэкенд аудитит факт ручного подтверждения. Используется только админом
+из UI после явного предупреждения.
+ */
+  force?: boolean;
 }

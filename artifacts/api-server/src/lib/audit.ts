@@ -222,7 +222,7 @@ export type AuditAction =
   | "approve_l1" | "approve_l2"
   | "send"
   | "bulk_edit"
-  | "acr_scan"
+  | "acr_scan" | "acr_scan_full" | "musicbrainz_isrc_check"
   | "resolve" | "reopen"
   | "import"
   | "pro_register" | "pro_register_failed" | "pro_register_network_error";

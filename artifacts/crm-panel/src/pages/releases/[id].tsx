@@ -17,7 +17,9 @@ import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
+  ShieldAlert, ScanSearch, Database, Activity,
 } from "lucide-react";
+import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
 import { useState, useEffect } from "react";
@@ -317,6 +319,10 @@ export default function ReleaseDetail() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Risk panel — модератор/админ видит композитную оценку и факторы.
+            Артист тоже видит, но только в read-only — кнопки сканов скрыты. */}
+        <RiskPanel release={release} onChanged={invalidateAll} />
 
         {/* Release Details */}
         <Card className="bg-card/50 backdrop-blur border-border/50">
@@ -980,6 +986,11 @@ function TakeDownDialog({ releaseId, onClose }: { releaseId: number; onClose: ()
 function DeliverDialog({ releaseId, onClose }: { releaseId: number; onClose: () => void }) {
   const deliver = useDeliverRelease();
   const [selected, setSelected] = useState<Set<DeliveryTarget>>(new Set());
+  // Когда бэкенд вернул 409 label_blocked_too_many_strikes — показываем
+  // подтверждение перед повторной отправкой с force=true.
+  const [strikeBlock, setStrikeBlock] = useState<null | {
+    labelName: string; copyrightStrikes: number; threshold: number; targets: DeliveryTarget[];
+  }>(null);
 
   const toggle = (code: DeliveryTarget) => {
     setSelected((prev) => {
@@ -991,21 +1002,94 @@ function DeliverDialog({ releaseId, onClose }: { releaseId: number; onClose: () 
   const selectAll = () => setSelected(new Set(DELIVER_TARGETS.map((t) => t.code)));
   const clearAll = () => setSelected(new Set());
 
+  const sendDelivery = async (targets: DeliveryTarget[], force: boolean) => {
+    // Используем direct fetch (а не useDeliverRelease.mutateAsync), чтобы
+    // получить доступ к телу 409-ответа и понять причину блокировки.
+    const resp = await fetch(`/api/releases/${releaseId}/deliver`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets, ddexVersion: "4.3", force }),
+    });
+    if (resp.status === 409) {
+      const body = await resp.json().catch(() => ({}));
+      if (body?.error === "label_blocked_too_many_strikes") {
+        setStrikeBlock({
+          labelName: body.labelName ?? "—",
+          copyrightStrikes: body.copyrightStrikes ?? 0,
+          threshold: body.threshold ?? 3,
+          targets,
+        });
+        return;
+      }
+      throw new Error(body?.error || body?.message || `HTTP 409`);
+    }
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body?.error || body?.message || `HTTP ${resp.status}`);
+    }
+    const res = await resp.json();
+    toast({
+      title: "Доставка поставлена в очередь",
+      description: `${res.jobs.length} job${res.jobs.length === 1 ? "" : "s"} → DDEX ERN 4.3. Прогресс — на /distribution.`,
+    });
+    onClose();
+  };
+
   const submit = async () => {
     const targets = Array.from(selected);
     if (targets.length === 0) return;
     try {
-      const res = await deliver.mutateAsync({ id: releaseId, data: { targets, ddexVersion: "4.3" } });
-      toast({
-        title: "Доставка поставлена в очередь",
-        description: `${res.jobs.length} job${res.jobs.length === 1 ? "" : "s"} → DDEX ERN 4.3. Прогресс — на /distribution.`,
-      });
-      onClose();
+      await sendDelivery(targets, false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({ title: "Ошибка отгрузки", description: msg, variant: "destructive" });
     }
   };
+
+  // ── Сценарий блокировки лейбла: подтверждаем и повторяем с force=true ──
+  if (strikeBlock) {
+    return (
+      <DialogContent className="bg-card border-border max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-400">
+            <ShieldAlert className="h-5 w-5" />
+            Внимание: лейбл заблокирован
+          </DialogTitle>
+          <DialogDescription className="space-y-2 pt-2">
+            <p>
+              У лейбла <strong className="text-foreground">«{strikeBlock.labelName}»</strong> накоплено{" "}
+              <span className="font-mono text-rose-400">{strikeBlock.copyrightStrikes}</span>{" "}
+              копирайт-страйков от DSP (порог: {strikeBlock.threshold}).
+            </p>
+            <p>
+              Повторная отгрузка может привести к ещё одному отказу и пометке лейбла как
+              ненадёжного. Вы уверены, что хотите продолжить?
+            </p>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setStrikeBlock(null)}>Отмена</Button>
+          <Button
+            variant="destructive"
+            disabled={deliver.isPending}
+            onClick={async () => {
+              try {
+                await sendDelivery(strikeBlock.targets, true);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                toast({ title: "Ошибка отгрузки", description: msg, variant: "destructive" });
+                setStrikeBlock(null);
+              }
+            }}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Подтвердить и отгрузить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    );
+  }
 
   return (
     <DialogContent className="bg-card border-border max-w-lg">
@@ -1053,5 +1137,271 @@ function DeliverDialog({ releaseId, onClose }: { releaseId: number; onClose: () 
         </Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+// ─── Risk Panel ─────────────────────────────────────────────────────────────
+// Композитная оценка риска отказа DSP. Источник истины — backend
+// services/risk-engine.ts. Здесь только показываем + даём кнопки запустить
+// дополнительные проверки (full multi-segment ACR scan, MusicBrainz ISRC).
+
+interface AcrCheckRow {
+  id: number;
+  releaseId: number;
+  trackId: number | null;
+  status: string;
+  mode: string | null;
+  engine: string | null;
+  matchedTitle: string | null;
+  matchedArtist: string | null;
+  matchedIsrc: string | null;
+  confidence: string | null;
+  errorMessage: string | null;
+  scannedAt: string;
+  segments: Array<{
+    index: number; startPct: number; endPct: number; status: string;
+    score?: number; matchedTitle?: string; matchedArtist?: string; error?: string;
+  }> | null;
+}
+
+// Использую loose-тип для release: поля riskScore/riskFactors появились в
+// openapi.yaml и сгенерируются в @workspace/api-client-react только при
+// следующем codegen в crm-panel. До этого читаем их через `any`-каст.
+function RiskPanel({ release, onChanged }: { release: ReleaseDetail; onChanged: () => void }) {
+  const { user } = useAuth();
+  const isModerator = user && (user.role === "admin" || user.role === "manager");
+  const r = release as ReleaseDetail & {
+    riskScore?: number;
+    riskFactors?: Array<{ code: string; message: string; severity: "low" | "medium" | "high" }>;
+  };
+  const score = r.riskScore ?? 0;
+  const factors = r.riskFactors ?? [];
+
+  const [checks, setChecks] = useState<AcrCheckRow[]>([]);
+  const [loadingChecks, setLoadingChecks] = useState(false);
+  const [scanningTrackId, setScanningTrackId] = useState<number | null>(null);
+  const [scanningKind, setScanningKind] = useState<"full" | "isrc" | null>(null);
+
+  const loadChecks = async () => {
+    setLoadingChecks(true);
+    try {
+      const data = await adminApi<{ checks: AcrCheckRow[] }>(`/api/distribution/acr/checks?releaseId=${release.id}`);
+      setChecks(data.checks ?? []);
+    } catch {
+      /* silent — панель деградирует, но не валится */
+    } finally {
+      setLoadingChecks(false);
+    }
+  };
+  useEffect(() => { void loadChecks(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [release.id, release.updatedAt]);
+
+  const tracks = release.tracks ?? [];
+  const firstTrackWithAudio = tracks.find((t) => !!t.audioUrl) ?? tracks[0];
+  const tracksWithIsrc = tracks.filter((t) => !!t.isrc);
+
+  const runFullScan = async (trackId: number) => {
+    setScanningKind("full");
+    setScanningTrackId(trackId);
+    try {
+      await adminApi(`/api/distribution/acr/scan-full`, {
+        method: "POST",
+        body: JSON.stringify({ releaseId: release.id, trackId }),
+      });
+      toast({ title: "Multi-segment ACR scan запущен", description: "Результат через ~30 сек — обновите страницу или подождите автообновления." });
+      // Дёргаем checks через 4 сек, чтобы pending-row уже точно был, и потом ещё через 30
+      setTimeout(() => { void loadChecks(); }, 4_000);
+      setTimeout(() => { void loadChecks(); onChanged(); }, 30_000);
+    } catch (e) {
+      toast({ title: "ACR full-scan failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setScanningTrackId(null);
+      setScanningKind(null);
+    }
+  };
+
+  const runMbCheck = async (trackId: number) => {
+    setScanningKind("isrc");
+    setScanningTrackId(trackId);
+    try {
+      await adminApi(`/api/distribution/musicbrainz/check-isrc`, {
+        method: "POST",
+        body: JSON.stringify({ trackId }),
+      });
+      toast({ title: "MusicBrainz check выполнен", description: "Результат добавлен в историю проверок." });
+      await loadChecks();
+      onChanged();
+    } catch (e) {
+      toast({ title: "MusicBrainz check failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setScanningTrackId(null);
+      setScanningKind(null);
+    }
+  };
+
+  const scoreColor =
+    score >= 70 ? "text-rose-300 bg-rose-500/15 border-rose-500/40"
+    : score >= 40 ? "text-amber-300 bg-amber-500/15 border-amber-500/40"
+    : "text-emerald-300 bg-emerald-500/15 border-emerald-500/40";
+  const scoreLabel = score >= 70 ? "Высокий" : score >= 40 ? "Средний" : "Низкий";
+
+  return (
+    <Card className="bg-card/50 backdrop-blur border-border/50">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4" />
+          Оценка риска
+        </CardTitle>
+        <div className={`text-xs px-2.5 py-1 rounded-md border font-mono ${scoreColor}`}>
+          {scoreLabel} · {score}/100
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Факторы риска */}
+        {factors.length === 0 ? (
+          <div className="text-sm text-muted-foreground flex items-center gap-2 py-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            Факторов риска не обнаружено.
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {factors.map((f, i) => {
+              const dot = f.severity === "high" ? "bg-rose-500" : f.severity === "medium" ? "bg-amber-500" : "bg-zinc-500";
+              return (
+                <li key={`${f.code}-${i}`} className="flex items-start gap-2 text-sm">
+                  <span className={`inline-block h-2 w-2 mt-1.5 rounded-full shrink-0 ${dot}`} />
+                  <div>
+                    <span className="text-foreground">{f.message}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono ml-2">[{f.code}]</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {/* Кнопки запуска проверок — только модераторам */}
+        {isModerator && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-border/40">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!firstTrackWithAudio || (scanningKind === "full" && scanningTrackId === firstTrackWithAudio?.id)}
+              onClick={() => firstTrackWithAudio && runFullScan(firstTrackWithAudio.id)}
+              title={firstTrackWithAudio ? `Сканировать «${firstTrackWithAudio.title}» в 5 окнах` : "Нет трека с audio_url"}
+            >
+              <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
+              {scanningKind === "full" ? "Сканируем…" : "Full multi-segment ACR"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={tracksWithIsrc.length === 0 || scanningKind === "isrc"}
+              onClick={() => tracksWithIsrc[0] && runMbCheck(tracksWithIsrc[0].id)}
+              title={tracksWithIsrc.length > 0 ? `Проверить ISRC ${tracksWithIsrc[0].isrc}` : "Ни у одного трека нет ISRC"}
+            >
+              <Database className="h-3.5 w-3.5 mr-1.5" />
+              {scanningKind === "isrc" ? "Запрашиваем MB…" : "MusicBrainz ISRC check"}
+            </Button>
+            {tracksWithIsrc.length > 1 && (
+              <span className="text-[11px] text-muted-foreground self-center">
+                (проверится первый ISRC; остальные — со страницы трека позже)
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* История проверок (последние 6) с timeline для full-сканов */}
+        {loadingChecks ? (
+          <Skeleton className="h-12 w-full" />
+        ) : checks.length === 0 ? (
+          <div className="text-xs text-muted-foreground italic">Проверок ACR/MusicBrainz по этому релизу ещё не было.</div>
+        ) : (
+          <div className="space-y-2 pt-1">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Activity className="h-3 w-3" />
+              История проверок
+            </div>
+            {checks.slice(0, 6).map((c) => (
+              <AcrCheckCard key={c.id} check={c} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AcrCheckCard({ check }: { check: AcrCheckRow }) {
+  const statusBadge =
+    check.status === "matched" ? "bg-rose-500/15 text-rose-300 border-rose-500/40"
+    : check.status === "clean" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+    : check.status === "pending" ? "bg-zinc-500/15 text-zinc-300 border-zinc-500/40"
+    : "bg-amber-500/15 text-amber-300 border-amber-500/40";
+
+  const engineLabel =
+    check.engine === "musicbrainz_isrc" ? "MusicBrainz ISRC"
+    : check.mode === "full" ? "ACR · multi-segment"
+    : "ACR · sample";
+
+  return (
+    <div className="rounded-md border border-border/50 bg-background/40 p-2.5 space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className={`px-1.5 py-0.5 rounded border font-mono uppercase text-[10px] ${statusBadge}`}>
+            {check.status}
+          </span>
+          <span className="text-muted-foreground">{engineLabel}</span>
+        </div>
+        <span className="text-muted-foreground">{new Date(check.scannedAt).toLocaleString()}</span>
+      </div>
+      {check.matchedTitle && (
+        <div className="text-xs">
+          <span className="text-muted-foreground">Match: </span>
+          <span className="text-foreground">«{check.matchedTitle}»</span>
+          {check.matchedArtist && <span className="text-muted-foreground"> — {check.matchedArtist}</span>}
+          {check.confidence && <span className="text-muted-foreground font-mono"> · score {check.confidence}</span>}
+        </div>
+      )}
+      {check.errorMessage && (
+        <div className="text-xs text-amber-300/90 line-clamp-2">{check.errorMessage}</div>
+      )}
+      {check.segments && check.segments.length > 0 && <SegmentTimeline segments={check.segments} />}
+    </div>
+  );
+}
+
+function SegmentTimeline({ segments }: { segments: NonNullable<AcrCheckRow["segments"]> }) {
+  // Горизонтальная полоса 0..100% с зонами по startPct..endPct.
+  // matched — красный, clean — зелёный, error — жёлтый.
+  return (
+    <div className="space-y-1">
+      <div className="relative h-5 w-full rounded-sm bg-zinc-800/60 border border-border/50 overflow-hidden">
+        {segments.map((s) => {
+          const left = `${s.startPct}%`;
+          const width = `${Math.max(2, s.endPct - s.startPct)}%`;
+          const cls =
+            s.status === "matched" ? "bg-rose-500/70 hover:bg-rose-500"
+            : s.status === "clean" ? "bg-emerald-500/55 hover:bg-emerald-500"
+            : "bg-amber-500/55 hover:bg-amber-500";
+          const tip =
+            s.status === "matched" ? `Сегмент ${s.startPct}-${s.endPct}%: ${s.matchedTitle ?? "?"} — ${s.matchedArtist ?? "?"} (score ${s.score ?? "?"})`
+            : s.status === "clean" ? `Сегмент ${s.startPct}-${s.endPct}%: чисто`
+            : `Сегмент ${s.startPct}-${s.endPct}%: ошибка ${s.error ?? ""}`;
+          return (
+            <div
+              key={s.index}
+              className={`absolute top-0 bottom-0 ${cls} border-r border-background/40 transition-colors`}
+              style={{ left, width }}
+              title={tip}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+        <span>0:00</span>
+        <span>{segments.length} сегментов</span>
+        <span>конец</span>
+      </div>
+    </div>
   );
 }

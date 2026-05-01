@@ -124,6 +124,21 @@ export const ReleaseAllowedTransitionsItem = {
   removed: "removed",
 } as const;
 
+export type ReleaseRiskFactorsItemSeverity =
+  (typeof ReleaseRiskFactorsItemSeverity)[keyof typeof ReleaseRiskFactorsItemSeverity];
+
+export const ReleaseRiskFactorsItemSeverity = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
+export type ReleaseRiskFactorsItem = {
+  code: string;
+  message: string;
+  severity: ReleaseRiskFactorsItemSeverity;
+};
+
 export interface Release {
   id: number;
   title: string;
@@ -165,6 +180,18 @@ export interface Release {
   /** true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved).
    */
   canDeliver: boolean;
+  /**
+   * Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом
+на основе ACR-результатов, страйков лейбла, регионального жанра и т.п.
+
+   * @minimum 0
+   * @maximum 100
+   */
+  riskScore: number;
+  /** Факторы, поднявшие riskScore. Каждый — {code, message, severity}.
+Показываются модератору в карточке релиза.
+ */
+  riskFactors: ReleaseRiskFactorsItem[];
 }
 
 export interface Track {
@@ -1026,6 +1053,11 @@ export interface DeliverReleaseBody {
   /** @minItems 1 */
   targets: DeliveryTarget[];
   ddexVersion?: DeliverReleaseBodyDdexVersion;
+  /** Если true — обходит блокировку лейбла с накопленными копирайт-страйками.
+Бэкенд аудитит факт ручного подтверждения. Используется только админом
+из UI после явного предупреждения.
+ */
+  force?: boolean;
 }
 
 export interface DeliverReleaseResponse {

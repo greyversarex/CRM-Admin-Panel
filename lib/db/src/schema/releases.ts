@@ -1,9 +1,22 @@
-import { pgTable, text, serial, integer, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { artistsTable } from "./artists";
 import { labelsTable } from "./labels";
+
+/**
+ * Один фактор риска релиза, который видит модератор. Поднимается в UI
+ * на странице релиза в блоке «Оценка риска».
+ */
+export type ReleaseRiskFactor = {
+  /** Машинный код фактора, напр. "regional_genre", "label_strikes_high". */
+  code: string;
+  /** Человекочитаемое описание для модератора (ru). */
+  message: string;
+  /** Уровень: low (0-25), medium (25-60), high (60-100). */
+  severity: "low" | "medium" | "high";
+};
 
 export const releasesTable = pgTable("releases", {
   id: serial("id").primaryKey(),
@@ -23,6 +36,16 @@ export const releasesTable = pgTable("releases", {
   pLine: text("p_line"),
   cLine: text("c_line"),
   statusNote: text("status_note"),
+  /**
+   * Композитный risk-score 0..100, перерасчитывается risk-engine'ом при
+   * submit/approve/scan. 0 = чисто, 100 = максимальный риск отказа DSP.
+   */
+  riskScore: integer("risk_score").notNull().default(0),
+  /**
+   * Набор причин текущего score. Показывается модератору в карточке.
+   * Пересчитывается вместе с riskScore.
+   */
+  riskFactors: jsonb("risk_factors").$type<ReleaseRiskFactor[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

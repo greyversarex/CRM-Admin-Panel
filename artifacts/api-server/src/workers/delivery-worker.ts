@@ -17,12 +17,13 @@
  *
  * Запускается из `index.ts` после `app.listen`.
  */
-import { db, deliveriesTable, ddexMessagesTable, auditLogTable } from "@workspace/db";
+import { db, deliveriesTable, ddexMessagesTable, auditLogTable, releasesTable } from "@workspace/db";
 import { notifyByReleaseId } from "../services/notifications";
 import { and, eq, lte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { createMessage, processMessage } from "../ddex/service";
 import { emitAlertAndForget } from "../services/alerts-emitter";
+import { incrementLabelStrike, isCopyrightFailure } from "../services/risk-engine";
 
 type DeliveryRow = typeof deliveriesTable.$inferSelect;
 
@@ -168,6 +169,23 @@ async function processOne(jobId: number): Promise<void> {
         entityId: jobId,
         meta: { releaseId: claimed.releaseId, target: claimed.target, attempts, error: msg.slice(0, 1000) },
       });
+
+      // ── Risk engine: страйк лейблу при копирайт-причине ──────────────
+      // DSP может вернуть DDEX ack с rejection reason 'CopyrightInfringement',
+      // 'WorkAlreadyExists', 'IsrcConflict' и т.п. Если в lastError видна такая
+      // причина — поднимаем счётчик страйков лейбла. После threshold (3 страйка)
+      // следующая отгрузка потребует force=true.
+      if (isCopyrightFailure(msg)) {
+        try {
+          const [rel] = await db.select({ labelId: releasesTable.labelId })
+            .from(releasesTable).where(eq(releasesTable.id, claimed.releaseId));
+          if (rel?.labelId) {
+            await incrementLabelStrike(rel.labelId, msg.slice(0, 200));
+          }
+        } catch (e) {
+          logger.error({ err: e, jobId }, "[worker] strike-increment failed");
+        }
+      }
     }
   }
 }

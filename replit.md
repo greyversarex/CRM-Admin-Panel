@@ -78,6 +78,30 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24. I
 
 ## Recent Changes
 
+### 2026-05-01 — Защита репутации лейбла: 5 уровней проверки + multi-segment ACR
+Цель — снизить риск «ACR clean → Spotify reject». Внедрено пять связанных слоёв:
+
+1. **Schema (миграция 0013)**:
+   - `acr_checks`: `mode` (`sample`|`full`), `engine` (`acrcloud`|`musicbrainz_isrc`), `segments` jsonb (timeline сэмплов).
+   - `releases`: `risk_score` int 0-100, `risk_factors` jsonb (`{code,message,severity}[]`).
+   - `labels`: `copyright_strikes` int (накопительный счётчик отказов DSP), `risk_score` int.
+
+2. **Multi-segment ACR scan**: `POST /api/distribution/acr/scan-full` — режет файл на 5 байтовых окон по ~512KB (0/25/50/75/95% позиции), сканит каждое через ACRCloud `/v1/identify`. Сохраняет таймлайн в `acr_checks.segments` со статусом по сегменту, score, найденными метаданными. UI рисует горизонтальную полосу 0..100% с цветовыми зонами.
+
+3. **MusicBrainz ISRC validator** (`services/musicbrainz.ts` + `POST /api/distribution/musicbrainz/check-isrc`): rate-limited (1 RPS) лукап `https://musicbrainz.org/ws/2/recording/?query=isrc:X&fmt=json`. Если ISRC найден у другого артиста/трека — пишет `acr_checks` с `engine=musicbrainz_isrc`, `status=matched`. Free, no auth, второй движок проверки.
+
+4. **Risk engine + label strikes** (`services/risk-engine.ts`): `computeRisk(release, label, checks)` собирает 0-100 + список факторов (`acr_matched`, `musicbrainz_isrc_conflict`, `label_strikes_high`, `regional_genre_weak_acr_coverage`, `pending_full_scan`). Вызывается на submit/approve/reject/scan через `assessAndPersist(releaseId)`. Delivery-worker инкрементит `labels.copyright_strikes` при ack=Rejected с copyright/conflict-keyword. При `copyright_strikes >= 3` `POST /releases/:id/deliver` возвращает 409 `label_blocked_too_many_strikes`; обходится `force: true` в body (аудитится).
+
+5. **Регион/жанр detection**: `isRegionalGenre(genre, language)` → true для tj/uz/kz/tg/fa и жанров world/folk/persian/tajik. Поднимает фактор риска «региональный каталог — слабое покрытие ACR».
+
+**UI** (`releases/[id].tsx`):
+- Новая карточка **«Оценка риска»** между Status и Release Details: цветной badge score (зелёный <40 / янтарный 40-69 / красный 70+), список факторов риска с severity-точками, кнопки модератора **Full multi-segment ACR** и **MusicBrainz ISRC check**, история проверок (последние 6) с inline-таймлайном сегментов.
+- **DeliverDialog**: при 409 `label_blocked_too_many_strikes` показывает confirm-экран с числом страйков и порогом, повтор отгрузки уходит с `force=true`.
+
+**API spec / типы**: `lib/api-spec/openapi.yaml` — добавлены `Release.riskScore`/`riskFactors`, `DeliverReleaseBody.force`. Прогнан codegen `@workspace/api-spec`. Расширены `AcrCheckSegment` (index, startPct/endPct, startBytes/endBytes, error, tookMs) и `AuditAction` (`acr_scan_full`, `musicbrainz_isrc_check`).
+
+Файлы: `lib/db/src/schema/{acr_checks,releases,labels}.ts`, `artifacts/api-server/src/services/{musicbrainz,risk-engine}.ts`, `artifacts/api-server/src/routes/{distribution-extras,releases}.ts`, `artifacts/api-server/src/workers/delivery-worker.ts`, `artifacts/api-server/src/lib/audit.ts`, `artifacts/crm-panel/src/pages/releases/[id].tsx`, `lib/api-spec/openapi.yaml`. Type-check (api-server + crm-panel) clean.
+
 ### 2026-05-01 — Inline release metadata editor (фикс «после кнопки нет редактора»)
 - На странице `/releases/:id` для черновика кнопка **Edit Release** теперь не открывает диалог-заглушку, а переключает карточку «Release Details» в инлайн-режим редактирования метаданных. Все поля: title, language, releaseType, genre, releaseDate, upc, pLine, cLine, isExplicit, territories. Сохранение через `useUpdateRelease` (PUT `/api/releases/:id`) с честным payload `CreateReleaseBody` (включая `artistId`/`labelId`/`coverUrl` из существующего релиза, чтобы пройти Zod-валидацию на бэке).
 - Для статуса `rejected` оставлен прежний диалог `EditReleaseDialog`, который сначала переводит rejected→draft.

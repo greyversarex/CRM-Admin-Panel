@@ -7,6 +7,7 @@
  */
 import type { ReleaseAllowedTransitionsItem } from "./releaseAllowedTransitionsItem";
 import type { ReleaseReleaseType } from "./releaseReleaseType";
+import type { ReleaseRiskFactorsItem } from "./releaseRiskFactorsItem";
 import type { ReleaseStatus } from "./releaseStatus";
 
 export interface Release {
@@ -50,4 +51,16 @@ export interface Release {
   /** true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved).
    */
   canDeliver: boolean;
+  /**
+   * Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом
+на основе ACR-результатов, страйков лейбла, регионального жанра и т.п.
+
+   * @minimum 0
+   * @maximum 100
+   */
+  riskScore: number;
+  /** Факторы, поднявшие riskScore. Каждый — {code, message, severity}.
+Показываются модератору в карточке релиза.
+ */
+  riskFactors: ReleaseRiskFactorsItem[];
 }

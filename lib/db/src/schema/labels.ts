@@ -10,11 +10,23 @@ export const labelsTable = pgTable("labels", {
   website: text("website"),
   parentLabelId: integer("parent_label_id").references((): AnyPgColumn => labelsTable.id, { onDelete: "set null" }),
   status: text("status").notNull().default("active"),
+  /**
+   * Накопительный счётчик копирайт-страйков от DSP.
+   * Инкрементится delivery-воркером при ack=Rejected с reason=copyright/conflict.
+   * При >= 3 — принудительная ручная верификация перед отгрузкой (force-confirm).
+   */
+  copyrightStrikes: integer("copyright_strikes").notNull().default(0),
+  /**
+   * Composite risk score лейбла 0..100 (агрегация страйков, доли отказов и т.п.).
+   * Пересчитывается risk-engine'ом.
+   */
+  riskScore: integer("risk_score").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
   index("labels_parent_idx").on(t.parentLabelId),
   index("labels_status_idx").on(t.status),
+  index("labels_strikes_idx").on(t.copyrightStrikes),
 ]);
 
 export const insertLabelSchema = createInsertSchema(labelsTable).omit({ id: true, createdAt: true, updatedAt: true });

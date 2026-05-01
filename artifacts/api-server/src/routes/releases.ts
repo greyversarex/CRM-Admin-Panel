@@ -13,6 +13,7 @@ import { getIntegrationByCode, loadCredentials } from "../services/integrations-
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
+import { assessAndPersist, LABEL_STRIKE_BLOCK_THRESHOLD } from "../services/risk-engine";
 
 const router = Router();
 
@@ -84,6 +85,10 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
     canSubmit: EDITABLE_STATUSES.has(r.status),
     // Можно запустить отгрузку в DSP (POST /releases/:id/deliver).
     canDeliver: r.status === "approved",
+    // Risk-engine: composite оценка + список факторов.
+    // Гарантируем явные значения (не undefined), даже если в БД старые строки.
+    riskScore: r.riskScore ?? 0,
+    riskFactors: r.riskFactors ?? [],
   };
 }
 
@@ -725,6 +730,11 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
     link: `/distribution`,
   });
 
+  // Пересчитываем risk-score сразу после submit — модератор увидит факторы
+  // ещё до того, как откроет карточку (в списке очереди их можно потом тоже
+  // подсветить). Fire-and-forget: ошибка тут не валит submit.
+  void assessAndPersist(release.id);
+
   // Уведомляем самого автора и его лейбл — подтверждение приёма заявки.
   void notifyByArtistId(release.artistId, {
     type: "release_submitted",
@@ -836,6 +846,12 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
     parsed.data.status === "rejected" ? "reject" : "update";
   void auditMutation(req, { action: auditAction, entityType: "release", entityId: release.id, before: existing, after: release });
 
+  // Risk-engine: пересчитываем при approve/reject — модератор должен видеть
+  // актуальную оценку при следующем открытии карточки. Fire-and-forget.
+  if (parsed.data.status === "approved" || parsed.data.status === "rejected") {
+    void assessAndPersist(release.id);
+  }
+
   // Уведомляем артиста и (если есть) лейбл о смене статуса релиза.
   const statusEmoji: Record<string, string> = {
     approved: "✅", rejected: "❌", pending_review: "📤", live: "🎵",
@@ -917,6 +933,35 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
       error: `Release must be approved before delivery. Current status: '${release.status}'.`,
     });
     return;
+  }
+
+  // ── Risk gate: лейбл с накопленными копирайт-страйками от DSP ──────────
+  // При threshold+ (см. LABEL_STRIKE_BLOCK_THRESHOLD) автоматическая отгрузка
+  // блокируется. Только АДМИН может пробить с явным force=true в body — это
+  // уйдёт в audit-log как ручное подтверждение риска. Менеджер пытаясь
+  // обойти получит 403, чтобы решение фиксировалось на уровне админа.
+  const force = body.data.force === true;
+  if (force && req.session?.user?.role !== "admin") {
+    res.status(403).json({
+      error: "force_requires_admin",
+      message: "Override блокировки лейбла доступен только администратору.",
+    });
+    return;
+  }
+  if (release.labelId && !force) {
+    const [label] = await db.select().from(labelsTable).where(eq(labelsTable.id, release.labelId));
+    if (label && label.copyrightStrikes >= LABEL_STRIKE_BLOCK_THRESHOLD) {
+      res.status(409).json({
+        error: "label_blocked_too_many_strikes",
+        message: `У лейбла «${label.name}» ${label.copyrightStrikes} копирайт-страйков от DSP. ` +
+          "Доставка требует ручного подтверждения. Передайте force=true чтобы пробить блок.",
+        labelId: label.id,
+        labelName: label.name,
+        copyrightStrikes: label.copyrightStrikes,
+        threshold: LABEL_STRIKE_BLOCK_THRESHOLD,
+      });
+      return;
+    }
   }
 
   // De-dup внутри запроса: ['spotify','spotify','vk_music'] → ['spotify','vk_music']

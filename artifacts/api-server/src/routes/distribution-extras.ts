@@ -18,13 +18,15 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable } from "@workspace/db";
+import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, type AcrCheckSegment } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { lookupIsrc, detectIsrcConflict, normalizeIsrc } from "../services/musicbrainz";
+import { assessAndPersist } from "../services/risk-engine";
 
 const storage = new ObjectStorageService();
 
@@ -136,6 +138,36 @@ const SAMPLE_MIN_SKIP = 100_000;
 
 interface SampleResult { buffer: Buffer; offsetBytes: number; totalBytes: number | null }
 
+/**
+ * SSRF-guard для внешнего audio_url. Бросает Error при любом подозрении.
+ * Вынесено отдельно, чтобы переиспользовать в fetchByteRange (multi-segment
+ * scan): первый probe валидирует URL, но между сегментами DNS может смениться
+ * (DNS-rebinding / TOCTOU), поэтому каждый byte-range запрос валидируется
+ * заново.
+ */
+async function assertSafeAudioUrl(audioUrl: string): Promise<URL> {
+  let u: URL;
+  try { u = new URL(audioUrl); } catch { throw new Error("invalid_audio_url"); }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error(`scheme_not_allowed:${u.protocol}`);
+  const host = u.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+    throw new Error("internal_host_not_allowed");
+  }
+  if (host.includes(":")) throw new Error("ipv6_not_allowed");
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    if (isPrivateIPv4(host)) throw new Error(`private_ip_not_allowed:${host}`);
+  } else {
+    const { lookup } = await import("dns/promises");
+    const records = await lookup(host, { all: true }).catch(() => [] as Array<{ address: string; family: number }>);
+    if (records.length === 0) throw new Error("dns_resolve_failed");
+    for (const r of records) {
+      if (r.family === 6) throw new Error("ipv6_resolution_not_allowed");
+      if (isPrivateIPv4(r.address)) throw new Error(`private_ip_not_allowed:${r.address}`);
+    }
+  }
+  return u;
+}
+
 async function fetchSample(audioUrl: string): Promise<SampleResult> {
   // ── Локальный файл хранилища ───────────────────────────────────────────────
   if (audioUrl.startsWith("/objects/")) {
@@ -161,25 +193,7 @@ async function fetchSample(audioUrl: string): Promise<SampleResult> {
   }
 
   // ── Внешний URL — SSRF-guard + HTTP fetch ─────────────────────────────────
-  let u: URL;
-  try { u = new URL(audioUrl); } catch { throw new Error("invalid_audio_url"); }
-  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error(`scheme_not_allowed:${u.protocol}`);
-  const host = u.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
-    throw new Error("internal_host_not_allowed");
-  }
-  if (host.includes(":")) throw new Error("ipv6_not_allowed");
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-    if (isPrivateIPv4(host)) throw new Error(`private_ip_not_allowed:${host}`);
-  } else {
-    const { lookup } = await import("dns/promises");
-    const records = await lookup(host, { all: true }).catch(() => [] as Array<{ address: string; family: number }>);
-    if (records.length === 0) throw new Error("dns_resolve_failed");
-    for (const r of records) {
-      if (r.family === 6) throw new Error("ipv6_resolution_not_allowed");
-      if (isPrivateIPv4(r.address)) throw new Error(`private_ip_not_allowed:${r.address}`);
-    }
-  }
+  await assertSafeAudioUrl(audioUrl);
 
   // HEAD-запрос чтобы узнать размер (и затем умно высчитать offset).
   // Если HEAD не поддержан — fallback на чтение с начала.
@@ -419,6 +433,308 @@ router.post("/distribution/acr/scan", async (req, res) => {
 
   void processAcrCheck(row.id, track.audioUrl, cfg as Required<AcrCloudConfig>);
   res.status(202).json(row);
+});
+
+// ── Multi-segment ACR scan ────────────────────────────────────────────────
+//
+// «Полный» скан: режем файл на N окон по ~512 КБ (≈12 сек аудио каждое),
+// разнесённых равномерно по таймлайну, и шлём каждое в ACRCloud отдельно.
+// Это в разы повышает шанс поймать совпадение в треках, где первое окно
+// (которое использует quick-scan) — вступление/чистый бит без вокала.
+//
+// Для прозрачности и UX результат пишется в ОДНУ acr_checks-строку:
+//   mode='full', engine='acrcloud', segments=[{start_pct, status, score, …}].
+// Финальный status строки — самый «горячий» из сегментов: matched > error > clean.
+
+const SEGMENT_COUNT = 5;
+const SEGMENT_BYTES = 512_000;
+
+interface SegmentSamplePlan { startBytes: number; endBytes: number; startPct: number; endPct: number }
+
+function planSegments(totalBytes: number | null): SegmentSamplePlan[] {
+  // Если размер неизвестен (например, внешний URL без HEAD) — берём один кусок с нуля.
+  if (totalBytes === null || totalBytes <= SEGMENT_BYTES * 2) {
+    return [{ startBytes: 0, endBytes: Math.min((totalBytes ?? SEGMENT_BYTES) - 1, SEGMENT_BYTES - 1), startPct: 0, endPct: 100 }];
+  }
+  const usable = totalBytes - SEGMENT_BYTES;
+  const plans: SegmentSamplePlan[] = [];
+  for (let i = 0; i < SEGMENT_COUNT; i++) {
+    // Равномерно: 0%, 25%, 50%, 75%, 95% (последнее — отступаем чтоб не упереться)
+    const pos = (SEGMENT_COUNT as number) === 1 ? 0 : (i / (SEGMENT_COUNT - 1)) * 0.95;
+    const start = Math.floor(usable * pos);
+    const end = start + SEGMENT_BYTES - 1;
+    plans.push({
+      startBytes: start,
+      endBytes: end,
+      startPct: Math.round((start / totalBytes) * 100),
+      endPct: Math.round((end / totalBytes) * 100),
+    });
+  }
+  return plans;
+}
+
+/** Скачать конкретный байтовый диапазон файла (object-storage или https).
+ *  Для внешних URL — каждый раз валидируем хост (DNS-rebinding / TOCTOU
+ *  между сегментами могли подменить A-запись на приватный IP). */
+async function fetchByteRange(audioUrl: string, startBytes: number, endBytes: number): Promise<{ buffer: Buffer; totalBytes: number | null }> {
+  if (audioUrl.startsWith("/objects/")) {
+    let file;
+    try { file = await storage.getObjectEntityFile(audioUrl); }
+    catch (e) { if (e instanceof ObjectNotFoundError) throw new Error("audio_file_not_found"); throw e; }
+    const [meta] = await file.getMetadata();
+    const total = meta.size;
+    const end = Math.min(total - 1, endBytes);
+    const stream = file.createReadStream({ start: startBytes, end });
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      stream.on("data", (c: Buffer) => chunks.push(c));
+      stream.on("end", resolve);
+      stream.on("error", reject);
+    });
+    return { buffer: Buffer.concat(chunks), totalBytes: total };
+  }
+  // Внешний URL: повторная SSRF-валидация (хост, IP, scheme).
+  // Без этого DNS-rebinding между probe и сегментами позволил бы попасть
+  // во внутреннюю сеть после первого «честного» ответа.
+  await assertSafeAudioUrl(audioUrl);
+  const resp = await fetch(audioUrl, {
+    method: "GET",
+    headers: { Range: `bytes=${startBytes}-${endBytes}` },
+    signal: AbortSignal.timeout(15_000),
+    redirect: "manual",
+  });
+  if (resp.status >= 300 && resp.status < 400) throw new Error(`audio_redirect_blocked_${resp.status}`);
+  if (!resp.ok && resp.status !== 206) throw new Error(`audio_fetch_${resp.status}`);
+  const ab = await resp.arrayBuffer();
+  return { buffer: Buffer.from(ab), totalBytes: null };
+}
+
+async function processFullScan(checkId: number, audioUrl: string, cfg: Required<AcrCloudConfig>, releaseId: number): Promise<void> {
+  const startedAt = Date.now();
+  const safeAudioUrl = safeUrl(audioUrl);
+  try {
+    // Шаг 1: один раз через fetchSample валидируем URL (SSRF-guard) + узнаём totalBytes.
+    const probe = await fetchSample(audioUrl);
+    const totalBytes = probe.totalBytes;
+    const plans = planSegments(totalBytes);
+
+    const segments: AcrCheckSegment[] = [];
+    let topMatch: { title?: string; artist?: string; isrc?: string; score: number } | null = null;
+    let matchedCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < plans.length; i++) {
+      const p = plans[i];
+      const segStart = Date.now();
+      try {
+        // Первый сегмент уже скачан в probe — переиспользуем чтоб не делать лишний HTTP.
+        const buf = i === 0 && p.startBytes === probe.offsetBytes
+          ? probe.buffer
+          : (await fetchByteRange(audioUrl, p.startBytes, p.endBytes)).buffer;
+        const r = await callAcrIdentify(cfg, buf);
+        const took = Date.now() - segStart;
+        if (!r.ok) {
+          errorCount++;
+          segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "error", error: r.error.slice(0, 200), tookMs: took });
+          continue;
+        }
+        const status = r.result["status"] as { code?: number; msg?: string } | undefined;
+        const md = r.result["metadata"] as { music?: Array<Record<string, unknown>> } | undefined;
+        const matches = md?.music ?? [];
+        if (status?.code === 0 && matches.length > 0) {
+          matchedCount++;
+          const top = matches[0];
+          const artists = (top["artists"] as Array<{ name?: string }> | undefined)?.map((a) => a.name).filter(Boolean).join(", ");
+          const externalIds = top["external_ids"] as { isrc?: string } | undefined;
+          const score = typeof top["score"] === "number" ? top["score"] : 0;
+          const matchedTitle = typeof top["title"] === "string" ? top["title"] : undefined;
+          const matchedArtist = artists || undefined;
+          const matchedIsrc = externalIds?.isrc;
+          if (!topMatch || score > topMatch.score) topMatch = { title: matchedTitle, artist: matchedArtist, isrc: matchedIsrc, score };
+          segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "matched", score, matchedTitle, matchedArtist, matchedIsrc, tookMs: took });
+        } else if (status?.code === 1001) {
+          segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "clean", tookMs: took });
+        } else {
+          errorCount++;
+          segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "error", error: `code=${status?.code} ${status?.msg ?? ""}`.slice(0, 200), tookMs: took });
+        }
+      } catch (e) {
+        errorCount++;
+        segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "error", error: (e as Error).message.slice(0, 200), tookMs: Date.now() - segStart });
+      }
+      // ACRCloud free-tier лимит ~3 RPS — между окнами пауза 400 мс.
+      if (i < plans.length - 1) await new Promise((r) => setTimeout(r, 400));
+    }
+
+    const finishedAt = Date.now();
+    const finalStatus: "matched" | "clean" | "error" = matchedCount > 0 ? "matched" : (errorCount === segments.length ? "error" : "clean");
+
+    await db.update(acrChecksTable).set({
+      status: finalStatus,
+      confidence: topMatch ? String(topMatch.score) : null,
+      matchedTitle: topMatch?.title ?? null,
+      matchedArtist: topMatch?.artist ?? null,
+      matchedIsrc: topMatch?.isrc ?? null,
+      segments,
+      resultJson: {
+        _scan_meta: {
+          mode: "full",
+          engine: "acrcloud",
+          segments_count: segments.length,
+          matched_count: matchedCount,
+          error_count: errorCount,
+          total_file_bytes: totalBytes,
+          total_ms: finishedAt - startedAt,
+          audio_url: safeAudioUrl,
+          requested_at_utc: new Date(startedAt).toISOString(),
+          completed_at_utc: new Date(finishedAt).toISOString(),
+        },
+        top_match: topMatch,
+      },
+      errorMessage: finalStatus === "error" ? "All segments failed (see segments[].error)" : null,
+    }).where(eq(acrChecksTable.id, checkId));
+
+    // Risk-engine увидит наличие full-scan и снимет/добавит факторы.
+    void assessAndPersist(releaseId);
+  } catch (e) {
+    logger.warn({ err: e, checkId }, "[acr] full-scan background failed");
+    await db.update(acrChecksTable).set({
+      status: "error",
+      errorMessage: `Full-scan: ${(e as Error).message}`,
+      resultJson: { _scan_meta: { mode: "full", engine: "acrcloud", audio_url: safeAudioUrl, error: (e as Error).message } },
+    }).where(eq(acrChecksTable.id, checkId)).catch(() => undefined);
+  }
+}
+
+router.post("/distribution/acr/scan-full", async (req, res): Promise<void> => {
+  const parsed = ScanBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+  const { releaseId, trackId } = parsed.data;
+
+  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId));
+  if (!release) { res.status(404).json({ error: "Release not found" }); return; }
+
+  let track: typeof tracksTable.$inferSelect | null = null;
+  if (trackId) {
+    const [t] = await db.select().from(tracksTable).where(eq(tracksTable.id, trackId));
+    if (!t) { res.status(404).json({ error: "Track not found" }); return; }
+    track = t;
+  } else {
+    const [t] = await db.select().from(tracksTable).where(eq(tracksTable.releaseId, releaseId)).limit(1);
+    track = t ?? null;
+  }
+
+  const cfg = await loadAcrConfig();
+  const userId = req.session?.user?.id ?? null;
+
+  if (!cfg.host || !cfg.accessKey || !cfg.accessSecret || cfg.enabled === false) {
+    res.status(503).json({ error: "credentials_not_configured", message: "ACRCloud не настроен (Настройки → Интеграции)" });
+    return;
+  }
+  if (!track?.audioUrl) {
+    res.status(422).json({ error: "audio_url_missing", message: "У трека нет audio_url" });
+    return;
+  }
+
+  const [row] = await db.insert(acrChecksTable).values({
+    releaseId, trackId: track.id,
+    status: "pending",
+    mode: "full",
+    engine: "acrcloud",
+    scannedBy: userId,
+  }).returning();
+  void auditMutation(req, { action: "acr_scan_full", entityType: "acr_check", entityId: row.id, before: null, after: row });
+  void processFullScan(row.id, track.audioUrl, cfg as Required<AcrCloudConfig>, releaseId);
+  res.status(202).json(row);
+});
+
+// ── MusicBrainz ISRC validator ────────────────────────────────────────────
+//
+// Спрашивает у MusicBrainz: какие recording'и зарегистрированы под этим ISRC?
+// Если ничего — clean (мы ставим свой ISRC). Если найдено что-то с другим
+// артистом/названием — matched (это конфликт, наш ISRC уже занят).
+
+const MbCheckBody = z.object({ trackId: z.number().int().positive() });
+
+router.post("/distribution/musicbrainz/check-isrc", async (req, res): Promise<void> => {
+  const parsed = MbCheckBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+  const { trackId } = parsed.data;
+
+  const [track] = await db.select().from(tracksTable).where(eq(tracksTable.id, trackId));
+  if (!track) { res.status(404).json({ error: "Track not found" }); return; }
+  if (!track.isrc) {
+    res.status(422).json({ error: "isrc_missing", message: "У трека нет ISRC — нечего проверять" });
+    return;
+  }
+  // tracks.release_id nullable в схеме (orphan-треки разрешены),
+  // но для проверки ISRC нам нужен релиз — без него непонятно куда писать
+  // и кому принадлежит «наш» артист.
+  const trackReleaseId = track.releaseId;
+  if (trackReleaseId === null) {
+    res.status(422).json({ error: "track_orphan", message: "Трек не привязан к релизу — проверка невозможна" });
+    return;
+  }
+
+  const isrc = normalizeIsrc(track.isrc);
+  if (!isrc) {
+    res.status(422).json({ error: "isrc_invalid_format", message: `ISRC '${track.isrc}' не похож на правильный формат (CC-XXX-YY-NNNNN)` });
+    return;
+  }
+
+  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, trackReleaseId));
+  const [artist] = release ? await db.select({ name: artistsTable.name }).from(artistsTable).where(eq(artistsTable.id, release.artistId)) : [undefined];
+  const ourArtist = artist?.name ?? "Unknown";
+  const userId = req.session?.user?.id ?? null;
+
+  const lookup = await lookupIsrc(isrc);
+  if (lookup.kind === "error") {
+    res.status(502).json({ error: "musicbrainz_error", message: lookup.message });
+    return;
+  }
+
+  if (lookup.kind === "not_found") {
+    const [row] = await db.insert(acrChecksTable).values({
+      releaseId: trackReleaseId,
+      trackId: track.id,
+      status: "clean",
+      engine: "musicbrainz_isrc",
+      mode: "sample",
+      matchedIsrc: isrc,
+      resultJson: { engine: "musicbrainz_isrc", isrc, recordings: [], verdict: "isrc_not_in_mb" },
+      scannedBy: userId,
+    }).returning();
+    void auditMutation(req, { action: "musicbrainz_isrc_check", entityType: "acr_check", entityId: row.id, before: null, after: row });
+    void assessAndPersist(trackReleaseId);
+    res.status(200).json(row);
+    return;
+  }
+
+  // kind === "found"
+  const conflict = detectIsrcConflict(track.title, ourArtist, lookup.recordings);
+  const [row] = await db.insert(acrChecksTable).values({
+    releaseId: trackReleaseId,
+    trackId: track.id,
+    status: conflict.conflict ? "matched" : "clean",
+    engine: "musicbrainz_isrc",
+    mode: "sample",
+    matchedIsrc: isrc,
+    matchedTitle: conflict.conflictingTitle ?? null,
+    matchedArtist: conflict.conflictingArtist ?? null,
+    confidence: lookup.recordings[0]?.score ? String(lookup.recordings[0].score) : null,
+    resultJson: {
+      engine: "musicbrainz_isrc",
+      isrc,
+      our_artist: ourArtist,
+      our_title: track.title,
+      recordings: lookup.recordings,
+      verdict: conflict.conflict ? "isrc_owned_by_other" : "isrc_match_us",
+    },
+    scannedBy: userId,
+  }).returning();
+  void auditMutation(req, { action: "musicbrainz_isrc_check", entityType: "acr_check", entityId: row.id, before: null, after: row });
+  void assessAndPersist(trackReleaseId);
+  res.status(200).json(row);
 });
 
 // ── Disputes (фильтрованные конфликты по релизам) ─────────────────────────

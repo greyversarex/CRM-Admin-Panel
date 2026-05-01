@@ -134,6 +134,8 @@ export * from "./releaseAllowedTransitionsItem";
 export * from "./releaseCounts";
 export * from "./releaseDetail";
 export * from "./releaseReleaseType";
+export * from "./releaseRiskFactorsItem";
+export * from "./releaseRiskFactorsItemSeverity";
 export * from "./releaseStatus";
 export * from "./revenueByMonth";
 export * from "./royaltyByDsp";
