@@ -2,6 +2,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { logger } from "./logger";
 import { db, platformSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 
 export interface MailMessage {
   to: string;
@@ -54,6 +55,34 @@ async function resolveTransport(): Promise<{ transport: Transporter | null; from
   if (cachedTransporter && now - lastResolveAt < RESOLVE_TTL_MS) {
     // Кэш-хит: возвращаем и transport, и сохранённый fromOverride.
     return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+  }
+
+  // 0) Проверяем Resend-интеграцию (Настройки → Интеграции → Resend)
+  try {
+    const resendIntegration = await getIntegrationByCode("resend");
+    if (resendIntegration && resendIntegration.status !== "disconnected") {
+      const creds = await loadCredentials(resendIntegration.id);
+      const apiKey = creds["api_key"];
+      if (apiKey) {
+        const fingerprint = `resend:${apiKey.slice(0, 8)}`;
+        if (fingerprint !== cachedFingerprint) {
+          // Resend предоставляет SMTP-relay: smtp.resend.com:465, user="resend", pass=api_key
+          cachedTransporter = nodemailer.createTransport({
+            host: "smtp.resend.com",
+            port: 465,
+            secure: true,
+            auth: { user: "resend", pass: apiKey },
+          });
+          cachedFingerprint = fingerprint;
+          cachedFromOverride = null;
+          logger.info("[mail] SMTP transport инициализирован через Resend-интеграцию");
+        }
+        lastResolveAt = now;
+        return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "[mail] ошибка при загрузке Resend-интеграции, пробуем другие источники");
   }
 
   // 1) Сначала проверяем БД-настройки (приоритет — UI важнее env)

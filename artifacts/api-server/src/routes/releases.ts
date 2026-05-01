@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { getDataScope, requireRole, resolveScopeFilter } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/notifications";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
@@ -219,6 +220,17 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
 
 interface SpotifyConfig { clientId?: string; clientSecret?: string }
 async function loadSpotifyConfig(): Promise<SpotifyConfig> {
+  try {
+    // Приоритет: интеграции (Настройки → Интеграции → Spotify for Artists)
+    const integration = await getIntegrationByCode("spotify");
+    if (integration && integration.status !== "disconnected") {
+      const creds = await loadCredentials(integration.id);
+      const clientId = creds["client_id"];
+      const clientSecret = creds["client_secret"];
+      if (clientId && clientSecret) return { clientId, clientSecret };
+    }
+  } catch { /* ignore */ }
+  // Fallback: platformSettings (старый путь через Настройки → Spotify)
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "spotify"));
     return (row?.value ?? {}) as SpotifyConfig;

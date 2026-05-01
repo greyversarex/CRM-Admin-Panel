@@ -12,6 +12,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, platformSettingsTable, pushSubscriptionsTable, usersTable } from "@workspace/db";
+import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import { eq } from "drizzle-orm";
 import webpush from "web-push";
 import { auditMutation } from "../lib/audit";
@@ -114,10 +115,39 @@ interface ChannelsConfig {
 }
 
 async function loadChannels(): Promise<ChannelsConfig> {
+  // Базовый конфиг из platformSettings (старый путь через Настройки → Каналы)
+  let base: ChannelsConfig = {};
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "channels"));
-    return (row?.value ?? {}) as ChannelsConfig;
-  } catch { return {}; }
+    base = (row?.value ?? {}) as ChannelsConfig;
+  } catch { /* ignore */ }
+
+  // Перезаписываем полями из таблицы интеграций (Настройки → Интеграции), если они есть
+  try {
+    const tgIntegration = await getIntegrationByCode("telegram_bot");
+    if (tgIntegration && tgIntegration.status !== "disconnected") {
+      const creds = await loadCredentials(tgIntegration.id);
+      const botToken = creds["bot_token"] || creds["token"];
+      if (botToken) {
+        base = { ...base, telegram: { ...base.telegram, enabled: true, botToken } };
+      }
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const waIntegration = await getIntegrationByCode("twilio_whatsapp");
+    if (waIntegration && waIntegration.status !== "disconnected") {
+      const creds = await loadCredentials(waIntegration.id);
+      const accountSid = creds["account_sid"];
+      const authToken = creds["auth_token"];
+      const fromNumber = creds["from_number"];
+      if (accountSid && authToken) {
+        base = { ...base, whatsapp: { ...base.whatsapp, enabled: true, provider: "twilio", accountSid, authToken, fromNumber } };
+      }
+    }
+  } catch { /* ignore */ }
+
+  return base;
 }
 
 async function sendTelegram(cfg: ChannelsConfig["telegram"], to: string, body: string) {
