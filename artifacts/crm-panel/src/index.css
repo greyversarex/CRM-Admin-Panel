@@ -147,47 +147,47 @@
 .dark {
   --button-outline: rgba(255,255,255, .06);
   --badge-outline: rgba(255,255,255, .05);
-  --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .03);
-  --elevate-2: rgba(255,255,255, .07);
+  --opaque-button-border-intensity: 8;
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .08);
 
-  --background: 222 35% 5%;
+  --background: 224 30% 9%;
   --foreground: 213 31% 96%;
-  --border: 220 22% 14%;
+  --border: 220 20% 18%;
 
-  --card: 220 28% 9%;
+  --card: 222 26% 13%;
   --card-foreground: 213 31% 96%;
-  --card-border: 220 22% 14%;
+  --card-border: 220 20% 19%;
 
-  --sidebar: 222 38% 7%;
+  --sidebar: 224 34% 11%;
   --sidebar-foreground: 213 31% 96%;
-  --sidebar-border: 220 22% 12%;
+  --sidebar-border: 220 20% 16%;
   --sidebar-primary: 226 84% 67%;
   --sidebar-primary-foreground: 213 31% 96%;
-  --sidebar-accent: 220 28% 11%;
+  --sidebar-accent: 222 26% 15%;
   --sidebar-accent-foreground: 213 31% 96%;
   --sidebar-ring: 226 84% 67%;
 
-  --popover: 220 28% 9%;
+  --popover: 222 26% 13%;
   --popover-foreground: 213 31% 96%;
-  --popover-border: 220 22% 14%;
+  --popover-border: 220 20% 19%;
 
   --primary: 226 84% 67%;
   --primary-foreground: 213 31% 96%;
 
-  --secondary: 220 22% 14%;
+  --secondary: 220 20% 18%;
   --secondary-foreground: 213 31% 96%;
 
-  --muted: 220 22% 12%;
-  --muted-foreground: 215 16% 54%;
+  --muted: 220 22% 16%;
+  --muted-foreground: 215 18% 58%;
 
-  --accent: 220 28% 11%;
+  --accent: 222 26% 15%;
   --accent-foreground: 213 31% 96%;
 
   --destructive: 0 72% 58%;
   --destructive-foreground: 213 31% 96%;
 
-  --input: 220 22% 12%;
+  --input: 220 22% 16%;
   --ring: 226 84% 67%;
 
   --chart-1: 226 84% 67%;
@@ -222,6 +222,9 @@
     font-variation-settings: "opsz" 32;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(ellipse 90% 50% at 50% -5%, hsl(226 84% 67% / 0.07) 0%, transparent 65%),
+      radial-gradient(ellipse 60% 30% at 90% 100%, hsl(271 80% 68% / 0.05) 0%, transparent 60%);
   }
 
   ::-webkit-scrollbar {
