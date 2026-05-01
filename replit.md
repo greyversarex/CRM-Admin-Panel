@@ -78,6 +78,26 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24. I
 
 ## Recent Changes
 
+### 2026-05-01 — Создание пользователей админом (фикс «нет кнопки + мёртвые юзеры»)
+До этого: на странице `/users` админ не мог создать пользователя из UI вообще, хотя `POST /api/users` существовал. Хуже того — старый endpoint вставлял запись БЕЗ `passwordHash`, то есть созданный пользователь не мог войти (фактически «мёртвый» аккаунт).
+
+- **Backend** (`artifacts/api-server/src/routes/users.ts`):
+  - Email нормализуется (trim+lowercase) и проверяется на уникальность → 409 `email_taken` с понятным сообщением вместо сырого 500 от unique-индекса.
+  - Генерируется временный пароль (`generateTempPassword(12)` — тот же helper, что в signup approve), хэшируется bcrypt, сохраняется в `passwordHash`. `kycStatus='not_started'`.
+  - Best-effort приглашение через `sendMailAndForget` (text + html) с временным паролем. Если SMTP не сконфигурирован — тихо пропускаем.
+  - В response возвращается `tempPassword` ОДНОРАЗОВО — админ показывает его в UI и может скопировать. В БД хранится только bcrypt-хэш.
+- **UI** (`artifacts/crm-panel/src/pages/users/`):
+  - Новая кнопка «Новый пользователь» (`UserPlus`-icon) в header карточки `All Users` — видна **только админу** (`currentUser?.role === "admin"`).
+  - Новый компонент `_create-user-dialog.tsx`: поля name / email / role / status. После успеха показывает временный пароль с кнопкой Copy + предупреждение «показывается только один раз». Закрытие диалога reset'ит state. Клиент дёргает `POST /api/users` напрямую через fetch (а не через сгенерированный `useCreateUser`) — потому что нужен доступ к нестандартному полю `tempPassword` в ответе.
+  - i18n: добавлены RU+EN строки `create_button`, `create_dialog_title`, `create_dialog_desc`, `create_submit`, `create_saved`, `create_error`, `create_validation_error`, `create_temp_pwd_title`, `create_temp_pwd_hint`, `create_copy`, `create_copied`, `create_done`.
+- **Smoke**: POST с новым email → 201 + tempPassword=12 chars; повтор того же email → 409 `email_taken`.
+- **Severe-фиксы по итогам architect-review**:
+  - `POST /users` теперь под `adminOnlyStrict = requireRole("admin")` — менеджер не может создавать аккаунты (тем более с ролью admin).
+  - INSERT обёрнут в try/catch на Postgres unique_violation `23505` → тот же 409 `email_taken` без 500 на гонке между pre-check и insert.
+  - Pre-check уникальности email теперь case-insensitive (`lower(email) = lower(input)`), чтобы legacy записи смешанного регистра не пускали логические дубликаты.
+  - `PUT /users/:id` (всё ещё под `adminOnly = admin|manager` для обычного редактирования профилей) обзавёлся anti-escalation guard'ом: менеджер не может (а) править админов вообще, (б) менять `role` никому. Иначе manager → self-promote → admin обходил бы строгий create-гейт.
+  - Smoke escalation: manager promote себя/чужих → 403; manager редактирует admin → 403; manager переименовывает artist без смены role → 200; admin меняет role → 200.
+
 ### 2026-05-01 — Защита репутации лейбла: 5 уровней проверки + multi-segment ACR
 Цель — снизить риск «ACR clean → Spotify reject». Внедрено пять связанных слоёв:
 

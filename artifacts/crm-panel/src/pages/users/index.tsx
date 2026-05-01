@@ -28,6 +28,7 @@ import { SignupsTab } from "./_signups-tab";
 import { KycTab } from "./_kyc-tab";
 import { ActivityTab } from "./_activity-tab";
 import { EditUserDialog } from "./_edit-user-dialog";
+import { CreateUserDialog } from "./_create-user-dialog";
 
 export default function Users() {
   const { t, lang } = useLang();
@@ -38,6 +39,7 @@ export default function Users() {
   const [, navigate] = useLocation();
   const [imperBusyId, setImperBusyId] = useState<number | null>(null);
   const [editTarget, setEditTarget] = useState<User | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
 
   const [signupsCount, setSignupsCount] = useState<number>(0);
@@ -215,6 +217,17 @@ export default function Users() {
                     <CardDescription>{t.users.users_card_desc}</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
+                    {currentUser?.role === "admin" && (
+                      <Button
+                        size="sm"
+                        className="h-9 gap-1.5"
+                        onClick={() => setCreateOpen(true)}
+                        data-testid="button-create-user"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        {t.users.create_button}
+                      </Button>
+                    )}
                     <select
                       aria-label="Filter by role"
                       className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
@@ -416,6 +429,7 @@ export default function Users() {
       </div>
 
       <EditUserDialog user={editTarget} onClose={() => setEditTarget(null)} />
+      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </Layout>
   );
 }

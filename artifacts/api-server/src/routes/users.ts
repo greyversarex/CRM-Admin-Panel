@@ -2,15 +2,22 @@ import { Router } from "express";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { db, usersTable } from "@workspace/db";
-import { count, eq, desc, ilike, or, and, type SQL } from "drizzle-orm";
+import { count, eq, desc, ilike, or, and, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
-import { isValidIban, isValidSwift, maskBankInfoFor } from "../lib/kycUtils";
+import { isValidIban, isValidSwift, maskBankInfoFor, generateTempPassword } from "../lib/kycUtils";
 import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
+import bcrypt from "bcryptjs";
+import { sendMailAndForget } from "../lib/mail";
 
 const adminOnly = requireRole("admin", "manager");
+// СОЗДАНИЕ юзеров — только настоящий admin. Менеджер не должен создавать
+// аккаунты (тем более с ролью admin) — иначе можно через UI / прямой API
+// эскалировать привилегии. UI-кнопка тоже скрывается для не-админа, но это
+// не security control, реальный гейт — здесь, на бэке.
+const adminOnlyStrict = requireRole("admin");
 
 const router = Router();
 
@@ -129,16 +136,83 @@ router.get("/users", adminOnly, async (req, res): Promise<void> => {
   });
 });
 
-router.post("/users", adminOnly, async (req, res): Promise<void> => {
+router.post("/users", adminOnlyStrict, async (req, res): Promise<void> => {
   const parsed = CreateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const [user] = await db.insert(usersTable).values(parsed.data).returning();
-  void auditMutation(req, { action: "create", entityType: "user", entityId: user.id, before: null, after: user });
-  res.status(201).json(formatUser(user));
+  // Email должен быть уникальным. Pre-check + case-insensitive (legacy строки
+  // могут быть смешанного регистра). Сравниваем через lower(email), чтобы
+  // существующая запись «John@Mail.ru» не ускользнула, когда админ вводит
+  // «john@mail.ru». Раса между check и insert закрыта catch ниже.
+  const emailNorm = parsed.data.email.trim().toLowerCase();
+  const [existing] = await db.select({ id: usersTable.id })
+    .from(usersTable)
+    .where(sql`lower(${usersTable.email}) = ${emailNorm}`);
+  if (existing) {
+    res.status(409).json({
+      error: "email_taken",
+      message: "Этот email уже зарегистрирован. Найдите пользователя в списке или используйте другой адрес.",
+    });
+    return;
+  }
+
+  // Генерим временный пароль и хэшируем (тот же путь, что в signup approve).
+  // Без passwordHash юзер не сможет войти — текущая старая версия create
+  // фактически создавала «мёртвых» пользователей.
+  const tempPassword = generateTempPassword(12);
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  let user: typeof usersTable.$inferSelect;
+  try {
+    [user] = await db.insert(usersTable).values({
+      ...parsed.data,
+      email: emailNorm,
+      passwordHash,
+      kycStatus: "not_started",
+    }).returning();
+  } catch (err: unknown) {
+    // Postgres unique_violation = 23505. Если pre-check проиграл гонку с
+    // параллельным insert'ом — отдаём тот же 409 без 500.
+    const code = (err as { code?: string })?.code;
+    if (code === "23505") {
+      res.status(409).json({
+        error: "email_taken",
+        message: "Этот email уже зарегистрирован. Найдите пользователя в списке или используйте другой адрес.",
+      });
+      return;
+    }
+    throw err;
+  }
+  void auditMutation(req, {
+    action: "create", entityType: "user", entityId: user.id, before: null, after: user,
+  });
+
+  // Best-effort приглашение на email с временным паролем. Если SMTP не
+  // сконфигурирован — sendMail тихо вернёт {sent:false}, админ всё равно
+  // увидит tempPassword в response и сможет передать вручную.
+  sendMailAndForget({
+    to: user.email,
+    subject: "Tajik Music CRM — ваш аккаунт создан",
+    text:
+      `Здравствуйте, ${user.name}.\n\n` +
+      `Администратор создал для вас аккаунт в Tajik Music CRM.\n\n` +
+      `Email: ${user.email}\n` +
+      `Временный пароль: ${tempPassword}\n\n` +
+      `Войдите по ссылке и смените пароль в профиле.\n`,
+    html:
+      `<p>Здравствуйте, ${user.name}.</p>` +
+      `<p>Администратор создал для вас аккаунт в Tajik Music CRM.</p>` +
+      `<p><b>Email:</b> ${user.email}<br/>` +
+      `<b>Временный пароль:</b> <code>${tempPassword}</code></p>` +
+      `<p>Войдите и смените пароль в профиле.</p>`,
+  });
+
+  // tempPassword отдаём одноразово — этот response админ показывает в UI.
+  // Сам tempPassword больше нигде не хранится в открытом виде (в БД только bcrypt-хэш).
+  res.status(201).json({ ...formatUser(user), tempPassword });
 });
 
 // ─── Bank Info (Task #6) ─────────────────────────────────────────────────
@@ -290,7 +364,28 @@ router.put("/users/:id", adminOnly, async (req, res): Promise<void> => {
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "User not found" }); return; }
 
-  const [user] = await db.update(usersTable).set(parsed.data).where(eq(usersTable.id, params.data.id)).returning();
+  // Anti-privilege-escalation. Менеджер может править свои/чужие профили,
+  // НО:
+  //   1) не имеет права менять `role` никому (иначе self-promotes до admin
+  //      и обходит строгий гейт на POST /users);
+  //   2) не имеет права менять `status` админам (иначе suspends других
+  //      админов и захватывает контроль);
+  //   3) не имеет права редактировать самих админов вообще (имена/email).
+  // Реальный admin — без ограничений.
+  const callerRole = req.session.user?.role;
+  const payload = { ...parsed.data };
+  if (callerRole !== "admin") {
+    if (existing.role === "admin") {
+      res.status(403).json({ error: "Forbidden: only admin can edit admin users" });
+      return;
+    }
+    if (payload.role !== existing.role) {
+      res.status(403).json({ error: "Forbidden: only admin can change user role" });
+      return;
+    }
+  }
+
+  const [user] = await db.update(usersTable).set(payload).where(eq(usersTable.id, params.data.id)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
