@@ -109,6 +109,21 @@ if (!sessionSecret) {
   logger.warn("SESSION_SECRET is not set — using insecure development fallback. DO NOT deploy without setting it.");
 }
 
+// Флаг Secure на cookie. По умолчанию — true в проде (правильно, если есть HTTPS).
+// Но если сайт временно работает по HTTP (TLS ещё не настроен), браузер ОТКАЗЫВАЕТСЯ
+// сохранять Set-Cookie с Secure, и тогда логин «проходит», но все следующие запросы
+// идут без сессии → 401 на всём подряд. В таком случае выставите
+// SESSION_COOKIE_SECURE=false в .env (только до тех пор, пока не настроен TLS!).
+const cookieSecure = (() => {
+  const raw = process.env.SESSION_COOKIE_SECURE;
+  if (raw === "true")  return true;
+  if (raw === "false") return false;
+  return isProduction;
+})();
+if (isProduction && !cookieSecure) {
+  logger.warn("SESSION_COOKIE_SECURE=false — cookie не помечается Secure. Используйте только пока не настроен HTTPS.");
+}
+
 app.use(
   session({
     store: new PgStore({
@@ -124,7 +139,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: isProduction,
+      secure: cookieSecure,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   }),
