@@ -259,6 +259,9 @@ function ScanReportCard({ check: c, releaseTitle, isExpanded, isJsonOpen, onTogg
 
   const sampleBytes = typeof scanMeta["sample_bytes"] === "number" ? scanMeta["sample_bytes"] as number : null;
   const sampleKb = typeof scanMeta["sample_kb"] === "number" ? scanMeta["sample_kb"] as number : null;
+  const sampleOffsetKb = typeof scanMeta["sample_offset_kb"] === "number" ? scanMeta["sample_offset_kb"] as number : null;
+  const totalFileKb = typeof scanMeta["total_file_kb"] === "number" ? scanMeta["total_file_kb"] as number : null;
+  const samplePositionPct = typeof scanMeta["sample_position_pct"] === "number" ? scanMeta["sample_position_pct"] as number : null;
   const acrHost = typeof scanMeta["acr_host"] === "string" ? scanMeta["acr_host"] as string : null;
   const fetchMs = typeof scanMeta["fetch_ms"] === "number" ? scanMeta["fetch_ms"] as number : null;
   const identifyMs = typeof scanMeta["identify_ms"] === "number" ? scanMeta["identify_ms"] as number : null;
@@ -344,6 +347,17 @@ function ScanReportCard({ check: c, releaseTitle, isExpanded, isJsonOpen, onTogg
               {c.status === "clean" && (
                 <>Аудио-отпечаток (acoustic fingerprint) сравнён с глобальной базой ACRCloud (~75 млн коммерческих записей и пользовательского контента). Совпадений не обнаружено — трек считается оригинальным с точки зрения сервиса распознавания.</>
               )}
+              {c.status === "clean" && (
+                <div className="mt-2.5 rounded-md bg-yellow-500/8 border border-yellow-500/20 px-2.5 py-2 text-[11.5px] text-yellow-200/90">
+                  <div className="font-medium text-yellow-300/90 mb-1">Если вы уверены, что это известный трек, возможные причины «чистого» результата:</div>
+                  <ul className="list-disc list-inside space-y-0.5 text-yellow-200/70">
+                    <li>База ACRCloud охватывает в основном западную и азиатскую коммерческую музыку — региональные треки (таджикские, узбекские, казахские) часто не индексируются, даже если очень популярны локально.</li>
+                    <li>Это может быть другая версия трека (live, кавер, ремикс, ремастер) — отпечаток отличается от оригинала.</li>
+                    <li>Если файл начинается с длинной тишины, эффектов или нестандартного интро — взятый сэмпл мог попасть мимо узнаваемой части.</li>
+                    <li>Низкое качество записи (плохая запись с микрофона, перекодирование с потерями) ослабляет отпечаток.</li>
+                  </ul>
+                </div>
+              )}
               {c.status === "error" && (
                 <>Не удалось получить ответ от сервиса распознавания. Подробности в технических данных ниже.</>
               )}
@@ -377,6 +391,20 @@ function ScanReportCard({ check: c, releaseTitle, isExpanded, isJsonOpen, onTogg
                   icon={<Database className="h-3 w-3" />}
                   label="Размер сэмпла"
                   value={`${sampleKb} КБ (${sampleBytes.toLocaleString("ru-RU")} б)`}
+                  mono
+                />
+              )}
+              {totalFileKb !== null && (
+                <DetailRow
+                  label="Размер файла"
+                  value={`${totalFileKb.toLocaleString("ru-RU")} КБ`}
+                  mono
+                />
+              )}
+              {sampleOffsetKb !== null && samplePositionPct !== null && (
+                <DetailRow
+                  label="Сэмпл взят с позиции"
+                  value={`${sampleOffsetKb.toLocaleString("ru-RU")} КБ (${samplePositionPct}% файла)`}
                   mono
                 />
               )}

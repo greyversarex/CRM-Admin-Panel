@@ -108,7 +108,23 @@ function isPrivateIPv4(ip: string): boolean {
  * Если audioUrl — локальный objectPath (/objects/...) — читаем напрямую из хранилища.
  * Если это внешний https URL — скачиваем через HTTP с SSRF-guard.
  */
-async function fetchSample(audioUrl: string, maxBytes = 1_048_576): Promise<Buffer> {
+/**
+ * Достаёт «умный» сэмпл аудио для отправки в ACRCloud.
+ *
+ * ACRCloud рекомендует ~10 секунд аудио из самой узнаваемой части трека
+ * (припев/вокал). Проблема: если брать с самого начала файла, то в первых
+ * сотнях КБ часто ID3-метаданные (особенно с встроенной обложкой) или
+ * затихание/интро. Решение: пропускаем первые 20% файла и берём 512 КБ —
+ * этого хватит на ~12-30 секунд аудио (зависит от битрейта) и почти всегда
+ * попадает в куплет/припев.
+ */
+const SAMPLE_BYTES = 512_000;
+const SAMPLE_SKIP_RATIO = 0.20;
+const SAMPLE_MIN_SKIP = 100_000;
+
+interface SampleResult { buffer: Buffer; offsetBytes: number; totalBytes: number | null }
+
+async function fetchSample(audioUrl: string): Promise<SampleResult> {
   // ── Локальный файл хранилища ───────────────────────────────────────────────
   if (audioUrl.startsWith("/objects/")) {
     let file;
@@ -118,14 +134,18 @@ async function fetchSample(audioUrl: string, maxBytes = 1_048_576): Promise<Buff
       if (e instanceof ObjectNotFoundError) throw new Error("audio_file_not_found");
       throw e;
     }
-    const stream = file.createReadStream({ start: 0, end: maxBytes - 1 });
+    const [meta] = await file.getMetadata();
+    const totalBytes = meta.size;
+    const offset = computeOffset(totalBytes);
+    const end = Math.min(totalBytes - 1, offset + SAMPLE_BYTES - 1);
+    const stream = file.createReadStream({ start: offset, end });
     const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
       stream.on("data", (chunk: Buffer) => chunks.push(chunk));
       stream.on("end", resolve);
       stream.on("error", reject);
     });
-    return Buffer.concat(chunks).subarray(0, maxBytes);
+    return { buffer: Buffer.concat(chunks).subarray(0, SAMPLE_BYTES), offsetBytes: offset, totalBytes };
   }
 
   // ── Внешний URL — SSRF-guard + HTTP fetch ─────────────────────────────────
@@ -149,16 +169,38 @@ async function fetchSample(audioUrl: string, maxBytes = 1_048_576): Promise<Buff
     }
   }
 
+  // HEAD-запрос чтобы узнать размер (и затем умно высчитать offset).
+  // Если HEAD не поддержан — fallback на чтение с начала.
+  let totalBytes: number | null = null;
+  try {
+    const headResp = await fetch(audioUrl, { method: "HEAD", signal: AbortSignal.timeout(8_000), redirect: "manual" });
+    const cl = headResp.headers.get("content-length");
+    if (headResp.ok && cl) totalBytes = parseInt(cl, 10);
+  } catch { /* ignore — пойдём с offset=0 */ }
+
+  const offset = totalBytes !== null ? computeOffset(totalBytes) : 0;
+  const end = totalBytes !== null
+    ? Math.min(totalBytes - 1, offset + SAMPLE_BYTES - 1)
+    : offset + SAMPLE_BYTES - 1;
+
   const resp = await fetch(audioUrl, {
     method: "GET",
-    headers: { Range: `bytes=0-${maxBytes - 1}` },
+    headers: { Range: `bytes=${offset}-${end}` },
     signal: AbortSignal.timeout(15_000),
     redirect: "manual",
   });
   if (resp.status >= 300 && resp.status < 400) throw new Error(`audio_redirect_blocked_${resp.status}`);
   if (!resp.ok && resp.status !== 206) throw new Error(`audio_fetch_${resp.status}`);
   const ab = await resp.arrayBuffer();
-  return Buffer.from(ab).subarray(0, maxBytes);
+  return { buffer: Buffer.from(ab).subarray(0, SAMPLE_BYTES), offsetBytes: offset, totalBytes };
+}
+
+function computeOffset(totalBytes: number): number {
+  // Если файл слишком маленький — берём с начала
+  if (totalBytes <= SAMPLE_BYTES + SAMPLE_MIN_SKIP) return 0;
+  const wantedSkip = Math.max(SAMPLE_MIN_SKIP, Math.floor(totalBytes * SAMPLE_SKIP_RATIO));
+  // Гарантируем что хвост файла не короче SAMPLE_BYTES
+  return Math.min(wantedSkip, totalBytes - SAMPLE_BYTES);
 }
 
 /**
@@ -219,7 +261,7 @@ async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<
   const startedAt = Date.now();
   const safeAudioUrl = safeUrl(audioUrl);
   try {
-    const sample = await fetchSample(audioUrl);
+    const { buffer: sample, offsetBytes, totalBytes } = await fetchSample(audioUrl);
     const fetchedAt = Date.now();
     const r = await callAcrIdentify(cfg, sample);
     const finishedAt = Date.now();
@@ -229,6 +271,11 @@ async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<
     const scanMeta = {
       sample_bytes: sample.length,
       sample_kb: Math.round(sample.length / 1024),
+      sample_offset_bytes: offsetBytes,
+      sample_offset_kb: Math.round(offsetBytes / 1024),
+      total_file_bytes: totalBytes,
+      total_file_kb: totalBytes !== null ? Math.round(totalBytes / 1024) : null,
+      sample_position_pct: totalBytes && totalBytes > 0 ? Math.round((offsetBytes / totalBytes) * 100) : null,
       audio_url: safeAudioUrl,
       acr_host: cfg.host,
       fetch_ms: fetchedAt - startedAt,
