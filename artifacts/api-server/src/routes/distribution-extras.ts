@@ -205,14 +205,51 @@ async function callAcrIdentify(cfg: Required<AcrCloudConfig>, sample: Buffer): P
  * Background-обработка: качаем sample, отправляем на ACRCloud,
  * обновляем acr_checks row.
  */
+/** Убираем query-string из URL чтобы не утекали подписанные токены/ключи доступа. */
+function safeUrl(u: string): string {
+  try {
+    const parsed = new URL(u, "http://x.local");
+    return `${parsed.origin === "http://x.local" ? "" : parsed.origin}${parsed.pathname}`;
+  } catch {
+    return u.split("?")[0];
+  }
+}
+
 async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<AcrCloudConfig>): Promise<void> {
+  const startedAt = Date.now();
+  const safeAudioUrl = safeUrl(audioUrl);
   try {
     const sample = await fetchSample(audioUrl);
+    const fetchedAt = Date.now();
     const r = await callAcrIdentify(cfg, sample);
+    const finishedAt = Date.now();
+
+    // Мета-данные нашего скана (не часть ответа ACRCloud, но полезно для отчёта).
+    // audio_url хранится без query-string — чтобы не утекали подписанные токены.
+    const scanMeta = {
+      sample_bytes: sample.length,
+      sample_kb: Math.round(sample.length / 1024),
+      audio_url: safeAudioUrl,
+      acr_host: cfg.host,
+      fetch_ms: fetchedAt - startedAt,
+      identify_ms: finishedAt - fetchedAt,
+      total_ms: finishedAt - startedAt,
+      requested_at_utc: new Date(startedAt).toISOString(),
+      completed_at_utc: new Date(finishedAt).toISOString(),
+    };
+
     if (!r.ok) {
-      await db.update(acrChecksTable).set({ status: "error", errorMessage: r.error }).where(eq(acrChecksTable.id, checkId));
+      await db.update(acrChecksTable).set({
+        status: "error",
+        errorMessage: r.error,
+        resultJson: { _scan_meta: scanMeta, _error: r.error },
+      }).where(eq(acrChecksTable.id, checkId));
       return;
     }
+
+    // Инжектируем _scan_meta в результат для прозрачности
+    const enrichedResult = { ...r.result, _scan_meta: scanMeta };
+
     const status = r.result["status"] as { code?: number; msg?: string } | undefined;
     const metadata = r.result["metadata"] as { music?: Array<Record<string, unknown>> } | undefined;
     const musicMatches = metadata?.music ?? [];
@@ -229,28 +266,38 @@ async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<
         matchedArtist: artists ?? null,
         matchedIsrc: externalIds?.isrc ?? null,
         matchedLabel: typeof top["label"] === "string" ? top["label"] : (album?.name ?? null),
-        resultJson: r.result,
+        resultJson: enrichedResult,
         errorMessage: null,
       }).where(eq(acrChecksTable.id, checkId));
     } else if (status?.code === 1001) {
       // "No result" — это нормальный кейс: трек не найден в базе ACRCloud
       await db.update(acrChecksTable).set({
         status: "clean",
-        resultJson: r.result,
+        resultJson: enrichedResult,
         errorMessage: null,
       }).where(eq(acrChecksTable.id, checkId));
     } else {
       await db.update(acrChecksTable).set({
         status: "error",
         errorMessage: `ACRCloud: ${status?.msg ?? "unknown"} (code=${status?.code})`,
-        resultJson: r.result,
+        resultJson: enrichedResult,
       }).where(eq(acrChecksTable.id, checkId));
     }
   } catch (e) {
     logger.warn({ err: e, checkId }, "[acr] background processing failed");
+    const failedAt = Date.now();
+    const partialMeta = {
+      audio_url: safeAudioUrl,
+      acr_host: cfg.host,
+      total_ms: failedAt - startedAt,
+      requested_at_utc: new Date(startedAt).toISOString(),
+      failed_at_utc: new Date(failedAt).toISOString(),
+      phase: "background",
+    };
     await db.update(acrChecksTable).set({
       status: "error",
       errorMessage: `Background: ${(e as Error).message}`,
+      resultJson: { _scan_meta: partialMeta, _error: (e as Error).message },
     }).where(eq(acrChecksTable.id, checkId)).catch(() => undefined);
   }
 }
