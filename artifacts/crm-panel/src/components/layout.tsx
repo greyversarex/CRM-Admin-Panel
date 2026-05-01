@@ -1,5 +1,4 @@
 import { SidebarNav } from "./sidebar-nav";
-import { WaveBackground } from "./wave-background";
 import { NotificationsPopover } from "./notifications-popover";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import {
@@ -90,7 +89,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         )}
-        <header className="h-[60px] flex items-center justify-between px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
+        <header className="h-[56px] flex items-center justify-between px-5 border-b border-border bg-card shrink-0 z-10">
           <div className="flex items-center flex-1 max-w-sm">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 z-10" />
@@ -242,9 +241,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative">
-          <WaveBackground />
-          <div className="relative z-10 p-6 md:p-7 mx-auto max-w-[1400px]">
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 md:p-7 mx-auto max-w-[1400px]">
             {children}
           </div>
         </main>

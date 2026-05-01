@@ -377,22 +377,22 @@ export function SidebarNav() {
                 const iconEl = (
                   <span
                     className={cn(
-                      "nav-icon-wrap flex items-center justify-center rounded-lg shrink-0",
-                      collapsed ? "h-[36px] w-[36px]" : "h-[28px] w-[28px] mr-2.5",
+                      "nav-icon-wrap flex items-center justify-center rounded-md shrink-0",
+                      collapsed ? "h-[36px] w-[36px]" : "h-[26px] w-[26px] mr-2.5",
                       isActive ? "nav-icon-active" : "nav-icon-idle"
                     )}
                   >
                     <Icon
                       className={cn(
-                        "transition-all duration-220",
-                        collapsed ? "h-[18px] w-[18px]" : "h-[15px] w-[15px]",
+                        "transition-opacity duration-150",
+                        collapsed ? "h-[17px] w-[17px]" : "h-[14px] w-[14px]",
                         isActive
-                          ? cn(item.iconColor ?? "text-primary", "opacity-100 drop-shadow-[0_0_8px_currentColor]")
+                          ? cn(item.iconColor ?? "text-primary", "opacity-100")
                           : item.iconColor
-                            ? cn(item.iconColor, "opacity-55 group-hover:opacity-90")
-                            : "text-white/40 group-hover:text-white/75"
+                            ? cn(item.iconColor, "opacity-55 group-hover:opacity-85")
+                            : "text-white/40 group-hover:text-white/70"
                       )}
-                      strokeWidth={1.9}
+                      strokeWidth={1.8}
                     />
                   </span>
                 );
@@ -493,26 +493,19 @@ export function SidebarNav() {
         onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Развернуть меню" : "Свернуть меню"}
         className={cn(
-          "relative flex items-center justify-center gap-2 w-full cursor-pointer select-none",
-          "h-11 transition-all duration-200",
-          "bg-[hsl(222_40%_6%)]",
-          "hover:bg-[hsl(222_40%_8%)]",
-          "active:scale-[0.98]",
-          "border-t border-primary/30",
-          "shadow-[0_-2px_12px_hsl(226_84%_67%/0.25),0_-1px_0_hsl(226_84%_67%/0.3)_inset]",
-          "hover:shadow-[0_-2px_20px_hsl(226_84%_67%/0.45),0_-1px_0_hsl(226_84%_67%/0.5)_inset,0_0_30px_hsl(271_80%_68%/0.15)]",
-          "text-primary font-bold text-[10px] tracking-[0.12em] uppercase",
-          "overflow-hidden"
+          "flex items-center justify-center gap-1.5 w-full cursor-pointer select-none",
+          "h-9 transition-colors duration-150",
+          "border-t border-[hsl(var(--sidebar-border))]",
+          "text-white/35 hover:text-white/65 text-[10px] tracking-[0.10em] uppercase font-medium",
+          "hover:bg-white/[0.03]"
         )}
       >
-        <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent pointer-events-none" />
-
         {collapsed ? (
-          <ChevronRight className="h-4 w-4 relative drop-shadow-[0_0_6px_hsl(var(--primary))]" />
+          <ChevronRight className="h-3.5 w-3.5" />
         ) : (
           <>
-            <ChevronLeft className="h-4 w-4 relative drop-shadow-[0_0_6px_hsl(var(--primary))]" />
-            <span className="relative drop-shadow-[0_0_8px_hsl(var(--primary))]">Свернуть</span>
+            <ChevronLeft className="h-3.5 w-3.5" />
+            <span>Свернуть</span>
           </>
         )}
       </button>
