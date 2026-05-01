@@ -331,7 +331,7 @@ export function SidebarNav() {
       </div>
 
       {/* Nav groups */}
-      <div className="flex-1 overflow-y-auto py-3 space-y-4" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
+      <div className="flex-1 overflow-y-auto py-3 space-y-0.5" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
         {navGroups.map((group) => {
           // 1. Manager: проверяем permission всей группы.
           if (user?.role === "manager" && group.managerKey && perms[group.managerKey] === false) {
@@ -344,11 +344,6 @@ export function SidebarNav() {
           if (visibleItems.length === 0) return null;
           return (
           <div key={group.titleKey}>
-            {!collapsed && visibleItems.length > 1 && (
-              <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.14em] text-white/50">
-                {nav[group.titleKey] ?? group.titleKey}
-              </p>
-            )}
             {collapsed && <div className="h-px bg-white/[0.07] mb-2 mx-1" />}
 
             <div className="space-y-0.5">
