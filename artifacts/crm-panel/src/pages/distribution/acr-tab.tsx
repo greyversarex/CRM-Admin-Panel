@@ -1,12 +1,12 @@
 /**
  * Distribution / ACRCloud tab — список проверок аудио-отпечатка + запуск новой.
  */
-import { useEffect, useState, useCallback } from "react";
-import { ScanSearch, RefreshCw, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { ScanSearch, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { adminApi, fmtDate } from "@/lib/admin-api";
 import { useListReleases } from "@workspace/api-client-react";
@@ -28,10 +28,24 @@ export function AcrTab() {
   const [configured, setConfigured] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [releaseId, setReleaseId] = useState("");
+
+  // Search state
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedTitle, setSelectedTitle] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const releasesQ = useListReleases({ limit: 200 });
   const releases = releasesQ.data?.releases ?? [];
+
+  const filtered = query.trim()
+    ? releases.filter((r) =>
+        r.title.toLowerCase().includes(query.toLowerCase()) ||
+        String(r.id).includes(query.trim())
+      )
+    : releases;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,13 +57,41 @@ export function AcrTab() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selectRelease = (id: number, title: string) => {
+    setSelectedId(id);
+    setSelectedTitle(title);
+    setQuery(title);
+    setOpen(false);
+  };
+
+  const clearSelection = () => {
+    setSelectedId(null);
+    setSelectedTitle("");
+    setQuery("");
+    inputRef.current?.focus();
+  };
+
   const scan = async () => {
-    if (!releaseId) { toast({ title: "Выберите релиз", variant: "destructive" }); return; }
+    if (!selectedId) { toast({ title: "Выберите релиз", variant: "destructive" }); return; }
     setScanning(true);
     try {
-      await adminApi("/api/distribution/acr/scan", { method: "POST", body: JSON.stringify({ releaseId: Number(releaseId) }) });
+      await adminApi("/api/distribution/acr/scan", { method: "POST", body: JSON.stringify({ releaseId: selectedId }) });
       toast({ title: "Проверка запущена" });
-      setReleaseId("");
+      clearSelection();
       await load();
     } catch (e) { toast({ title: "Ошибка", description: String((e as Error).message), variant: "destructive" }); }
     setScanning(false);
@@ -60,12 +102,12 @@ export function AcrTab() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold">ACRCloud — проверка аудио</h3>
-          <p className="text-xs text-muted-foreground">
-            Сравнение аудио-отпечатка трека с глобальной базой авторских прав.{" "}
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            <span className="text-xs text-muted-foreground">Сравнение аудио-отпечатка трека с глобальной базой авторских прав.</span>
             {configured
-              ? <Badge variant="default" className="ml-1">credentials configured</Badge>
-              : <Badge variant="destructive" className="ml-1">credentials not configured</Badge>}
-          </p>
+              ? <Badge variant="default">credentials configured</Badge>
+              : <Badge variant="destructive">credentials not configured</Badge>}
+          </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} data-testid="button-refresh-acr">
           <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Обновить
@@ -79,25 +121,74 @@ export function AcrTab() {
       )}
 
       <div className="rounded-md border bg-card p-3 flex items-end gap-2">
-        <div className="flex-1">
-          <Label className="text-xs mb-1.5 block">Релиз для сканирования</Label>
-          <Select value={releaseId} onValueChange={setReleaseId}>
-            <SelectTrigger data-testid="input-acr-release-id">
-              <SelectValue placeholder={releasesQ.isLoading ? "Загрузка релизов…" : "Выберите релиз…"} />
-            </SelectTrigger>
-            <SelectContent>
-              {releases.map((r) => (
-                <SelectItem key={r.id} value={String(r.id)}>
-                  #{r.id} — {r.title}
-                  {r.status === "pending_review" && (
-                    <span className="ml-2 text-amber-400 text-[10px]">(на модерации)</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex-1 relative">
+          <Label className="text-xs mb-1.5 block">Поиск релиза для сканирования</Label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10" style={{ color: "hsl(220 12% 52%)" }} />
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelectedId(null);
+                setSelectedTitle("");
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              placeholder="Введите название или ID релиза…"
+              className="pl-8 pr-8"
+              data-testid="input-acr-release-id"
+            />
+            {query && (
+              <button
+                onClick={clearSelection}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                style={{ color: "hsl(220 12% 52%)" }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Dropdown */}
+          {open && (
+            <div
+              ref={dropdownRef}
+              className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-card shadow-xl max-h-52 overflow-y-auto"
+            >
+              {releasesQ.isLoading ? (
+                <div className="p-3 text-xs text-muted-foreground text-center flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Загрузка…
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="p-3 text-xs text-muted-foreground text-center">Ничего не найдено</div>
+              ) : (
+                filtered.slice(0, 20).map((r) => (
+                  <button
+                    key={r.id}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-primary/10 flex items-center justify-between gap-2 transition-colors"
+                    onMouseDown={(e) => { e.preventDefault(); selectRelease(r.id, r.title); }}
+                  >
+                    <span className="truncate">{r.title}</span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      {r.status === "pending_review" && (
+                        <span className="text-[10px] text-amber-400">на модерации</span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground/60">#{r.id}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
-        <Button onClick={() => void scan()} disabled={!releaseId || scanning} data-testid="button-acr-scan">
+
+        <Button
+          onClick={() => void scan()}
+          disabled={!selectedId || scanning}
+          data-testid="button-acr-scan"
+          className="mb-0"
+        >
           {scanning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ScanSearch className="h-4 w-4 mr-1" />}
           Запустить
         </Button>
@@ -106,8 +197,8 @@ export function AcrTab() {
       <div className="rounded-md border bg-card divide-y">
         {checks.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground text-center">
-            Проверок ещё не было.{" "}
-            <span className="block mt-1 text-xs opacity-60">Выберите релиз выше и нажмите «Запустить», чтобы начать сканирование.</span>
+            Проверок ещё не было.
+            <span className="block mt-1 text-xs opacity-60">Найдите релиз выше и нажмите «Запустить».</span>
           </div>
         ) : checks.map((c) => (
           <div key={c.id} className="p-3 flex items-center justify-between" data-testid={`row-acr-${c.id}`}>
