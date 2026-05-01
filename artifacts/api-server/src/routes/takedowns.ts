@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, takedownRequestsTable } from "@workspace/db";
 import { eq, desc, and, or } from "drizzle-orm";
 import { getDataScope } from "../lib/auth";
+import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
 
 const router = Router();
 
@@ -93,6 +94,26 @@ router.patch("/takedowns/:id/status", async (req, res): Promise<void> => {
     .returning();
 
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Уведомляем инициатора (артиста/лейбл)
+  const statusLabel: Record<string, string> = {
+    processing: "принят в обработку",
+    completed:  "выполнен",
+    rejected:   "отклонён",
+    pending:    "возвращён в ожидание",
+  };
+  const title = `Takedown «${row.releaseTitle}» ${statusLabel[status] ?? status}`;
+  const payload = {
+    type: `takedown_${status}`,
+    title,
+    body: "",
+    entityType: "release" as const,
+    entityId: id,
+    link: "/releases",
+  };
+  if (row.artistId) void notifyByArtistId(row.artistId, payload);
+  if (row.labelId)  void notifyByLabelId(row.labelId,   payload);
+
   res.json({ id: row.id, status: row.status, completedAt: row.completedAt?.toISOString() ?? null });
 });
 

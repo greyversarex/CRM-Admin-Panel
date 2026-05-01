@@ -9,7 +9,9 @@ import { PLATFORM_FEE_RATE as DEFAULT_FEE_RATE } from "../lib/finance";
 const router = Router();
 
 const MIN_PAYOUT = 50;
-const ALLOW_SEED = process.env.NODE_ENV !== "production";
+// Approximate $/stream blend — used only to display "≈ streams" on UI cards.
+// NOT used to fabricate revenue: streams are derived from real gross.
+const STREAM_RATE_USD = 0.0035;
 
 function fmt(d: Date) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -58,7 +60,6 @@ router.get("/royalties/summary", async (req, res): Promise<void> => {
   const f = entityFilter(req);
   if (!f.ok) { res.status(400).json({ error: f.error }); return; }
   const where = f.conditions.length > 0 ? and(...f.conditions) : undefined;
-  const isScoped = f.conditions.length > 0;
 
   const txs = await db.select().from(transactionsTable).where(where);
 
@@ -86,19 +87,6 @@ router.get("/royalties/summary", async (req, res): Promise<void> => {
     }
   }
 
-  // Synthesize tiny baseline if DB is empty so cards never show 0 across the board (DEV ONLY)
-  if (lifetimeGross === 0 && ALLOW_SEED) {
-    const seedBase = isScoped ? 800 : 4200;
-    months.forEach((m, i) => {
-      const seasonality = 1 + Math.sin((i / 12) * Math.PI * 2) * 0.25;
-      const noise = 0.85 + ((i * 37) % 30) / 100;
-      m.gross = Math.round(seedBase * seasonality * noise * 100) / 100;
-      m.net = Math.round(m.gross * (1 - DEFAULT_FEE_RATE) * 100) / 100;
-    });
-    lifetimeGross = months.reduce((s, m) => s + m.gross, 0);
-    lifetimeNet = months.reduce((s, m) => s + m.net, 0);
-  }
-
   const payoutsTotal = txs
     .filter((t: typeof transactionsTable.$inferSelect) => t.type === "payout")
     .reduce((s: number, t: typeof transactionsTable.$inferSelect) => s + Math.abs(Number(t.amount)), 0);
@@ -108,9 +96,9 @@ router.get("/royalties/summary", async (req, res): Promise<void> => {
   const currentPeriodGross = months[months.length - 1].gross;
   const previousPeriodGross = months[months.length - 2]?.gross ?? 0;
 
-  // Streams approximation: $0.0035 per stream blend
-  const currentPeriodStreams = Math.round(currentPeriodGross / 0.0035);
-  const previousPeriodStreams = Math.round(previousPeriodGross / 0.0035);
+  // Streams approximation: derived from real gross only (zero gross → zero streams)
+  const currentPeriodStreams = Math.round(currentPeriodGross / STREAM_RATE_USD);
+  const previousPeriodStreams = Math.round(previousPeriodGross / STREAM_RATE_USD);
 
   const nextStatement = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 15));
   const nextPayment = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 28));
@@ -142,7 +130,6 @@ router.get("/royalties/statements", async (req, res): Promise<void> => {
   const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
   if (req.query.year !== undefined && !Number.isFinite(year!)) { res.status(400).json({ error: "Invalid year" }); return; }
   const where = f.conditions.length > 0 ? and(...f.conditions) : undefined;
-  const isScoped = f.conditions.length > 0;
   const txs = await db.select().from(transactionsTable).where(where);
 
   // Build map period → {gross, streams}
@@ -153,30 +140,23 @@ router.get("/royalties/statements", async (req, res): Promise<void> => {
     const cur = map.get(period) ?? { gross: 0, streams: 0 };
     const amt = Number(t.amount);
     cur.gross += amt;
-    cur.streams += Math.round(amt / 0.0035);
+    cur.streams += Math.round(amt / STREAM_RATE_USD);
     map.set(period, cur);
   }
 
-  // Generate the last 12 months always (so the table is never empty on a fresh DB)
+  // Generate the last 12 months — empty months simply have gross=0 (no synthesis).
   const now = new Date();
   const periods: string[] = [];
   for (let i = 0; i < 12; i++) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     periods.push(fmt(d));
   }
-  const seedBase = isScoped ? 800 : 4200;
 
   const out = periods
     .filter((p) => !year || p.startsWith(String(year)))
     .map((period, i) => {
-      let g = map.get(period)?.gross ?? 0;
-      let s = map.get(period)?.streams ?? 0;
-      if (g === 0 && ALLOW_SEED) {
-        const seasonality = 1 + Math.sin(((11 - i) / 12) * Math.PI * 2) * 0.25;
-        const noise = 0.85 + ((i * 17) % 30) / 100;
-        g = Math.round(seedBase * seasonality * noise * 100) / 100;
-        s = Math.round(g / 0.0035);
-      }
+      const g = map.get(period)?.gross ?? 0;
+      const s = map.get(period)?.streams ?? 0;
       const fees = Math.round(g * DEFAULT_FEE_RATE * 100) / 100;
       const net = Math.round((g - fees) * 100) / 100;
       const ageMonths = i;
@@ -200,7 +180,46 @@ router.get("/royalties/statements", async (req, res): Promise<void> => {
   res.json(out);
 });
 
-// ─── Statement download (mock CSV; PDF returns plain-text placeholder) ───
+// ─── Statement download (real CSV + minimal but real PDF from DB) ─────────
+async function aggregateStatement(req: any, period: string) {
+  const f = entityFilter(req);
+  if (!f.ok) return { ok: false as const, status: 400, error: f.error };
+  const conditions = [...f.conditions, eq(transactionsTable.period, period)];
+  const rows = await db
+    .select({ platform: transactionsTable.platform, amount: transactionsTable.amount, type: transactionsTable.type })
+    .from(transactionsTable)
+    .where(and(...conditions));
+  const byDsp = new Map<string, number>();
+  for (const r of rows) {
+    if (r.type === "payout") continue;
+    const key = r.platform ?? "Unknown";
+    byDsp.set(key, (byDsp.get(key) ?? 0) + Number(r.amount));
+  }
+  const lines = Array.from(byDsp.entries())
+    .map(([dsp, gross]) => {
+      const fees = gross * DEFAULT_FEE_RATE;
+      const net = gross - fees;
+      return {
+        dsp,
+        streams: Math.round(gross / STREAM_RATE_USD),
+        gross: Math.round(gross * 100) / 100,
+        fees: Math.round(fees * 100) / 100,
+        net: Math.round(net * 100) / 100,
+      };
+    })
+    .sort((a, b) => b.gross - a.gross);
+  const totals = lines.reduce(
+    (acc, l) => ({
+      streams: acc.streams + l.streams,
+      gross: acc.gross + l.gross,
+      fees: acc.fees + l.fees,
+      net: acc.net + l.net,
+    }),
+    { streams: 0, gross: 0, fees: 0, net: 0 },
+  );
+  return { ok: true as const, lines, totals };
+}
+
 router.get("/royalties/statements/:period/download", async (req, res): Promise<void> => {
   const period = req.params.period;
   const format = (req.query.format as string) || "csv";
@@ -208,26 +227,80 @@ router.get("/royalties/statements/:period/download", async (req, res): Promise<v
     res.status(400).json({ error: "Invalid period" });
     return;
   }
-  if (format === "csv") {
-    const rows = [
-      ["DSP", "Streams", "Gross USD", "Fees USD", "Net USD"],
-      ["Spotify", "184,200", "644.70", "96.70", "548.00"],
-      ["Apple Music", "92,140", "414.63", "62.19", "352.44"],
-      ["YouTube Music", "120,420", "240.84", "36.13", "204.71"],
-      ["Yandex Music", "212,800", "212.80", "31.92", "180.88"],
-      ["VK Music", "84,600", "84.60", "12.69", "71.91"],
-    ];
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="statement_${period}.csv"`);
-    res.send(rows.map((r) => r.join(",")).join("\n"));
+  const agg = await aggregateStatement(req, period);
+  if (!agg.ok) {
+    res.status(agg.status).json({ error: agg.error });
     return;
   }
+
+  if (format === "csv") {
+    const header = ["DSP", "Streams", "Gross USD", "Fees USD", "Net USD"];
+    const body = agg.lines.map((l) => [
+      l.dsp,
+      l.streams.toString(),
+      l.gross.toFixed(2),
+      l.fees.toFixed(2),
+      l.net.toFixed(2),
+    ]);
+    body.push([
+      "TOTAL",
+      agg.totals.streams.toString(),
+      agg.totals.gross.toFixed(2),
+      agg.totals.fees.toFixed(2),
+      agg.totals.net.toFixed(2),
+    ]);
+    const escape = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const csv = [header, ...body].map((r) => r.map(escape).join(",")).join("\r\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="statement_${period}.csv"`);
+    res.send(csv);
+    return;
+  }
+
   if (format === "pdf") {
+    // Minimal valid PDF rendered from real DB aggregates. No third-party renderer
+    // dependency. Each line is a separate text op so totals reflect real data.
+    const lines = [
+      `Tajik Music Distribution`,
+      `Royalty Statement — ${periodLabel(period)}`,
+      ``,
+      `${"DSP".padEnd(20)} ${"Streams".padStart(10)} ${"Gross".padStart(10)} ${"Fees".padStart(10)} ${"Net".padStart(10)}`,
+      ...agg.lines.map((l) =>
+        `${l.dsp.padEnd(20).slice(0, 20)} ${l.streams.toString().padStart(10)} ${l.gross.toFixed(2).padStart(10)} ${l.fees.toFixed(2).padStart(10)} ${l.net.toFixed(2).padStart(10)}`,
+      ),
+      ``,
+      `${"TOTAL".padEnd(20)} ${agg.totals.streams.toString().padStart(10)} ${agg.totals.gross.toFixed(2).padStart(10)} ${agg.totals.fees.toFixed(2).padStart(10)} ${agg.totals.net.toFixed(2).padStart(10)}`,
+    ];
+    // Build PDF content stream: one Tj per line, moving down 14pt each time.
+    const escapePdf = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+    const ops: string[] = ["BT", "/F1 10 Tf", "60 760 Td"];
+    lines.forEach((ln, i) => {
+      if (i > 0) ops.push("0 -14 Td");
+      ops.push(`(${escapePdf(ln)}) Tj`);
+    });
+    ops.push("ET");
+    const stream = ops.join("\n");
+    const objs: string[] = [];
+    objs.push(`<< /Type /Catalog /Pages 2 0 R >>`);
+    objs.push(`<< /Type /Pages /Count 1 /Kids [3 0 R] >>`);
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>`);
+    objs.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    objs.push(`<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>`);
+    let pdf = "%PDF-1.4\n";
+    const offsets: number[] = [];
+    objs.forEach((body, i) => {
+      offsets.push(Buffer.byteLength(pdf, "binary"));
+      pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+    });
+    const xrefOffset = Buffer.byteLength(pdf, "binary");
+    pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+    for (const off of offsets) {
+      pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+    }
+    pdf += `trailer << /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="statement_${period}.pdf"`);
-    // Minimal placeholder PDF (text-only). In production, render real PDF.
-    const body = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 88>>stream\nBT /F1 18 Tf 80 720 Td (Tajik Music — Royalty Statement ${period}) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f\ntrailer<</Size 6/Root 1 0 R>>\n%%EOF`;
-    res.send(Buffer.from(body, "utf-8"));
+    res.send(Buffer.from(pdf, "binary"));
     return;
   }
   res.status(400).json({ error: "Unknown format" });
@@ -250,14 +323,26 @@ router.get("/royalties/by-release", async (req, res): Promise<void> => {
 
   const releaseIds = releases.map((r: typeof releasesTable.$inferSelect) => r.id);
   const txs = await db
-    .select({ releaseId: transactionsTable.releaseId, amount: transactionsTable.amount, type: transactionsTable.type })
+    .select({ releaseId: transactionsTable.releaseId, amount: transactionsTable.amount, type: transactionsTable.type, createdAt: transactionsTable.createdAt })
     .from(transactionsTable)
     .where(inArray(transactionsTable.releaseId, releaseIds));
 
+  // Compute totals + a real trend % (current 30 days vs previous 30 days)
+  const now = Date.now();
+  const D30 = 30 * 24 * 3600 * 1000;
   const sums = new Map<number, number>();
+  const recent = new Map<number, number>();
+  const prev = new Map<number, number>();
   for (const tx of txs) {
     if (tx.type === "payout" || tx.releaseId == null) continue;
-    sums.set(tx.releaseId, (sums.get(tx.releaseId) ?? 0) + Number(tx.amount));
+    const amt = Number(tx.amount);
+    sums.set(tx.releaseId, (sums.get(tx.releaseId) ?? 0) + amt);
+    const ageMs = now - tx.createdAt.getTime();
+    if (ageMs < D30) {
+      recent.set(tx.releaseId, (recent.get(tx.releaseId) ?? 0) + amt);
+    } else if (ageMs < 2 * D30) {
+      prev.set(tx.releaseId, (prev.get(tx.releaseId) ?? 0) + amt);
+    }
   }
 
   // Hydrate artist/label names in batch
@@ -267,15 +352,15 @@ router.get("/royalties/by-release", async (req, res): Promise<void> => {
     : [];
   const artistMap = new Map(artistRows.map((a: { id: number; name: string }) => [a.id, a.name]));
 
-  const out = releases.map((r: typeof releasesTable.$inferSelect, i: number) => {
-    let gross = sums.get(r.id) ?? 0;
-    if (gross === 0 && ALLOW_SEED) {
-      // Seed deterministic placeholder so the table isn't empty on a fresh DB (DEV ONLY)
-      gross = Math.round((300 + ((r.id * 113) % 1500)) * 100) / 100;
-    }
+  const out = releases.map((r: typeof releasesTable.$inferSelect) => {
+    const gross = sums.get(r.id) ?? 0;
     const net = Math.round(gross * (1 - DEFAULT_FEE_RATE) * 100) / 100;
-    const streams = Math.round(gross / 0.0035);
-    const trend = ((r.id * 7 + i * 11) % 41) - 20;
+    const streams = Math.round(gross / STREAM_RATE_USD);
+    const recentG = recent.get(r.id) ?? 0;
+    const prevG = prev.get(r.id) ?? 0;
+    const trend = prevG > 0
+      ? Math.round(((recentG - prevG) / prevG) * 100)
+      : (recentG > 0 ? 100 : 0);
     return {
       releaseId: r.id,
       title: r.title,
@@ -298,52 +383,44 @@ router.get("/royalties/by-dsp", async (req, res): Promise<void> => {
   const f = entityFilter(req);
   if (!f.ok) { res.status(400).json({ error: f.error }); return; }
   const where = f.conditions.length > 0 ? and(...f.conditions) : undefined;
-  const isScoped = f.conditions.length > 0;
   const rows = await db
-    .select({ platform: transactionsTable.platform, amount: transactionsTable.amount, type: transactionsTable.type })
+    .select({ platform: transactionsTable.platform, amount: transactionsTable.amount, type: transactionsTable.type, createdAt: transactionsTable.createdAt })
     .from(transactionsTable)
     .where(where);
 
-  const map = new Map<string, number>();
+  // Aggregate gross by DSP plus a real trend (last 30 vs previous 30 days)
+  const now = Date.now();
+  const D30 = 30 * 24 * 3600 * 1000;
+  const totals = new Map<string, { gross: number; recent: number; prev: number }>();
   for (const r of rows) {
     if (r.type === "payout" || !r.platform) continue;
-    map.set(r.platform, (map.get(r.platform) ?? 0) + Number(r.amount));
+    const amt = Number(r.amount);
+    const cur = totals.get(r.platform) ?? { gross: 0, recent: 0, prev: 0 };
+    cur.gross += amt;
+    const ageMs = now - r.createdAt.getTime();
+    if (ageMs < D30) cur.recent += amt;
+    else if (ageMs < 2 * D30) cur.prev += amt;
+    totals.set(r.platform, cur);
   }
 
-  const SEED_DSPS: { dsp: string; share: number; trend: number }[] = [
-    { dsp: "Spotify",       share: 0.34, trend:  8 },
-    { dsp: "Apple Music",   share: 0.21, trend:  3 },
-    { dsp: "YouTube Music", share: 0.14, trend: 12 },
-    { dsp: "Yandex Music",  share: 0.12, trend: -2 },
-    { dsp: "VK Music",      share: 0.07, trend:  5 },
-    { dsp: "TikTok",        share: 0.06, trend: 22 },
-    { dsp: "Boom",          share: 0.03, trend:  1 },
-    { dsp: "Tidal",         share: 0.02, trend: -4 },
-    { dsp: "Amazon Music",  share: 0.01, trend:  0 },
-  ];
-
-  const totalReal = Array.from(map.values()).reduce((s: number, v: number) => s + v, 0);
-  let total = totalReal;
-  const useSeed = totalReal === 0 && ALLOW_SEED;
-  if (useSeed) {
-    total = isScoped ? 9600 : 48200;
-  }
-
-  const out = SEED_DSPS.map((s) => {
-    const gross = useSeed
-      ? total * s.share
-      : (map.get(s.dsp) ?? 0);
-    const net = gross * (1 - DEFAULT_FEE_RATE);
-    return {
-      dsp: s.dsp,
-      streams: Math.round(gross / 0.0035),
-      gross: Math.round(gross * 100) / 100,
-      net: Math.round(net * 100) / 100,
-      currency: "USD",
-      share: total > 0 ? Math.round((gross / total) * 1000) / 10 : 0,
-      trend: s.trend,
-    };
-  }).filter((r) => r.gross > 0)
+  const totalGross = Array.from(totals.values()).reduce((s, v) => s + v.gross, 0);
+  const out = Array.from(totals.entries())
+    .map(([dsp, v]) => {
+      const net = v.gross * (1 - DEFAULT_FEE_RATE);
+      const trend = v.prev > 0
+        ? Math.round(((v.recent - v.prev) / v.prev) * 100)
+        : (v.recent > 0 ? 100 : 0);
+      return {
+        dsp,
+        streams: Math.round(v.gross / STREAM_RATE_USD),
+        gross: Math.round(v.gross * 100) / 100,
+        net: Math.round(net * 100) / 100,
+        currency: "USD",
+        share: totalGross > 0 ? Math.round((v.gross / totalGross) * 1000) / 10 : 0,
+        trend,
+      };
+    })
+    .filter((r) => r.gross > 0)
     .sort((a, b) => b.gross - a.gross);
 
   res.json(out);

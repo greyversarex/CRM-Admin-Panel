@@ -15,8 +15,6 @@ import {
   sendgridConnector,
   wiseConnector,
   stripeConnector,
-  telegramBotConnector,
-  twilioWhatsappConnector,
   ascapConnector,
   bmiConnector,
   songtrustConnector,
@@ -48,10 +46,6 @@ register(sendgridConnector);
 // Payments
 register(wiseConnector);
 register(stripeConnector);
-
-// Communications
-register(telegramBotConnector);
-register(twilioWhatsappConnector);
 
 // Publishing (PRO)
 register(ascapConnector);

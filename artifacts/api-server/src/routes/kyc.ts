@@ -24,6 +24,7 @@ import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
 import { emitAlertAndForget } from "../services/alerts-emitter";
+import { createNotification } from "../services/notifications";
 import {
   ObjectStorageService, ObjectNotFoundError, objectStorageClient,
 } from "../lib/objectStorage";
@@ -350,6 +351,14 @@ router.post("/admin/kyc-documents/:id/approve", requireRole("admin", "manager"),
     action: "approve", entityType: "kyc_document", entityId: id,
     before: doc, after: updated,
   });
+  void createNotification({
+    userId: doc.userId,
+    type: "kyc_document_approved",
+    title: "Документ KYC одобрен",
+    body: `Ваш документ "${doc.kind}" одобрен модератором.`,
+    entityType: "general",
+    link: "/kyc",
+  });
   res.json(serializeDoc(updated));
 });
 
@@ -375,6 +384,14 @@ router.post("/admin/kyc-documents/:id/reject", requireRole("admin", "manager"), 
     entityType: "kyc_document",
     entityId: id,
     meta: { userId: doc.userId, reason: parsed.data.reason ?? null },
+  });
+  void createNotification({
+    userId: doc.userId,
+    type: "kyc_document_rejected",
+    title: "Документ KYC отклонён",
+    body: `Документ "${doc.kind}" отклонён${parsed.data.reason ? `. Причина: ${parsed.data.reason}` : ""}. Загрузите новый документ.`,
+    entityType: "general",
+    link: "/kyc",
   });
   res.json(serializeDoc(updated));
 });
@@ -411,6 +428,14 @@ router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), asy
     after:  { id: updated.id, kycStatus: updated.kycStatus, kycCompletedAt: updated.kycCompletedAt },
   });
   logger.info({ userId, by: req.session.user!.id }, "[kyc] user globally approved");
+  void createNotification({
+    userId,
+    type: "kyc_approved",
+    title: "KYC одобрен",
+    body: "Ваша верификация успешно пройдена. Теперь вам доступны все функции платформы.",
+    entityType: "general",
+    link: "/kyc",
+  });
   res.json({ ok: true, kycStatus: updated.kycStatus, kycCompletedAt: updated.kycCompletedAt?.toISOString() ?? null });
 });
 
@@ -430,6 +455,16 @@ router.post("/admin/users/:id/kyc/reject", requireRole("admin", "manager"), asyn
     after:  { id: updated.id, kycStatus: updated.kycStatus, kycCompletedAt: updated.kycCompletedAt },
   });
   logger.info({ userId, reason: parsed.data.reason }, "[kyc] user globally rejected");
+  void createNotification({
+    userId,
+    type: "kyc_rejected",
+    title: "KYC отклонён",
+    body: parsed.data.reason
+      ? `Верификация отклонена. Причина: ${parsed.data.reason}. Загрузите новые документы.`
+      : "Ваша KYC-верификация отклонена. Пожалуйста, перезагрузите документы.",
+    entityType: "general",
+    link: "/kyc",
+  });
   res.json({ ok: true, kycStatus: updated.kycStatus });
 });
 

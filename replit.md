@@ -429,3 +429,82 @@ Dark navy/slate background with electric indigo (#6366f1) accent. Dense, profess
 - **Admin/Manager**: видят полные dropdown'ы исполнителей и лейблов.
 - Весь UI переведён на русский: «Создать релиз», типы (Сингл/Альбом/EP/Сборник), языки (Таджикский/Русский/…), кнопки «Сохранить релиз»/«Отмена», «Назад к релизам», жанры, «Explicit-контент».
 - Backend auth без изменений (artist → 403 при чужом artistId, label → 403 при чужом labelId/artist).
+
+## Stage 5 — Полный аудит и закрытие критических дыр (май 2026)
+
+Проведён сквозной аудит всех ролей (admin/manager/label/artist). Закрыты критические дыры —
+фейк-данные, сломанные уведомления, dead-кнопки, отсутствующий flow согласования сплитов и
+инвайта артистов. Зачищен лишний scope.
+
+### Что убрано (мок-данные / фейки)
+- `royalties.ts`: удалены ветки `ALLOW_SEED` и синтетика на `Math.sin` в `/summary`,
+  `/statements`, `/by-release`, `/by-dsp`. CSV `/statements/:period/download?format=csv`
+  генерируется из реальных строк `royaltyLineItemsTable`. PDF возвращает 501 с явным сообщением
+  «PDF-экспорт пока не реализован».
+- `dashboard.ts /revenue-by-month`: список последних 12 месяцев генерируется программно от
+  `new Date()` — никаких хардкод-меток.
+- `automation.ts /scheduled`: возвращает реальные scheduled задачи из БД (или `[]`).
+
+### Уведомления
+- `notifications-service.ts` — единая точка `createNotification`, `notifyAdmins`,
+  `notifyByArtistId`, `notifyByLabelId`. Используется во всех новых триггерах.
+- KYC: при approve/reject документа и глобального юзера — `createNotification` соответствующему
+  пользователю (link `/kyc`).
+- Signup: при approve нового signup — in-app уведомление новому юзеру (link `/kyc`); reject
+  оставляет `emitAlertAndForget` для админов (как было).
+- Takedowns: смена статуса (`processing/completed/rejected/pending`) — уведомление инициатору
+  через `notifyByArtistId`/`notifyByLabelId`.
+- Support: новое сообщение в тикете — уведомление противоположной стороне (staff↔customer);
+  смена статуса staff'ом — уведомление requester'у. Все nullable `requesterUserId` корректно
+  чекаются.
+
+### Splits acceptance flow
+- БД-схема не менялась — статус акцепта хранится прямо в `participants` jsonb массиве:
+  `acceptanceStatus: "pending"|"accepted"|"rejected"`, `acceptanceAt: ISO`. Это позволяет
+  обойтись без миграции и поддерживает per-participant подпись.
+- Backend `POST /splits/:id/accept` и `/reject`: матчит участника по `getDataScope` →
+  `role`/`artistId`/`labelId`, обновляет в jsonb, шлёт `notifyAdmins` об акцепте/отклонении.
+- UI `splits/index.tsx`: badge общего статуса (`pending`/`partial`/`accepted`/`rejected`),
+  иконки per-participant (Check/X/Clock), кнопки **Принять**/**Отклонить** появляются у того
+  участника, чей scope совпадает с текущим юзером и `acceptanceStatus === "pending"`.
+
+### Artist invite flow
+- Backend `POST /artists/:id/invite-user` (admin/manager/label): создаёт `User role=artist` с
+  bcrypt-хешем временного пароля, привязывает `user.artistId`, отправляет letter c кредами через
+  `sendMail`, шлёт `createNotification` приглашающему («Артист X получил доступ»). Возвращает
+  `{ user, tempPassword }`.
+- UI `artist-form-dialog.tsx` (только в режиме создания): чекбокс «Создать аккаунт для артиста»
+  + поле email; после `createArtist` вызывает `/invite-user` и показывает toast с временным
+  паролем.
+
+### Payouts page
+- Кнопка «Запросить выплату» теперь открывает `RequestPayoutDialog` (`useCreatePayoutRequest`)
+  с полями amount/currency/method/details, валидацией и invalidate-ом списка после успеха.
+- Поиск `searchQuery` теперь реально фильтрует по `artistName`/`labelName`/`method` через
+  client-side `filteredPayouts` useMemo.
+- Backend `POST /payouts` уже был — он по-прежнему форсит KYC + bank-info + 2-step-confirmation
+  + `notifyAdmins`.
+
+### Scope cleanup
+- **Blacklist** убран:
+  - `users/index.tsx`: удалена вкладка `blacklist`, KPI «Suspended» и весь связанный state.
+  - Файл `_blacklist-tab.tsx` удалён.
+  - i18n-строки `blacklist_*` остались (мёртвые) — на UI не используются.
+- **Telegram/WhatsApp** убраны из мульти-канальной отправки:
+  - `communications-channels.ts`: оставлены только `email` + `push`. `loadChannels`,
+    `sendTelegram`, `sendWhatsapp`, ветки в `/send` и `/test-channel` удалены.
+  - `connectors/registry.ts` и `connectors/api-validators.ts`: `telegramBotConnector` и
+    `twilioWhatsappConnector` удалены полностью.
+  - `settings/index.tsx`: удалён мёртвый компонент `TabChannels` (он не был замаунчен).
+  - i18n contact-fields `telegram`/`whatsapp` для CRM-клиентов оставлены — это просто контакты
+    юзеров, не каналы.
+
+### Audit-actions расширены
+- `lib/audit.ts AuditAction`: добавлены `accept` (для splits) и `invite` (для artist-invite).
+
+### Принципиальные правила, которые соблюдались
+- Без эмодзи во всех новых строках (UI и notifications).
+- Все новые фичи работают только от БД — никаких моков/фолбэков.
+- Schema field name `kind` (не `docType`) для `kycDocumentsTable`.
+- Все nullable FK (`requesterUserId`, `assigneeUserId`) явно чекаются перед использованием в
+  `createNotification`.

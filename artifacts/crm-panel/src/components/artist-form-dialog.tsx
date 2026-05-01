@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import {
   useCreateArtist, useUpdateArtist, useListLabels,
@@ -63,10 +64,15 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const isEdit = Boolean(initial?.id);
 
   const [form, setForm] = useState<ArtistFormValues>(EMPTY);
+  const [createAccount, setCreateAccount] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(initial ? { ...EMPTY, ...initial } : { ...EMPTY, labelId: isLabel ? user?.labelId ?? null : null });
+      setCreateAccount(false);
+      setInviteEmail("");
     }
   }, [open, initial, isLabel, user?.labelId]);
 
@@ -76,7 +82,7 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const queryClient = useQueryClient();
   const createM = useCreateArtist();
   const updateM = useUpdateArtist();
-  const isSaving = createM.isPending || updateM.isPending;
+  const isSaving = createM.isPending || updateM.isPending || inviting;
 
   const invalidateLists = (artistId?: number) => {
     queryClient.invalidateQueries({ queryKey: getListArtistsQueryKey() });
@@ -112,6 +118,35 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
         const created = await createM.mutateAsync({ data: payload });
         invalidateLists(created.id);
         toast({ title: "Артист создан", description: `«${created.name}» добавлен` });
+
+        // Опциональный инвайт юзера сразу после создания.
+        if (createAccount && inviteEmail.trim()) {
+          setInviting(true);
+          try {
+            const r = await fetch(`/api/artists/${created.id}/invite-user`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: inviteEmail.trim(), name: created.name }),
+            });
+            if (!r.ok) {
+              const err = await r.json().catch(() => ({}));
+              throw new Error(err?.error ?? "Не удалось отправить приглашение");
+            }
+            const data = await r.json();
+            toast({
+              title: "Приглашение отправлено",
+              description: data?.tempPassword
+                ? `Временный пароль: ${data.tempPassword}`
+                : `Письмо ушло на ${inviteEmail}`,
+            });
+          } catch (e) {
+            toast({ title: "Артист создан, но инвайт не ушёл", description: (e as Error).message, variant: "destructive" });
+          } finally {
+            setInviting(false);
+          }
+        }
+
         onSaved?.(created.id);
       }
       onOpenChange(false);
@@ -238,6 +273,36 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
               </SelectContent>
             </Select>
           </div>
+
+          {!isEdit && (
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="art-create-account"
+                  checked={createAccount}
+                  onCheckedChange={(v) => setCreateAccount(v === true)}
+                />
+                <Label htmlFor="art-create-account" className="cursor-pointer text-sm font-normal">
+                  Создать аккаунт пользователя для артиста и отправить приглашение по email
+                </Label>
+              </div>
+              {createAccount && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="art-invite-email">Email для приглашения *</Label>
+                  <Input
+                    id="art-invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="artist@example.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Будет создан User с ролью artist. На указанный email уйдёт временный пароль.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -116,45 +116,6 @@ export const stripeConnector = createApiConnector({
 });
 
 // ──────────────────────────────────────────────
-// COMMUNICATIONS
-// ──────────────────────────────────────────────
-
-export const telegramBotConnector = createApiConnector({
-  code: "telegram_bot",
-  authType: "api_key",
-  requiredFields: [{ key: "bot_token", label: "Bot Token" }],
-  async probe(creds) {
-    const res = await fetch(`https://api.telegram.org/bot${creds.bot_token}/getMe`, {
-      signal: AbortSignal.timeout(8000),
-    });
-    const json = await res.json() as { ok: boolean; result?: { username: string } };
-    if (json.ok && json.result) {
-      return { ok: true, message: `Telegram бот @${json.result.username} подключён.` };
-    }
-    return { ok: false, message: "Неверный Bot Token. Проверьте токен в @BotFather." };
-  },
-});
-
-export const twilioWhatsappConnector = createApiConnector({
-  code: "twilio_whatsapp",
-  authType: "basic",
-  requiredFields: [
-    { key: "account_sid", label: "Account SID" },
-    { key: "auth_token", label: "Auth Token" },
-  ],
-  async probe(creds) {
-    const auth = Buffer.from(`${creds.account_sid}:${creds.auth_token}`).toString("base64");
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${creds.account_sid}.json`, {
-      headers: { Authorization: `Basic ${auth}` },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (res.status === 401) return { ok: false, message: "Неверный Account SID или Auth Token" };
-    if (res.ok) return { ok: true, message: "Twilio API доступен. Аккаунт валиден." };
-    return { ok: false, message: `Twilio вернул HTTP ${res.status}` };
-  },
-});
-
-// ──────────────────────────────────────────────
 // PUBLISHING (PRO)
 // ──────────────────────────────────────────────
 

@@ -216,6 +216,7 @@ export function computeDiff(
 export type AuditAction =
   | "create" | "update" | "delete" | "login"
   | "approve" | "reject" | "deliver" | "submit"
+  | "accept" | "invite"
   | "freeze" | "unfreeze"
   | "approve_payout" | "reject_payout"
   | "approve_l1" | "approve_l2"

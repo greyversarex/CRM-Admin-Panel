@@ -1,9 +1,15 @@
 import { Router } from "express";
-import { db, artistsTable, releasesTable, tracksTable, labelsTable } from "@workspace/db";
+import bcrypt from "bcryptjs";
+import { z } from "zod/v4";
+import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable } from "@workspace/db";
 import { count, eq, ilike, and, desc } from "drizzle-orm";
 import { CreateArtistBody, UpdateArtistBody, GetArtistParams, UpdateArtistParams, DeleteArtistParams, GetArtistStatsParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { generateTempPassword } from "../lib/kycUtils";
+import { sendMailAndForget } from "../lib/mail";
+import { logger } from "../lib/logger";
+import { createNotification } from "../services/notifications";
 
 const router = Router();
 
@@ -251,6 +257,83 @@ router.get("/artists/:id/stats", async (req, res): Promise<void> => {
     monthlyListeners: Math.floor(total / 12),
     topPlatform: "Spotify",
     streamsByPlatform,
+  });
+});
+
+// ─── POST /artists/:id/invite-user ─────────────────────────────────────────
+// Лейбл (или admin/manager) создаёт User с ролью artist, привязанный к
+// существующему артисту, и отправляет на email временный пароль.
+const InviteBody = z.object({
+  email: z.string().email("Невалидный email"),
+  name: z.string().min(1).max(120).optional(),
+});
+
+router.post("/artists/:id/invite-user", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
+  const id = parseId(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = InviteBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [artist] = await db.select().from(artistsTable).where(eq(artistsTable.id, id));
+  if (!artist) { res.status(404).json({ error: "Артист не найден" }); return; }
+
+  const scope = getDataScope(req);
+  // Лейбл может приглашать только своих артистов.
+  if (scope.role === "label") {
+    if (scope.labelId == null || artist.labelId !== scope.labelId) {
+      res.status(403).json({ error: "Артист не принадлежит вашему лейблу" });
+      return;
+    }
+  }
+
+  // Email уникален. Если уже занят — 409.
+  const email = parsed.data.email.trim().toLowerCase();
+  const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
+  if (existing) { res.status(409).json({ error: "Пользователь с таким email уже существует" }); return; }
+
+  const tempPassword = generateTempPassword(12);
+  const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+  const [user] = await db.insert(usersTable).values({
+    name: parsed.data.name?.trim() || artist.name,
+    email,
+    passwordHash,
+    role: "artist",
+    status: "active",
+    artistId: artist.id,
+    labelId: artist.labelId,
+    country: artist.country,
+  }).returning();
+
+  void auditMutation(req, { action: "invite", entityType: "user", entityId: user.id, before: null, after: user });
+
+  sendMailAndForget({
+    to: user.email,
+    subject: "Приглашение в Tajik Music CRM",
+    text:
+      `Здравствуйте, ${user.name}!\n\n` +
+      `Лейбл пригласил вас в Tajik Music CRM в роли артиста.\n\n` +
+      `Логин (email): ${user.email}\n` +
+      `Временный пароль: ${tempPassword}\n\n` +
+      `Войдите по адресу: ${process.env.PUBLIC_APP_URL ?? "/login"}\n` +
+      `После входа смените пароль в разделе «Профиль → Безопасность».`,
+  });
+  logger.info({ artistId: id, userId: user.id, email: user.email }, "[artists] invite-user — onboarding email queued");
+
+  void createNotification({
+    userId: user.id,
+    type: "artist_invited",
+    title: "🎉 Добро пожаловать в Tajik Music CRM",
+    body: "Лейбл пригласил вас. Заполните профиль и пройдите KYC, чтобы получать выплаты.",
+    entityType: "general",
+    link: "/profile",
+  });
+
+  // tempPassword отдаём ТОЛЬКО в этом ответе (out-of-band страховка).
+  res.status(201).json({
+    ok: true,
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, artistId: user.artistId },
+    tempPassword,
   });
 });
 

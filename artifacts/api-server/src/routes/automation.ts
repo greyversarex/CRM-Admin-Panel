@@ -17,7 +17,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { db, fraudRulesTable, fraudAlertsTable, moderationRulesTable } from "@workspace/db";
+import { db, fraudRulesTable, fraudAlertsTable, moderationRulesTable, paymentAutomationRulesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { auditMutation } from "../lib/audit";
 
@@ -25,24 +25,54 @@ const router = Router();
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 
-// ── Scheduled tasks (статический список воркеров) ───────────────────────────
+// ── Scheduled tasks ─────────────────────────────────────────────────────────
+// Возвращаем ДВЕ группы: (1) системные воркеры, скомпилированные в код
+// (видно по наличию файла в src/workers/) и (2) настраиваемые админом правила
+// автоматизации (paymentAutomationRulesTable со scheduleCron). lastRunAt
+// читается из БД, если он там есть.
 
-interface ScheduledTask {
+interface ScheduledTaskOut {
+  source: "system" | "rule";
   name: string;
   description: string;
   schedule: string;
   enabled: boolean;
+  lastRunAt: string | null;
+  ruleId?: number;
 }
 
-const SCHEDULED_TASKS: ScheduledTask[] = [
-  { name: "delivery-worker", description: "Отправка DDEX-сообщений в очереди и retry", schedule: "каждые 30 сек", enabled: true },
-  { name: "ack-poller", description: "Опрос SFTP-ящиков для входящих ack", schedule: "каждые 10 мин", enabled: true },
-  { name: "webhook-dispatcher", description: "Доставка webhook-сообщений подписчикам", schedule: "каждые 30 сек", enabled: true },
-  { name: "trigger-evaluator", description: "Срабатывание email-триггеров автоматизации", schedule: "при событии", enabled: true },
+// Системные воркеры — описания и расписания соответствуют коду в src/workers/.
+// Если воркер удалён из кода, его нужно убрать и отсюда (намеренно дублируется,
+// чтобы UI показывал именно то, что реально работает на этом сервере).
+const SYSTEM_WORKERS: Omit<ScheduledTaskOut, "source" | "lastRunAt">[] = [
+  { name: "delivery-worker",   description: "Отправка DDEX-сообщений в очереди и retry",  schedule: "каждые 30 сек", enabled: true },
+  { name: "ack-poller",        description: "Опрос SFTP-ящиков для входящих ack",         schedule: "каждые 10 мин", enabled: true },
+  { name: "webhook-dispatcher", description: "Доставка webhook-сообщений подписчикам",     schedule: "каждые 30 сек", enabled: true },
+  { name: "trigger-evaluator",  description: "Срабатывание email-триггеров автоматизации", schedule: "при событии",   enabled: true },
 ];
 
 router.get("/automation/scheduled", async (_req, res) => {
-  res.json({ tasks: SCHEDULED_TASKS });
+  // Реальные cron-правила выплат из БД
+  const rules = await db.select().from(paymentAutomationRulesTable).orderBy(desc(paymentAutomationRulesTable.createdAt));
+
+  const tasks: ScheduledTaskOut[] = [
+    ...SYSTEM_WORKERS.map((w) => ({
+      source: "system" as const,
+      ...w,
+      lastRunAt: null,
+    })),
+    ...rules.map((r) => ({
+      source: "rule" as const,
+      name: r.name,
+      description: r.notes ?? r.kind,
+      schedule: r.scheduleCron ?? "при событии",
+      enabled: r.enabled,
+      lastRunAt: r.lastRunAt ? r.lastRunAt.toISOString() : null,
+      ruleId: r.id,
+    })),
+  ];
+
+  res.json({ tasks });
 });
 
 // ── Fraud rules ──────────────────────────────────────────────────────────────

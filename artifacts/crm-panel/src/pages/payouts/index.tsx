@@ -1,13 +1,17 @@
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth";
-import { useListPayouts } from "@workspace/api-client-react";
-import { useState } from "react";
+import { useListPayouts, useCreatePayoutRequest, getListPayoutsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Search, Filter, Wallet, CheckCircle, XCircle, Plus, Download, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { exportPayoutsCsv } from "@/lib/export-payouts";
@@ -34,11 +38,27 @@ export function PayoutsPanel() {
   const isArtist    = user?.role === "artist";
   const isLabel     = user?.role === "label";
 
-  const { data: payoutsData, isLoading } = useListPayouts({
+  const [requestOpen, setRequestOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const listParams = {
     limit: 50,
     ...(isArtist && user?.artistId ? { artist_id: user.artistId } : {}),
     ...(isLabel  && user?.labelId  ? { label_id:  user.labelId  } : {}),
-  });
+  };
+  const { data: payoutsData, isLoading } = useListPayouts(listParams);
+
+  // Клиентский фильтр по строке поиска (artist/label name)
+  const filteredPayouts = useMemo(() => {
+    const all = payoutsData?.data ?? [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(p =>
+      (p.artistName ?? "").toLowerCase().includes(q) ||
+      (p.labelName  ?? "").toLowerCase().includes(q) ||
+      (p.method     ?? "").toLowerCase().includes(q),
+    );
+  }, [payoutsData?.data, searchQuery]);
 
   const onExport = async () => {
     if (exporting) return;
@@ -106,7 +126,7 @@ export function PayoutsPanel() {
               {exporting ? `${t.payouts.exporting} ${exportLoaded}` : t.payouts.export_csv}
             </Button>
             {!isAdminLike && (
-              <Button onClick={() => toast({ title: t.payouts.request_payout, description: t.payouts.request_payout_desc })}>
+              <Button onClick={() => setRequestOpen(true)} data-testid="button-request-payout">
                 <Plus className="mr-2 h-4 w-4" /> {t.payouts.request_payout}
               </Button>
             )}
@@ -157,14 +177,14 @@ export function PayoutsPanel() {
                       <TableCell className="text-right"><Skeleton className="h-8 w-16 rounded-md ml-auto" /></TableCell>
                     </TableRow>
                   ))
-                ) : payoutsData?.data.length === 0 ? (
+                ) : filteredPayouts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center h-32 text-muted-foreground">
                       {t.payouts.empty}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  payoutsData?.data.map((payout) => (
+                  filteredPayouts.map((payout) => (
                     <TableRow key={payout.id} className="border-border/50 hover:bg-accent/30 cursor-pointer">
                       <TableCell>
                         <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
@@ -204,7 +224,139 @@ export function PayoutsPanel() {
             </Table>
           </CardContent>
         </Card>
+
+        {!isAdminLike && (
+          <RequestPayoutDialog
+            open={requestOpen}
+            onOpenChange={setRequestOpen}
+            artistId={isArtist ? user?.artistId ?? null : null}
+            labelId={isLabel  ? user?.labelId  ?? null : null}
+            onCreated={() => queryClient.invalidateQueries({ queryKey: getListPayoutsQueryKey(listParams) })}
+          />
+        )}
       </div>
+  );
+}
+
+// ─── Запрос выплаты (артист / лейбл) ─────────────────────────────────────────
+function RequestPayoutDialog(props: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  artistId: number | null;
+  labelId: number | null;
+  onCreated: () => void;
+}) {
+  const { open, onOpenChange, artistId, labelId, onCreated } = props;
+  const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<"USD" | "EUR" | "RUB">("USD");
+  const [method, setMethod] = useState<"bank_transfer" | "paypal" | "crypto" | "qiwi" | "yoomoney">("bank_transfer");
+  const [details, setDetails] = useState("");
+  const createM = useCreatePayoutRequest();
+
+  const submit = async () => {
+    const num = parseFloat(amount.replace(",", "."));
+    if (!Number.isFinite(num) || num <= 0) {
+      toast({ title: "Укажите корректную сумму", variant: "destructive" });
+      return;
+    }
+    try {
+      await createM.mutateAsync({
+        data: {
+          artistId: artistId ?? undefined,
+          labelId:  labelId  ?? undefined,
+          amount: num,
+          currency,
+          method,
+          paymentDetails: details.trim() || undefined,
+        } as any,
+      });
+      toast({
+        title: "Запрос на выплату создан",
+        description: "Запрос отправлен на рассмотрение администратору.",
+      });
+      setAmount("");
+      setDetails("");
+      onCreated();
+      onOpenChange(false);
+    } catch (e: any) {
+      const msg = e?.payload?.error ?? e?.message ?? "Не удалось создать запрос";
+      toast({ title: "Ошибка", description: String(msg), variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Запросить выплату</DialogTitle>
+          <DialogDescription>
+            Запрос уйдёт администратору. Перед подачей убедись, что у тебя пройден KYC и заполнены банковские реквизиты в профиле.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2 grid gap-1.5">
+              <Label htmlFor="po-amount">Сумма *</Label>
+              <Input
+                id="po-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="100.00"
+                autoFocus
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="po-currency">Валюта</Label>
+              <Select value={currency} onValueChange={(v) => setCurrency(v as any)}>
+                <SelectTrigger id="po-currency"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="RUB">RUB</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="po-method">Метод выплаты</Label>
+            <Select value={method} onValueChange={(v) => setMethod(v as any)}>
+              <SelectTrigger id="po-method"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bank_transfer">Банковский перевод</SelectItem>
+                <SelectItem value="paypal">PayPal</SelectItem>
+                <SelectItem value="crypto">Криптовалюта</SelectItem>
+                <SelectItem value="qiwi">QIWI</SelectItem>
+                <SelectItem value="yoomoney">ЮMoney</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="po-details">Реквизиты / комментарий</Label>
+            <Input
+              id="po-details"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder="Доп. данные для выплаты (необязательно)"
+            />
+            <p className="text-xs text-muted-foreground">
+              Основные банковские реквизиты берутся из профиля. Здесь можно указать уточнения.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createM.isPending}>
+            Отмена
+          </Button>
+          <Button onClick={submit} disabled={createM.isPending}>
+            {createM.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Запросить
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

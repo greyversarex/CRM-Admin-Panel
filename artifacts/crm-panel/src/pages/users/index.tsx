@@ -27,7 +27,6 @@ import { useLang } from "@/lib/i18n";
 import { SignupsTab } from "./_signups-tab";
 import { KycTab } from "./_kyc-tab";
 import { ActivityTab } from "./_activity-tab";
-import { BlacklistTab } from "./_blacklist-tab";
 import { EditUserDialog } from "./_edit-user-dialog";
 
 export default function Users() {
@@ -43,7 +42,6 @@ export default function Users() {
 
   const [signupsCount, setSignupsCount] = useState<number>(0);
   const [kycPendingCount, setKycPendingCount] = useState<number>(0);
-  const [blacklistCount, setBlacklistCount] = useState<number>(0);
 
   const queryClient = useQueryClient();
   const updateUser = useUpdateUser();
@@ -180,11 +178,10 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <KpiCard label={t.users.kpi_total}    value={String(totalUsers)}      icon={Users2}        iconColor="text-primary"      iconBg="bg-primary/12"      iconBorder="border-primary/20" />
           <KpiCard label={t.users.kpi_signups}  value={String(signupsCount)}    icon={UserPlus}      iconColor="text-amber-400"    iconBg="bg-amber-500/12"    iconBorder="border-amber-500/20" />
           <KpiCard label={t.users.kpi_kyc}      value={String(kycPendingCount)} icon={FileSignature} iconColor="text-violet-400"   iconBg="bg-violet-500/12"   iconBorder="border-violet-500/20" />
-          <KpiCard label={t.users.kpi_suspended} value={String(blacklistCount)} icon={Ban}           iconColor="text-rose-400"     iconBg="bg-rose-500/12"     iconBorder="border-rose-500/20" />
         </div>
 
         <Tabs defaultValue="users">
@@ -205,10 +202,6 @@ export default function Users() {
             </TabsTrigger>
             <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Activity className="h-3.5 w-3.5" /> {t.users.tab_activity}
-            </TabsTrigger>
-            <TabsTrigger value="blacklist" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
-              <Ban className="h-3.5 w-3.5" /> {t.users.tab_blacklist}
-              {blacklistCount > 0 && <Badge variant="outline" className="ml-1 h-4 text-[10px] bg-rose-500/10 border-rose-500/30 text-rose-400">{blacklistCount}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -418,11 +411,6 @@ export default function Users() {
           {/* ── ACTIVITY ── */}
           <TabsContent value="activity" className="mt-4">
             <ActivityTab />
-          </TabsContent>
-
-          {/* ── BLACKLIST ── */}
-          <TabsContent value="blacklist" className="mt-4">
-            <BlacklistTab onCountChange={setBlacklistCount} />
           </TabsContent>
         </Tabs>
       </div>

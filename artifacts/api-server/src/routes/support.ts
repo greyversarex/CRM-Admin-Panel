@@ -4,6 +4,7 @@ import { db, supportTicketsTable, supportTicketMessagesTable, usersTable } from 
 import { and, desc, eq, or, sql, asc } from "drizzle-orm";
 import { requireAuth, requireRole, getSessionUser } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { createNotification } from "../services/notifications";
 
 const router = Router();
 
@@ -385,6 +386,29 @@ router.post("/support/tickets/:id/messages", requireAuth, async (req, res): Prom
       .update(supportTicketsTable)
       .set({ lastMessageAt: now, updatedAt: now, status: newStatus })
       .where(eq(supportTicketsTable.id, id));
+
+    // Уведомление противоположной стороне:
+    // - staff ответил → уведомляем requester
+    // - customer ответил → уведомляем assignee (если назначен)
+    if (staff && ticket.requesterUserId && ticket.requesterUserId !== user.id) {
+      void createNotification({
+        userId: ticket.requesterUserId,
+        type: "support_message",
+        title: `Новый ответ в тикете «${ticket.subject}»`,
+        body: parsed.data.body.length > 200 ? parsed.data.body.slice(0, 200) + "…" : parsed.data.body,
+        entityType: "general",
+        link: `/support/inbox`,
+      });
+    } else if (!staff && ticket.assigneeUserId && ticket.assigneeUserId !== user.id) {
+      void createNotification({
+        userId: ticket.assigneeUserId,
+        type: "support_message",
+        title: `Новое сообщение от клиента в тикете «${ticket.subject}»`,
+        body: parsed.data.body.length > 200 ? parsed.data.body.slice(0, 200) + "…" : parsed.data.body,
+        entityType: "general",
+        link: `/support/inbox`,
+      });
+    }
   }
 
   res.status(201).json({
@@ -445,6 +469,24 @@ router.patch("/support/tickets/:id", requireAuth, requireRole("admin", "manager"
     before: { status: before.status, priority: before.priority, assigneeUserId: before.assigneeUserId },
     after: { status: after.status, priority: after.priority, assigneeUserId: after.assigneeUserId },
   });
+
+  // Уведомление requester при смене статуса (resolved/closed/waiting)
+  if (parsed.data.status !== undefined && parsed.data.status !== before.status && before.requesterUserId) {
+    const statusLabel: Record<string, string> = {
+      open: "переоткрыт",
+      waiting: "ожидает вашего ответа",
+      resolved: "помечен как решённый",
+      closed: "закрыт",
+    };
+    void createNotification({
+      userId: before.requesterUserId,
+      type: `support_status_${parsed.data.status}`,
+      title: `Тикет «${before.subject}» ${statusLabel[parsed.data.status] ?? parsed.data.status}`,
+      body: "",
+      entityType: "general",
+      link: `/support/inbox`,
+    });
+  }
 
   res.json({ ticket: shapeTicket(after, null, null) });
 });

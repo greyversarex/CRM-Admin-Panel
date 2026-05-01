@@ -18,6 +18,7 @@ import { sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { emitAlertAndForget } from "../services/alerts-emitter";
+import { createNotification } from "../services/notifications";
 
 const router = Router();
 
@@ -300,6 +301,16 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
     role: user.role,
     artistId: createdArtistId,
     labelId: createdLabelId,
+  });
+
+  // In-app приветствие — увидит при первом входе
+  void createNotification({
+    userId: user.id,
+    type: "signup_approved",
+    title: "🎉 Добро пожаловать в Tajik Music CRM",
+    body: "Заявка одобрена. Следующий шаг — пройти KYC-верификацию и заполнить банковские/налоговые реквизиты.",
+    entityType: "general",
+    link: "/kyc",
   });
 
   // ВНИМАНИЕ: tempPassword возвращается ТОЛЬКО в этом ответе и нигде не логируется.

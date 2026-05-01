@@ -4,6 +4,7 @@ import { count, eq, desc, and, sql, inArray } from "drizzle-orm";
 import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, DeleteSplitParams } from "@workspace/api-zod";
 import { requireAuth, requireRole, getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
+import { notifyAdmins } from "../services/notifications";
 
 const router = Router();
 
@@ -204,6 +205,81 @@ router.delete("/splits/:id", requireRole("admin", "manager"), async (req, res): 
   void auditMutation(req, { action: "delete", entityType: "split", entityId: split.id, before: split, after: null });
 
   res.sendStatus(204);
+});
+
+// ─── Acceptance flow ──────────────────────────────────────────────────────
+// Per-participant acceptance status is stored inline in the jsonb participants
+// array as `acceptanceStatus: 'pending' | 'accepted' | 'rejected'` (default
+// pending) + `acceptanceAt` ISO string. This avoids a schema migration: the UI
+// derives the overall split status (pending / partial / fully-accepted /
+// rejected) from the participants array.
+async function applyParticipantDecision(
+  req: Parameters<Parameters<typeof router.post>[1]>[0],
+  res: Parameters<Parameters<typeof router.post>[1]>[1],
+  decision: "accepted" | "rejected",
+): Promise<void> {
+  const params = GetSplitParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const scope = getDataScope(req);
+  if (scope.role !== "artist" && scope.role !== "label") {
+    res.status(403).json({ error: "Только артист или лейбл может подписать сплит" });
+    return;
+  }
+
+  const [split] = await db.select().from(splitsTable).where(eq(splitsTable.id, params.data.id));
+  if (!split) { res.status(404).json({ error: "Split not found" }); return; }
+
+  const participants = (split.participants as any[]) ?? [];
+  // Найти участника, которому соответствует текущий пользователь.
+  const myEntityType = scope.role === "artist" ? "artist" : "label";
+  const myEntityId = scope.role === "artist" ? scope.artistId : scope.labelId;
+  if (!myEntityId) { res.status(403).json({ error: "Нет привязки к артисту/лейблу" }); return; }
+
+  const idx = participants.findIndex(
+    (p) => p && p.entityType === myEntityType && Number(p.entityId) === Number(myEntityId),
+  );
+  if (idx < 0) { res.status(403).json({ error: "Вы не указаны в этом сплите" }); return; }
+
+  const now = new Date().toISOString();
+  const updatedParticipants = participants.map((p, i) =>
+    i === idx ? { ...p, acceptanceStatus: decision, acceptanceAt: now } : p,
+  );
+
+  const [updated] = await db.update(splitsTable)
+    .set({ participants: updatedParticipants as any })
+    .where(eq(splitsTable.id, split.id))
+    .returning();
+
+  void auditMutation(req, {
+    action: decision === "accepted" ? "accept" : "reject",
+    entityType: "split",
+    entityId: split.id,
+    before: split,
+    after: updated,
+  });
+
+  // Уведомляем админов
+  const participantName = participants[idx]?.entityName ?? `${myEntityType} #${myEntityId}`;
+  void notifyAdmins({
+    type: `split_${decision}`,
+    title: decision === "accepted"
+      ? `${participantName} подписал сплит #${split.id}`
+      : `${participantName} отклонил сплит #${split.id}`,
+    body: "",
+    entityType: "general",
+    link: "/splits",
+  });
+
+  const enriched = await enrichSplit(updated);
+  res.json(enriched);
+}
+
+router.post("/splits/:id/accept", requireAuth, async (req, res): Promise<void> => {
+  await applyParticipantDecision(req, res, "accepted");
+});
+
+router.post("/splits/:id/reject", requireAuth, async (req, res): Promise<void> => {
+  await applyParticipantDecision(req, res, "rejected");
 });
 
 export default router;
