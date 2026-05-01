@@ -38,7 +38,7 @@ export function AcrTab() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const releasesQ = useListReleases({ limit: 200 });
-  const releases = releasesQ.data?.releases ?? [];
+  const releases = releasesQ.data?.data ?? [];
 
   const filtered = query.trim()
     ? releases.filter((r) =>
