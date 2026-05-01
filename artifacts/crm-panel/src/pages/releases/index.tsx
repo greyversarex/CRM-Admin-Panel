@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { assetHref } from "@/components/asset-uploader";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
@@ -278,7 +279,7 @@ export function ReleasesPanel() {
                           className="group text-left rounded-lg overflow-hidden border border-border/40 bg-background/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all">
                           <div className="aspect-square bg-muted flex items-center justify-center relative overflow-hidden">
                             {r.coverUrl
-                              ? <img src={r.coverUrl} alt={r.title} className="h-full w-full object-cover" />
+                              ? <img src={assetHref(r.coverUrl)} alt={r.title} className="h-full w-full object-cover" />
                               : <CoverPlaceholder title={r.title} />}
                             <div className="absolute top-2 right-2">
                               <StatusBadge status={r.status} className="text-[9px] px-1.5 py-0 h-5" />
@@ -328,7 +329,7 @@ export function ReleasesPanel() {
                             <TableCell>
                               <div className="h-10 w-10 rounded overflow-hidden bg-muted flex items-center justify-center border border-border/50">
                                 {r.coverUrl
-                                  ? <img src={r.coverUrl} alt={r.title} className="h-full w-full object-cover" />
+                                  ? <img src={assetHref(r.coverUrl)} alt={r.title} className="h-full w-full object-cover" />
                                   : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
                               </div>
                             </TableCell>

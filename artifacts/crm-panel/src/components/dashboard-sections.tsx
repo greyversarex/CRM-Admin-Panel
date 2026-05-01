@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Globe2, Film, TrendingUp, TrendingDown, Music2, Disc3, Award, Users as UsersIcon } from "lucide-react";
+import { assetHref } from "@/components/asset-uploader";
 import { ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -214,7 +215,7 @@ export function LatestReleasesGridCard() {
               <div key={r.id} className="group cursor-pointer">
                 <div className="aspect-square rounded-lg overflow-hidden border border-border/50 bg-gradient-to-br from-primary/15 to-violet-500/10 flex items-center justify-center relative">
                   {r.coverUrl ? (
-                    <img src={r.coverUrl} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img src={assetHref(r.coverUrl)} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <Music2 className="h-8 w-8 text-primary/50" />
                   )}
@@ -274,7 +275,7 @@ export function TopTracksCard() {
               <div key={t.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1 transition-colors cursor-default">
                 <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="w-8 h-8 rounded-lg overflow-hidden bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
-                  {t.coverUrl ? <img src={t.coverUrl} alt={t.title} className="w-full h-full object-cover" /> : <Music2 className="h-3.5 w-3.5 text-violet-400" />}
+                  {t.coverUrl ? <img src={assetHref(t.coverUrl)} alt={t.title} className="w-full h-full object-cover" /> : <Music2 className="h-3.5 w-3.5 text-violet-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{t.title}</p>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { assetHref } from "@/components/asset-uploader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -234,7 +235,7 @@ export function ModerationDialog({
             <div className="flex items-start gap-4">
               <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-border flex items-center justify-center shrink-0">
                 {release.coverUrl ? (
-                  <img src={release.coverUrl} alt={release.title} className="h-full w-full object-cover rounded-xl" />
+                  <img src={assetHref(release.coverUrl)} alt={release.title} className="h-full w-full object-cover rounded-xl" />
                 ) : (
                   <Disc3 className="h-9 w-9 text-primary/70" />
                 )}

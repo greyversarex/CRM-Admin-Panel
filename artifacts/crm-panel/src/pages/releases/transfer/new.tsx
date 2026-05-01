@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, AlertCircle, ImageIcon, Music2 } from "lucide-react";
+import { assetHref } from "@/components/asset-uploader";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import {
@@ -220,7 +221,7 @@ export default function NewImport() {
                             <td className="px-3 py-2 flex items-center gap-2">
                               <div className="h-7 w-7 rounded bg-muted flex items-center justify-center overflow-hidden">
                                 {r.coverUrl
-                                  ? <img src={r.coverUrl} className="h-full w-full object-cover" alt="" />
+                                  ? <img src={assetHref(r.coverUrl)} className="h-full w-full object-cover" alt="" />
                                   : <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />}
                               </div>
                               {r.title}
