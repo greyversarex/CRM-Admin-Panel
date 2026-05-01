@@ -245,7 +245,7 @@ function ConfigureDialog({ service, record, open, onOpenChange, onSaved }: Confi
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; unverified?: boolean } | null>(null);
 
   useEffect(() => {
     if (!service || !open) return;
@@ -305,8 +305,8 @@ function ConfigureDialog({ service, record, open, onOpenChange, onSaved }: Confi
           body: JSON.stringify({ fields: filled }),
         });
       }
-      const r = await apiCall<{ ok: boolean; message?: string }>(`/api/integrations/${service.code}/test`, { method: "POST" });
-      setTestResult({ ok: r.ok, message: r.message ?? (r.ok ? "Соединение установлено" : "Ошибка соединения") });
+      const r = await apiCall<{ ok: boolean; message?: string; unverified?: boolean }>(`/api/integrations/${service.code}/test`, { method: "POST" });
+      setTestResult({ ok: r.ok, message: r.message ?? (r.ok ? "Соединение установлено" : "Ошибка соединения"), unverified: r.unverified });
       if (r.ok) onSaved();
     } catch (e) {
       setTestResult({ ok: false, message: (e as Error).message });
@@ -366,8 +366,20 @@ function ConfigureDialog({ service, record, open, onOpenChange, onSaved }: Confi
           ))}
 
           {testResult && (
-            <div className={`rounded-md border p-3 text-sm ${testResult.ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
-              <p className="font-medium">{testResult.ok ? "Соединение успешно" : "Сбой соединения"}</p>
+            <div className={`rounded-md border p-3 text-sm ${
+              !testResult.ok
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                : testResult.unverified
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            }`}>
+              <p className="font-medium">{
+                !testResult.ok
+                  ? "Сбой соединения"
+                  : testResult.unverified
+                    ? "Креды сохранены — но автоматический тест невозможен"
+                    : "Соединение успешно"
+              }</p>
               <p className="text-xs opacity-90 mt-1 break-words">{testResult.message}</p>
             </div>
           )}
@@ -399,6 +411,9 @@ function StatusBadge({ status, hasCredentials }: { status?: string; hasCredentia
   }
   if (status === "error") {
     return <Badge variant="outline" className="text-[10px] gap-1 text-rose-400 bg-rose-500/10 border-rose-500/20"><AlertTriangle className="h-2.5 w-2.5" />Ошибка</Badge>;
+  }
+  if (status === "unverified") {
+    return <Badge variant="outline" className="text-[10px] gap-1 text-amber-400 bg-amber-500/10 border-amber-500/20" title="Креды сохранены, но автоматический тест соединения для этой интеграции невозможен. Реальная проверка произойдёт при первом использовании."><AlertTriangle className="h-2.5 w-2.5" />Не проверено</Badge>;
   }
   return <Badge variant="outline" className="text-[10px] gap-1 text-amber-400 bg-amber-500/10 border-amber-500/20"><Unplug className="h-2.5 w-2.5" />Настроен</Badge>;
 }
@@ -474,10 +489,14 @@ export function TabIntegrations() {
         method: "POST",
         body: JSON.stringify({ name: service.name, category: service.category, authType: service.authType }),
       }).catch(() => {});
-      const r = await apiCall<{ ok: boolean; message?: string }>(`/api/integrations/${service.code}/test`, { method: "POST" });
+      const r = await apiCall<{ ok: boolean; message?: string; unverified?: boolean }>(`/api/integrations/${service.code}/test`, { method: "POST" });
       toast({
         variant: r.ok ? "default" : "destructive",
-        title: r.ok ? `${service.name}: соединение OK` : `${service.name}: сбой`,
+        title: !r.ok
+          ? `${service.name}: сбой`
+          : r.unverified
+            ? `${service.name}: сохранено, но без проверки`
+            : `${service.name}: соединение OK`,
         description: r.message,
       });
       void load();

@@ -21,6 +21,16 @@ export type ConnectorResult = {
   ok: boolean;
   message?: string;
   data?: Record<string, unknown>;
+  /**
+   * Если true — это означает «креды формально приняты, но настоящего
+   * end-to-end теста сделать нельзя» (например, OAuth-провайдер не
+   * поддерживает server-side проверку, или у площадки нет публичного API).
+   *
+   * Сервис интеграций маппит это в status="unverified" вместо "connected".
+   * UI рисует жёлтую плашку «Настроен (не проверено)» — пользователь видит,
+   * что настоящего теста не было, и не получает ложное чувство уверенности.
+   */
+  unverified?: boolean;
 };
 
 export type DeliveryPayload = {

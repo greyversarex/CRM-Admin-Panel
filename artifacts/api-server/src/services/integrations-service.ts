@@ -161,7 +161,7 @@ export async function disconnectIntegration(integrationCode: string): Promise<vo
     .where(eq(integrationsTable.id, integration.id));
 }
 
-export async function testConnection(integrationCode: string): Promise<{ ok: boolean; message?: string }> {
+export async function testConnection(integrationCode: string): Promise<{ ok: boolean; message?: string; unverified?: boolean }> {
   const integration = await getIntegrationByCode(integrationCode);
   if (!integration) return { ok: false, message: "Интеграция не зарегистрирована" };
 
@@ -184,6 +184,18 @@ export async function testConnection(integrationCode: string): Promise<{ ok: boo
   try {
     const result = await connector.testConnection(ctx);
     const duration = Date.now() - startTime;
+
+    // Маппинг результата коннектора в статус интеграции:
+    //   ok=true                     → "connected" (зелёный, реально проверено)
+    //   ok=true, unverified=true    → "unverified" (жёлтый, креды сохранены,
+    //                                  но end-to-end тест невозможен — например,
+    //                                  OAuth требует браузерного редиректа)
+    //   ok=false                    → "error" (красный)
+    let nextStatus: "connected" | "unverified" | "error";
+    if (!result.ok) nextStatus = "error";
+    else if (result.unverified) nextStatus = "unverified";
+    else nextStatus = "connected";
+
     await db.update(integrationSyncJobsTable).set({
       status: result.ok ? "success" : "error",
       finishedAt: new Date(),
@@ -193,12 +205,12 @@ export async function testConnection(integrationCode: string): Promise<{ ok: boo
     }).where(eq(integrationSyncJobsTable.id, job.id));
 
     await db.update(integrationsTable).set({
-      status: result.ok ? "connected" : "error",
+      status: nextStatus,
       lastSyncAt: new Date(),
       lastError: result.ok ? null : result.message,
     }).where(eq(integrationsTable.id, integration.id));
 
-    return { ok: result.ok, message: result.message };
+    return { ok: result.ok, message: result.message, unverified: result.unverified };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     const duration = Date.now() - startTime;

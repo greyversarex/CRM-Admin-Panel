@@ -128,7 +128,7 @@ export function IntegrationConfigDialog({
   const [passphrase, setPassphrase] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; unverified?: boolean } | null>(null);
 
   // ── ack-опрос ────────────────────────────────────────────────────────────
   const [polling, setPolling] = useState(false);
@@ -240,8 +240,8 @@ export function IntegrationConfigDialog({
     setTestResult(null);
     try {
       await saveConfigAndCreds();
-      const r = await api<{ ok: boolean; message?: string }>(`/api/integrations/${integration.code}/test`, { method: "POST" });
-      setTestResult({ ok: r.ok, message: r.message ?? (r.ok ? "OK" : "Ошибка") });
+      const r = await api<{ ok: boolean; message?: string; unverified?: boolean }>(`/api/integrations/${integration.code}/test`, { method: "POST" });
+      setTestResult({ ok: r.ok, message: r.message ?? (r.ok ? "OK" : "Ошибка"), unverified: r.unverified });
     } catch (e) {
       setTestResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -439,8 +439,20 @@ export function IntegrationConfigDialog({
 
           {/* Test result */}
           {testResult && (
-            <div className={`rounded-md border p-3 text-sm ${testResult.ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
-              <p className="font-medium">{testResult.ok ? "Тест успешен" : "Тест не прошёл"}</p>
+            <div className={`rounded-md border p-3 text-sm ${
+              !testResult.ok
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                : testResult.unverified
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+            }`}>
+              <p className="font-medium">{
+                !testResult.ok
+                  ? "Тест не прошёл"
+                  : testResult.unverified
+                    ? "Креды сохранены, но реальной проверки не было"
+                    : "Тест успешен"
+              }</p>
               <p className="text-xs opacity-90 mt-1 break-words">{testResult.message}</p>
             </div>
           )}

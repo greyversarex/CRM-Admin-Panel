@@ -75,8 +75,31 @@ function escapeXml(s: string): string {
   return s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!));
 }
 
+/** Anti-SSRF: запрещаем localhost / приватные сети / link-local в TCP-пробе. */
+function isPublicHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (!h) return false;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return false;
+  // IPv4 RFC 1918 + loopback + link-local + unspecified.
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [parseInt(v4[1]!, 10), parseInt(v4[2]!, 10)];
+    if (a === 0 || a === 10 || a === 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a >= 224) return false; // multicast/reserved
+    return true;
+  }
+  // IPv6 loopback / link-local / unique-local.
+  if (h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return false;
+  return true;
+}
+
 /** Проверка что SFTP-хост доступен по TCP (без полноценного SSH-handshake). */
 async function testTcpReachable(host: string, port: number, timeoutMs = 5000): Promise<boolean> {
+  if (!isPublicHost(host)) return false;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return false;
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;
@@ -140,27 +163,33 @@ export function createDdexSftpConnector(code: string): IConnector {
           return { ok: false, message: `SFTP error: ${(err as Error).message}` };
         }
       } catch {
-        // Пакет не установлен — деградируем до TCP-проверки.
+        // Пакет ssh2-sftp-client не установлен — деградируем до TCP-проверки.
+        // ВАЖНО: TCP-доступность ≠ работающий SFTP. Возвращаем unverified, а не
+        // ложный "ok: true", иначе пользователь подумает что всё подключено.
         const reachable = await testTcpReachable(host, port);
         if (!reachable) return { ok: false, message: `SFTP-хост ${host}:${port} недоступен (TCP)` };
         return {
           ok: true,
-          message: `Хост ${host}:${port} доступен по TCP. Для полноценного handshake установите ssh2-sftp-client.`,
+          unverified: true,
+          message: `Хост ${host}:${port} доступен по TCP, но настоящий SFTP-handshake не выполнен (нет пакета ssh2-sftp-client). Реальная авторизация будет проверена при первой доставке релиза.`,
           data: { host, port },
         };
       }
     },
 
     async deliverRelease(ctx: ConnectorContext, payload: DeliveryPayload): Promise<ConnectorResult> {
+      // ВАЖНО: этот метод НЕ выполняет фактическую SFTP-загрузку.
+      // Реальная отгрузка релиза идёт через ddex/transports/sftp.ts (вызывается
+      // из delivery-worker), который ставит файлы через ssh2-sftp-client.put().
+      // Здесь мы только генерируем DDEX XML — это утилита для предпросмотра.
+      // НЕ помечать релиз как "доставленный" по результату этого вызова.
       const partyId = (ctx.config.partyId as string) ?? "PA-DPIDA-2024053004-T";
       const xml = generateDdexErn(payload, partyId);
-      // На этом этапе у нас есть валидный DDEX XML.
-      // Реальная загрузка через SFTP включается, когда установим ssh2-sftp-client
-      // и появится реальный хост от партнёра.
       return {
         ok: true,
-        message: `DDEX ERN-4.3 XML сгенерирован (${xml.length} байт). Загрузка через SFTP: ${ctx.credentials.host}${ctx.credentials.remote_path ?? "/"}`,
-        data: { xmlSize: xml.length, batchId: `BATCH-${Date.now()}`, releaseId: payload.releaseId },
+        unverified: true,
+        message: `DDEX ERN-4.3 XML сгенерирован (${xml.length} байт). Фактическая загрузка не выполнена — этот метод только превью XML, реальную отгрузку делает delivery-worker через SFTP-транспорт.`,
+        data: { xmlSize: xml.length, releaseId: payload.releaseId, uploaded: false },
       };
     },
   };
