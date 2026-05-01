@@ -5,6 +5,7 @@ import {
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
   getListDeliveriesQueryKey,
   type Track, type DeliveryTarget,
+  type ReleaseDetail, type CreateReleaseBody,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useParams, useLocation } from "wouter";
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -28,10 +29,29 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch as SwitchUI } from "@/components/ui/switch";
+import { Label as FieldLabel } from "@/components/ui/label";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
+
+// Те же справочники, что в /releases/new — единый источник.
+const META_GENRES = ["Pop", "Dance Pop", "Tajik Folk", "Hip Hop", "Rock", "Electronic", "R&B", "Classical", "Jazz", "World"];
+const META_LANGS: Array<{ value: string; label: string }> = [
+  { value: "Tajik",   label: "Таджикский" },
+  { value: "Russian", label: "Русский" },
+  { value: "English", label: "Английский" },
+  { value: "Persian", label: "Персидский" },
+  { value: "Uzbek",   label: "Узбекский" },
+  { value: "Arabic",  label: "Арабский" },
+];
+const META_RELEASE_TYPES: Array<{ value: string; label: string }> = [
+  { value: "single",      label: "Сингл" },
+  { value: "album",       label: "Альбом" },
+  { value: "ep",          label: "EP" },
+  { value: "compilation", label: "Сборник" },
+];
 
 // Соответствует enum DeliveryTarget в openapi.yaml + connectors/registry.ts.
 // label — что видит пользователь, code — что уходит в API.
@@ -80,6 +100,15 @@ export default function ReleaseDetail() {
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  // Инлайн-режим редактирования метаданных карточки Release Details.
+  // Включается кнопкой «Edit Release» для черновика (без диалога/смены статуса).
+  const [metaEditing, setMetaEditing] = useState(false);
+  // Если пользователь параллельно отправил релиз на модерацию (или статус сменился
+  // на любой не-draft) — инлайн-форма должна автоматически закрыться, иначе
+  // следующий PUT упадёт на бэкендовом lock-чек'е (releaseEditableReason).
+  useEffect(() => {
+    if (release && release.status !== "draft" && metaEditing) setMetaEditing(false);
+  }, [release?.status, metaEditing]);
   const { user } = useAuth();
 
   const invalidateAll = () => {
@@ -177,21 +206,36 @@ export default function ReleaseDetail() {
                 />
               </Dialog>
             )}
-            {/* Edit Release: backend-флаг isEditable (draft/rejected). В остальных — disabled. */}
+            {/* Edit Release:
+                - draft: одной кнопкой включаем инлайн-редактирование метаданных
+                  прямо в карточке Release Details. Никаких диалогов и смены статуса.
+                - rejected: показываем диалог с подтверждением и переходом rejected→draft.
+                - всё остальное (live/approved/etc): кнопка Edit Locked. */}
             {release.isEditable ? (
-              <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-card">
-                    <Edit3 className="mr-2 h-4 w-4" /> Edit Release
-                  </Button>
-                </DialogTrigger>
-                <EditReleaseDialog
-                  releaseId={id}
-                  title={release.title}
-                  currentStatus={release.status}
-                  onClose={() => { setEditOpen(false); invalidateAll(); }}
-                />
-              </Dialog>
+              release.status === "draft" ? (
+                <Button
+                  variant="outline"
+                  className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
+                  onClick={() => setMetaEditing((v) => !v)}
+                >
+                  <Edit3 className="mr-2 h-4 w-4" />
+                  {metaEditing ? "Завершить редактирование" : "Edit Release"}
+                </Button>
+              ) : (
+                <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="bg-card">
+                      <Edit3 className="mr-2 h-4 w-4" /> Edit Release
+                    </Button>
+                  </DialogTrigger>
+                  <EditReleaseDialog
+                    releaseId={id}
+                    title={release.title}
+                    currentStatus={release.status}
+                    onClose={() => { setEditOpen(false); invalidateAll(); }}
+                  />
+                </Dialog>
+              )
             ) : (
               <Button
                 variant="outline"
@@ -276,28 +320,41 @@ export default function ReleaseDetail() {
 
         {/* Release Details */}
         <Card className="bg-card/50 backdrop-blur border-border/50">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Release Details</CardTitle>
+            {metaEditing && (
+              <span className="text-[11px] text-primary/90 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
+                Режим редактирования
+              </span>
+            )}
           </CardHeader>
           <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
-            <div className="space-y-3">
-              <KV label="Release Title" value={release.title} highlight />
-              <KV label="Metadata Language" value={release.language || "English"} />
-              <KV label="Primary Artist" value={release.artistName} chip />
-              <KV label="Label" value={release.labelName || "Independent"} />
-              <KV label="Release Date" value={release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "TBD"} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                <KV label="Genre" value={release.genre || "—"} />
-                <KV label="Subgenre" value="—" />
-                <KV label="UPC" value={release.upc || "Pending"} mono />
-                <KV label="Release Type" value={release.releaseType} cap />
-                <KV label="Tracks" value={String(release.totalTracks)} />
-                <KV label="Explicit Content" value={release.isExplicit ? "Yes" : "No"} />
-                <KV label="P-Line" value={release.pLine || "—"} />
-                <KV label="C-Line" value={release.cLine || "—"} />
-                <KV label="Territories" value={(release.territories || ["WW"]).join(", ")} />
+            {metaEditing ? (
+              <EditDetailsForm
+                release={release}
+                onCancel={() => setMetaEditing(false)}
+                onSaved={() => { setMetaEditing(false); invalidateAll(); }}
+              />
+            ) : (
+              <div className="space-y-3">
+                <KV label="Release Title" value={release.title} highlight />
+                <KV label="Metadata Language" value={release.language || "English"} />
+                <KV label="Primary Artist" value={release.artistName} chip />
+                <KV label="Label" value={release.labelName || "Independent"} />
+                <KV label="Release Date" value={release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "TBD"} />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                  <KV label="Genre" value={release.genre || "—"} />
+                  <KV label="Subgenre" value="—" />
+                  <KV label="UPC" value={release.upc || "Pending"} mono />
+                  <KV label="Release Type" value={release.releaseType} cap />
+                  <KV label="Tracks" value={String(release.totalTracks)} />
+                  <KV label="Explicit Content" value={release.isExplicit ? "Yes" : "No"} />
+                  <KV label="P-Line" value={release.pLine || "—"} />
+                  <KV label="C-Line" value={release.cLine || "—"} />
+                  <KV label="Territories" value={(release.territories || ["WW"]).join(", ")} />
+                </div>
               </div>
-            </div>
+            )}
             <CoverUploader
               value={release.coverUrl ?? null}
               releaseId={id}
@@ -374,6 +431,150 @@ export default function ReleaseDetail() {
         </Card>
       </div>
     </Layout>
+  );
+}
+
+// ─── Inline edit form для Release Details (только для статуса draft) ──────
+// Сервер позволяет PUT /releases/:id для не-владельцев только в draft/rejected.
+// Поэтому форма доступна только из режима metaEditing, который включается
+// для draft. Для rejected — сначала нужно перевести в draft (это делает
+// EditReleaseDialog ниже).
+function EditDetailsForm({
+  release, onCancel, onSaved,
+}: {
+  release: ReleaseDetail;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const updateRelease = useUpdateRelease();
+  const [form, setForm] = useState({
+    title:        release.title ?? "",
+    language:     release.language ?? "Tajik",
+    releaseType:  release.releaseType ?? "single",
+    genre:        release.genre ?? "",
+    releaseDate:  release.releaseDate ? String(release.releaseDate).slice(0, 10) : "",
+    upc:          release.upc ?? "",
+    pLine:        release.pLine ?? "",
+    cLine:        release.cLine ?? "",
+    isExplicit:   !!release.isExplicit,
+    territories:  (release.territories ?? ["WW"]).join(", "),
+  });
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((p) => ({ ...p, [k]: v }));
+
+  const onSave = async () => {
+    if (!form.title.trim()) {
+      toast({ variant: "destructive", title: "Название обязательно", description: "Поле «Название релиза» не может быть пустым." });
+      return;
+    }
+    const territories = form.territories
+      .split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+    // UpdateReleaseBody на бэке требует title/releaseType/artistId; labelId/coverUrl — nullable.
+    // Для не-привилегированных пользователей бэк отклоняет смену artistId/labelId,
+    // поэтому подставляем существующие значения релиза без изменений.
+    const data: CreateReleaseBody = {
+      title:       form.title.trim(),
+      releaseType: form.releaseType as CreateReleaseBody["releaseType"],
+      artistId:    release.artistId,
+      labelId:     release.labelId ?? null,
+      coverUrl:    release.coverUrl ?? null,
+      language:    form.language || null,
+      genre:       form.genre || null,
+      releaseDate: form.releaseDate || null,
+      upc:         form.upc.trim() || null,
+      pLine:       form.pLine.trim() || null,
+      cLine:       form.cLine.trim() || null,
+      isExplicit:  form.isExplicit,
+      territories: territories.length > 0 ? territories : ["WW"],
+    };
+    try {
+      await updateRelease.mutateAsync({ id: release.id, data });
+      toast({ title: "Изменения сохранены", description: "Метаданные релиза обновлены." });
+      onSaved();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось сохранить", description: (e as Error).message });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <FormField label="Название релиза *">
+        <Input value={form.title} onChange={(e) => set("title", e.target.value)} className="bg-background/40" />
+      </FormField>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField label="Язык метаданных">
+          <Select value={form.language} onValueChange={(v) => set("language", v)}>
+            <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {META_LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField label="Тип релиза">
+          <Select value={form.releaseType} onValueChange={(v) => set("releaseType", v as typeof form.releaseType)}>
+            <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {META_RELEASE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <FormField label="Жанр">
+          <Select value={form.genre || undefined} onValueChange={(v) => set("genre", v)}>
+            <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              {META_GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField label="UPC (необязательно)">
+          <Input value={form.upc} onChange={(e) => set("upc", e.target.value)} placeholder="195502855390" className="bg-background/40 font-mono" />
+        </FormField>
+        <FormField label="Дата релиза">
+          <Input type="date" value={form.releaseDate} onChange={(e) => set("releaseDate", e.target.value)} className="bg-background/40" />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField label="℗ Строка">
+          <Input value={form.pLine} onChange={(e) => set("pLine", e.target.value)} placeholder="2026 Tajik Music" className="bg-background/40" />
+        </FormField>
+        <FormField label="© Строка">
+          <Input value={form.cLine} onChange={(e) => set("cLine", e.target.value)} placeholder="2026 Tajik Music" className="bg-background/40" />
+        </FormField>
+      </div>
+
+      <FormField label="Территории (через запятую, ISO-коды или WW)">
+        <Input value={form.territories} onChange={(e) => set("territories", e.target.value)} placeholder="WW" className="bg-background/40 font-mono uppercase" />
+      </FormField>
+
+      <div className="flex items-center justify-between p-3 rounded-md bg-background/40 border border-border/50">
+        <div>
+          <FieldLabel className="text-sm">Explicit-контент</FieldLabel>
+          <p className="text-xs text-muted-foreground">Пометить релиз как explicit на музыкальных площадках.</p>
+        </div>
+        <SwitchUI checked={form.isExplicit} onCheckedChange={(v) => set("isExplicit", v)} />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+        <Button variant="outline" onClick={onCancel} disabled={updateRelease.isPending}>Отмена</Button>
+        <Button onClick={onSave} disabled={updateRelease.isPending}>
+          {updateRelease.isPending ? "Сохраняем…" : "Сохранить изменения"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <FieldLabel className="text-xs text-muted-foreground">{label}</FieldLabel>
+      {children}
+    </div>
   );
 }
 

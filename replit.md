@@ -78,6 +78,12 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24. I
 
 ## Recent Changes
 
+### 2026-05-01 — Inline release metadata editor (фикс «после кнопки нет редактора»)
+- На странице `/releases/:id` для черновика кнопка **Edit Release** теперь не открывает диалог-заглушку, а переключает карточку «Release Details» в инлайн-режим редактирования метаданных. Все поля: title, language, releaseType, genre, releaseDate, upc, pLine, cLine, isExplicit, territories. Сохранение через `useUpdateRelease` (PUT `/api/releases/:id`) с честным payload `CreateReleaseBody` (включая `artistId`/`labelId`/`coverUrl` из существующего релиза, чтобы пройти Zod-валидацию на бэке).
+- Для статуса `rejected` оставлен прежний диалог `EditReleaseDialog`, который сначала переводит rejected→draft.
+- Auto-close: `useEffect` закрывает инлайн-форму, если статус релиза уезжает с draft (например, пользователь параллельно отправил на модерацию). Без этого следующий PUT упирался бы в backend-lock.
+- Файл: `artifacts/crm-panel/src/pages/releases/[id].tsx`. Архитектурный review (architect) пройден.
+
 ### 2026-05-01 — Audit fixes (no fakes/mocks/stubs, cross-role workflows closed)
 - **Honest artist stats**: `GET /api/artists/:id/stats` теперь агрегирует реальные `usage_reports` + `transactions`. Никаких Math.random.
 - **import-upc — честный 501**: Эндпоинт больше не создаёт мусорных релизов; возвращает понятное сообщение и направляет в Transfer-модуль.
