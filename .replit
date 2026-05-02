@@ -64,3 +64,10 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+NODE_ENV = "development"
+LOG_LEVEL = "info"
+SESSION_COOKIE_SECURE = "false"
