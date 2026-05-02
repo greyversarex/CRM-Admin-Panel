@@ -24,3 +24,9 @@ id = "ZAt6LkZPsNZnl3rzLk16S"
 uri = "file://docs/DDEX_ARCHITECTURE.md"
 type = "text"
 title = "DDEX Architecture (план)"
+
+[[outputs]]
+id = "CGrSNYvR6tLeBZdQZXxkn"
+uri = "file://AUDIT_REPORT.md"
+type = "text"
+title = "Аудит кодовой базы Tajik Music Distribution CRM"
