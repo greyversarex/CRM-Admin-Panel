@@ -273,7 +273,7 @@ async function getSpotifyToken(cfg: SpotifyConfig): Promise<string> {
   return _spotifyToken.value;
 }
 
-router.get("/releases/transfer-imports", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
+router.get("/releases/transfer-imports", requireRole("admin", "manager", "label", "artist"), async (_req, res): Promise<void> => {
   const rows = await db.select().from(transferImportsTable).orderBy(desc(transferImportsTable.id));
   res.json(rows.map(serializeTransferImport));
 });
@@ -311,7 +311,7 @@ function isUniqueViolation(e: any): boolean {
   return false;
 }
 
-router.post("/releases/transfer-imports", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.post("/releases/transfer-imports", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
   const parsed = CreateTransferImportBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -433,7 +433,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager"), async
   res.status(201).json(serializeTransferImport(inserted));
 });
 
-router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
   const parsed = SpotifySearchReleasesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

@@ -29,6 +29,9 @@ import { KycTab } from "./_kyc-tab";
 import { ActivityTab } from "./_activity-tab";
 import { EditUserDialog } from "./_edit-user-dialog";
 import { CreateUserDialog } from "./_create-user-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Users() {
   const { t, lang } = useLang();
@@ -41,6 +44,8 @@ export default function Users() {
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
+  const [blockTarget, setBlockTarget] = useState<User | null>(null);
+  const [blockReason, setBlockReason] = useState("");
 
   const [signupsCount, setSignupsCount] = useState<number>(0);
   const [kycPendingCount, setKycPendingCount] = useState<number>(0);
@@ -60,12 +65,15 @@ export default function Users() {
     }
   };
 
-  async function setStatus(u: User, status: "active" | "suspended") {
+  async function setStatus(u: User, status: "active" | "suspended", reason?: string) {
     setStatusBusyId(u.id);
     try {
       await updateUser.mutateAsync({
         id: u.id,
-        data: { name: u.name, email: u.email, role: u.role, status } as any,
+        data: {
+          name: u.name, email: u.email, role: u.role, status,
+          ...(status === "suspended" && reason ? { blockReason: reason } : {}),
+        } as any,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
@@ -79,6 +87,13 @@ export default function Users() {
       setStatusBusyId(null);
     }
   }
+
+  const handleBlockConfirm = async () => {
+    if (!blockTarget) return;
+    await setStatus(blockTarget, "suspended", blockReason.trim() || undefined);
+    setBlockTarget(null);
+    setBlockReason("");
+  };
 
   const params = {
     role: roleFilter === "all" ? undefined : (roleFilter as any),
@@ -347,7 +362,7 @@ export default function Users() {
                                   <DropdownMenuItem
                                     className="text-rose-400 focus:text-rose-300"
                                     disabled={statusBusyId === u.id || u.id === currentUser?.id}
-                                    onClick={() => setStatus(u, "suspended")}
+                                    onClick={() => { setBlockTarget(u); setBlockReason(""); }}
                                     data-testid={`menu-suspend-${u.id}`}
                                   >
                                     <Ban className="h-3.5 w-3.5 mr-2" /> {t.users.menu_suspend}
@@ -430,6 +445,47 @@ export default function Users() {
 
       <EditUserDialog user={editTarget} onClose={() => setEditTarget(null)} />
       <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+
+      <Dialog open={!!blockTarget} onOpenChange={(o) => { if (!o) { setBlockTarget(null); setBlockReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.users.block_dialog_title}</DialogTitle>
+            <DialogDescription>{t.users.block_dialog_desc}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
+              <Ban className="h-5 w-5 text-rose-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">{blockTarget?.name}</p>
+                <p className="text-xs text-muted-foreground">{blockTarget?.email}</p>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">{t.users.block_reason_label}</label>
+              <textarea
+                className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md bg-background border border-border resize-y mt-1"
+                placeholder={t.users.block_reason_placeholder}
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setBlockTarget(null); setBlockReason(""); }}>
+              {t.users.edit_cancel}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBlockConfirm}
+              disabled={statusBusyId === blockTarget?.id || !blockReason.trim()}
+            >
+              <Ban className="h-3.5 w-3.5 mr-2" />
+              {t.users.block_confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

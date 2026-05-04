@@ -162,16 +162,18 @@ export function ReleasesPanel() {
                 {t.releases.transfer_track}
               </Button>
             )}
-            <Button
-              variant="outline"
-              className="bg-card"
-              onClick={onExportCatalog}
-              disabled={exporting}
-              data-testid="button-export-csv"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {exportLabel}
-            </Button>
+            {!isArtist && !isLabel && (
+              <Button
+                variant="outline"
+                className="bg-card"
+                onClick={onExportCatalog}
+                disabled={exporting}
+                data-testid="button-export-csv"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {exportLabel}
+              </Button>
+            )}
             {!isArtist && !isLabel && (
               <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")} data-testid="button-upload-csv">
                 <Upload className="mr-2 h-4 w-4" />

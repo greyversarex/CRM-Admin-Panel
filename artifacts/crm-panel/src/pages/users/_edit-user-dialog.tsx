@@ -23,6 +23,7 @@ export function EditUserDialog({ user, onClose }: Props) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "manager" | "label" | "artist">("artist");
   const [status, setStatus] = useState<"active" | "inactive" | "suspended">("active");
+  const [blockReason, setBlockReason] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -30,6 +31,7 @@ export function EditUserDialog({ user, onClose }: Props) {
       setEmail(user.email);
       setRole(user.role as any);
       setStatus(user.status as any);
+      setBlockReason((user as any).blockReason ?? "");
     }
   }, [user]);
 
@@ -38,7 +40,10 @@ export function EditUserDialog({ user, onClose }: Props) {
     try {
       await update.mutateAsync({
         id: user.id,
-        data: { name, email, role, status } as any,
+        data: {
+          name, email, role, status,
+          ...(status === "suspended" && blockReason.trim() ? { blockReason: blockReason.trim() } : {}),
+        } as any,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: t.users.edit_saved, description: name });
@@ -93,6 +98,17 @@ export function EditUserDialog({ user, onClose }: Props) {
               </select>
             </div>
           </div>
+          {status === "suspended" && (
+            <div>
+              <label className="text-xs text-muted-foreground">{t.users.block_reason_label}</label>
+              <textarea
+                className="w-full min-h-[80px] px-3 py-2 text-sm rounded-md bg-background border border-border resize-y"
+                placeholder={t.users.block_reason_placeholder}
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+              />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>{t.users.edit_cancel}</Button>

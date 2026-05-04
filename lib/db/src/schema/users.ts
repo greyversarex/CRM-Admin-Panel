@@ -29,6 +29,7 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash"),
   role: text("role").notNull().default("artist"),
   status: text("status").notNull().default("active"),
+  blockReason: text("block_reason"),
   avatarUrl: text("avatar_url"),
   artistId: integer("artist_id").references((): AnyPgColumn => artistsTable.id, { onDelete: "set null" }),
   labelId: integer("label_id").references((): AnyPgColumn => labelsTable.id, { onDelete: "set null" }),

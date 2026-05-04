@@ -229,9 +229,10 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "my_catalog",
     items: [
-      { nameKey: "my_releases", href: "/releases",            icon: Disc3,    iconColor: "text-emerald-400" },
-      { nameKey: "takedown",    href: "/releases/takedown",   icon: XCircle,  iconColor: "text-red-400" },
-      { nameKey: "delivery",    href: "/delivery",            icon: Truck,    iconColor: "text-amber-400" },
+      { nameKey: "my_releases", href: "/releases",            icon: Disc3,          iconColor: "text-emerald-400" },
+      { nameKey: "transfer",    href: "/releases/transfer",   icon: ArrowRightLeft, iconColor: "text-emerald-400" },
+      { nameKey: "takedown",    href: "/releases/takedown",   icon: XCircle,        iconColor: "text-red-400" },
+      { nameKey: "delivery",    href: "/delivery",            icon: Truck,          iconColor: "text-amber-400" },
     ],
   },
   {

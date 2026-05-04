@@ -361,17 +361,11 @@ router.put("/users/:id", adminOnly, async (req, res): Promise<void> => {
     return;
   }
 
+  const blockReason = typeof req.body.blockReason === "string" ? req.body.blockReason.trim() || null : null;
+
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "User not found" }); return; }
 
-  // Anti-privilege-escalation. Менеджер может править свои/чужие профили,
-  // НО:
-  //   1) не имеет права менять `role` никому (иначе self-promotes до admin
-  //      и обходит строгий гейт на POST /users);
-  //   2) не имеет права менять `status` админам (иначе suspends других
-  //      админов и захватывает контроль);
-  //   3) не имеет права редактировать самих админов вообще (имена/email).
-  // Реальный admin — без ограничений.
   const callerRole = req.session.user?.role;
   const payload = { ...parsed.data };
   if (callerRole !== "admin") {
@@ -385,12 +379,28 @@ router.put("/users/:id", adminOnly, async (req, res): Promise<void> => {
     }
   }
 
-  const [user] = await db.update(usersTable).set(payload).where(eq(usersTable.id, params.data.id)).returning();
+  const dbPayload = {
+    ...payload,
+    blockReason: payload.status === "suspended" ? blockReason : null,
+  };
+
+  const [user] = await db.update(usersTable).set(dbPayload).where(eq(usersTable.id, params.data.id)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
   void auditMutation(req, { action: "update", entityType: "user", entityId: user.id, before: existing, after: user });
+
+  if (payload.status === "suspended" && existing.status !== "suspended") {
+    const reasonText = blockReason || "No reason provided";
+    const safeReason = reasonText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    sendMailAndForget({
+      to: user.email,
+      subject: "Your account has been suspended",
+      text: `Your account has been suspended.\n\nReason: ${reasonText}\n\nIf you believe this is a mistake, please contact support.`,
+      html: `<div style="font-family:system-ui;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#dc2626">Account Suspended</h2><p>Your account has been suspended.</p><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:16px 0"><strong>Reason:</strong><br/>${safeReason}</div><p style="color:#6b7280;font-size:14px">If you believe this is a mistake, please contact support.</p></div>`,
+    });
+  }
 
   res.json(formatUser(user));
 });

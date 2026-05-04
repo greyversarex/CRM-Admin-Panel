@@ -3,10 +3,9 @@ import { WaveBackground } from "./wave-background";
 import { NotificationsPopover } from "./notifications-popover";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import {
-  Search, Globe, ChevronDown,
+  Globe, ChevronDown, Plus,
   User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut,
 } from "lucide-react";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Switch } from "./ui/switch";
@@ -90,19 +89,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         )}
-        <header className="h-[60px] flex items-center justify-between px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
-          <div className="flex items-center flex-1 max-w-sm">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 z-10" />
-              <Input
-                type="search"
-                placeholder={t.header.search}
-                className="w-full pl-9 h-9 text-sm rounded-lg focus-visible:ring-2 focus-visible:ring-primary/50"
-              />
-            </div>
-          </div>
-
+        <header className="h-[60px] flex items-center justify-end px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center gap-2">
+            {(user?.role === "artist" || user?.role === "label") && (
+              <Button size="sm" onClick={() => navigate("/releases/new")} className="h-8 gap-1.5 mr-2">
+                <Plus className="h-3.5 w-3.5" />
+                {t.releases.create_release}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground px-2.5">
