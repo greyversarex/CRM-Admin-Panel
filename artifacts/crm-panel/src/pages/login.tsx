@@ -98,6 +98,10 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
     function drawFrame() {
       const W = canvas.width;
       const H = canvas.height;
+      if (!W || !H) {
+        rafId = requestAnimationFrame(drawFrame);
+        return;
+      }
       t += 0.016;
 
       // Clear with slight trail
