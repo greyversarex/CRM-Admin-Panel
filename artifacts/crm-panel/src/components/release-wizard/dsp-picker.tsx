@@ -80,17 +80,23 @@ export function DspPickerDialog({
           <TabsContent value="all" className="flex-1 overflow-y-auto pr-1">
             <div className="space-y-4">
               {grouped.map(([category, items]) => {
-                const allOn = items.every((i) => draft.includes(i.code));
+                // «Выбрать все» применяется только к подключённым DSP (с ddexPartyId);
+                // площадки «В разработке» исключаем — пользователь не должен случайно
+                // выбрать недоставляемую площадку через bulk-кнопку.
+                const selectable = items.filter((i) => !!i.ddexPartyId);
+                const allOn = selectable.length > 0 && selectable.every((i) => draft.includes(i.code));
                 return (
                   <div key={category}>
                     <div className="flex items-center justify-between mb-2 sticky top-0 bg-background py-1">
                       <h4 className="text-xs uppercase text-muted-foreground tracking-wider">
                         {DSP_CATEGORY_LABELS[category] ?? category}
                       </h4>
-                      <button type="button" className="text-xs text-primary hover:underline"
-                              onClick={() => toggleAll(items.map((i) => i.code))}>
-                        {allOn ? "Снять все" : "Выбрать все"}
-                      </button>
+                      {selectable.length > 0 && (
+                        <button type="button" className="text-xs text-primary hover:underline"
+                                onClick={() => toggleAll(selectable.map((i) => i.code))}>
+                          {allOn ? "Снять все" : "Выбрать все"}
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {items.map((d) => (

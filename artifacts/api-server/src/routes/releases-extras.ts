@@ -161,13 +161,29 @@ router.put("/releases/:id/dsps", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const codes = Array.from(new Set(parsed.data.dsps.map((s) => s.trim()).filter(Boolean)));
 
-  // Validate коды против каталога.
+  // Validate коды против каталога + проверяем deliverability.
+  // Без ddexPartyId DSP не доставляется по DDEX (Yandex/VK/Звук и т.п.) —
+  // их нельзя сохранять в release_dsps, иначе delivery-worker не сможет
+  // отгрузить релиз и пользователь увидит постоянный failed.
   if (codes.length > 0) {
-    const known = await db.select({ code: dspCatalogTable.code }).from(dspCatalogTable);
-    const knownSet = new Set(known.map((k) => k.code));
-    const unknown = codes.filter((c) => !knownSet.has(c));
+    const known = await db.select({ code: dspCatalogTable.code, ddexPartyId: dspCatalogTable.ddexPartyId, isActive: dspCatalogTable.isActive })
+      .from(dspCatalogTable);
+    const byCode = new Map(known.map((k) => [k.code, k]));
+    const unknown = codes.filter((c) => !byCode.has(c));
     if (unknown.length > 0) {
       res.status(400).json({ error: `Unknown DSP codes: ${unknown.join(", ")}` });
+      return;
+    }
+    const inactive = codes.filter((c) => byCode.get(c)?.isActive === false);
+    if (inactive.length > 0) {
+      res.status(400).json({ error: `Площадки отключены: ${inactive.join(", ")}` });
+      return;
+    }
+    const undeliverable = codes.filter((c) => !byCode.get(c)?.ddexPartyId);
+    if (undeliverable.length > 0) {
+      res.status(400).json({
+        error: `Эти площадки ещё не подключены по DDEX и не могут быть выбраны: ${undeliverable.join(", ")}. Свяжитесь с администратором.`,
+      });
       return;
     }
   }

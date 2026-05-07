@@ -122,17 +122,18 @@ const DEFAULT_CODES: CodesConfig = {
 };
 
 async function loadAndIncrementCodes<T>(producer: (cfg: CodesConfig) => { value: T; next: CodesConfig }): Promise<T> {
-  // Атомарный update через single UPDATE с computed JSON — иначе два параллельных
-  // запроса могут получить один и тот же counter и сгенерируют одинаковый ISRC.
+  // Гарантируем, что row существует ДО транзакции с FOR UPDATE — иначе два параллельных
+  // первых запроса оба увидят NULL, оба попробуют INSERT и один упадёт с unique violation.
+  // ON CONFLICT DO NOTHING делает это идемпотентно.
+  await db.insert(platformSettingsTable)
+    .values({ key: "codes", value: DEFAULT_CODES as unknown as Record<string, unknown> })
+    .onConflictDoNothing({ target: platformSettingsTable.key });
+
   return await db.transaction(async (tx) => {
     const [row] = await tx.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "codes")).for("update");
     const current = { ...DEFAULT_CODES, ...((row?.value as Partial<CodesConfig>) ?? {}) };
     const { value, next } = producer(current);
-    if (row) {
-      await tx.update(platformSettingsTable).set({ value: next as unknown as Record<string, unknown> }).where(eq(platformSettingsTable.key, "codes"));
-    } else {
-      await tx.insert(platformSettingsTable).values({ key: "codes", value: next as unknown as Record<string, unknown> });
-    }
+    await tx.update(platformSettingsTable).set({ value: next as unknown as Record<string, unknown> }).where(eq(platformSettingsTable.key, "codes"));
     return value;
   });
 }
@@ -158,8 +159,10 @@ export async function generateIsrc(): Promise<{ code: string; warning?: string }
 }
 
 function calcEanCheck(d11: string): string {
+  // UPC-A check digit: позиции 1,3,5,7,9,11 (1-indexed нечётные = 0-indexed чётные) ×3,
+  // остальные ×1. Затем (10 - sum%10) % 10. Проверено на референсном UPC 03600029145 → 2.
   let sum = 0;
-  for (let i = 0; i < 11; i++) sum += Number(d11[i]) * (i % 2 === 0 ? 1 : 3);
+  for (let i = 0; i < 11; i++) sum += Number(d11[i]) * (i % 2 === 0 ? 3 : 1);
   return String((10 - (sum % 10)) % 10);
 }
 
@@ -216,7 +219,9 @@ router.get("/catalog/codes/config", async (_req, res) => {
 const CodesConfigSchema = z.object({
   isrcCountry: z.string().length(2),
   isrcRegistrant: z.string().min(3).max(3),
-  upcCompanyPrefix: z.string().regex(/^\d{0,12}$/),
+  // UPC company prefix: только 3..10 цифр (либо пусто = генерация UPC отключена).
+  // 11+ цифр оставит 0 цифр под item — генератор всё равно упадёт, лучше не пускать.
+  upcCompanyPrefix: z.string().regex(/^(\d{3,10})?$/, "UPC company prefix должен быть 3..10 цифр (или пусто)"),
 });
 router.put("/catalog/codes/config", async (req, res) => {
   const parsed = CodesConfigSchema.safeParse(req.body);
