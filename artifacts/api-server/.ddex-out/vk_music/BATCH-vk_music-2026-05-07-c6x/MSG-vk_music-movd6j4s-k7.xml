@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NewReleaseMessage xmlns:ern="http://ddex.net/xml/ern/43" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" MessageSchemaVersionId="ern/43" LanguageAndScriptCode="en">
+  <MessageHeader>
+    <MessageThreadId>THREAD-vk_music-R6-movcxic7</MessageThreadId>
+    <MessageId>MSG-vk_music-movd6j4s-k7</MessageId>
+    <MessageSender>
+      <PartyId>PADPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music Distribution</FullName>
+      </PartyName>
+    </MessageSender>
+    <MessageRecipient>
+      <PartyId>PADPIDA-VK-MUSIC</PartyId>
+      <PartyName>
+        <FullName>VK Музыка / BOOM</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>2026-05-07T10:49:37.373Z</MessageCreatedDateTime>
+    <MessageControlType>OriginalMessage</MessageControlType>
+  </MessageHeader>
+  <PartyList>
+    <Party>
+      <PartyReference>P_MAIN_ARTIST</PartyReference>
+      <PartyName>
+        <FullName>Parviz Nazarov</FullName>
+      </PartyName>
+    </Party>
+    <Party>
+      <PartyReference>P_LABEL</PartyReference>
+      <PartyName>
+        <FullName>Silk Road Music</FullName>
+      </PartyName>
+    </Party>
+  </PartyList>
+  <ResourceList>
+    <SoundRecording>
+      <ResourceReference>A1</ResourceReference>
+      <Type>MusicalWorkSoundRecording</Type>
+      <ResourceId>
+        <ISRC>TJA012600001</ISRC>
+      </ResourceId>
+      <DisplayTitleText>Test Track</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Test Track</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <Duration>PT3M5S</Duration>
+      <LanguageOfPerformance>tg</LanguageOfPerformance>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <Contributor SequenceNumber="1">
+        <ContributorPartyReference>P_W_T6_2</ContributorPartyReference>
+        <ContributorRole>Composer</ContributorRole>
+      </Contributor>
+      <Contributor SequenceNumber="2">
+        <ContributorPartyReference>P_W_T6_3</ContributorPartyReference>
+        <ContributorRole>Lyricist</ContributorRole>
+      </Contributor>
+      <Contributor SequenceNumber="3">
+        <ContributorPartyReference>P_PF_T6_4</ContributorPartyReference>
+        <ContributorRole>Performer</ContributorRole>
+      </Contributor>
+      <Contributor SequenceNumber="4">
+        <ContributorPartyReference>P_PR_T6_5</ContributorPartyReference>
+        <ContributorRole>Producer</ContributorRole>
+      </Contributor>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_A1</TechnicalResourceDetailsReference>
+        <AudioCodecType>WAV</AudioCodecType>
+        <BitsPerSample>16</BitsPerSample>
+        <SamplingRate>44100</SamplingRate>
+        <NumberOfChannels>2</NumberOfChannels>
+        <File>
+          <URI>TJA012600001.wav</URI>
+          <HashSum>
+            <HashSum>d7143f1f80ec19f480b57f1d83f5768be86a7de8</HashSum>
+            <HashSumAlgorithmType>SHA1</HashSumAlgorithmType>
+          </HashSum>
+        </File>
+      </TechnicalDetails>
+    </SoundRecording>
+    <Image>
+      <ResourceReference>IMG_COVER</ResourceReference>
+      <Type>FrontCoverImage</Type>
+      <ResourceId>
+        <ProprietaryId Namespace="TJM">COVER-7501234567890</ProprietaryId>
+      </ResourceId>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_IMG</TechnicalResourceDetailsReference>
+        <File>
+          <URI>cover_7501234567890.jpg</URI>
+          <HashSum>
+            <HashSum>e70f9c33f7a399929a576d0d2d935fa87cc73fa4</HashSum>
+            <HashSumAlgorithmType>SHA1</HashSumAlgorithmType>
+          </HashSum>
+        </File>
+      </TechnicalDetails>
+    </Image>
+  </ResourceList>
+  <ReleaseList>
+    <Release>
+      <ReleaseReference>R0</ReleaseReference>
+      <ReleaseType>Single</ReleaseType>
+      <ReleaseId>
+        <ICPN isEan="false">7501234567890</ICPN>
+      </ReleaseId>
+      <DisplayTitleText>E2E Test Release</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>E2E Test Release</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <ReleaseLabelReference>P_LABEL</ReleaseLabelReference>
+      <Genre>
+        <GenreText>Hip-Hop</GenreText>
+      </Genre>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <OriginalReleaseDate>2026-08-01</OriginalReleaseDate>
+      <OriginalDigitalReleaseDate>2026-08-01</OriginalDigitalReleaseDate>
+      <PLine>
+        <Year>2026</Year>
+        <PLineText>Silk Road Music</PLineText>
+      </PLine>
+      <CLine>
+        <Year>2026</Year>
+        <CLineText>Silk Road Music</CLineText>
+      </CLine>
+      <ResourceGroup>
+        <Title>
+          <TitleText>E2E Test Release</TitleText>
+        </Title>
+        <ResourceGroupContentItem>
+          <SequenceNumber>1</SequenceNumber>
+          <ReleaseResourceReference>A1</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+        <ResourceGroupContentItem>
+          <ReleaseResourceReference>IMG_COVER</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+      </ResourceGroup>
+    </Release>
+  </ReleaseList>
+  <DealList>
+    <ReleaseDeal>
+      <DealReleaseReference>R0</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>SubscriptionModel</CommercialModelType>
+          <Usage>
+            <UseType>OnDemandStream</UseType>
+          </Usage>
+          <Usage>
+            <UseType>PermanentDownload</UseType>
+          </Usage>
+          <TerritoryCode>Worldwide</TerritoryCode>
+          <ValidityPeriod>
+            <StartDate>2026-08-01</StartDate>
+          </ValidityPeriod>
+        </DealTerms>
+      </Deal>
+    </ReleaseDeal>
+  </DealList>
+</NewReleaseMessage>

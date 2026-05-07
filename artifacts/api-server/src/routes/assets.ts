@@ -288,8 +288,14 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
 
   // storageKey is derived server-side from objectPath. We accept it in the
   // schema for forward compatibility but never trust the client value.
+  // ВАЖНО: createUpload() возвращает storageKey = "<privateDir>/uploads/<uuid>"
+  // (например "private/uploads/<uuid>"), и файл реально лежит на диске под
+  // <LOCAL_STORAGE_ROOT>/<privateDir>/uploads/<uuid>. Резолвер DDEX/доставки
+  // ожидает тот же префикс. Раньше тут отрезалось только "/objects/", из-за
+  // чего storageKey терял "private/", и доставка падала с ENOENT.
+  const privateDir = storage.getPrivateObjectDir(); // "private"
   const computedStorageKey = body.objectPath.startsWith("/objects/")
-    ? body.objectPath.slice("/objects/".length)
+    ? `${privateDir}/${body.objectPath.slice("/objects/".length)}`
     : body.storageKey;
 
   const [inserted] = await db.insert(assetsTable).values({

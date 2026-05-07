@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ftp:FtpAcknowledgementMessage xmlns:ftp="http://ddex.net/xml/ftp/41" MessageSchemaVersionId="ftp/41">
+  <MessageHeader>
+    <MessageId>BC-BATCH-vk_music-2026-05-07-jg8</MessageId>
+    <MessageSender><PartyId>PADPIDA-2024053004-T</PartyId></MessageSender>
+    <MessageRecipient><PartyId>PADPIDA-VK-MUSIC</PartyId></MessageRecipient>
+    <MessageCreatedDateTime>2026-05-07T10:51:37.739Z</MessageCreatedDateTime>
+  </MessageHeader>
+  <BatchInformation>
+    <BatchId>BATCH-vk_music-2026-05-07-jg8</BatchId>
+    <NumberOfFiles>3</NumberOfFiles>
+    <FileName>MSG-vk_music-movd6j4s-k7.xml</FileName>
+    <FileName>TJA012600001.wav</FileName>
+    <FileName>cover_7501234567890.jpg</FileName>
+  </BatchInformation>
+</ftp:FtpAcknowledgementMessage>

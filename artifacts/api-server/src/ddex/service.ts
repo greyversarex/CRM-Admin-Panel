@@ -54,11 +54,20 @@ const DEFAULT_DEAL_USE_TYPES = ["OnDemandStream", "PermanentDownload"] as const;
  * Для assets.objectPath вида `/objects/uploads/<uuid>` склеиваем с LOCAL_STORAGE_ROOT.
  */
 function resolveAssetLocalPath(objectPath: string | null, storageKey: string | null): string | null {
-  if (storageKey) return path.join(LOCAL_STORAGE_ROOT, storageKey);
+  // Защитный fallback для legacy-строк: если storageKey не содержит ожидаемого
+  // root-префикса ("private/" или "public/"), доверяем ему меньше и пробуем
+  // путь от objectPath (где префикс гарантирован). См. миграцию
+  // 0017_assets_storage_key_backfill.sql и комментарий в routes/assets.ts confirm.
+  const hasKnownPrefix = (k: string): boolean =>
+    k.startsWith("private/") || k.startsWith("public/");
+  if (storageKey && hasKnownPrefix(storageKey)) {
+    return path.join(LOCAL_STORAGE_ROOT, storageKey);
+  }
   if (objectPath?.startsWith("/objects/")) {
     const relative = objectPath.replace(/^\/objects\//, "");
     return path.join(LOCAL_STORAGE_ROOT, "private", relative);
   }
+  if (storageKey) return path.join(LOCAL_STORAGE_ROOT, storageKey);
   return null;
 }
 
@@ -75,9 +84,12 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
     .where(eq(tracksTable.releaseId, releaseId))
     .orderBy(tracksTable.trackNumber);
 
-  // Cover asset (kind=image, releaseId=this)
+  // Cover asset (kind=cover, releaseId=this).
+  // ВАЖНО: assets-таблица использует kind="cover" (см. routes/assets.ts:188 mimePrefix
+  // и schema). Раньше здесь ошибочно искался kind="image" — поэтому DDEX-валидатор
+  // всегда возвращал COVER_MISSING даже при загруженной обложке.
   const [coverAsset] = await db.select().from(assetsTable)
-    .where(and(eq(assetsTable.releaseId, releaseId), eq(assetsTable.kind, "image")))
+    .where(and(eq(assetsTable.releaseId, releaseId), eq(assetsTable.kind, "cover")))
     .limit(1);
 
   const cover: ResourceFile | null = coverAsset

@@ -2,8 +2,9 @@ import { Router } from "express";
 import {
   db, releasesTable, tracksTable, artistsTable,
   releaseArtistsTable, releaseDspsTable, dspCatalogTable,
+  assetsTable,
 } from "@workspace/db";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
   GetReleaseParams,
@@ -192,6 +193,11 @@ router.put("/releases/:id/dsps", async (req, res): Promise<void> => {
 // ─── Submission validation (dry-run) ────────────────────────────────────────
 type Issue = { section: "release" | "tracks" | "delivery" | "contributors"; field?: string | null; message: string; severity: "error" | "warning" };
 
+// Регулярки соответствуют ddex/business-validator.ts — это критично, чтобы
+// wizard и DDEX-валидатор не расходились. Если правила меняются — менять в обоих.
+const UPC_REGEX  = /^\d{12,13}$/;                       // EAN-13 / UPC-A
+const ISRC_REGEX = /^[A-Z]{2}[A-Z0-9]{3}\d{2}\d{5}$/;   // CC-XXX-YY-NNNNN
+
 router.post("/releases/:id/validate", async (req, res): Promise<void> => {
   const r = await loadReleaseInScope(req, req.params.id);
   if (r.status !== 200) { res.status(r.status).json({ error: "Forbidden or not found" }); return; }
@@ -202,12 +208,29 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
 
   // ── Release-level ──
   if (!nonBlank(release.title))       issues.push({ section: "release", field: "title",       message: "Название релиза обязательно", severity: "error" });
-  if (!nonBlank(release.coverUrl))    issues.push({ section: "release", field: "coverUrl",    message: "Загрузите обложку", severity: "error" });
   if (!nonBlank(release.releaseDate)) issues.push({ section: "release", field: "releaseDate", message: "Укажите дату релиза", severity: "error" });
   if (!nonBlank(release.genre))       issues.push({ section: "release", field: "genre",       message: "Выберите жанр", severity: "error" });
   if (!nonBlank(release.language))    issues.push({ section: "release", field: "language",    message: "Укажите язык метаданных", severity: "warning" });
   if (!nonBlank(release.pLine))       issues.push({ section: "release", field: "pLine",       message: "Укажите ℗ Line (правообладатель записи)", severity: "warning" });
   if (!nonBlank(release.cLine))       issues.push({ section: "release", field: "cLine",       message: "Укажите © Line (правообладатель композиции)", severity: "warning" });
+
+  // UPC: warning если не задан (бэкенд может сгенерировать через MusicBrainz/auto),
+  // но обязательная error если задан в неправильном формате — лучше поймать здесь,
+  // чем уже на этапе доставки в DSP.
+  if (!nonBlank(release.upc)) {
+    issues.push({ section: "release", field: "upc", message: "UPC/ICPN не заполнен — без него релиз не уйдёт в DSP", severity: "error" });
+  } else if (!UPC_REGEX.test(release.upc!.trim())) {
+    issues.push({ section: "release", field: "upc", message: `UPC «${release.upc}» должен быть 12-13 цифр (EAN-13/UPC-A)`, severity: "error" });
+  }
+
+  // Cover: проверяем что обложка реально загружена в storage (asset row),
+  // а не просто что URL-строка непустая. Это синхронно с DDEX-валидатором.
+  const [coverAsset] = await db.select().from(assetsTable)
+    .where(and(eq(assetsTable.releaseId, release.id), eq(assetsTable.kind, "cover")))
+    .limit(1);
+  if (!coverAsset) {
+    issues.push({ section: "release", field: "coverUrl", message: "Загрузите обложку (jpg/png, минимум 3000×3000)", severity: "error" });
+  }
 
   // ── Contributors ──
   const releaseArtists = await db.select().from(releaseArtistsTable).where(eq(releaseArtistsTable.releaseId, release.id));
@@ -222,10 +245,41 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
   if (tracks.length === 0) {
     issues.push({ section: "tracks", message: "Добавьте хотя бы один трек", severity: "error" });
   } else {
+    // Один SQL вместо N+1 — берём все audio-assets для этих треков.
+    const trackIds = tracks.map((t) => t.id);
+    const audioAssets = trackIds.length > 0
+      ? await db.select({ trackId: assetsTable.trackId }).from(assetsTable)
+          .where(and(inArray(assetsTable.trackId, trackIds), eq(assetsTable.kind, "audio")))
+      : [];
+    const tracksWithAudio = new Set(audioAssets.map((a) => a.trackId).filter((x): x is number => x != null));
+
+    const isrcSeen = new Map<string, number>(); // isrc → first track id, для детекта дублей
     for (const t of tracks) {
-      const label = `Трек ${t.trackNumber ?? "?"}: ${t.title}`;
-      if (!nonBlank(t.audioUrl))       issues.push({ section: "tracks", field: `track:${t.id}:audioUrl`,    message: `${label} — нет аудио-файла`, severity: "error" });
-      if (!nonBlank(t.title))          issues.push({ section: "tracks", field: `track:${t.id}:title`,       message: `${label} — нет названия`, severity: "error" });
+      const label = `Трек ${t.trackNumber ?? "?"}: ${t.title || "(без названия)"}`;
+      if (!nonBlank(t.title)) {
+        issues.push({ section: "tracks", field: `track:${t.id}:title`, message: `${label} — нет названия`, severity: "error" });
+      }
+      // Аудио: проверяем реальное наличие в storage, а не просто audioUrl.
+      if (!tracksWithAudio.has(t.id)) {
+        issues.push({ section: "tracks", field: `track:${t.id}:audioUrl`, message: `${label} — нет аудио-файла в хранилище`, severity: "error" });
+      }
+      if (!t.durationSeconds || t.durationSeconds <= 0) {
+        issues.push({ section: "tracks", field: `track:${t.id}:duration`, message: `${label} — не определена длительность (загрузите аудио)`, severity: "error" });
+      }
+      // ISRC: формат + дубли
+      if (!nonBlank(t.isrc)) {
+        issues.push({ section: "tracks", field: `track:${t.id}:isrc`, message: `${label} — нет ISRC (нажмите «Сгенерировать» или впишите свой)`, severity: "error" });
+      } else {
+        const isrc = t.isrc!.trim().toUpperCase();
+        if (!ISRC_REGEX.test(isrc)) {
+          issues.push({ section: "tracks", field: `track:${t.id}:isrc`, message: `${label} — ISRC «${isrc}» должен быть в формате CC-XXX-YY-NNNNN`, severity: "error" });
+        } else if (isrcSeen.has(isrc)) {
+          issues.push({ section: "tracks", field: `track:${t.id}:isrc`, message: `${label} — ISRC ${isrc} уже использован в другом треке`, severity: "error" });
+        } else {
+          isrcSeen.set(isrc, t.id);
+        }
+      }
+      // Writers + сумма долей = 100%
       const writers = (t.writers as Array<{ name: string; share: number }> | null) ?? [];
       if (writers.length === 0) {
         issues.push({ section: "tracks", field: `track:${t.id}:writers`, message: `${label} — нужен минимум один автор (Writer)`, severity: "error" });
@@ -235,7 +289,9 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
           issues.push({ section: "tracks", field: `track:${t.id}:writers`, message: `${label} — сумма долей writers должна быть 100% (сейчас ${totalShare}%)`, severity: "error" });
         }
       }
-      if (!nonBlank(t.aiUsage))        issues.push({ section: "tracks", field: `track:${t.id}:aiUsage`, message: `${label} — укажите использование AI`, severity: "warning" });
+      if (!nonBlank(t.aiUsage)) {
+        issues.push({ section: "tracks", field: `track:${t.id}:aiUsage`, message: `${label} — укажите использование AI`, severity: "warning" });
+      }
     }
   }
 
