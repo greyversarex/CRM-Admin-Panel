@@ -341,7 +341,25 @@ export async function processMessage(messageId: number): Promise<ProcessMessageR
 
   const integration = await getIntegrationByCode(msg.partnerCode);
   const cfg = (integration?.config ?? {}) as Record<string, string>;
-  const transportName = cfg.transport || "local-fs";
+
+  // SAFETY: больше никаких "silent local-fs success".
+  // Если интеграция вообще не настроена — fail с понятной ошибкой, чтобы
+  // лейбл не думал, что релиз ушёл в DSP, когда на самом деле XML лежит
+  // на VPS в .ddex-out. local-fs допустим ТОЛЬКО как явный выбор оператора
+  // (например, для тестов или дев-окружения), либо если включён DDEX_ALLOW_LOCAL_FS.
+  const explicitTransport = cfg.transport;
+  const allowLocalFs = process.env.DDEX_ALLOW_LOCAL_FS === "1" || process.env.NODE_ENV !== "production";
+  if (!integration && !allowLocalFs) {
+    const errMsg = `DSP "${msg.partnerCode}" не подключена. Откройте Настройки → Интеграции и подключите коннектор перед отправкой релизов.`;
+    await db.update(ddexMessagesTable).set({ status: "invalid" }).where(eq(ddexMessagesTable.id, messageId));
+    return { ok: false, messageId, batchId: 0, error: errMsg };
+  }
+  if (!explicitTransport && !allowLocalFs) {
+    const errMsg = `DSP "${msg.partnerCode}": не указан транспорт (поле config.transport). Настройте SFTP или другой транспорт в интеграции, чтобы релиз действительно был доставлен в DSP.`;
+    await db.update(ddexMessagesTable).set({ status: "invalid" }).where(eq(ddexMessagesTable.id, messageId));
+    return { ok: false, messageId, batchId: 0, error: errMsg };
+  }
+  const transportName = explicitTransport || "local-fs";
   const transport = getTransport(transportName);
   const partner = await buildPartnerContext(msg.partnerCode);
 

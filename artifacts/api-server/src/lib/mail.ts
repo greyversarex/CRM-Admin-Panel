@@ -57,32 +57,38 @@ async function resolveTransport(): Promise<{ transport: Transporter | null; from
     return { transport: cachedTransporter, fromOverride: cachedFromOverride };
   }
 
-  // 0) Проверяем Resend-интеграцию (Настройки → Интеграции → Resend)
+  // 0) Проверяем Resend — сначала ENV (RESEND_API_KEY надёжнее, не слетит
+  // если кто-то случайно отключит интеграцию в UI), потом UI-интеграцию.
   try {
-    const resendIntegration = await getIntegrationByCode("resend");
-    if (resendIntegration && resendIntegration.status !== "disconnected") {
-      const creds = await loadCredentials(resendIntegration.id);
-      const apiKey = creds["api_key"];
-      if (apiKey) {
-        const fingerprint = `resend:${apiKey.slice(0, 8)}`;
-        if (fingerprint !== cachedFingerprint) {
-          // Resend предоставляет SMTP-relay: smtp.resend.com:465, user="resend", pass=api_key
-          cachedTransporter = nodemailer.createTransport({
-            host: "smtp.resend.com",
-            port: 465,
-            secure: true,
-            auth: { user: "resend", pass: apiKey },
-          });
-          cachedFingerprint = fingerprint;
-          cachedFromOverride = null;
-          logger.info("[mail] SMTP transport инициализирован через Resend-интеграцию");
-        }
-        lastResolveAt = now;
-        return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+    const envApiKey = process.env.RESEND_API_KEY?.trim();
+    let apiKey = envApiKey || "";
+    let source = envApiKey ? "env" : "";
+    if (!apiKey) {
+      const resendIntegration = await getIntegrationByCode("resend");
+      if (resendIntegration && resendIntegration.status !== "disconnected") {
+        const creds = await loadCredentials(resendIntegration.id);
+        apiKey = creds["api_key"] || "";
+        source = "integration";
       }
     }
+    if (apiKey) {
+      const fingerprint = `resend:${source}:${apiKey.slice(0, 8)}`;
+      if (fingerprint !== cachedFingerprint) {
+        cachedTransporter = nodemailer.createTransport({
+          host: "smtp.resend.com",
+          port: 465,
+          secure: true,
+          auth: { user: "resend", pass: apiKey },
+        });
+        cachedFingerprint = fingerprint;
+        cachedFromOverride = null;
+        logger.info({ source }, "[mail] Resend SMTP transport готов");
+      }
+      lastResolveAt = now;
+      return { transport: cachedTransporter, fromOverride: cachedFromOverride };
+    }
   } catch (err) {
-    logger.warn({ err }, "[mail] ошибка при загрузке Resend-интеграции, пробуем другие источники");
+    logger.warn({ err }, "[mail] не удалось инициализировать Resend, пробуем SMTP/env");
   }
 
   // 1) Сначала проверяем БД-настройки (приоритет — UI важнее env)

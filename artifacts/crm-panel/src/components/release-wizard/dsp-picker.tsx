@@ -131,14 +131,25 @@ export function DspPickerDialog({
 }
 
 function DspRow({ dsp, checked, onToggle }: { dsp: DspCatalogItem; checked: boolean; onToggle: () => void }) {
+  // DSP без ddexPartyId не подключены по DDEX-протоколу (Yandex/VK/Звук и т.д.).
+  // Их нельзя выбирать в релизе — мы не сможем доставить контент туда автоматически.
+  // Покажем как «В разработке», блокируем чекбокс. Когда появится коннектор,
+  // в dsp_catalog заполнят ddex_party_id или другой transport_code и плашка снимется.
+  const disabled = !dsp.ddexPartyId;
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
+      title={disabled ? "Площадка ещё не подключена по DDEX/SFTP. Свяжитесь с администратором — для запуска нужно настроить транспорт." : undefined}
       className={`flex items-center gap-3 p-2 rounded-md border text-left transition
-        ${checked ? "bg-primary/10 border-primary/40" : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
+        ${disabled
+          ? "bg-muted/20 border-border/30 opacity-60 cursor-not-allowed"
+          : checked
+            ? "bg-primary/10 border-primary/40"
+            : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
     >
-      <Checkbox checked={checked} className="pointer-events-none" />
+      <Checkbox checked={checked && !disabled} disabled={disabled} className="pointer-events-none" />
       {dsp.logoUrl ? (
         <img src={assetHref(dsp.logoUrl)} alt="" className="h-7 w-7 rounded object-cover bg-muted" />
       ) : (
@@ -147,10 +158,17 @@ function DspRow({ dsp, checked, onToggle }: { dsp: DspCatalogItem; checked: bool
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="text-sm truncate">{dsp.name}</div>
+        <div className="text-sm truncate flex items-center gap-1.5">
+          {dsp.name}
+          {disabled && (
+            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
+              В разработке
+            </span>
+          )}
+        </div>
         <div className="text-[10px] text-muted-foreground">{dsp.code}</div>
       </div>
-      {checked && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+      {checked && !disabled && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
     </button>
   );
 }
