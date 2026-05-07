@@ -48,3 +48,6 @@ export * from "./promo_assets";
 export * from "./playlist_stats";
 export * from "./tiktok_stats";
 export * from "./label_members";
+export * from "./dsp_catalog";
+export * from "./release_artists";
+export * from "./release_dsps";

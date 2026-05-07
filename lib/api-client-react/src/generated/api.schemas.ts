@@ -109,6 +109,24 @@ export const ReleaseStatus = {
   removed: "removed",
 } as const;
 
+export type ReleaseArtistRefRole =
+  (typeof ReleaseArtistRefRole)[keyof typeof ReleaseArtistRefRole];
+
+export const ReleaseArtistRefRole = {
+  primary: "primary",
+  featuring: "featuring",
+  with: "with",
+  remixer: "remixer",
+} as const;
+
+export interface ReleaseArtistRef {
+  artistId: number;
+  name: string;
+  role: ReleaseArtistRefRole;
+  /** @minimum 0 */
+  position: number;
+}
+
 export type ReleaseAllowedTransitionsItem =
   (typeof ReleaseAllowedTransitionsItem)[keyof typeof ReleaseAllowedTransitionsItem];
 
@@ -143,6 +161,8 @@ export type ReleaseRiskFactorsItem = {
 export interface Release {
   id: number;
   title: string;
+  /** Опциональная пометка ("Remix", "Live", "Deluxe Edition"). */
+  releaseVersion?: string | null;
   releaseType: ReleaseReleaseType;
   status: ReleaseStatus;
   /** Комментарий модератора к статусу (например, причина отказа).
@@ -150,19 +170,32 @@ export interface Release {
  */
   statusNote?: string | null;
   upc?: string | null;
+  /** Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан. */
+  catalogNumber?: string | null;
   artistId: number;
   artistName: string;
   labelId?: number | null;
   labelName?: string | null;
   coverUrl?: string | null;
   genre?: string | null;
+  subgenre?: string | null;
   releaseDate?: string | null;
+  /** Время выхода (HH:MM, UTC), для DSP timeline. */
+  releaseTime?: string | null;
   language?: string | null;
   isExplicit: boolean;
+  isCompilation: boolean;
+  isVariousArtists: boolean;
   territories: string[];
   totalTracks: number;
   pLine?: string | null;
   cLine?: string | null;
+  pLineYear?: number | null;
+  cLineYear?: number | null;
+  /** Multi-primary contributors на уровне релиза. */
+  artists: ReleaseArtistRef[];
+  /** Выбранные DSP-площадки (коды из dsp_catalog). */
+  dsps: string[];
   createdAt: string;
   updatedAt: string;
   /** Статусы, доступные через PATCH /releases/:id/status (state-machine бэкенда).
@@ -195,9 +228,89 @@ export interface Release {
   riskFactors: ReleaseRiskFactorsItem[];
 }
 
+export type TrackExplicitStatus =
+  (typeof TrackExplicitStatus)[keyof typeof TrackExplicitStatus];
+
+export const TrackExplicitStatus = {
+  non_explicit: "non_explicit",
+  explicit: "explicit",
+  censored: "censored",
+} as const;
+
+/**
+ * Раскрытие использования генеративного AI (требование DSP с 2024).
+ */
+export type TrackAiUsage = (typeof TrackAiUsage)[keyof typeof TrackAiUsage];
+
+export const TrackAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
+export type TrackAudioStyle =
+  (typeof TrackAudioStyle)[keyof typeof TrackAudioStyle];
+
+export const TrackAudioStyle = {
+  instrumental: "instrumental",
+  vocal: "vocal",
+} as const;
+
+export type TrackDisplayArtistRole =
+  (typeof TrackDisplayArtistRole)[keyof typeof TrackDisplayArtistRole];
+
+export const TrackDisplayArtistRole = {
+  primary: "primary",
+  featuring: "featuring",
+  with: "with",
+  remixer: "remixer",
+} as const;
+
+export interface TrackDisplayArtist {
+  name: string;
+  role: TrackDisplayArtistRole;
+  artistId?: number | null;
+}
+
+export type TrackWriterRole =
+  (typeof TrackWriterRole)[keyof typeof TrackWriterRole];
+
+export const TrackWriterRole = {
+  composer: "composer",
+  lyricist: "lyricist",
+  songwriter: "songwriter",
+  arranger: "arranger",
+} as const;
+
+export interface TrackWriter {
+  name: string;
+  role: TrackWriterRole;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  share: number;
+  caeIpi?: string | null;
+}
+
+export interface TrackPerformer {
+  name: string;
+  /** vocals | background_vocals | guitar | bass | drums | keyboards |
+music_producer | piano | violin | other (см. UI-каталог).
+ */
+  role: string;
+}
+
+export interface TrackProductionMember {
+  name: string;
+  /** producer | recording_engineer | mixing_engineer | mastering_engineer | other. */
+  role: string;
+}
+
 export interface Track {
   id: number;
   title: string;
+  trackVersion?: string | null;
   isrc?: string | null;
   releaseId?: number | null;
   releaseName?: string | null;
@@ -206,12 +319,30 @@ export interface Track {
   trackNumber?: number | null;
   durationSeconds?: number | null;
   genre?: string | null;
+  subgenre?: string | null;
   language?: string | null;
   isExplicit: boolean;
-  composerName?: string | null;
-  lyricistName?: string | null;
+  explicitStatus: TrackExplicitStatus;
+  /** Раскрытие использования генеративного AI (требование DSP с 2024). */
+  aiUsage: TrackAiUsage;
+  /**
+   * Стартовая точка превью на DSP в секундах.
+   * @minimum 0
+   */
+  clipStartSeconds: number;
+  recordingYear?: number | null;
+  /** ISO-3166-1 alpha-2 код страны записи. */
+  countryOfRecording?: string | null;
+  audioStyle: TrackAudioStyle;
+  /** ISO-639-1 язык вокала (только при audioStyle=vocal). */
+  vocalLanguage?: string | null;
+  lyrics?: string | null;
   iswc?: string | null;
   audioUrl?: string | null;
+  displayArtists: TrackDisplayArtist[];
+  writers: TrackWriter[];
+  performers: TrackPerformer[];
+  production: TrackProductionMember[];
   createdAt: string;
   updatedAt: string;
 }
@@ -318,18 +449,26 @@ export const CreateReleaseBodyReleaseType = {
 
 export interface CreateReleaseBody {
   title: string;
+  releaseVersion?: string | null;
   releaseType: CreateReleaseBodyReleaseType;
   artistId: number;
   labelId?: number | null;
   upc?: string | null;
+  catalogNumber?: string | null;
   coverUrl?: string | null;
   genre?: string | null;
+  subgenre?: string | null;
   releaseDate?: string | null;
+  releaseTime?: string | null;
   language?: string | null;
   isExplicit?: boolean;
+  isCompilation?: boolean;
+  isVariousArtists?: boolean;
   territories?: string[];
   pLine?: string | null;
   cLine?: string | null;
+  pLineYear?: number | null;
+  cLineYear?: number | null;
 }
 
 export type UpdateReleaseStatusBodyStatus =
@@ -442,20 +581,135 @@ export interface PaginatedReleases {
   pagination: Pagination;
 }
 
+export type UpdateReleaseArtistsBodyArtistsItemRole =
+  (typeof UpdateReleaseArtistsBodyArtistsItemRole)[keyof typeof UpdateReleaseArtistsBodyArtistsItemRole];
+
+export const UpdateReleaseArtistsBodyArtistsItemRole = {
+  primary: "primary",
+  featuring: "featuring",
+  with: "with",
+  remixer: "remixer",
+} as const;
+
+export type UpdateReleaseArtistsBodyArtistsItem = {
+  artistId: number;
+  role: UpdateReleaseArtistsBodyArtistsItemRole;
+};
+
+export interface UpdateReleaseArtistsBody {
+  artists: UpdateReleaseArtistsBodyArtistsItem[];
+}
+
+export type DspCatalogItemCategory =
+  (typeof DspCatalogItemCategory)[keyof typeof DspCatalogItemCategory];
+
+export const DspCatalogItemCategory = {
+  streaming: "streaming",
+  download: "download",
+  social: "social",
+  video: "video",
+  regional: "regional",
+} as const;
+
+export interface DspCatalogItem {
+  /** Стабильный код, например `spotify`. */
+  code: string;
+  name: string;
+  logoUrl?: string | null;
+  ddexPartyId?: string | null;
+  category: DspCatalogItemCategory;
+  isActive: boolean;
+  position: number;
+}
+
+export interface UpdateReleaseDspsBody {
+  dsps: string[];
+}
+
+export type ValidationIssueSection =
+  (typeof ValidationIssueSection)[keyof typeof ValidationIssueSection];
+
+export const ValidationIssueSection = {
+  release: "release",
+  tracks: "tracks",
+  delivery: "delivery",
+  contributors: "contributors",
+} as const;
+
+export type ValidationIssueSeverity =
+  (typeof ValidationIssueSeverity)[keyof typeof ValidationIssueSeverity];
+
+export const ValidationIssueSeverity = {
+  error: "error",
+  warning: "warning",
+} as const;
+
+export interface ValidationIssue {
+  section: ValidationIssueSection;
+  field?: string | null;
+  message: string;
+  severity: ValidationIssueSeverity;
+}
+
+export interface SubmissionValidationResult {
+  /** true если нет issues с severity=error. */
+  ok: boolean;
+  issues: ValidationIssue[];
+}
+
+export type CreateTrackBodyExplicitStatus =
+  (typeof CreateTrackBodyExplicitStatus)[keyof typeof CreateTrackBodyExplicitStatus];
+
+export const CreateTrackBodyExplicitStatus = {
+  non_explicit: "non_explicit",
+  explicit: "explicit",
+  censored: "censored",
+} as const;
+
+export type CreateTrackBodyAiUsage =
+  (typeof CreateTrackBodyAiUsage)[keyof typeof CreateTrackBodyAiUsage];
+
+export const CreateTrackBodyAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
+export type CreateTrackBodyAudioStyle =
+  (typeof CreateTrackBodyAudioStyle)[keyof typeof CreateTrackBodyAudioStyle];
+
+export const CreateTrackBodyAudioStyle = {
+  instrumental: "instrumental",
+  vocal: "vocal",
+} as const;
+
 export interface CreateTrackBody {
   title: string;
+  trackVersion?: string | null;
   isrc?: string | null;
   releaseId?: number | null;
   artistId: number;
   trackNumber?: number | null;
   durationSeconds?: number | null;
   genre?: string | null;
+  subgenre?: string | null;
   language?: string | null;
   isExplicit?: boolean;
-  composerName?: string | null;
-  lyricistName?: string | null;
+  explicitStatus?: CreateTrackBodyExplicitStatus;
+  aiUsage?: CreateTrackBodyAiUsage;
+  /** @minimum 0 */
+  clipStartSeconds?: number;
+  recordingYear?: number | null;
+  countryOfRecording?: string | null;
+  audioStyle?: CreateTrackBodyAudioStyle;
+  vocalLanguage?: string | null;
+  lyrics?: string | null;
   iswc?: string | null;
   audioUrl?: string | null;
+  displayArtists?: TrackDisplayArtist[];
+  writers?: TrackWriter[];
+  performers?: TrackPerformer[];
+  production?: TrackProductionMember[];
 }
 
 export interface PaginatedTracks {

@@ -44,8 +44,12 @@ export type TrackContext = {
   language: string;        // ISO-639-1: "tg" | "ru" | "en"
   isExplicit: boolean;
   trackNumber: number;
-  composerName: string | null;
-  lyricistName: string | null;
+  /** Структурированный список авторов/композиторов (writers jsonb на треке). */
+  writers: Array<{ name: string; role: "composer" | "lyricist" | "songwriter" | "arranger"; share: number }>;
+  /** Performers (для DDEX <Contributor> и Apple Music). */
+  performers: Array<{ name: string; role: string }>;
+  /** Production & Engineering. */
+  production: Array<{ name: string; role: string }>;
   contributors: ContributingArtist[];
   audioFile: ResourceFile | null;
 };

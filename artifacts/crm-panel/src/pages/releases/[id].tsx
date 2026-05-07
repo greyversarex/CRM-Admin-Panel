@@ -215,14 +215,24 @@ export default function ReleaseDetail() {
                 - всё остальное (live/approved/etc): кнопка Edit Locked. */}
             {release.isEditable ? (
               release.status === "draft" ? (
-                <Button
-                  variant="outline"
-                  className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
-                  onClick={() => setMetaEditing((v) => !v)}
-                >
-                  <Edit3 className="mr-2 h-4 w-4" />
-                  {metaEditing ? "Завершить редактирование" : "Edit Release"}
-                </Button>
+                <>
+                  <Button
+                    variant="default"
+                    onClick={() => setLocation(`/releases/${id}/edit`)}
+                    title="Полный 4-шаговый мастер редактирования"
+                  >
+                    <Edit3 className="mr-2 h-4 w-4" /> Продолжить в мастере
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
+                    onClick={() => setMetaEditing((v) => !v)}
+                    title="Быстрое редактирование основных полей в карточке"
+                  >
+                    <Edit3 className="mr-2 h-4 w-4" />
+                    {metaEditing ? "Завершить" : "Быстрое ред."}
+                  </Button>
+                </>
               ) : (
                 <Dialog open={editOpen} onOpenChange={setEditOpen}>
                   <DialogTrigger asChild>

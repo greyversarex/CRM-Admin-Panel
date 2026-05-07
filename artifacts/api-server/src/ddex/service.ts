@@ -115,8 +115,9 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
       language: (t.language || release.language || "tg").toLowerCase(),
       isExplicit: t.isExplicit,
       trackNumber: t.trackNumber ?? trackContexts.length + 1,
-      composerName: t.composerName,
-      lyricistName: t.lyricistName,
+      writers: Array.isArray(t.writers) ? t.writers : [],
+      performers: Array.isArray(t.performers) ? t.performers : [],
+      production: Array.isArray(t.production) ? t.production : [],
       // На простом этапе — главный артист релиза как единственный contributor.
       // Featured-роли для отдельных треков в текущей схеме не моделируются; добавится
       // когда появится `track_artists` join-table.

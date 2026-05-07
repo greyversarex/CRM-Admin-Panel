@@ -12,14 +12,19 @@ import { logger } from "./logger";
 // глубине внутри jsonb-полей (defence-in-depth).
 const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
   release: new Set([
-    "id", "title", "releaseType", "status", "upc", "artistId", "labelId",
-    "coverUrl", "genre", "releaseDate", "language", "isExplicit", "territories",
-    "pLine", "cLine", "statusNote", "createdAt", "updatedAt",
+    "id", "title", "releaseVersion", "releaseType", "status", "upc",
+    "catalogNumber", "artistId", "labelId", "coverUrl", "genre", "subgenre",
+    "releaseDate", "releaseTime", "language", "isExplicit", "isCompilation",
+    "isVariousArtists", "territories", "pLine", "cLine", "pLineYear",
+    "cLineYear", "statusNote", "createdAt", "updatedAt",
   ]),
   track: new Set([
-    "id", "title", "isrc", "releaseId", "artistId", "trackNumber",
-    "durationSeconds", "genre", "language", "isExplicit", "composerName",
-    "lyricistName", "iswc", "audioUrl", "createdAt", "updatedAt",
+    "id", "title", "trackVersion", "isrc", "releaseId", "artistId",
+    "trackNumber", "durationSeconds", "genre", "subgenre", "language",
+    "isExplicit", "explicitStatus", "aiUsage", "clipStartSeconds",
+    "recordingYear", "countryOfRecording", "audioStyle", "vocalLanguage",
+    "lyrics", "iswc", "audioUrl", "displayArtists", "writers", "performers",
+    "production", "createdAt", "updatedAt",
   ]),
   artist: new Set([
     "id", "name", "slug", "imageUrl", "genre", "bio", "country", "labelId",

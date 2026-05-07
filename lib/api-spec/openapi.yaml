@@ -476,6 +476,112 @@ paths:
         "204":
           description: Release deleted
 
+  /releases/{id}/artists:
+    get:
+      operationId: getReleaseArtists
+      tags: [releases]
+      summary: List multi-primary contributors of a release
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Release artists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReleaseArtistRef"
+    put:
+      operationId: updateReleaseArtists
+      tags: [releases]
+      summary: Replace multi-primary contributors of a release
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReleaseArtistsBody"
+      responses:
+        "200":
+          description: Updated artists list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReleaseArtistRef"
+
+  /releases/{id}/dsps:
+    get:
+      operationId: getReleaseDsps
+      tags: [releases]
+      summary: List DSP destinations selected for the release
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Selected DSP codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    put:
+      operationId: updateReleaseDsps
+      tags: [releases]
+      summary: Replace DSP destinations selected for the release
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReleaseDspsBody"
+      responses:
+        "200":
+          description: Updated DSP codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /releases/{id}/validate:
+    post:
+      operationId: validateReleaseForSubmission
+      tags: [releases]
+      summary: Run wizard validation against a release without changing status
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionValidationResult"
+
+  /dsp-catalog:
+    get:
+      operationId: listDspCatalog
+      tags: [releases]
+      summary: Master list of DSP destinations available for delivery
+      responses:
+        "200":
+          description: DSP catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DspCatalogItem"
+
   /releases/{id}/submit:
     post:
       operationId: submitReleaseForReview
@@ -2226,6 +2332,10 @@ components:
           type: integer
         title:
           type: string
+        releaseVersion:
+          type: string
+          nullable: true
+          description: Опциональная пометка ("Remix", "Live", "Deluxe Edition").
         releaseType:
           type: string
           enum: [single, album, ep, compilation]
@@ -2241,6 +2351,10 @@ components:
         upc:
           type: string
           nullable: true
+        catalogNumber:
+          type: string
+          nullable: true
+          description: Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.
         artistId:
           type: integer
         artistName:
@@ -2257,13 +2371,24 @@ components:
         genre:
           type: string
           nullable: true
+        subgenre:
+          type: string
+          nullable: true
         releaseDate:
           type: string
           nullable: true
+        releaseTime:
+          type: string
+          nullable: true
+          description: Время выхода (HH:MM, UTC), для DSP timeline.
         language:
           type: string
           nullable: true
         isExplicit:
+          type: boolean
+        isCompilation:
+          type: boolean
+        isVariousArtists:
           type: boolean
         territories:
           type: array
@@ -2277,6 +2402,22 @@ components:
         cLine:
           type: string
           nullable: true
+        pLineYear:
+          type: integer
+          nullable: true
+        cLineYear:
+          type: integer
+          nullable: true
+        artists:
+          type: array
+          description: Multi-primary contributors на уровне релиза.
+          items:
+            $ref: "#/components/schemas/ReleaseArtistRef"
+        dsps:
+          type: array
+          description: Выбранные DSP-площадки (коды из dsp_catalog).
+          items:
+            type: string
         createdAt:
           type: string
         updatedAt:
@@ -2323,7 +2464,7 @@ components:
               message: { type: string }
               severity: { type: string, enum: [low, medium, high] }
             required: [code, message, severity]
-      required: [id, title, releaseType, status, artistId, artistName, isExplicit, territories, totalTracks, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, riskScore, riskFactors]
+      required: [id, title, releaseType, status, artistId, artistName, isExplicit, isCompilation, isVariousArtists, territories, totalTracks, artists, dsps, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, riskScore, riskFactors]
 
     ReleaseDetail:
       allOf:
@@ -2340,6 +2481,9 @@ components:
       properties:
         title:
           type: string
+        releaseVersion:
+          type: string
+          nullable: true
         releaseType:
           type: string
           enum: [single, album, ep, compilation]
@@ -2351,19 +2495,34 @@ components:
         upc:
           type: string
           nullable: true
+        catalogNumber:
+          type: string
+          nullable: true
         coverUrl:
           type: string
           nullable: true
         genre:
           type: string
           nullable: true
+        subgenre:
+          type: string
+          nullable: true
         releaseDate:
+          type: string
+          nullable: true
+        releaseTime:
           type: string
           nullable: true
         language:
           type: string
           nullable: true
         isExplicit:
+          type: boolean
+          default: false
+        isCompilation:
+          type: boolean
+          default: false
+        isVariousArtists:
           type: boolean
           default: false
         territories:
@@ -2376,6 +2535,12 @@ components:
           nullable: true
         cLine:
           type: string
+          nullable: true
+        pLineYear:
+          type: integer
+          nullable: true
+        cLineYear:
+          type: integer
           nullable: true
       required: [title, releaseType, artistId]
 
@@ -2548,7 +2713,114 @@ components:
           $ref: "#/components/schemas/Pagination"
       required: [data, pagination]
 
+    # ==================== RELEASE ARTISTS / DSP / VALIDATION ====================
+    ReleaseArtistRef:
+      type: object
+      properties:
+        artistId: { type: integer }
+        name: { type: string }
+        role:
+          type: string
+          enum: [primary, featuring, with, remixer]
+        position: { type: integer, minimum: 0 }
+      required: [artistId, name, role, position]
+
+    UpdateReleaseArtistsBody:
+      type: object
+      properties:
+        artists:
+          type: array
+          items:
+            type: object
+            properties:
+              artistId: { type: integer }
+              role: { type: string, enum: [primary, featuring, with, remixer] }
+            required: [artistId, role]
+      required: [artists]
+
+    DspCatalogItem:
+      type: object
+      properties:
+        code: { type: string, description: "Стабильный код, например `spotify`." }
+        name: { type: string }
+        logoUrl: { type: string, nullable: true }
+        ddexPartyId: { type: string, nullable: true }
+        category:
+          type: string
+          enum: [streaming, download, social, video, regional]
+        isActive: { type: boolean }
+        position: { type: integer }
+      required: [code, name, category, isActive, position]
+
+    UpdateReleaseDspsBody:
+      type: object
+      properties:
+        dsps:
+          type: array
+          items:
+            type: string
+            description: Коды DSP из dsp_catalog.
+      required: [dsps]
+
+    ValidationIssue:
+      type: object
+      properties:
+        section:
+          type: string
+          enum: [release, tracks, delivery, contributors]
+        field: { type: string, nullable: true }
+        message: { type: string }
+        severity: { type: string, enum: [error, warning] }
+      required: [section, message, severity]
+
+    SubmissionValidationResult:
+      type: object
+      properties:
+        ok: { type: boolean, description: "true если нет issues с severity=error." }
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+      required: [ok, issues]
+
     # ==================== TRACKS ====================
+    TrackDisplayArtist:
+      type: object
+      properties:
+        name: { type: string }
+        role: { type: string, enum: [primary, featuring, with, remixer] }
+        artistId: { type: integer, nullable: true }
+      required: [name, role]
+
+    TrackWriter:
+      type: object
+      properties:
+        name: { type: string }
+        role: { type: string, enum: [composer, lyricist, songwriter, arranger] }
+        share: { type: number, minimum: 0, maximum: 100 }
+        caeIpi: { type: string, nullable: true }
+      required: [name, role, share]
+
+    TrackPerformer:
+      type: object
+      properties:
+        name: { type: string }
+        role:
+          type: string
+          description: |
+            vocals | background_vocals | guitar | bass | drums | keyboards |
+            music_producer | piano | violin | other (см. UI-каталог).
+      required: [name, role]
+
+    TrackProductionMember:
+      type: object
+      properties:
+        name: { type: string }
+        role:
+          type: string
+          description: producer | recording_engineer | mixing_engineer | mastering_engineer | other.
+      required: [name, role]
+
     Track:
       type: object
       properties:
@@ -2556,6 +2828,9 @@ components:
           type: integer
         title:
           type: string
+        trackVersion:
+          type: string
+          nullable: true
         isrc:
           type: string
           nullable: true
@@ -2578,15 +2853,40 @@ components:
         genre:
           type: string
           nullable: true
+        subgenre:
+          type: string
+          nullable: true
         language:
           type: string
           nullable: true
         isExplicit:
           type: boolean
-        composerName:
+        explicitStatus:
+          type: string
+          enum: [non_explicit, explicit, censored]
+        aiUsage:
+          type: string
+          enum: [none, some, all]
+          description: Раскрытие использования генеративного AI (требование DSP с 2024).
+        clipStartSeconds:
+          type: integer
+          minimum: 0
+          description: Стартовая точка превью на DSP в секундах.
+        recordingYear:
+          type: integer
+          nullable: true
+        countryOfRecording:
           type: string
           nullable: true
-        lyricistName:
+          description: ISO-3166-1 alpha-2 код страны записи.
+        audioStyle:
+          type: string
+          enum: [instrumental, vocal]
+        vocalLanguage:
+          type: string
+          nullable: true
+          description: ISO-639-1 язык вокала (только при audioStyle=vocal).
+        lyrics:
           type: string
           nullable: true
         iswc:
@@ -2595,17 +2895,36 @@ components:
         audioUrl:
           type: string
           nullable: true
+        displayArtists:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackDisplayArtist"
+        writers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackWriter"
+        performers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackPerformer"
+        production:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackProductionMember"
         createdAt:
           type: string
         updatedAt:
           type: string
-      required: [id, title, artistId, artistName, isExplicit, createdAt, updatedAt]
+      required: [id, title, artistId, artistName, isExplicit, explicitStatus, aiUsage, clipStartSeconds, audioStyle, displayArtists, writers, performers, production, createdAt, updatedAt]
 
     CreateTrackBody:
       type: object
       properties:
         title:
           type: string
+        trackVersion:
+          type: string
+          nullable: true
         isrc:
           type: string
           nullable: true
@@ -2623,16 +2942,41 @@ components:
         genre:
           type: string
           nullable: true
+        subgenre:
+          type: string
+          nullable: true
         language:
           type: string
           nullable: true
         isExplicit:
           type: boolean
           default: false
-        composerName:
+        explicitStatus:
+          type: string
+          enum: [non_explicit, explicit, censored]
+          default: non_explicit
+        aiUsage:
+          type: string
+          enum: [none, some, all]
+          default: none
+        clipStartSeconds:
+          type: integer
+          minimum: 0
+          default: 0
+        recordingYear:
+          type: integer
+          nullable: true
+        countryOfRecording:
           type: string
           nullable: true
-        lyricistName:
+        audioStyle:
+          type: string
+          enum: [instrumental, vocal]
+          default: vocal
+        vocalLanguage:
+          type: string
+          nullable: true
+        lyrics:
           type: string
           nullable: true
         iswc:
@@ -2641,6 +2985,22 @@ components:
         audioUrl:
           type: string
           nullable: true
+        displayArtists:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackDisplayArtist"
+        writers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackWriter"
+        performers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackPerformer"
+        production:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackProductionMember"
       required: [title, artistId]
 
     PaginatedTracks:

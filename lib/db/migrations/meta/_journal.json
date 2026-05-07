@@ -106,6 +106,13 @@
       "when": 1777676846178,
       "tag": "0014_massive_pepper_potts",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778147500000,
+      "tag": "0015_release_wizard_overhaul",
+      "breakpoints": true
     }
   ]
 }

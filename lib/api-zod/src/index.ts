@@ -15,5 +15,7 @@ export {
   CreateUserBody,
   DeliverReleaseBody,
   RejectPayoutBody,
+  UpdateReleaseArtistsBody,
+  UpdateReleaseDspsBody,
   UpdateReleaseStatusBody,
 } from "./generated/api";

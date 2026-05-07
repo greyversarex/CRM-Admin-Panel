@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ReleaseAllowedTransitionsItem } from "./releaseAllowedTransitionsItem";
+import type { ReleaseArtistRef } from "./releaseArtistRef";
 import type { ReleaseReleaseType } from "./releaseReleaseType";
 import type { ReleaseRiskFactorsItem } from "./releaseRiskFactorsItem";
 import type { ReleaseStatus } from "./releaseStatus";
@@ -13,6 +14,8 @@ import type { ReleaseStatus } from "./releaseStatus";
 export interface Release {
   id: number;
   title: string;
+  /** Опциональная пометка ("Remix", "Live", "Deluxe Edition"). */
+  releaseVersion?: string | null;
   releaseType: ReleaseReleaseType;
   status: ReleaseStatus;
   /** Комментарий модератора к статусу (например, причина отказа).
@@ -20,19 +23,32 @@ export interface Release {
  */
   statusNote?: string | null;
   upc?: string | null;
+  /** Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан. */
+  catalogNumber?: string | null;
   artistId: number;
   artistName: string;
   labelId?: number | null;
   labelName?: string | null;
   coverUrl?: string | null;
   genre?: string | null;
+  subgenre?: string | null;
   releaseDate?: string | null;
+  /** Время выхода (HH:MM, UTC), для DSP timeline. */
+  releaseTime?: string | null;
   language?: string | null;
   isExplicit: boolean;
+  isCompilation: boolean;
+  isVariousArtists: boolean;
   territories: string[];
   totalTracks: number;
   pLine?: string | null;
   cLine?: string | null;
+  pLineYear?: number | null;
+  cLineYear?: number | null;
+  /** Multi-primary contributors на уровне релиза. */
+  artists: ReleaseArtistRef[];
+  /** Выбранные DSP-площадки (коды из dsp_catalog). */
+  dsps: string[];
   createdAt: string;
   updatedAt: string;
   /** Статусы, доступные через PATCH /releases/:id/status (state-machine бэкенда).

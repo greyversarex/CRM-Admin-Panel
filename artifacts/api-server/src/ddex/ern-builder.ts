@@ -210,16 +210,30 @@ function appendSoundRecording(parent: ReturnType<typeof create>, _release: Relea
   sr.ele("ParentalWarningType").txt(t.isExplicit ? "Explicit" : "NotExplicit");
 
   // ContributorList — по DDEX ERN 4.3 живёт внутри SoundRecording.
-  // Для упрощения добавляем композитора и лирика как отдельных contributor'ов.
-  if (t.composerName) {
-    const contrib = sr.ele("Contributor", { SequenceNumber: "1" });
-    contrib.ele("ContributorPartyReference").txt(`P_COMPOSER_T${t.trackId}`);
-    contrib.ele("ContributorRole").txt("Composer");
+  // Включаем writers (composer/lyricist/songwriter/arranger), performers и
+  // production как отдельных <Contributor>. Каждой роли свой DDEX-маппинг.
+  let contribSeq = 1;
+  const ddexWriterRole: Record<string, string> = {
+    composer: "Composer",
+    lyricist: "Lyricist",
+    songwriter: "ComposerLyricist",
+    arranger: "Arranger",
+  };
+  for (const w of t.writers) {
+    const ddexRole = ddexWriterRole[w.role] ?? "Composer";
+    const c = sr.ele("Contributor", { SequenceNumber: String(contribSeq++) });
+    c.ele("ContributorPartyReference").txt(`P_W_T${t.trackId}_${contribSeq}`);
+    c.ele("ContributorRole").txt(ddexRole);
   }
-  if (t.lyricistName) {
-    const contrib = sr.ele("Contributor", { SequenceNumber: "2" });
-    contrib.ele("ContributorPartyReference").txt(`P_LYRICIST_T${t.trackId}`);
-    contrib.ele("ContributorRole").txt("Lyricist");
+  for (const p of t.performers) {
+    const c = sr.ele("Contributor", { SequenceNumber: String(contribSeq++) });
+    c.ele("ContributorPartyReference").txt(`P_PF_T${t.trackId}_${contribSeq}`);
+    c.ele("ContributorRole").txt("Performer");
+  }
+  for (const pr of t.production) {
+    const c = sr.ele("Contributor", { SequenceNumber: String(contribSeq++) });
+    c.ele("ContributorPartyReference").txt(`P_PR_T${t.trackId}_${contribSeq}`);
+    c.ele("ContributorRole").txt(pr.role === "producer" ? "Producer" : "StudioPersonnel");
   }
 
   if (t.audioFile) {

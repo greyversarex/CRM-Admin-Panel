@@ -5,6 +5,7 @@ import dashboardRouter from "./dashboard";
 import artistsRouter from "./artists";
 import labelsRouter from "./labels";
 import releasesRouter from "./releases";
+import releasesExtrasRouter from "./releases-extras";
 import tracksRouter from "./tracks";
 import usersRouter from "./users";
 import crmRouter from "./crm";
@@ -81,6 +82,7 @@ router.use(artistsRouter);            // scoped per-route inside
 router.use("/labels", adminOnly, requireManagerPermission("catalog"));     // labels mgmt is admin/manager only
 router.use(labelsRouter);
 router.use(releasesRouter);           // scoped per-route inside
+router.use(releasesExtrasRouter);     // /dsp-catalog + /releases/:id/{artists,dsps,validate}
 router.use(tracksRouter);             // scoped per-route inside
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
 // authenticated users (their own profile / password change).

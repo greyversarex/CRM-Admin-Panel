@@ -43,6 +43,7 @@ import type {
   DeliverReleaseBody,
   DeliverReleaseResponse,
   Delivery,
+  DspCatalogItem,
   GeographyAnalytics,
   GetGeographyAnalyticsParams,
   GetRoyaltySummaryParams,
@@ -91,6 +92,7 @@ import type {
   PublishingWork,
   RejectPayoutBody,
   Release,
+  ReleaseArtistRef,
   ReleaseCounts,
   ReleaseDetail,
   RevenueByMonth,
@@ -103,12 +105,15 @@ import type {
   SpotifySearchResult,
   StatusCount,
   StreamAnalytics,
+  SubmissionValidationResult,
   SubmitReleaseForReview409,
   TopArtist,
   Track,
   Transaction,
   TransferImport,
   UnreadNotificationCount,
+  UpdateReleaseArtistsBody,
+  UpdateReleaseDspsBody,
   UpdateReleaseStatusBody,
   User,
 } from "./api.schemas";
@@ -1973,6 +1978,517 @@ export const useDeleteRelease = <
 > => {
   return useMutation(getDeleteReleaseMutationOptions(options));
 };
+
+/**
+ * @summary List multi-primary contributors of a release
+ */
+export const getGetReleaseArtistsUrl = (id: number) => {
+  return `/api/releases/${id}/artists`;
+};
+
+export const getReleaseArtists = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ReleaseArtistRef[]> => {
+  return customFetch<ReleaseArtistRef[]>(getGetReleaseArtistsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReleaseArtistsQueryKey = (id: number) => {
+  return [`/api/releases/${id}/artists`] as const;
+};
+
+export const getGetReleaseArtistsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReleaseArtists>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseArtists>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReleaseArtistsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReleaseArtists>>
+  > = ({ signal }) => getReleaseArtists(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseArtists>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReleaseArtistsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReleaseArtists>>
+>;
+export type GetReleaseArtistsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List multi-primary contributors of a release
+ */
+
+export function useGetReleaseArtists<
+  TData = Awaited<ReturnType<typeof getReleaseArtists>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseArtists>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReleaseArtistsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Replace multi-primary contributors of a release
+ */
+export const getUpdateReleaseArtistsUrl = (id: number) => {
+  return `/api/releases/${id}/artists`;
+};
+
+export const updateReleaseArtists = async (
+  id: number,
+  updateReleaseArtistsBody: UpdateReleaseArtistsBody,
+  options?: RequestInit,
+): Promise<ReleaseArtistRef[]> => {
+  return customFetch<ReleaseArtistRef[]>(getUpdateReleaseArtistsUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateReleaseArtistsBody),
+  });
+};
+
+export const getUpdateReleaseArtistsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReleaseArtists>>,
+    TError,
+    { id: number; data: BodyType<UpdateReleaseArtistsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReleaseArtists>>,
+  TError,
+  { id: number; data: BodyType<UpdateReleaseArtistsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateReleaseArtists"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReleaseArtists>>,
+    { id: number; data: BodyType<UpdateReleaseArtistsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateReleaseArtists(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReleaseArtistsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReleaseArtists>>
+>;
+export type UpdateReleaseArtistsMutationBody =
+  BodyType<UpdateReleaseArtistsBody>;
+export type UpdateReleaseArtistsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace multi-primary contributors of a release
+ */
+export const useUpdateReleaseArtists = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReleaseArtists>>,
+    TError,
+    { id: number; data: BodyType<UpdateReleaseArtistsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReleaseArtists>>,
+  TError,
+  { id: number; data: BodyType<UpdateReleaseArtistsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateReleaseArtistsMutationOptions(options));
+};
+
+/**
+ * @summary List DSP destinations selected for the release
+ */
+export const getGetReleaseDspsUrl = (id: number) => {
+  return `/api/releases/${id}/dsps`;
+};
+
+export const getReleaseDsps = async (
+  id: number,
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getGetReleaseDspsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReleaseDspsQueryKey = (id: number) => {
+  return [`/api/releases/${id}/dsps`] as const;
+};
+
+export const getGetReleaseDspsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReleaseDsps>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseDsps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReleaseDspsQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getReleaseDsps>>> = ({
+    signal,
+  }) => getReleaseDsps(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseDsps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReleaseDspsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReleaseDsps>>
+>;
+export type GetReleaseDspsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List DSP destinations selected for the release
+ */
+
+export function useGetReleaseDsps<
+  TData = Awaited<ReturnType<typeof getReleaseDsps>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseDsps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReleaseDspsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Replace DSP destinations selected for the release
+ */
+export const getUpdateReleaseDspsUrl = (id: number) => {
+  return `/api/releases/${id}/dsps`;
+};
+
+export const updateReleaseDsps = async (
+  id: number,
+  updateReleaseDspsBody: UpdateReleaseDspsBody,
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getUpdateReleaseDspsUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateReleaseDspsBody),
+  });
+};
+
+export const getUpdateReleaseDspsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReleaseDsps>>,
+    TError,
+    { id: number; data: BodyType<UpdateReleaseDspsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReleaseDsps>>,
+  TError,
+  { id: number; data: BodyType<UpdateReleaseDspsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateReleaseDsps"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReleaseDsps>>,
+    { id: number; data: BodyType<UpdateReleaseDspsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateReleaseDsps(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReleaseDspsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReleaseDsps>>
+>;
+export type UpdateReleaseDspsMutationBody = BodyType<UpdateReleaseDspsBody>;
+export type UpdateReleaseDspsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace DSP destinations selected for the release
+ */
+export const useUpdateReleaseDsps = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReleaseDsps>>,
+    TError,
+    { id: number; data: BodyType<UpdateReleaseDspsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReleaseDsps>>,
+  TError,
+  { id: number; data: BodyType<UpdateReleaseDspsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateReleaseDspsMutationOptions(options));
+};
+
+/**
+ * @summary Run wizard validation against a release without changing status
+ */
+export const getValidateReleaseForSubmissionUrl = (id: number) => {
+  return `/api/releases/${id}/validate`;
+};
+
+export const validateReleaseForSubmission = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SubmissionValidationResult> => {
+  return customFetch<SubmissionValidationResult>(
+    getValidateReleaseForSubmissionUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getValidateReleaseForSubmissionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof validateReleaseForSubmission>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof validateReleaseForSubmission>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["validateReleaseForSubmission"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof validateReleaseForSubmission>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return validateReleaseForSubmission(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ValidateReleaseForSubmissionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof validateReleaseForSubmission>>
+>;
+
+export type ValidateReleaseForSubmissionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Run wizard validation against a release without changing status
+ */
+export const useValidateReleaseForSubmission = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof validateReleaseForSubmission>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof validateReleaseForSubmission>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getValidateReleaseForSubmissionMutationOptions(options));
+};
+
+/**
+ * @summary Master list of DSP destinations available for delivery
+ */
+export const getListDspCatalogUrl = () => {
+  return `/api/dsp-catalog`;
+};
+
+export const listDspCatalog = async (
+  options?: RequestInit,
+): Promise<DspCatalogItem[]> => {
+  return customFetch<DspCatalogItem[]>(getListDspCatalogUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDspCatalogQueryKey = () => {
+  return [`/api/dsp-catalog`] as const;
+};
+
+export const getListDspCatalogQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDspCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDspCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDspCatalogQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDspCatalog>>> = ({
+    signal,
+  }) => listDspCatalog({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDspCatalog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDspCatalogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDspCatalog>>
+>;
+export type ListDspCatalogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Master list of DSP destinations available for delivery
+ */
+
+export function useListDspCatalog<
+  TData = Awaited<ReturnType<typeof listDspCatalog>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDspCatalog>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDspCatalogQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Artist/label submits a draft (or previously-rejected) release for moderation

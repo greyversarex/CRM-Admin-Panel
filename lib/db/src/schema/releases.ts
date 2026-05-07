@@ -21,20 +21,40 @@ export type ReleaseRiskFactor = {
 export const releasesTable = pgTable("releases", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
+  /** Опциональная пометка версии: "Remix", "Live", "Deluxe Edition", … */
+  releaseVersion: text("release_version"),
   releaseType: text("release_type").notNull().default("single"),
   status: text("status").notNull().default("draft"),
   upc: text("upc"),
+  /**
+   * Внутренний код лейбла. Авто-генерится на сервере как `CAT{id}` если
+   * пользователь не задал вручную.
+   */
+  catalogNumber: text("catalog_number"),
   // restrict: нельзя удалить артиста с релизами — это финансово/юридически связано
+  // Историческое поле «главный артист». Для multi-primary см. release_artists.
   artistId: integer("artist_id").notNull().references(() => artistsTable.id, { onDelete: "restrict" }),
   labelId: integer("label_id").references(() => labelsTable.id, { onDelete: "set null" }),
   coverUrl: text("cover_url"),
   genre: text("genre"),
+  subgenre: text("subgenre"),
   releaseDate: text("release_date"),
+  /** HH:MM в UTC. Используется в Delivery Options Timeline. */
+  releaseTime: text("release_time"),
   language: text("language"),
   isExplicit: boolean("is_explicit").notNull().default(false),
+  /** Сборник нескольких артистов (Compilation Yes/No). */
+  isCompilation: boolean("is_compilation").notNull().default(false),
+  /** Various Artists (5+ контрибьюторов как primary). */
+  isVariousArtists: boolean("is_various_artists").notNull().default(false),
   territories: text("territories").array().notNull().default(["WW"]),
+  /** Старые свободные поля — оставлены для совместимости и DDEX backfill. */
   pLine: text("p_line"),
   cLine: text("c_line"),
+  /** Год P-line отдельно (для DDEX <PLine><Year>). */
+  pLineYear: integer("p_line_year"),
+  /** Год C-line отдельно (для DDEX <CLine><Year>). */
+  cLineYear: integer("c_line_year"),
   statusNote: text("status_note"),
   /**
    * Композитный risk-score 0..100, перерасчитывается risk-engine'ом при
@@ -56,6 +76,7 @@ export const releasesTable = pgTable("releases", {
   // Partial unique index: prevents duplicate UPCs at the DB level (race-safe).
   // NULL/empty UPCs are allowed for drafts that haven't received a barcode yet.
   uniqueIndex("releases_upc_unique_idx").on(t.upc).where(sql`${t.upc} IS NOT NULL AND ${t.upc} <> ''`),
+  uniqueIndex("releases_catalog_number_uniq_idx").on(t.catalogNumber).where(sql`${t.catalogNumber} IS NOT NULL AND ${t.catalogNumber} <> ''`),
 ]);
 
 export const insertReleaseSchema = createInsertSchema(releasesTable).omit({ id: true, createdAt: true, updatedAt: true });

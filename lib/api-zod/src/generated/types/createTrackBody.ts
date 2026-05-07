@@ -5,19 +5,39 @@
  * Music Distribution CRM API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTrackBodyAiUsage } from "./createTrackBodyAiUsage";
+import type { CreateTrackBodyAudioStyle } from "./createTrackBodyAudioStyle";
+import type { CreateTrackBodyExplicitStatus } from "./createTrackBodyExplicitStatus";
+import type { TrackDisplayArtist } from "./trackDisplayArtist";
+import type { TrackPerformer } from "./trackPerformer";
+import type { TrackProductionMember } from "./trackProductionMember";
+import type { TrackWriter } from "./trackWriter";
 
 export interface CreateTrackBody {
   title: string;
+  trackVersion?: string | null;
   isrc?: string | null;
   releaseId?: number | null;
   artistId: number;
   trackNumber?: number | null;
   durationSeconds?: number | null;
   genre?: string | null;
+  subgenre?: string | null;
   language?: string | null;
   isExplicit?: boolean;
-  composerName?: string | null;
-  lyricistName?: string | null;
+  explicitStatus?: CreateTrackBodyExplicitStatus;
+  aiUsage?: CreateTrackBodyAiUsage;
+  /** @minimum 0 */
+  clipStartSeconds?: number;
+  recordingYear?: number | null;
+  countryOfRecording?: string | null;
+  audioStyle?: CreateTrackBodyAudioStyle;
+  vocalLanguage?: string | null;
+  lyrics?: string | null;
   iswc?: string | null;
   audioUrl?: string | null;
+  displayArtists?: TrackDisplayArtist[];
+  writers?: TrackWriter[];
+  performers?: TrackPerformer[];
+  production?: TrackProductionMember[];
 }

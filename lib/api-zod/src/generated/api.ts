@@ -166,8 +166,15 @@ export const GetArtistParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getArtistResponseTwoReleasesItemArtistsItemPositionMin = 0;
+
 export const getArtistResponseTwoReleasesItemRiskScoreMin = 0;
 export const getArtistResponseTwoReleasesItemRiskScoreMax = 100;
+
+export const getArtistResponseTwoRecentTracksItemClipStartSecondsMin = 0;
+
+export const getArtistResponseTwoRecentTracksItemWritersItemShareMin = 0;
+export const getArtistResponseTwoRecentTracksItemWritersItemShareMax = 100;
 
 export const GetArtistResponse = zod
   .object({
@@ -196,6 +203,12 @@ export const GetArtistResponse = zod
           zod.object({
             id: zod.number(),
             title: zod.string(),
+            releaseVersion: zod
+              .string()
+              .nullish()
+              .describe(
+                'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+              ),
             releaseType: zod.enum(["single", "album", "ep", "compilation"]),
             status: zod.enum([
               "draft",
@@ -216,19 +229,51 @@ export const GetArtistResponse = zod
                 "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
               ),
             upc: zod.string().nullish(),
+            catalogNumber: zod
+              .string()
+              .nullish()
+              .describe(
+                "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+              ),
             artistId: zod.number(),
             artistName: zod.string(),
             labelId: zod.number().nullish(),
             labelName: zod.string().nullish(),
             coverUrl: zod.string().nullish(),
             genre: zod.string().nullish(),
+            subgenre: zod.string().nullish(),
             releaseDate: zod.string().nullish(),
+            releaseTime: zod
+              .string()
+              .nullish()
+              .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
             language: zod.string().nullish(),
             isExplicit: zod.boolean(),
+            isCompilation: zod.boolean(),
+            isVariousArtists: zod.boolean(),
             territories: zod.array(zod.string()),
             totalTracks: zod.number(),
             pLine: zod.string().nullish(),
             cLine: zod.string().nullish(),
+            pLineYear: zod.number().nullish(),
+            cLineYear: zod.number().nullish(),
+            artists: zod
+              .array(
+                zod.object({
+                  artistId: zod.number(),
+                  name: zod.string(),
+                  role: zod.enum(["primary", "featuring", "with", "remixer"]),
+                  position: zod
+                    .number()
+                    .min(
+                      getArtistResponseTwoReleasesItemArtistsItemPositionMin,
+                    ),
+                }),
+              )
+              .describe("Multi-primary contributors на уровне релиза."),
+            dsps: zod
+              .array(zod.string())
+              .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
             createdAt: zod.string(),
             updatedAt: zod.string(),
             allowedTransitions: zod
@@ -290,6 +335,7 @@ export const GetArtistResponse = zod
           zod.object({
             id: zod.number(),
             title: zod.string(),
+            trackVersion: zod.string().nullish(),
             isrc: zod.string().nullish(),
             releaseId: zod.number().nullish(),
             releaseName: zod.string().nullish(),
@@ -298,12 +344,75 @@ export const GetArtistResponse = zod
             trackNumber: zod.number().nullish(),
             durationSeconds: zod.number().nullish(),
             genre: zod.string().nullish(),
+            subgenre: zod.string().nullish(),
             language: zod.string().nullish(),
             isExplicit: zod.boolean(),
-            composerName: zod.string().nullish(),
-            lyricistName: zod.string().nullish(),
+            explicitStatus: zod.enum(["non_explicit", "explicit", "censored"]),
+            aiUsage: zod
+              .enum(["none", "some", "all"])
+              .describe(
+                "Раскрытие использования генеративного AI (требование DSP с 2024).",
+              ),
+            clipStartSeconds: zod
+              .number()
+              .min(getArtistResponseTwoRecentTracksItemClipStartSecondsMin)
+              .describe("Стартовая точка превью на DSP в секундах."),
+            recordingYear: zod.number().nullish(),
+            countryOfRecording: zod
+              .string()
+              .nullish()
+              .describe("ISO-3166-1 alpha-2 код страны записи."),
+            audioStyle: zod.enum(["instrumental", "vocal"]),
+            vocalLanguage: zod
+              .string()
+              .nullish()
+              .describe("ISO-639-1 язык вокала (только при audioStyle=vocal)."),
+            lyrics: zod.string().nullish(),
             iswc: zod.string().nullish(),
             audioUrl: zod.string().nullish(),
+            displayArtists: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod.enum(["primary", "featuring", "with", "remixer"]),
+                artistId: zod.number().nullish(),
+              }),
+            ),
+            writers: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod.enum([
+                  "composer",
+                  "lyricist",
+                  "songwriter",
+                  "arranger",
+                ]),
+                share: zod
+                  .number()
+                  .min(getArtistResponseTwoRecentTracksItemWritersItemShareMin)
+                  .max(getArtistResponseTwoRecentTracksItemWritersItemShareMax),
+                caeIpi: zod.string().nullish(),
+              }),
+            ),
+            performers: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod
+                  .string()
+                  .describe(
+                    "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+                  ),
+              }),
+            ),
+            production: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod
+                  .string()
+                  .describe(
+                    "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+                  ),
+              }),
+            ),
             createdAt: zod.string(),
             updatedAt: zod.string(),
           }),
@@ -532,6 +641,8 @@ export const ListReleasesQueryParams = zod.object({
   limit: zod.coerce.number().default(listReleasesQueryLimitDefault),
 });
 
+export const listReleasesResponseDataItemArtistsItemPositionMin = 0;
+
 export const listReleasesResponseDataItemRiskScoreMin = 0;
 export const listReleasesResponseDataItemRiskScoreMax = 100;
 
@@ -540,6 +651,12 @@ export const ListReleasesResponse = zod.object({
     zod.object({
       id: zod.number(),
       title: zod.string(),
+      releaseVersion: zod
+        .string()
+        .nullish()
+        .describe(
+          'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+        ),
       releaseType: zod.enum(["single", "album", "ep", "compilation"]),
       status: zod.enum([
         "draft",
@@ -560,19 +677,49 @@ export const ListReleasesResponse = zod.object({
           "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
         ),
       upc: zod.string().nullish(),
+      catalogNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+        ),
       artistId: zod.number(),
       artistName: zod.string(),
       labelId: zod.number().nullish(),
       labelName: zod.string().nullish(),
       coverUrl: zod.string().nullish(),
       genre: zod.string().nullish(),
+      subgenre: zod.string().nullish(),
       releaseDate: zod.string().nullish(),
+      releaseTime: zod
+        .string()
+        .nullish()
+        .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
       language: zod.string().nullish(),
       isExplicit: zod.boolean(),
+      isCompilation: zod.boolean(),
+      isVariousArtists: zod.boolean(),
       territories: zod.array(zod.string()),
       totalTracks: zod.number(),
       pLine: zod.string().nullish(),
       cLine: zod.string().nullish(),
+      pLineYear: zod.number().nullish(),
+      cLineYear: zod.number().nullish(),
+      artists: zod
+        .array(
+          zod.object({
+            artistId: zod.number(),
+            name: zod.string(),
+            role: zod.enum(["primary", "featuring", "with", "remixer"]),
+            position: zod
+              .number()
+              .min(listReleasesResponseDataItemArtistsItemPositionMin),
+          }),
+        )
+        .describe("Multi-primary contributors на уровне релиза."),
+      dsps: zod
+        .array(zod.string())
+        .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       allowedTransitions: zod
@@ -640,24 +787,36 @@ export const ListReleasesResponse = zod.object({
  * @summary Create a new release
  */
 export const createReleaseBodyIsExplicitDefault = false;
+export const createReleaseBodyIsCompilationDefault = false;
+export const createReleaseBodyIsVariousArtistsDefault = false;
 export const createReleaseBodyTerritoriesDefault = [`WW`];
 
 export const CreateReleaseBody = zod.object({
   title: zod.string(),
+  releaseVersion: zod.string().nullish(),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   artistId: zod.number(),
   labelId: zod.number().nullish(),
   upc: zod.string().nullish(),
+  catalogNumber: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(createReleaseBodyIsExplicitDefault),
+  isCompilation: zod.boolean().default(createReleaseBodyIsCompilationDefault),
+  isVariousArtists: zod
+    .boolean()
+    .default(createReleaseBodyIsVariousArtistsDefault),
   territories: zod
     .array(zod.string())
     .default(createReleaseBodyTerritoriesDefault),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
 });
 
 /**
@@ -667,13 +826,26 @@ export const GetReleaseParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getReleaseResponseOneArtistsItemPositionMin = 0;
+
 export const getReleaseResponseOneRiskScoreMin = 0;
 export const getReleaseResponseOneRiskScoreMax = 100;
+
+export const getReleaseResponseTwoTracksItemClipStartSecondsMin = 0;
+
+export const getReleaseResponseTwoTracksItemWritersItemShareMin = 0;
+export const getReleaseResponseTwoTracksItemWritersItemShareMax = 100;
 
 export const GetReleaseResponse = zod
   .object({
     id: zod.number(),
     title: zod.string(),
+    releaseVersion: zod
+      .string()
+      .nullish()
+      .describe(
+        'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+      ),
     releaseType: zod.enum(["single", "album", "ep", "compilation"]),
     status: zod.enum([
       "draft",
@@ -694,19 +866,49 @@ export const GetReleaseResponse = zod
         "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
       ),
     upc: zod.string().nullish(),
+    catalogNumber: zod
+      .string()
+      .nullish()
+      .describe(
+        "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+      ),
     artistId: zod.number(),
     artistName: zod.string(),
     labelId: zod.number().nullish(),
     labelName: zod.string().nullish(),
     coverUrl: zod.string().nullish(),
     genre: zod.string().nullish(),
+    subgenre: zod.string().nullish(),
     releaseDate: zod.string().nullish(),
+    releaseTime: zod
+      .string()
+      .nullish()
+      .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
     language: zod.string().nullish(),
     isExplicit: zod.boolean(),
+    isCompilation: zod.boolean(),
+    isVariousArtists: zod.boolean(),
     territories: zod.array(zod.string()),
     totalTracks: zod.number(),
     pLine: zod.string().nullish(),
     cLine: zod.string().nullish(),
+    pLineYear: zod.number().nullish(),
+    cLineYear: zod.number().nullish(),
+    artists: zod
+      .array(
+        zod.object({
+          artistId: zod.number(),
+          name: zod.string(),
+          role: zod.enum(["primary", "featuring", "with", "remixer"]),
+          position: zod
+            .number()
+            .min(getReleaseResponseOneArtistsItemPositionMin),
+        }),
+      )
+      .describe("Multi-primary contributors на уровне релиза."),
+    dsps: zod
+      .array(zod.string())
+      .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
     createdAt: zod.string(),
     updatedAt: zod.string(),
     allowedTransitions: zod
@@ -768,6 +970,7 @@ export const GetReleaseResponse = zod
           zod.object({
             id: zod.number(),
             title: zod.string(),
+            trackVersion: zod.string().nullish(),
             isrc: zod.string().nullish(),
             releaseId: zod.number().nullish(),
             releaseName: zod.string().nullish(),
@@ -776,12 +979,75 @@ export const GetReleaseResponse = zod
             trackNumber: zod.number().nullish(),
             durationSeconds: zod.number().nullish(),
             genre: zod.string().nullish(),
+            subgenre: zod.string().nullish(),
             language: zod.string().nullish(),
             isExplicit: zod.boolean(),
-            composerName: zod.string().nullish(),
-            lyricistName: zod.string().nullish(),
+            explicitStatus: zod.enum(["non_explicit", "explicit", "censored"]),
+            aiUsage: zod
+              .enum(["none", "some", "all"])
+              .describe(
+                "Раскрытие использования генеративного AI (требование DSP с 2024).",
+              ),
+            clipStartSeconds: zod
+              .number()
+              .min(getReleaseResponseTwoTracksItemClipStartSecondsMin)
+              .describe("Стартовая точка превью на DSP в секундах."),
+            recordingYear: zod.number().nullish(),
+            countryOfRecording: zod
+              .string()
+              .nullish()
+              .describe("ISO-3166-1 alpha-2 код страны записи."),
+            audioStyle: zod.enum(["instrumental", "vocal"]),
+            vocalLanguage: zod
+              .string()
+              .nullish()
+              .describe("ISO-639-1 язык вокала (только при audioStyle=vocal)."),
+            lyrics: zod.string().nullish(),
             iswc: zod.string().nullish(),
             audioUrl: zod.string().nullish(),
+            displayArtists: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod.enum(["primary", "featuring", "with", "remixer"]),
+                artistId: zod.number().nullish(),
+              }),
+            ),
+            writers: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod.enum([
+                  "composer",
+                  "lyricist",
+                  "songwriter",
+                  "arranger",
+                ]),
+                share: zod
+                  .number()
+                  .min(getReleaseResponseTwoTracksItemWritersItemShareMin)
+                  .max(getReleaseResponseTwoTracksItemWritersItemShareMax),
+                caeIpi: zod.string().nullish(),
+              }),
+            ),
+            performers: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod
+                  .string()
+                  .describe(
+                    "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+                  ),
+              }),
+            ),
+            production: zod.array(
+              zod.object({
+                name: zod.string(),
+                role: zod
+                  .string()
+                  .describe(
+                    "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+                  ),
+              }),
+            ),
             createdAt: zod.string(),
             updatedAt: zod.string(),
           }),
@@ -798,25 +1064,39 @@ export const UpdateReleaseParams = zod.object({
 });
 
 export const updateReleaseBodyIsExplicitDefault = false;
+export const updateReleaseBodyIsCompilationDefault = false;
+export const updateReleaseBodyIsVariousArtistsDefault = false;
 export const updateReleaseBodyTerritoriesDefault = [`WW`];
 
 export const UpdateReleaseBody = zod.object({
   title: zod.string(),
+  releaseVersion: zod.string().nullish(),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   artistId: zod.number(),
   labelId: zod.number().nullish(),
   upc: zod.string().nullish(),
+  catalogNumber: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(updateReleaseBodyIsExplicitDefault),
+  isCompilation: zod.boolean().default(updateReleaseBodyIsCompilationDefault),
+  isVariousArtists: zod
+    .boolean()
+    .default(updateReleaseBodyIsVariousArtistsDefault),
   territories: zod
     .array(zod.string())
     .default(updateReleaseBodyTerritoriesDefault),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
 });
+
+export const updateReleaseResponseArtistsItemPositionMin = 0;
 
 export const updateReleaseResponseRiskScoreMin = 0;
 export const updateReleaseResponseRiskScoreMax = 100;
@@ -824,6 +1104,12 @@ export const updateReleaseResponseRiskScoreMax = 100;
 export const UpdateReleaseResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  releaseVersion: zod
+    .string()
+    .nullish()
+    .describe(
+      'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+    ),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   status: zod.enum([
     "draft",
@@ -844,19 +1130,47 @@ export const UpdateReleaseResponse = zod.object({
       "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
     ),
   upc: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+    ),
   artistId: zod.number(),
   artistName: zod.string(),
   labelId: zod.number().nullish(),
   labelName: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod
+    .string()
+    .nullish()
+    .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
+  isCompilation: zod.boolean(),
+  isVariousArtists: zod.boolean(),
   territories: zod.array(zod.string()),
   totalTracks: zod.number(),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
+  artists: zod
+    .array(
+      zod.object({
+        artistId: zod.number(),
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        position: zod.number().min(updateReleaseResponseArtistsItemPositionMin),
+      }),
+    )
+    .describe("Multi-primary contributors на уровне релиза."),
+  dsps: zod
+    .array(zod.string())
+    .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   allowedTransitions: zod
@@ -920,11 +1234,119 @@ export const DeleteReleaseParams = zod.object({
 });
 
 /**
+ * @summary List multi-primary contributors of a release
+ */
+export const GetReleaseArtistsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getReleaseArtistsResponsePositionMin = 0;
+
+export const GetReleaseArtistsResponseItem = zod.object({
+  artistId: zod.number(),
+  name: zod.string(),
+  role: zod.enum(["primary", "featuring", "with", "remixer"]),
+  position: zod.number().min(getReleaseArtistsResponsePositionMin),
+});
+export const GetReleaseArtistsResponse = zod.array(
+  GetReleaseArtistsResponseItem,
+);
+
+/**
+ * @summary Replace multi-primary contributors of a release
+ */
+export const UpdateReleaseArtistsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateReleaseArtistsBody = zod.object({
+  artists: zod.array(
+    zod.object({
+      artistId: zod.number(),
+      role: zod.enum(["primary", "featuring", "with", "remixer"]),
+    }),
+  ),
+});
+
+export const updateReleaseArtistsResponsePositionMin = 0;
+
+export const UpdateReleaseArtistsResponseItem = zod.object({
+  artistId: zod.number(),
+  name: zod.string(),
+  role: zod.enum(["primary", "featuring", "with", "remixer"]),
+  position: zod.number().min(updateReleaseArtistsResponsePositionMin),
+});
+export const UpdateReleaseArtistsResponse = zod.array(
+  UpdateReleaseArtistsResponseItem,
+);
+
+/**
+ * @summary List DSP destinations selected for the release
+ */
+export const GetReleaseDspsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetReleaseDspsResponseItem = zod.string();
+export const GetReleaseDspsResponse = zod.array(GetReleaseDspsResponseItem);
+
+/**
+ * @summary Replace DSP destinations selected for the release
+ */
+export const UpdateReleaseDspsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateReleaseDspsBody = zod.object({
+  dsps: zod.array(zod.string().describe("Коды DSP из dsp_catalog.")),
+});
+
+export const UpdateReleaseDspsResponseItem = zod.string();
+export const UpdateReleaseDspsResponse = zod.array(
+  UpdateReleaseDspsResponseItem,
+);
+
+/**
+ * @summary Run wizard validation against a release without changing status
+ */
+export const ValidateReleaseForSubmissionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ValidateReleaseForSubmissionResponse = zod.object({
+  ok: zod.boolean().describe("true если нет issues с severity=error."),
+  issues: zod.array(
+    zod.object({
+      section: zod.enum(["release", "tracks", "delivery", "contributors"]),
+      field: zod.string().nullish(),
+      message: zod.string(),
+      severity: zod.enum(["error", "warning"]),
+    }),
+  ),
+});
+
+/**
+ * @summary Master list of DSP destinations available for delivery
+ */
+export const ListDspCatalogResponseItem = zod.object({
+  code: zod.string().describe("Стабильный код, например `spotify`."),
+  name: zod.string(),
+  logoUrl: zod.string().nullish(),
+  ddexPartyId: zod.string().nullish(),
+  category: zod.enum(["streaming", "download", "social", "video", "regional"]),
+  isActive: zod.boolean(),
+  position: zod.number(),
+});
+export const ListDspCatalogResponse = zod.array(ListDspCatalogResponseItem);
+
+/**
  * @summary Artist/label submits a draft (or previously-rejected) release for moderation
  */
 export const SubmitReleaseForReviewParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const submitReleaseForReviewResponseArtistsItemPositionMin = 0;
 
 export const submitReleaseForReviewResponseRiskScoreMin = 0;
 export const submitReleaseForReviewResponseRiskScoreMax = 100;
@@ -932,6 +1354,12 @@ export const submitReleaseForReviewResponseRiskScoreMax = 100;
 export const SubmitReleaseForReviewResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  releaseVersion: zod
+    .string()
+    .nullish()
+    .describe(
+      'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+    ),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   status: zod.enum([
     "draft",
@@ -952,19 +1380,49 @@ export const SubmitReleaseForReviewResponse = zod.object({
       "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
     ),
   upc: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+    ),
   artistId: zod.number(),
   artistName: zod.string(),
   labelId: zod.number().nullish(),
   labelName: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod
+    .string()
+    .nullish()
+    .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
+  isCompilation: zod.boolean(),
+  isVariousArtists: zod.boolean(),
   territories: zod.array(zod.string()),
   totalTracks: zod.number(),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
+  artists: zod
+    .array(
+      zod.object({
+        artistId: zod.number(),
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        position: zod
+          .number()
+          .min(submitReleaseForReviewResponseArtistsItemPositionMin),
+      }),
+    )
+    .describe("Multi-primary contributors на уровне релиза."),
+  dsps: zod
+    .array(zod.string())
+    .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   allowedTransitions: zod
@@ -1043,12 +1501,20 @@ export const UpdateReleaseStatusBody = zod.object({
   note: zod.string().nullish(),
 });
 
+export const updateReleaseStatusResponseArtistsItemPositionMin = 0;
+
 export const updateReleaseStatusResponseRiskScoreMin = 0;
 export const updateReleaseStatusResponseRiskScoreMax = 100;
 
 export const UpdateReleaseStatusResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  releaseVersion: zod
+    .string()
+    .nullish()
+    .describe(
+      'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+    ),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   status: zod.enum([
     "draft",
@@ -1069,19 +1535,49 @@ export const UpdateReleaseStatusResponse = zod.object({
       "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
     ),
   upc: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+    ),
   artistId: zod.number(),
   artistName: zod.string(),
   labelId: zod.number().nullish(),
   labelName: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod
+    .string()
+    .nullish()
+    .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
+  isCompilation: zod.boolean(),
+  isVariousArtists: zod.boolean(),
   territories: zod.array(zod.string()),
   totalTracks: zod.number(),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
+  artists: zod
+    .array(
+      zod.object({
+        artistId: zod.number(),
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        position: zod
+          .number()
+          .min(updateReleaseStatusResponseArtistsItemPositionMin),
+      }),
+    )
+    .describe("Multi-primary contributors на уровне релиза."),
+  dsps: zod
+    .array(zod.string())
+    .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   allowedTransitions: zod
@@ -1149,12 +1645,20 @@ export const ImportReleaseByUpcBody = zod.object({
     .default(importReleaseByUpcBodySourceDefault),
 });
 
+export const importReleaseByUpcResponseArtistsItemPositionMin = 0;
+
 export const importReleaseByUpcResponseRiskScoreMin = 0;
 export const importReleaseByUpcResponseRiskScoreMax = 100;
 
 export const ImportReleaseByUpcResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  releaseVersion: zod
+    .string()
+    .nullish()
+    .describe(
+      'Опциональная пометка (\"Remix\", \"Live\", \"Deluxe Edition\").',
+    ),
   releaseType: zod.enum(["single", "album", "ep", "compilation"]),
   status: zod.enum([
     "draft",
@@ -1175,19 +1679,49 @@ export const ImportReleaseByUpcResponse = zod.object({
       "Комментарий модератора к статусу (например, причина отказа).\nЗаполняется при rejected\/takedown_requested, очищается при resubmit.\n",
     ),
   upc: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+    ),
   artistId: zod.number(),
   artistName: zod.string(),
   labelId: zod.number().nullish(),
   labelName: zod.string().nullish(),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
+  releaseTime: zod
+    .string()
+    .nullish()
+    .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
+  isCompilation: zod.boolean(),
+  isVariousArtists: zod.boolean(),
   territories: zod.array(zod.string()),
   totalTracks: zod.number(),
   pLine: zod.string().nullish(),
   cLine: zod.string().nullish(),
+  pLineYear: zod.number().nullish(),
+  cLineYear: zod.number().nullish(),
+  artists: zod
+    .array(
+      zod.object({
+        artistId: zod.number(),
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        position: zod
+          .number()
+          .min(importReleaseByUpcResponseArtistsItemPositionMin),
+      }),
+    )
+    .describe("Multi-primary contributors на уровне релиза."),
+  dsps: zod
+    .array(zod.string())
+    .describe("Выбранные DSP-площадки (коды из dsp_catalog)."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   allowedTransitions: zod
@@ -1349,11 +1883,17 @@ export const ListTracksQueryParams = zod.object({
   limit: zod.coerce.number().default(listTracksQueryLimitDefault),
 });
 
+export const listTracksResponseDataItemClipStartSecondsMin = 0;
+
+export const listTracksResponseDataItemWritersItemShareMin = 0;
+export const listTracksResponseDataItemWritersItemShareMax = 100;
+
 export const ListTracksResponse = zod.object({
   data: zod.array(
     zod.object({
       id: zod.number(),
       title: zod.string(),
+      trackVersion: zod.string().nullish(),
       isrc: zod.string().nullish(),
       releaseId: zod.number().nullish(),
       releaseName: zod.string().nullish(),
@@ -1362,12 +1902,70 @@ export const ListTracksResponse = zod.object({
       trackNumber: zod.number().nullish(),
       durationSeconds: zod.number().nullish(),
       genre: zod.string().nullish(),
+      subgenre: zod.string().nullish(),
       language: zod.string().nullish(),
       isExplicit: zod.boolean(),
-      composerName: zod.string().nullish(),
-      lyricistName: zod.string().nullish(),
+      explicitStatus: zod.enum(["non_explicit", "explicit", "censored"]),
+      aiUsage: zod
+        .enum(["none", "some", "all"])
+        .describe(
+          "Раскрытие использования генеративного AI (требование DSP с 2024).",
+        ),
+      clipStartSeconds: zod
+        .number()
+        .min(listTracksResponseDataItemClipStartSecondsMin)
+        .describe("Стартовая точка превью на DSP в секундах."),
+      recordingYear: zod.number().nullish(),
+      countryOfRecording: zod
+        .string()
+        .nullish()
+        .describe("ISO-3166-1 alpha-2 код страны записи."),
+      audioStyle: zod.enum(["instrumental", "vocal"]),
+      vocalLanguage: zod
+        .string()
+        .nullish()
+        .describe("ISO-639-1 язык вокала (только при audioStyle=vocal)."),
+      lyrics: zod.string().nullish(),
       iswc: zod.string().nullish(),
       audioUrl: zod.string().nullish(),
+      displayArtists: zod.array(
+        zod.object({
+          name: zod.string(),
+          role: zod.enum(["primary", "featuring", "with", "remixer"]),
+          artistId: zod.number().nullish(),
+        }),
+      ),
+      writers: zod.array(
+        zod.object({
+          name: zod.string(),
+          role: zod.enum(["composer", "lyricist", "songwriter", "arranger"]),
+          share: zod
+            .number()
+            .min(listTracksResponseDataItemWritersItemShareMin)
+            .max(listTracksResponseDataItemWritersItemShareMax),
+          caeIpi: zod.string().nullish(),
+        }),
+      ),
+      performers: zod.array(
+        zod.object({
+          name: zod.string(),
+          role: zod
+            .string()
+            .describe(
+              "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+            ),
+        }),
+      ),
+      production: zod.array(
+        zod.object({
+          name: zod.string(),
+          role: zod
+            .string()
+            .describe(
+              "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+            ),
+        }),
+      ),
       createdAt: zod.string(),
       updatedAt: zod.string(),
     }),
@@ -1384,21 +1982,92 @@ export const ListTracksResponse = zod.object({
  * @summary Create a new track
  */
 export const createTrackBodyIsExplicitDefault = false;
+export const createTrackBodyExplicitStatusDefault = `non_explicit`;
+export const createTrackBodyAiUsageDefault = `none`;
+export const createTrackBodyClipStartSecondsDefault = 0;
+export const createTrackBodyClipStartSecondsMin = 0;
+
+export const createTrackBodyAudioStyleDefault = `vocal`;
+export const createTrackBodyWritersItemShareMin = 0;
+export const createTrackBodyWritersItemShareMax = 100;
 
 export const CreateTrackBody = zod.object({
   title: zod.string(),
+  trackVersion: zod.string().nullish(),
   isrc: zod.string().nullish(),
   releaseId: zod.number().nullish(),
   artistId: zod.number(),
   trackNumber: zod.number().nullish(),
   durationSeconds: zod.number().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(createTrackBodyIsExplicitDefault),
-  composerName: zod.string().nullish(),
-  lyricistName: zod.string().nullish(),
+  explicitStatus: zod
+    .enum(["non_explicit", "explicit", "censored"])
+    .default(createTrackBodyExplicitStatusDefault),
+  aiUsage: zod
+    .enum(["none", "some", "all"])
+    .default(createTrackBodyAiUsageDefault),
+  clipStartSeconds: zod
+    .number()
+    .min(createTrackBodyClipStartSecondsMin)
+    .default(createTrackBodyClipStartSecondsDefault),
+  recordingYear: zod.number().nullish(),
+  countryOfRecording: zod.string().nullish(),
+  audioStyle: zod
+    .enum(["instrumental", "vocal"])
+    .default(createTrackBodyAudioStyleDefault),
+  vocalLanguage: zod.string().nullish(),
+  lyrics: zod.string().nullish(),
   iswc: zod.string().nullish(),
   audioUrl: zod.string().nullish(),
+  displayArtists: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        artistId: zod.number().nullish(),
+      }),
+    )
+    .optional(),
+  writers: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod.enum(["composer", "lyricist", "songwriter", "arranger"]),
+        share: zod
+          .number()
+          .min(createTrackBodyWritersItemShareMin)
+          .max(createTrackBodyWritersItemShareMax),
+        caeIpi: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  performers: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod
+          .string()
+          .describe(
+            "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+          ),
+      }),
+    )
+    .optional(),
+  production: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod
+          .string()
+          .describe(
+            "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+          ),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -1408,9 +2077,15 @@ export const GetTrackParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getTrackResponseClipStartSecondsMin = 0;
+
+export const getTrackResponseWritersItemShareMin = 0;
+export const getTrackResponseWritersItemShareMax = 100;
+
 export const GetTrackResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  trackVersion: zod.string().nullish(),
   isrc: zod.string().nullish(),
   releaseId: zod.number().nullish(),
   releaseName: zod.string().nullish(),
@@ -1419,12 +2094,70 @@ export const GetTrackResponse = zod.object({
   trackNumber: zod.number().nullish(),
   durationSeconds: zod.number().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
-  composerName: zod.string().nullish(),
-  lyricistName: zod.string().nullish(),
+  explicitStatus: zod.enum(["non_explicit", "explicit", "censored"]),
+  aiUsage: zod
+    .enum(["none", "some", "all"])
+    .describe(
+      "Раскрытие использования генеративного AI (требование DSP с 2024).",
+    ),
+  clipStartSeconds: zod
+    .number()
+    .min(getTrackResponseClipStartSecondsMin)
+    .describe("Стартовая точка превью на DSP в секундах."),
+  recordingYear: zod.number().nullish(),
+  countryOfRecording: zod
+    .string()
+    .nullish()
+    .describe("ISO-3166-1 alpha-2 код страны записи."),
+  audioStyle: zod.enum(["instrumental", "vocal"]),
+  vocalLanguage: zod
+    .string()
+    .nullish()
+    .describe("ISO-639-1 язык вокала (только при audioStyle=vocal)."),
+  lyrics: zod.string().nullish(),
   iswc: zod.string().nullish(),
   audioUrl: zod.string().nullish(),
+  displayArtists: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod.enum(["primary", "featuring", "with", "remixer"]),
+      artistId: zod.number().nullish(),
+    }),
+  ),
+  writers: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod.enum(["composer", "lyricist", "songwriter", "arranger"]),
+      share: zod
+        .number()
+        .min(getTrackResponseWritersItemShareMin)
+        .max(getTrackResponseWritersItemShareMax),
+      caeIpi: zod.string().nullish(),
+    }),
+  ),
+  performers: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod
+        .string()
+        .describe(
+          "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+        ),
+    }),
+  ),
+  production: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod
+        .string()
+        .describe(
+          "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+        ),
+    }),
+  ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -1437,26 +2170,103 @@ export const UpdateTrackParams = zod.object({
 });
 
 export const updateTrackBodyIsExplicitDefault = false;
+export const updateTrackBodyExplicitStatusDefault = `non_explicit`;
+export const updateTrackBodyAiUsageDefault = `none`;
+export const updateTrackBodyClipStartSecondsDefault = 0;
+export const updateTrackBodyClipStartSecondsMin = 0;
+
+export const updateTrackBodyAudioStyleDefault = `vocal`;
+export const updateTrackBodyWritersItemShareMin = 0;
+export const updateTrackBodyWritersItemShareMax = 100;
 
 export const UpdateTrackBody = zod.object({
   title: zod.string(),
+  trackVersion: zod.string().nullish(),
   isrc: zod.string().nullish(),
   releaseId: zod.number().nullish(),
   artistId: zod.number(),
   trackNumber: zod.number().nullish(),
   durationSeconds: zod.number().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(updateTrackBodyIsExplicitDefault),
-  composerName: zod.string().nullish(),
-  lyricistName: zod.string().nullish(),
+  explicitStatus: zod
+    .enum(["non_explicit", "explicit", "censored"])
+    .default(updateTrackBodyExplicitStatusDefault),
+  aiUsage: zod
+    .enum(["none", "some", "all"])
+    .default(updateTrackBodyAiUsageDefault),
+  clipStartSeconds: zod
+    .number()
+    .min(updateTrackBodyClipStartSecondsMin)
+    .default(updateTrackBodyClipStartSecondsDefault),
+  recordingYear: zod.number().nullish(),
+  countryOfRecording: zod.string().nullish(),
+  audioStyle: zod
+    .enum(["instrumental", "vocal"])
+    .default(updateTrackBodyAudioStyleDefault),
+  vocalLanguage: zod.string().nullish(),
+  lyrics: zod.string().nullish(),
   iswc: zod.string().nullish(),
   audioUrl: zod.string().nullish(),
+  displayArtists: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod.enum(["primary", "featuring", "with", "remixer"]),
+        artistId: zod.number().nullish(),
+      }),
+    )
+    .optional(),
+  writers: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod.enum(["composer", "lyricist", "songwriter", "arranger"]),
+        share: zod
+          .number()
+          .min(updateTrackBodyWritersItemShareMin)
+          .max(updateTrackBodyWritersItemShareMax),
+        caeIpi: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  performers: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod
+          .string()
+          .describe(
+            "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+          ),
+      }),
+    )
+    .optional(),
+  production: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        role: zod
+          .string()
+          .describe(
+            "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+          ),
+      }),
+    )
+    .optional(),
 });
+
+export const updateTrackResponseClipStartSecondsMin = 0;
+
+export const updateTrackResponseWritersItemShareMin = 0;
+export const updateTrackResponseWritersItemShareMax = 100;
 
 export const UpdateTrackResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
+  trackVersion: zod.string().nullish(),
   isrc: zod.string().nullish(),
   releaseId: zod.number().nullish(),
   releaseName: zod.string().nullish(),
@@ -1465,12 +2275,70 @@ export const UpdateTrackResponse = zod.object({
   trackNumber: zod.number().nullish(),
   durationSeconds: zod.number().nullish(),
   genre: zod.string().nullish(),
+  subgenre: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
-  composerName: zod.string().nullish(),
-  lyricistName: zod.string().nullish(),
+  explicitStatus: zod.enum(["non_explicit", "explicit", "censored"]),
+  aiUsage: zod
+    .enum(["none", "some", "all"])
+    .describe(
+      "Раскрытие использования генеративного AI (требование DSP с 2024).",
+    ),
+  clipStartSeconds: zod
+    .number()
+    .min(updateTrackResponseClipStartSecondsMin)
+    .describe("Стартовая точка превью на DSP в секундах."),
+  recordingYear: zod.number().nullish(),
+  countryOfRecording: zod
+    .string()
+    .nullish()
+    .describe("ISO-3166-1 alpha-2 код страны записи."),
+  audioStyle: zod.enum(["instrumental", "vocal"]),
+  vocalLanguage: zod
+    .string()
+    .nullish()
+    .describe("ISO-639-1 язык вокала (только при audioStyle=vocal)."),
+  lyrics: zod.string().nullish(),
   iswc: zod.string().nullish(),
   audioUrl: zod.string().nullish(),
+  displayArtists: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod.enum(["primary", "featuring", "with", "remixer"]),
+      artistId: zod.number().nullish(),
+    }),
+  ),
+  writers: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod.enum(["composer", "lyricist", "songwriter", "arranger"]),
+      share: zod
+        .number()
+        .min(updateTrackResponseWritersItemShareMin)
+        .max(updateTrackResponseWritersItemShareMax),
+      caeIpi: zod.string().nullish(),
+    }),
+  ),
+  performers: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod
+        .string()
+        .describe(
+          "vocals | background_vocals | guitar | bass | drums | keyboards |\nmusic_producer | piano | violin | other (см. UI-каталог).\n",
+        ),
+    }),
+  ),
+  production: zod.array(
+    zod.object({
+      name: zod.string(),
+      role: zod
+        .string()
+        .describe(
+          "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
+        ),
+    }),
+  ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });

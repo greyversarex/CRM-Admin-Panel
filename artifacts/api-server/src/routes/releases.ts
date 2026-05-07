@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, platformSettingsTable, type TransferImportItem } from "@workspace/db";
-import { count, eq, desc, and, sql, ilike, or, inArray } from "drizzle-orm";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, platformSettingsTable, releaseArtistsTable, releaseDspsTable, type TransferImportItem } from "@workspace/db";
+import { count, eq, desc, and, sql, ilike, or, inArray, asc } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
   DeleteReleaseParams, UpdateReleaseStatusParams, UpdateReleaseStatusBody,
@@ -68,12 +68,40 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
 
   const [trackCount] = await db.select({ count: count() }).from(tracksTable).where(eq(tracksTable.releaseId, r.id));
 
+  // Multi-primary contributors на уровне релиза. Пустой если есть только legacy
+  // artistId (например, импорт из Spotify не заполнял join-table).
+  const artistsRows = await db.select({
+    artistId: releaseArtistsTable.artistId,
+    role: releaseArtistsTable.role,
+    position: releaseArtistsTable.position,
+    name: artistsTable.name,
+  }).from(releaseArtistsTable)
+    .innerJoin(artistsTable, eq(artistsTable.id, releaseArtistsTable.artistId))
+    .where(eq(releaseArtistsTable.releaseId, r.id))
+    .orderBy(asc(releaseArtistsTable.position), asc(releaseArtistsTable.id));
+
+  const artists = artistsRows.map((a) => ({
+    artistId: a.artistId,
+    name: a.name,
+    role: a.role,
+    position: a.position,
+  }));
+
+  // Выбранные DSP — список кодов из release_dsps.
+  const dspRows = await db.select({ code: releaseDspsTable.dspCode })
+    .from(releaseDspsTable)
+    .where(eq(releaseDspsTable.releaseId, r.id))
+    .orderBy(asc(releaseDspsTable.id));
+  const dsps = dspRows.map((d) => d.code);
+
   const EDITABLE_STATUSES = new Set(["draft", "rejected"]);
   return {
     ...r,
     artistName,
     labelName,
     totalTracks: trackCount.count,
+    artists,
+    dsps,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     // ── Флаги единого источника истины (используются фронтендом) ──────────
@@ -548,6 +576,26 @@ router.post("/releases", async (req, res): Promise<void> => {
   }
 
   const [release] = await db.insert(releasesTable).values(parsed.data).returning();
+
+  // Auto-generate catalogNumber `CAT{id}` если лейбл не задал явно. Делаем
+  // сразу после INSERT, чтобы id был известен.
+  if (!release.catalogNumber || !release.catalogNumber.trim()) {
+    const [updated] = await db.update(releasesTable)
+      .set({ catalogNumber: `CAT${release.id}` })
+      .where(eq(releasesTable.id, release.id))
+      .returning();
+    if (updated) release.catalogNumber = updated.catalogNumber;
+  }
+
+  // Сразу заносим главного артиста в release_artists (primary, position=0),
+  // чтобы multi-primary join-table не был пустой для свежесозданных релизов.
+  // ON CONFLICT DO NOTHING — на случай повторной отправки запроса.
+  await db.insert(releaseArtistsTable).values({
+    releaseId: release.id,
+    artistId: release.artistId,
+    role: "primary",
+    position: 0,
+  }).onConflictDoNothing();
 
   // Task #3: пишем только в audit_log, в activity_log больше не дублируем.
   // Старые записи activity_log остаются для дашборд-виджета «Recent activity».

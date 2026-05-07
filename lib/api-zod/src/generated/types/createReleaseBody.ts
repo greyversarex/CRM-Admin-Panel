@@ -9,16 +9,24 @@ import type { CreateReleaseBodyReleaseType } from "./createReleaseBodyReleaseTyp
 
 export interface CreateReleaseBody {
   title: string;
+  releaseVersion?: string | null;
   releaseType: CreateReleaseBodyReleaseType;
   artistId: number;
   labelId?: number | null;
   upc?: string | null;
+  catalogNumber?: string | null;
   coverUrl?: string | null;
   genre?: string | null;
+  subgenre?: string | null;
   releaseDate?: string | null;
+  releaseTime?: string | null;
   language?: string | null;
   isExplicit?: boolean;
+  isCompilation?: boolean;
+  isVariousArtists?: boolean;
   territories?: string[];
   pLine?: string | null;
   cLine?: string | null;
+  pLineYear?: number | null;
+  cLineYear?: number | null;
 }
