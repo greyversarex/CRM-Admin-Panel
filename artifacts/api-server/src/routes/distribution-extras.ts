@@ -18,8 +18,9 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, type AcrCheckSegment } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, ddexMessagesTable, deliveriesTable, integrationsTable, assetsTable, type AcrCheckSegment } from "@workspace/db";
+import { eq, desc, and, gte, lte, inArray, sql, count, isNotNull, or } from "drizzle-orm";
+import { getDataScope } from "../lib/auth";
 import { createHmac } from "node:crypto";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
@@ -735,6 +736,243 @@ router.post("/distribution/musicbrainz/check-isrc", async (req, res): Promise<vo
   void auditMutation(req, { action: "musicbrainz_isrc_check", entityType: "acr_check", entityId: row.id, before: null, after: row });
   void assessAndPersist(trackReleaseId);
   res.status(200).json(row);
+});
+
+// ── Moderation queue ────────────────────────────────────────────────────
+//
+// Релизы, ожидающие/прошедшие модерацию. По каждому релизу даём:
+//   • базовые поля (title/artist/upc/type/submitted)
+//   • сводку по аудио (сколько треков всего / сколько с реальным asset row)
+//   • статус ACR-проверки (pending/clean/match/error/none)
+//   • risk_score из risk-engine (если есть)
+// Фильтр по статусу: pending_review (по умолчанию), approved, rejected, all.
+router.get("/distribution/moderation", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "Admin/manager only" }); return; }
+
+  const status = typeof req.query.status === "string" ? req.query.status : "pending_review";
+  const limit = Math.min(parseInt(String(req.query.limit ?? "50"), 10) || 50, 200);
+
+  const statusFilter =
+    status === "all"
+      ? undefined
+      : inArray(releasesTable.status, status.split(",").filter(Boolean));
+
+  const releases = await db.select({
+    id:           releasesTable.id,
+    title:        releasesTable.title,
+    artistId:     releasesTable.artistId,
+    artistName:   artistsTable.name,
+    releaseType:  releasesTable.releaseType,
+    upc:          releasesTable.upc,
+    status:       releasesTable.status,
+    statusNote:   releasesTable.statusNote,
+    submittedAt:  releasesTable.updatedAt,
+    riskScore:    releasesTable.riskScore,
+    riskFactors:  releasesTable.riskFactors,
+  })
+    .from(releasesTable)
+    .leftJoin(artistsTable, eq(releasesTable.artistId, artistsTable.id))
+    .where(statusFilter)
+    .orderBy(desc(releasesTable.updatedAt))
+    .limit(limit);
+
+  if (releases.length === 0) { res.json({ items: [] }); return; }
+
+  const releaseIds = releases.map((r) => r.id);
+
+  // Tracks per release (count + how many with audio asset)
+  const trackRows = await db.select({
+    releaseId: tracksTable.releaseId,
+    trackId:   tracksTable.id,
+  }).from(tracksTable).where(inArray(tracksTable.releaseId, releaseIds));
+  const trackIds = trackRows.map((t) => t.trackId);
+
+  const audioAssets = trackIds.length > 0
+    ? await db.select({ trackId: assetsTable.trackId }).from(assetsTable)
+        .where(and(inArray(assetsTable.trackId, trackIds), eq(assetsTable.kind, "audio")))
+    : [];
+  const tracksWithAudio = new Set(audioAssets.map((a) => a.trackId).filter((x): x is number => x != null));
+
+  const trackStatsByRelease = new Map<number, { total: number; withAudio: number }>();
+  for (const t of trackRows) {
+    if (t.releaseId == null) continue;
+    const cur = trackStatsByRelease.get(t.releaseId) ?? { total: 0, withAudio: 0 };
+    cur.total += 1;
+    if (t.trackId != null && tracksWithAudio.has(t.trackId)) cur.withAudio += 1;
+    trackStatsByRelease.set(t.releaseId, cur);
+  }
+
+  // Latest ACR check per release (берём самый свежий, агрегируем по статусу всех)
+  const acrRows = await db.select({
+    releaseId: acrChecksTable.releaseId,
+    status:    acrChecksTable.status,
+    scannedAt: acrChecksTable.scannedAt,
+  }).from(acrChecksTable)
+    .where(and(isNotNull(acrChecksTable.releaseId), inArray(acrChecksTable.releaseId, releaseIds)))
+    .orderBy(desc(acrChecksTable.scannedAt));
+
+  // Сворачиваем в один статус: если есть match — match; иначе если есть error — error;
+  // иначе если есть clean — clean; иначе pending; иначе none.
+  const acrByRelease = new Map<number, { status: string; lastScannedAt: string | null; total: number }>();
+  for (const a of acrRows) {
+    if (!a.releaseId) continue;
+    const cur = acrByRelease.get(a.releaseId);
+    if (!cur) {
+      acrByRelease.set(a.releaseId, { status: a.status, lastScannedAt: a.scannedAt.toISOString(), total: 1 });
+    } else {
+      const order = ["match", "error", "pending", "clean"];
+      const a1 = order.indexOf(cur.status);
+      const a2 = order.indexOf(a.status);
+      if (a2 >= 0 && (a1 < 0 || a2 < a1)) cur.status = a.status;
+      cur.total += 1;
+    }
+  }
+
+  res.json({
+    items: releases.map((r) => {
+      const ts = trackStatsByRelease.get(r.id) ?? { total: 0, withAudio: 0 };
+      const acr = acrByRelease.get(r.id);
+      const riskFactors = (r.riskFactors as unknown as Array<{ code: string; severity: string }> | null) ?? [];
+      const issuesCount = riskFactors.filter((f) => f.severity === "error" || f.severity === "warning").length;
+      return {
+        id:           r.id,
+        title:        r.title,
+        artistId:     r.artistId,
+        artistName:   r.artistName ?? "",
+        releaseType:  r.releaseType,
+        upc:          r.upc ?? "",
+        status:       r.status,
+        statusNote:   r.statusNote ?? null,
+        submittedAt:  r.submittedAt.toISOString(),
+        audio:        ts,
+        acr: acr
+          ? { status: acr.status, lastScannedAt: acr.lastScannedAt, totalChecks: acr.total }
+          : { status: "none", lastScannedAt: null, totalChecks: 0 },
+        riskScore:    r.riskScore ?? null,
+        issuesCount,
+      };
+    }),
+  });
+});
+
+// ── DSP Status — агрегация по партнёрам ─────────────────────────────────
+//
+// Сводка по каждой DSP/деливери-партнёру: сколько сообщений ушло/принято/
+// отклонено/в очереди/с ошибками; когда в последний раз была отправка/ack;
+// текущий integration.status (для подсветки «не настроено»). Используется на
+// dashboard-вкладке «Статус площадок».
+router.get("/distribution/dsp-status", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "Admin/manager only" }); return; }
+
+  // Группируем ddex_messages по partner_code + status
+  const msgRows = await db.select({
+    partnerCode: ddexMessagesTable.partnerCode,
+    status:      ddexMessagesTable.status,
+    cnt:         count(),
+    lastSent:    sql<string | null>`max(${ddexMessagesTable.sentAt})`,
+    lastAcked:   sql<string | null>`max(${ddexMessagesTable.ackedAt})`,
+  })
+    .from(ddexMessagesTable)
+    .groupBy(ddexMessagesTable.partnerCode, ddexMessagesTable.status);
+
+  // Параллельно — текущие настроенные DSP-/delivery-интеграции, чтобы
+  // показать «настроено / не настроено» даже если по ним ещё нет сообщений.
+  const integrations = await db.select({
+    code:       integrationsTable.code,
+    name:       integrationsTable.name,
+    status:     integrationsTable.status,
+    category:   integrationsTable.category,
+  }).from(integrationsTable)
+    .where(or(eq(integrationsTable.category, "dsp"), eq(integrationsTable.category, "delivery")));
+
+  type DspRow = {
+    code: string;
+    name: string;
+    integrationStatus: string | null;
+    counts: { sent: number; acked: number; rejected: number; queued: number; invalid: number; cancelled: number; draft: number; validated: number };
+    totalMessages: number;
+    lastSentAt: string | null;
+    lastAckedAt: string | null;
+  };
+
+  const map = new Map<string, DspRow>();
+  for (const i of integrations) {
+    map.set(i.code, {
+      code: i.code, name: i.name, integrationStatus: i.status,
+      counts: { sent: 0, acked: 0, rejected: 0, queued: 0, invalid: 0, cancelled: 0, draft: 0, validated: 0 },
+      totalMessages: 0, lastSentAt: null, lastAckedAt: null,
+    });
+  }
+  for (const m of msgRows) {
+    let row = map.get(m.partnerCode);
+    if (!row) {
+      row = {
+        code: m.partnerCode, name: m.partnerCode, integrationStatus: null,
+        counts: { sent: 0, acked: 0, rejected: 0, queued: 0, invalid: 0, cancelled: 0, draft: 0, validated: 0 },
+        totalMessages: 0, lastSentAt: null, lastAckedAt: null,
+      };
+      map.set(m.partnerCode, row);
+    }
+    if (m.status in row.counts) (row.counts as Record<string, number>)[m.status] = m.cnt;
+    row.totalMessages += m.cnt;
+    if (m.lastSent && (!row.lastSentAt || m.lastSent > row.lastSentAt)) row.lastSentAt = m.lastSent;
+    if (m.lastAcked && (!row.lastAckedAt || m.lastAcked > row.lastAckedAt)) row.lastAckedAt = m.lastAcked;
+  }
+
+  res.json({ items: Array.from(map.values()).sort((a, b) => b.totalMessages - a.totalMessages || a.name.localeCompare(b.name)) });
+});
+
+// ── Scheduled — релизы с будущей датой релиза ────────────────────────────
+//
+// Берём релизы, у которых releaseDate >= today и они в активном статусе
+// (approved/live/delivering — то есть уже могут уйти/ушли в DSP, но дата ещё
+// не наступила). Для status='draft' такие релизы не показываем (они ещё в
+// работе). Используется для календаря выпусков.
+router.get("/distribution/scheduled", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "Admin/manager only" }); return; }
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const from = typeof req.query.from === "string" ? req.query.from : today;
+  const to   = typeof req.query.to === "string" ? req.query.to : null;
+
+  const conds = [
+    isNotNull(releasesTable.releaseDate),
+    gte(releasesTable.releaseDate, from),
+    inArray(releasesTable.status, ["approved", "live", "delivering", "pending_review"]),
+  ];
+  if (to) conds.push(lte(releasesTable.releaseDate, to));
+
+  const rows = await db.select({
+    id:          releasesTable.id,
+    title:       releasesTable.title,
+    artistName:  artistsTable.name,
+    releaseType: releasesTable.releaseType,
+    upc:         releasesTable.upc,
+    status:      releasesTable.status,
+    releaseDate: releasesTable.releaseDate,
+    releaseTime: releasesTable.releaseTime,
+  })
+    .from(releasesTable)
+    .leftJoin(artistsTable, eq(releasesTable.artistId, artistsTable.id))
+    .where(and(...conds))
+    .orderBy(releasesTable.releaseDate)
+    .limit(200);
+
+  res.json({
+    items: rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      artistName: r.artistName ?? "",
+      releaseType: r.releaseType,
+      upc: r.upc ?? "",
+      status: r.status,
+      releaseDate: r.releaseDate,
+      releaseTime: r.releaseTime ?? null,
+    })),
+  });
 });
 
 // ── Disputes (фильтрованные конфликты по релизам) ─────────────────────────
