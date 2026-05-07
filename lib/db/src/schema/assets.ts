@@ -17,6 +17,14 @@ export const assetsTable = pgTable("assets", {
   sizeBytes: integer("size_bytes").notNull(),
   sha256: text("sha256"),
   durationSeconds: integer("duration_seconds"),
+  // Технические характеристики аудио — извлекаются через music-metadata при
+  // confirm()-загрузке. Используются на странице модерации (Audio File Requirements)
+  // и при формировании DDEX TechnicalSoundRecordingDetails.
+  sampleRateHz: integer("sample_rate_hz"),
+  bitDepth: integer("bit_depth"),
+  channels: integer("channels"),
+  codec: text("codec"),
+  bitrateKbps: integer("bitrate_kbps"),
   // set null: ассет может остаться в storage даже после удаления родителя (для аудита/восстановления)
   releaseId: integer("release_id").references(() => releasesTable.id, { onDelete: "set null" }),
   trackId: integer("track_id").references(() => tracksTable.id, { onDelete: "set null" }),

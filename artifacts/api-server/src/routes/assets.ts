@@ -261,9 +261,17 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
   });
   const sha256 = hash.digest("hex");
 
-  // For audio, extract duration in a second pass (music-metadata reads only the
-  // header, so this is cheap even for 200 MB files).
+  // For audio, extract duration + technical specs (sample rate, bit depth,
+  // channels, codec, bitrate) in a second pass. music-metadata reads only the
+  // header, so this is cheap even for 200 MB files. Эти поля показываются на
+  // экране модерации (Audio File Requirements) и попадают в DDEX
+  // TechnicalSoundRecordingDetails.
   let durationSeconds: number | null = null;
+  let sampleRateHz: number | null = null;
+  let bitDepth: number | null = null;
+  let channels: number | null = null;
+  let codec: string | null = null;
+  let bitrateKbps: number | null = null;
   if (body.kind === "audio") {
     try {
       const stream = file.createReadStream();
@@ -272,7 +280,13 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
         { mimeType: body.mimeType, size: sizeBytes },
         { duration: true },
       );
-      durationSeconds = audioMeta.format.duration ? Math.round(audioMeta.format.duration) : null;
+      const f = audioMeta.format;
+      durationSeconds = f.duration ? Math.round(f.duration) : null;
+      sampleRateHz = f.sampleRate ?? null;
+      bitDepth = f.bitsPerSample ?? null;
+      channels = f.numberOfChannels ?? null;
+      codec = f.codec ?? f.container ?? null;
+      bitrateKbps = f.bitrate ? Math.round(f.bitrate / 1000) : null;
       stream.destroy();
     } catch (err) {
       req.log?.warn({ err }, "music-metadata failed");
@@ -307,6 +321,11 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
     sizeBytes,
     sha256,
     durationSeconds,
+    sampleRateHz,
+    bitDepth,
+    channels,
+    codec,
+    bitrateKbps,
     releaseId: body.releaseId ?? null,
     trackId: body.trackId ?? null,
     artistId: scopedArtistId,

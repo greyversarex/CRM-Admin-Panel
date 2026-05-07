@@ -18,9 +18,13 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, ddexMessagesTable, deliveriesTable, integrationsTable, assetsTable, type AcrCheckSegment } from "@workspace/db";
-import { eq, desc, and, gte, lte, inArray, sql, count, isNotNull, or } from "drizzle-orm";
+import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, ddexMessagesTable, deliveriesTable, integrationsTable, assetsTable, labelsTable, releaseArtistsTable, releaseDspsTable, type AcrCheckSegment } from "@workspace/db";
+import { eq, desc, and, gte, lte, inArray, sql, count, isNotNull, or, asc } from "drizzle-orm";
 import { getDataScope } from "../lib/auth";
+import { resolveAssetLocalPath } from "../ddex/service";
+import * as mm from "music-metadata";
+import { createReadStream } from "node:fs";
+import type { Readable } from "node:stream";
 import { createHmac } from "node:crypto";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
@@ -983,6 +987,263 @@ router.get("/distribution/disputes", async (req, res) => {
     : eq(rightsConflictsTable.assetType, "release");
   const rows = await db.select().from(rightsConflictsTable).where(where).orderBy(desc(rightsConflictsTable.createdAt)).limit(200);
   res.json({ disputes: rows });
+});
+
+// ── Backfill audio tech metadata ─────────────────────────────────────────
+//
+// Одноразовый endpoint: для каждого assets.kind='audio' БЕЗ sample_rate_hz
+// читает локальный файл через music-metadata и заполняет sample_rate_hz,
+// bit_depth, channels, codec, bitrate_kbps. Используется один раз после
+// миграции 0018, и каждый раз когда добавляется аудио без правильных метатэгов.
+router.post("/distribution/backfill-audio-tech", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "Admin/manager only" }); return; }
+
+  const limit = Math.min(parseInt(String(req.query.limit ?? "50"), 10) || 50, 500);
+  const rows = await db.select({
+    id: assetsTable.id,
+    objectPath: assetsTable.objectPath,
+    storageKey: assetsTable.storageKey,
+    mimeType: assetsTable.mimeType,
+    sizeBytes: assetsTable.sizeBytes,
+  }).from(assetsTable)
+    .where(and(eq(assetsTable.kind, "audio"), sql`${assetsTable.sampleRateHz} IS NULL`))
+    .limit(limit);
+
+  let updated = 0; let failed = 0;
+  for (const r of rows) {
+    const localPath = resolveAssetLocalPath(r.objectPath, r.storageKey);
+    if (!localPath) { failed += 1; continue; }
+    try {
+      const stream = createReadStream(localPath);
+      const meta = await mm.parseStream(
+        stream as unknown as Readable,
+        { mimeType: r.mimeType, size: r.sizeBytes },
+        { duration: true },
+      );
+      const f = meta.format;
+      stream.destroy();
+      await db.update(assetsTable).set({
+        durationSeconds: f.duration ? Math.round(f.duration) : undefined,
+        sampleRateHz: f.sampleRate ?? null,
+        bitDepth: f.bitsPerSample ?? null,
+        channels: f.numberOfChannels ?? null,
+        codec: f.codec ?? f.container ?? null,
+        bitrateKbps: f.bitrate ? Math.round(f.bitrate / 1000) : null,
+      }).where(eq(assetsTable.id, r.id));
+      updated += 1;
+    } catch (err) {
+      logger.warn({ err, assetId: r.id }, "backfill-audio-tech failed");
+      failed += 1;
+    }
+  }
+
+  res.json({ scanned: rows.length, updated, failed });
+});
+
+// ── Moderation detail (полная карточка релиза для модерации) ────────────
+//
+// Отдаёт админу всё необходимое для решения «одобрить/отклонить»:
+//   • полную карточку релиза (cover, артисты с ролями, лейбл, UPC, c/p line,
+//     жанр, даты, тип, выбранные DSP)
+//   • список треков со всеми Audio Details (ISRC, версия, длительность,
+//     контрибьюторы — writers/performers/production, lyrics, языки)
+//   • аудио-файл по каждому треку: формат, sample rate, bit depth, channels,
+//     размер + проверка соответствия требованиям (lossless, 44.1+ kHz, 16+ bit)
+//   • cover-ассет: размеры файла + предупреждение если меньше 3000×3000
+//   • историю ACR по релизу (последние сегменты)
+//   • risk score / факторы
+//   • автоматический QC-чеклист с issues для top-banner ("N issues")
+router.get("/distribution/moderation/:releaseId/details", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "Admin/manager only" }); return; }
+
+  const releaseId = parseInt(req.params.releaseId, 10);
+  if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
+
+  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId));
+  if (!release) { res.status(404).json({ error: "Release not found" }); return; }
+
+  // Артист (legacy) + лейбл
+  const [legacyArtist] = await db.select({ id: artistsTable.id, name: artistsTable.name }).from(artistsTable).where(eq(artistsTable.id, release.artistId));
+  const label = release.labelId
+    ? (await db.select({ id: labelsTable.id, name: labelsTable.name }).from(labelsTable).where(eq(labelsTable.id, release.labelId)))[0] ?? null
+    : null;
+
+  // Multi-primary artists через release_artists
+  const releaseArtists = await db.select({
+    artistId: releaseArtistsTable.artistId,
+    role: releaseArtistsTable.role,
+    position: releaseArtistsTable.position,
+    name: artistsTable.name,
+  }).from(releaseArtistsTable)
+    .innerJoin(artistsTable, eq(artistsTable.id, releaseArtistsTable.artistId))
+    .where(eq(releaseArtistsTable.releaseId, releaseId))
+    .orderBy(asc(releaseArtistsTable.position), asc(releaseArtistsTable.id));
+
+  // Выбранные DSP
+  const dsps = (await db.select({ code: releaseDspsTable.dspCode })
+    .from(releaseDspsTable)
+    .where(eq(releaseDspsTable.releaseId, releaseId))).map((r) => r.code);
+
+  // Cover asset
+  const [coverAsset] = await db.select().from(assetsTable)
+    .where(and(eq(assetsTable.releaseId, releaseId), inArray(assetsTable.kind, ["cover", "image"])))
+    .orderBy(desc(assetsTable.createdAt))
+    .limit(1);
+
+  // Tracks + audio assets
+  const tracks = await db.select().from(tracksTable)
+    .where(eq(tracksTable.releaseId, releaseId))
+    .orderBy(asc(tracksTable.trackNumber), asc(tracksTable.id));
+
+  const trackIds = tracks.map((t) => t.id);
+  const audioAssets = trackIds.length
+    ? await db.select().from(assetsTable)
+        .where(and(inArray(assetsTable.trackId, trackIds), eq(assetsTable.kind, "audio")))
+    : [];
+  const audioByTrack = new Map<number, typeof audioAssets[number]>();
+  for (const a of audioAssets) if (a.trackId != null && !audioByTrack.has(a.trackId)) audioByTrack.set(a.trackId, a);
+
+  // ACR checks по релизу (история, последние 50)
+  const acrChecks = await db.select().from(acrChecksTable)
+    .where(eq(acrChecksTable.releaseId, releaseId))
+    .orderBy(desc(acrChecksTable.scannedAt))
+    .limit(50);
+
+  // ── Audio File Requirements (Symphonic / DDEX baseline) ────────────────
+  const REQ = { losslessMimes: ["audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "audio/x-flac"], minSampleRate: 44100, minBitDepth: 16 };
+
+  function checkTrackAudio(a: typeof audioAssets[number] | undefined) {
+    if (!a) return { ok: false, missing: true, checks: { format: false, sampleRate: false, bitDepth: false } };
+    const isLossless = REQ.losslessMimes.includes(a.mimeType.toLowerCase());
+    const srOk = (a.sampleRateHz ?? 0) >= REQ.minSampleRate;
+    const bdOk = (a.bitDepth ?? 0) >= REQ.minBitDepth;
+    return {
+      ok: isLossless && srOk && bdOk,
+      missing: false,
+      checks: { format: isLossless, sampleRate: srOk, bitDepth: bdOk },
+    };
+  }
+
+  // ── Auto QC issues ─────────────────────────────────────────────────────
+  const issues: { code: string; severity: "error" | "warning"; message: string; trackId?: number }[] = [];
+  if (!release.upc) issues.push({ code: "missing_upc", severity: "error", message: "UPC не указан" });
+  if (!release.releaseDate) issues.push({ code: "missing_release_date", severity: "error", message: "Дата релиза не указана" });
+  if (!coverAsset) issues.push({ code: "missing_cover", severity: "error", message: "Обложка не загружена" });
+  else if (coverAsset.sizeBytes < 200_000) issues.push({ code: "small_cover", severity: "warning", message: "Обложка возможно меньше 3000×3000 (файл < 200 КБ)" });
+  if (!releaseArtists.length) issues.push({ code: "no_artists", severity: "error", message: "Не указаны primary-артисты релиза" });
+  if (tracks.length === 0) issues.push({ code: "no_tracks", severity: "error", message: "В релизе нет треков" });
+
+  for (const t of tracks) {
+    if (!t.isrc) issues.push({ code: "missing_isrc", severity: "error", message: `Track ${t.trackNumber ?? "?"}: ISRC не указан`, trackId: t.id });
+    const audio = audioByTrack.get(t.id);
+    const ck = checkTrackAudio(audio);
+    if (ck.missing) issues.push({ code: "missing_audio", severity: "error", message: `Track ${t.trackNumber ?? "?"}: аудио-файл не загружен`, trackId: t.id });
+    else {
+      if (!ck.checks.format)     issues.push({ code: "non_lossless",     severity: "error",   message: `Track ${t.trackNumber ?? "?"}: формат не lossless (${audio?.mimeType ?? "—"})`,        trackId: t.id });
+      if (!ck.checks.sampleRate) issues.push({ code: "low_sample_rate",  severity: "warning", message: `Track ${t.trackNumber ?? "?"}: sample rate ${audio?.sampleRateHz ?? "?"} Hz (требуется ≥ ${REQ.minSampleRate})`, trackId: t.id });
+      if (!ck.checks.bitDepth)   issues.push({ code: "low_bit_depth",    severity: "warning", message: `Track ${t.trackNumber ?? "?"}: bit depth ${audio?.bitDepth ?? "?"} (требуется ≥ ${REQ.minBitDepth})`,         trackId: t.id });
+    }
+    const writersTotal = ((t.writers as Array<{ share?: number }> | null) ?? []).reduce((s, w) => s + (w.share ?? 0), 0);
+    if (writersTotal > 0 && Math.abs(writersTotal - 100) > 0.01) {
+      issues.push({ code: "writers_share_mismatch", severity: "warning", message: `Track ${t.trackNumber ?? "?"}: сумма долей авторов = ${writersTotal}% (должна быть 100%)`, trackId: t.id });
+    }
+  }
+
+  // Группировка ACR по релизу: общий статус
+  const order = ["match", "error", "pending", "clean"];
+  let acrStatus: string = "none";
+  for (const c of acrChecks) {
+    const a1 = order.indexOf(acrStatus);
+    const a2 = order.indexOf(c.status);
+    if (a2 >= 0 && (a1 < 0 || a2 < a1)) acrStatus = c.status;
+  }
+
+  res.json({
+    release: {
+      id: release.id,
+      title: release.title,
+      releaseType: release.releaseType,
+      releaseVersion: release.releaseVersion,
+      catalogNumber: release.catalogNumber,
+      upc: release.upc,
+      status: release.status,
+      statusNote: release.statusNote,
+      genre: release.genre,
+      subgenre: release.subgenre,
+      language: release.language,
+      isExplicit: release.isExplicit,
+      isCompilation: release.isCompilation,
+      isVariousArtists: release.isVariousArtists,
+      releaseDate: release.releaseDate,
+      releaseTime: release.releaseTime,
+      cLine: release.cLine, cLineYear: release.cLineYear,
+      pLine: release.pLine, pLineYear: release.pLineYear,
+      submittedAt: release.updatedAt.toISOString(),
+      riskScore: release.riskScore ?? null,
+      riskFactors: release.riskFactors ?? [],
+    },
+    legacyArtist,
+    label,
+    artists: releaseArtists,
+    dsps,
+    cover: coverAsset ? {
+      id: coverAsset.id,
+      filename: coverAsset.filename,
+      mimeType: coverAsset.mimeType,
+      sizeBytes: coverAsset.sizeBytes,
+      objectPath: coverAsset.objectPath,
+    } : null,
+    tracks: tracks.map((t) => {
+      const audio = audioByTrack.get(t.id);
+      const ck = checkTrackAudio(audio);
+      return {
+        id: t.id,
+        position: t.trackNumber,
+        title: t.title,
+        trackVersion: t.trackVersion,
+        isrc: t.isrc,
+        durationSeconds: audio?.durationSeconds ?? t.durationSeconds ?? null,
+        explicitStatus: t.explicitStatus,
+        aiUsage: t.aiUsage,
+        recordingYear: t.recordingYear,
+        countryOfRecording: t.countryOfRecording,
+        audioStyle: t.audioStyle,
+        vocalLanguage: t.vocalLanguage,
+        hasLyrics: !!(t.lyrics && t.lyrics.trim().length > 0),
+        displayArtists: t.displayArtists ?? [],
+        writers: t.writers ?? [],
+        performers: t.performers ?? [],
+        production: t.production ?? [],
+        audio: audio ? {
+          filename: audio.filename,
+          mimeType: audio.mimeType,
+          sizeBytes: audio.sizeBytes,
+          sampleRateHz: audio.sampleRateHz,
+          bitDepth: audio.bitDepth,
+          channels: audio.channels,
+          codec: audio.codec,
+          bitrateKbps: audio.bitrateKbps,
+        } : null,
+        requirements: ck,
+      };
+    }),
+    acr: {
+      status: acrStatus,
+      totalChecks: acrChecks.length,
+      latest: acrChecks.slice(0, 5).map((c) => ({
+        id: c.id,
+        scannedAt: c.scannedAt.toISOString(),
+        status: c.status,
+        confidence: c.confidence,
+        matchedTitle: c.matchedTitle,
+        matchedArtist: c.matchedArtist,
+      })),
+    },
+    requirements: REQ,
+    issues,
+  });
 });
 
 export default router;

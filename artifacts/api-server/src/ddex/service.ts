@@ -53,7 +53,7 @@ const DEFAULT_DEAL_USE_TYPES = ["OnDemandStream", "PermanentDownload"] as const;
  * Преобразует storageKey/objectPath в локальный файловый путь.
  * Для assets.objectPath вида `/objects/uploads/<uuid>` склеиваем с LOCAL_STORAGE_ROOT.
  */
-function resolveAssetLocalPath(objectPath: string | null, storageKey: string | null): string | null {
+export function resolveAssetLocalPath(objectPath: string | null, storageKey: string | null): string | null {
   // Защитный fallback для legacy-строк: если storageKey не содержит ожидаемого
   // root-префикса ("private/" или "public/"), доверяем ему меньше и пробуем
   // путь от objectPath (где префикс гарантирован). См. миграцию

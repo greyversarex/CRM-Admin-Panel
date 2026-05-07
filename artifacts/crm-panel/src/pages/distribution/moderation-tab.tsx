@@ -21,9 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { ModerationDetailDialog } from "./moderation-detail-dialog";
 
 type ModerationItem = {
   id: number;
@@ -43,15 +42,6 @@ type ModerationItem = {
 
 async function jget<T>(url: string): Promise<T> {
   const r = await fetch(url, { credentials: "same-origin" });
-  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
-  return r.json() as Promise<T>;
-}
-async function jpatch<T>(url: string, body: unknown): Promise<T> {
-  const r = await fetch(url, {
-    method: "PATCH", credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
   if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
   return r.json() as Promise<T>;
 }
@@ -105,7 +95,7 @@ export function ModerationTab() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<"pending_review" | "approved" | "rejected" | "all">("pending_review");
   const [search, setSearch] = useState("");
-  const [reviewing, setReviewing] = useState<ModerationItem | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const listQ = useQuery({
     queryKey: ["moderation", statusFilter],
@@ -202,11 +192,9 @@ export function ModerationTab() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {r.status === "pending_review" && (
-                      <Button size="sm" variant="outline" onClick={() => setReviewing(r)} data-testid={`button-review-${r.id}`}>
-                        Рассмотреть
-                      </Button>
-                    )}
+                    <Button size="sm" variant={r.status === "pending_review" ? "default" : "outline"} onClick={() => setReviewingId(r.id)} data-testid={`button-review-${r.id}`}>
+                      {r.status === "pending_review" ? "Рассмотреть" : "Детали"}
+                    </Button>
                     <Button asChild size="sm" data-testid={`button-open-${r.id}`}>
                       <Link href={`/releases/${r.id}`}>
                         <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Открыть
@@ -220,12 +208,12 @@ export function ModerationTab() {
         </Table>
       </div>
 
-      {reviewing && (
-        <ReviewDialog
-          item={reviewing}
-          onClose={() => setReviewing(null)}
-          onDone={() => {
-            setReviewing(null);
+      {reviewingId != null && (
+        <ModerationDetailDialog
+          releaseId={reviewingId}
+          onClose={() => setReviewingId(null)}
+          onDecided={() => {
+            setReviewingId(null);
             qc.invalidateQueries({ queryKey: ["moderation"] });
             toast({ title: "Статус релиза обновлён" });
           }}
@@ -235,93 +223,3 @@ export function ModerationTab() {
   );
 }
 
-function ReviewDialog({ item, onClose, onDone }: { item: ModerationItem; onClose: () => void; onDone: () => void }) {
-  const { toast } = useToast();
-  const [note, setNote] = useState("");
-  const [decision, setDecision] = useState<"approved" | "rejected" | null>(null);
-
-  const decideMut = useMutation({
-    mutationFn: async (d: "approved" | "rejected") =>
-      jpatch(`/api/releases/${item.id}/status`, { status: d, note: note.trim() || undefined }),
-    onSuccess: onDone,
-    onError: (e: Error) => toast({ variant: "destructive", title: "Не удалось обновить статус", description: e.message }),
-  });
-
-  const audioOk = item.audio.total > 0 && item.audio.withAudio === item.audio.total;
-  const acrOk = item.acr.status === "clean" || item.acr.status === "none";
-
-  return (
-    <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>Модерация релиза «{item.title}»</DialogTitle>
-          <DialogDescription>
-            {item.artistName} · {item.releaseType.toUpperCase()} {item.upc ? `· UPC ${item.upc}` : ""}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-xs text-muted-foreground">Аудио</div>
-              <div className={audioOk ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
-                {item.audio.withAudio}/{item.audio.total} треков загружены
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">ACR-проверка</div>
-              <div className={acrOk ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
-                {item.acr.status === "none"  && "не запускалась"}
-                {item.acr.status === "clean" && "совпадений нет"}
-                {item.acr.status === "match" && "найдены совпадения"}
-                {item.acr.status === "pending" && "в процессе"}
-                {item.acr.status === "error" && "ошибка проверки"}
-                {item.acr.totalChecks > 0 && ` (${item.acr.totalChecks})`}
-              </div>
-            </div>
-            {item.riskScore != null && (
-              <div className="col-span-2">
-                <div className="text-xs text-muted-foreground">Risk score</div>
-                <div>{item.riskScore} / 100 · {item.issuesCount} замечаний</div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Комментарий (попадёт в `releases.status_note` и в уведомление пользователю)
-            </label>
-            <Textarea
-              value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="Например: «Заменить обложку — не соответствует требованиям 3000×3000»"
-              rows={3} data-testid="textarea-review-note"
-            />
-          </div>
-
-          {decision === "rejected" && !note.trim() && (
-            <div className="text-xs text-red-600">Для отклонения укажите причину в комментарии.</div>
-          )}
-        </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
-          <Button
-            variant="destructive"
-            disabled={decideMut.isPending || !note.trim()}
-            onClick={() => { setDecision("rejected"); decideMut.mutate("rejected"); }}
-            data-testid="button-reject"
-          >
-            <XCircle className="h-4 w-4 mr-2" />Отклонить
-          </Button>
-          <Button
-            disabled={decideMut.isPending}
-            onClick={() => { setDecision("approved"); decideMut.mutate("approved"); }}
-            data-testid="button-approve"
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />Одобрить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
