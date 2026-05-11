@@ -605,7 +605,7 @@ function Step1Details({
             </div>
           </div>
 
-          {/* Язык / Дата / Время */}
+          {/* Язык метаданных (дата выхода настраивается на Шаге 3 «Доставка на DSP») */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-xs text-muted-foreground">Язык метаданных</FieldLabel>
@@ -613,14 +613,6 @@ function Step1Details({
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Дата релиза</FieldLabel>
-              <Input type="date" value={form.releaseDate} onChange={(e) => set("releaseDate", e.target.value)} className="bg-background/40" />
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Время выхода (UTC)</FieldLabel>
-              <Input type="time" value={form.releaseTime} onChange={(e) => set("releaseTime", e.target.value)} className="bg-background/40" />
             </div>
           </div>
 

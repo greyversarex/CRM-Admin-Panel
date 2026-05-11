@@ -35,7 +35,7 @@ export function releaseEditableReason(
 ): string | null {
   if (scope.fullAccess) return null;
   if (status === "draft" || status === "rejected") return null;
-  return `Release in status '${status}' is locked for editing. Wait for moderator decision or take down to edit.`;
+  return `Релиз в статусе «${status}» закрыт для редактирования. Дождитесь решения модератора или снимите релиз с витрин (Take Down), чтобы вносить правки.`;
 }
 
 // ─── Transfer import storage ────────────────────────────────────────────────
