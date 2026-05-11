@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useUpdateTrack, useDeleteTrack,
   getListTracksQueryKey, getGetReleaseQueryKey,
@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronUp, Trash2, Music2, Save, Wand2 } from "lucide-react";
-import { AudioUploader, assetHref } from "@/components/asset-uploader";
+import { ChevronDown, ChevronUp, Trash2, Music2, Save, Wand2, Upload, Loader2 } from "lucide-react";
+import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "./types";
 import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
@@ -41,6 +41,22 @@ export function TrackCard({
   const deleteTrack = useDeleteTrack();
   const [draft, setDraft] = useState<Track>(track);
   const dirty = JSON.stringify(draft) !== JSON.stringify(track);
+
+  // Инлайн-загрузка аудио прямо из шапки строки трека (когда audioUrl ещё пуст).
+  const inlineUploadRef = useRef<HTMLInputElement>(null);
+  const { upload: inlineUpload, isUploading: isInlineUploading } = useAssetUpload();
+  const onInlineAudio = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const asset = await inlineUpload(file, { kind: "audio", trackId: track.id, attach: true });
+      setDraft((p) => ({ ...p, audioUrl: asset.objectPath, durationSeconds: asset.durationSeconds ?? p.durationSeconds }));
+      qc.invalidateQueries({ queryKey: getListTracksQueryKey({ release_id: releaseId }) });
+      qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(releaseId) });
+      toast({ title: "Аудио загружено", description: file.name });
+    } catch (e: any) {
+      toast({ title: "Не удалось загрузить", description: e?.message ?? "", variant: "destructive" });
+    }
+  };
 
   const set = <K extends keyof Track>(k: K, v: Track[K]) => setDraft((p) => ({ ...p, [k]: v }));
 
@@ -111,7 +127,25 @@ export function TrackCard({
         {draft.audioUrl ? (
           <audio controls className="h-7 max-w-[200px]" src={assetHref(draft.audioUrl)} />
         ) : (
-          <span className="text-[11px] text-amber-500 italic">аудио не загружено</span>
+          <>
+            <input
+              ref={inlineUploadRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(e) => onInlineAudio(e.target.files?.[0])}
+            />
+            <Button
+              type="button" size="sm" variant="outline"
+              className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+              disabled={isInlineUploading}
+              onClick={() => inlineUploadRef.current?.click()}
+            >
+              {isInlineUploading
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Загрузка…</>
+                : <><Upload className="h-3.5 w-3.5 mr-1" /> Загрузить трек</>}
+            </Button>
+          </>
         )}
         <Button size="sm" variant="outline" onClick={onExpandToggle}>
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

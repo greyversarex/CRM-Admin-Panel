@@ -752,30 +752,6 @@ function Step2Tracks({
     }
   };
 
-  const addEmpty = async () => {
-    try {
-      await createTrack.mutateAsync({
-        data: {
-          title: "Новый трек",
-          releaseId,
-          artistId: primaryArtistId,
-          trackNumber: (tracks.length || 0) + 1,
-          audioStyle: "vocal",
-          aiUsage: "none",
-          explicitStatus: "non_explicit",
-          clipStartSeconds: 0,
-          displayArtists: [],
-          writers: [],
-          performers: [],
-          production: [],
-        },
-      });
-      invalidate();
-    } catch (e: any) {
-      toast({ title: "Не удалось создать трек", description: e?.message ?? "", variant: "destructive" });
-    }
-  };
-
   return (
     <Card className="bg-card/50 border-border/50">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -784,7 +760,7 @@ function Step2Tracks({
             <ListMusic className="h-5 w-5" /> Треки релиза ({tracks.length})
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            Загрузите все аудиофайлы массово или добавьте трек вручную. По клику на трек откроются Audio Details.
+            Загрузите .wav-файлы — название трека возьмётся из имени файла, и по клику на трек откроются Audio Details.
           </p>
         </div>
         <div className="flex gap-2">
@@ -792,18 +768,17 @@ function Step2Tracks({
             ref={inputRef} type="file" multiple accept="audio/*" className="hidden"
             onChange={(e) => onBulkPick(e.target.files)}
           />
-          <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={isBulkUploading}>
+          <Button onClick={() => inputRef.current?.click()} disabled={isBulkUploading}>
             {isBulkUploading
               ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Загрузка…</>
-              : <><Upload className="h-4 w-4 mr-1" /> Массовая загрузка .wav</>}
+              : <><Upload className="h-4 w-4 mr-1" /> Загрузить треки (.wav)</>}
           </Button>
-          <Button onClick={addEmpty}><Plus className="h-4 w-4 mr-1" /> Добавить трек</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {tracks.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            Треков пока нет. Загрузите .wav-файлы или добавьте трек вручную.
+            Треков пока нет. Нажмите «Загрузить треки» — каждый .wav превратится в отдельный трек.
           </div>
         )}
         {tracks.map((t) => (
