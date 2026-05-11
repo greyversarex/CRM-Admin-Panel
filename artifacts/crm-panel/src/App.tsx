@@ -50,6 +50,7 @@ import SmartLinks from "@/pages/marketing/links";
 import PromoAssets from "@/pages/marketing/assets";
 import ReleaseCalendar from "@/pages/releases/calendar";
 import TakedownRequests from "@/pages/releases/takedown";
+import Delivery from "@/pages/delivery";
 
 const queryClient = new QueryClient();
 
@@ -143,6 +144,7 @@ function Router() {
       <ProtectedRoute path="/marketing/assets"  component={PromoAssets} />
       <ProtectedRoute path="/releases/calendar" component={ReleaseCalendar} />
       <ProtectedRoute path="/releases/takedown" component={TakedownRequests} />
+      <ProtectedRoute path="/delivery"          component={Delivery} />
 
       {/* Task #6 — admin/manager only (gated через permissions.ts) */}
       <ProtectedRoute path="/admin/signups"  component={AdminSignups} />
