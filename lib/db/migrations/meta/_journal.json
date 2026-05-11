@@ -113,6 +113,27 @@
       "when": 1778147500000,
       "tag": "0015_release_wizard_overhaul",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778400000000,
+      "tag": "0016_users_block_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778450000000,
+      "tag": "0017_assets_storage_key_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778500000000,
+      "tag": "0018_assets_audio_tech_metadata",
+      "breakpoints": true
     }
   ]
 }
