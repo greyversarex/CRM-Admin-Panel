@@ -585,22 +585,28 @@ function Step1Details({
             </div>
           )}
 
-          {/* Genre / Subgenre / Language */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Genre / Subgenre — отдельная строка на 2 колонки, чтобы списки не сжимались */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-xs text-muted-foreground">Жанр</FieldLabel>
               <Select value={form.genre} onValueChange={(v) => { set("genre", v); set("subgenre", ""); }}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-background/40 h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Сабжанр</FieldLabel>
+              <FieldLabel className="text-xs text-muted-foreground">
+                Сабжанр {subgenresFor.length === 0 && <span className="text-muted-foreground/60">(для жанра «{form.genre}» список пуст)</span>}
+              </FieldLabel>
               <Select value={form.subgenre} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="bg-background/40 h-10"><SelectValue placeholder={subgenresFor.length === 0 ? "—" : "Выберите сабжанр"} /></SelectTrigger>
                 <SelectContent>{subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Язык / Дата / Время */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-xs text-muted-foreground">Язык метаданных</FieldLabel>
               <Select value={form.language} onValueChange={(v) => set("language", v)}>
@@ -608,10 +614,6 @@ function Step1Details({
                 <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Date + Time */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-xs text-muted-foreground">Дата релиза</FieldLabel>
               <Input type="date" value={form.releaseDate} onChange={(e) => set("releaseDate", e.target.value)} className="bg-background/40" />
