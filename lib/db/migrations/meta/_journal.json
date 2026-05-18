@@ -134,6 +134,13 @@
       "when": 1778500000000,
       "tag": "0018_assets_audio_tech_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1779200000000,
+      "tag": "0019_symphonic_release_flow",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,8 @@
  */
 import type { ReleaseAllowedTransitionsItem } from "./releaseAllowedTransitionsItem";
 import type { ReleaseArtistRef } from "./releaseArtistRef";
+import type { ReleaseCoverAiUsage } from "./releaseCoverAiUsage";
+import type { ReleaseMetadataTranslationsItem } from "./releaseMetadataTranslationsItem";
 import type { ReleaseReleaseType } from "./releaseReleaseType";
 import type { ReleaseRiskFactorsItem } from "./releaseRiskFactorsItem";
 import type { ReleaseStatus } from "./releaseStatus";
@@ -45,6 +47,14 @@ export interface Release {
   cLine?: string | null;
   pLineYear?: number | null;
   cLineYear?: number | null;
+  /** Раскрытие AI для обложки (Symphonic-style). NULL = не указано. */
+  coverAiUsage?: ReleaseCoverAiUsage;
+  /** Пользователь нажал "I need a UPC" в гейте — UPC присваивается на сабмите.
+UI должен показывать UPC поле как "Assigned on submission".
+ */
+  upcRequestPending: boolean;
+  /** Переводы названия/версии релиза на другие языки. */
+  metadataTranslations: ReleaseMetadataTranslationsItem[];
   /** Multi-primary contributors на уровне релиза. */
   artists: ReleaseArtistRef[];
   /** Выбранные DSP-площадки (коды из dsp_catalog). */

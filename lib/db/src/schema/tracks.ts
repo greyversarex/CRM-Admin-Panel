@@ -83,6 +83,33 @@ export const tracksTable = pgTable("tracks", {
   iswc: text("iswc"),
   audioUrl: text("audio_url"),
 
+  /**
+   * Путь к spatial audio файлу (Dolby Atmos / Sony 360RA). Symphonic берёт $24.99
+   * за spatial track при одобрении релиза. Отдельный файл от стерео `audioUrl`.
+   */
+  spatialAudioUrl: text("spatial_audio_url"),
+  /** Отдельный ISRC для spatial mix-а (Apple Music требует уникальный код). */
+  spatialIsrc: text("spatial_isrc"),
+  /** AI disclosure для spatial-микса: none | some | all | null. */
+  spatialAiUsage: text("spatial_ai_usage"),
+  /**
+   * Биллинг spatial трека: none | pending | charged | waived.
+   *  - none     — spatial не загружен или не используется
+   *  - pending  — загружен, ждёт списания на сабмите релиза
+   *  - charged  — оплачен (помечается админом, реальный биллинг — задача интеграции)
+   *  - waived   — освобождён от оплаты решением админа
+   */
+  spatialBillingStatus: text("spatial_billing_status").notNull().default("none"),
+  /**
+   * Переводы названия трека на другие языки: [{language, title, version}].
+   * Symphonic "+ Add Translation (Optional)" на track-edit.
+   */
+  metadataTranslations: jsonb("metadata_translations").$type<Array<{
+    language: string;
+    title: string;
+    version?: string | null;
+  }>>().notNull().default(sql`'[]'::jsonb`),
+
   /** Display Artists (см. TrackDisplayArtist[]). */
   displayArtists: jsonb("display_artists").$type<TrackDisplayArtist[]>().notNull().default(sql`'[]'::jsonb`),
   /** Writers с долями (см. TrackWriter[]). Заменяет composerName/lyricistName. */

@@ -257,6 +257,26 @@ export const GetArtistResponse = zod
             cLine: zod.string().nullish(),
             pLineYear: zod.number().nullish(),
             cLineYear: zod.number().nullish(),
+            coverAiUsage: zod
+              .enum(["none", "some", "all"])
+              .nullish()
+              .describe(
+                "Раскрытие AI для обложки (Symphonic-style). NULL = не указано.",
+              ),
+            upcRequestPending: zod
+              .boolean()
+              .describe(
+                'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+              ),
+            metadataTranslations: zod
+              .array(
+                zod.object({
+                  language: zod.string(),
+                  title: zod.string(),
+                  version: zod.string().nullish(),
+                }),
+              )
+              .describe("Переводы названия\/версии релиза на другие языки."),
             artists: zod
               .array(
                 zod.object({
@@ -411,6 +431,24 @@ export const GetArtistResponse = zod
                   .describe(
                     "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
                   ),
+              }),
+            ),
+            spatialAudioUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Путь к Dolby Atmos \/ spatial audio файлу (отдельно от стерео).",
+              ),
+            spatialIsrc: zod.string().nullish(),
+            spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+            spatialBillingStatus: zod
+              .enum(["none", "pending", "charged", "waived"])
+              .describe("Статус биллинга spatial трека ($24.99 в Symphonic)."),
+            metadataTranslations: zod.array(
+              zod.object({
+                language: zod.string(),
+                title: zod.string(),
+                version: zod.string().nullish(),
               }),
             ),
             createdAt: zod.string(),
@@ -705,6 +743,26 @@ export const ListReleasesResponse = zod.object({
       cLine: zod.string().nullish(),
       pLineYear: zod.number().nullish(),
       cLineYear: zod.number().nullish(),
+      coverAiUsage: zod
+        .enum(["none", "some", "all"])
+        .nullish()
+        .describe(
+          "Раскрытие AI для обложки (Symphonic-style). NULL = не указано.",
+        ),
+      upcRequestPending: zod
+        .boolean()
+        .describe(
+          'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+        ),
+      metadataTranslations: zod
+        .array(
+          zod.object({
+            language: zod.string(),
+            title: zod.string(),
+            version: zod.string().nullish(),
+          }),
+        )
+        .describe("Переводы названия\/версии релиза на другие языки."),
       artists: zod
         .array(
           zod.object({
@@ -790,6 +848,7 @@ export const createReleaseBodyIsExplicitDefault = false;
 export const createReleaseBodyIsCompilationDefault = false;
 export const createReleaseBodyIsVariousArtistsDefault = false;
 export const createReleaseBodyTerritoriesDefault = [`WW`];
+export const createReleaseBodyUpcRequestPendingDefault = false;
 
 export const CreateReleaseBody = zod.object({
   title: zod.string(),
@@ -817,6 +876,20 @@ export const CreateReleaseBody = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  upcRequestPending: zod
+    .boolean()
+    .default(createReleaseBodyUpcRequestPendingDefault)
+    .describe('true если выбран \"I need a UPC\" в гейте.'),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -894,6 +967,26 @@ export const GetReleaseResponse = zod
     cLine: zod.string().nullish(),
     pLineYear: zod.number().nullish(),
     cLineYear: zod.number().nullish(),
+    coverAiUsage: zod
+      .enum(["none", "some", "all"])
+      .nullish()
+      .describe(
+        "Раскрытие AI для обложки (Symphonic-style). NULL = не указано.",
+      ),
+    upcRequestPending: zod
+      .boolean()
+      .describe(
+        'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+      ),
+    metadataTranslations: zod
+      .array(
+        zod.object({
+          language: zod.string(),
+          title: zod.string(),
+          version: zod.string().nullish(),
+        }),
+      )
+      .describe("Переводы названия\/версии релиза на другие языки."),
     artists: zod
       .array(
         zod.object({
@@ -1048,6 +1141,24 @@ export const GetReleaseResponse = zod
                   ),
               }),
             ),
+            spatialAudioUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Путь к Dolby Atmos \/ spatial audio файлу (отдельно от стерео).",
+              ),
+            spatialIsrc: zod.string().nullish(),
+            spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+            spatialBillingStatus: zod
+              .enum(["none", "pending", "charged", "waived"])
+              .describe("Статус биллинга spatial трека ($24.99 в Symphonic)."),
+            metadataTranslations: zod.array(
+              zod.object({
+                language: zod.string(),
+                title: zod.string(),
+                version: zod.string().nullish(),
+              }),
+            ),
             createdAt: zod.string(),
             updatedAt: zod.string(),
           }),
@@ -1067,6 +1178,7 @@ export const updateReleaseBodyIsExplicitDefault = false;
 export const updateReleaseBodyIsCompilationDefault = false;
 export const updateReleaseBodyIsVariousArtistsDefault = false;
 export const updateReleaseBodyTerritoriesDefault = [`WW`];
+export const updateReleaseBodyUpcRequestPendingDefault = false;
 
 export const UpdateReleaseBody = zod.object({
   title: zod.string(),
@@ -1094,6 +1206,20 @@ export const UpdateReleaseBody = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  upcRequestPending: zod
+    .boolean()
+    .default(updateReleaseBodyUpcRequestPendingDefault)
+    .describe('true если выбран \"I need a UPC\" в гейте.'),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const updateReleaseResponseArtistsItemPositionMin = 0;
@@ -1158,6 +1284,24 @@ export const UpdateReleaseResponse = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod
+    .enum(["none", "some", "all"])
+    .nullish()
+    .describe("Раскрытие AI для обложки (Symphonic-style). NULL = не указано."),
+  upcRequestPending: zod
+    .boolean()
+    .describe(
+      'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+    ),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .describe("Переводы названия\/версии релиза на другие языки."),
   artists: zod
     .array(
       zod.object({
@@ -1408,6 +1552,24 @@ export const SubmitReleaseForReviewResponse = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod
+    .enum(["none", "some", "all"])
+    .nullish()
+    .describe("Раскрытие AI для обложки (Symphonic-style). NULL = не указано."),
+  upcRequestPending: zod
+    .boolean()
+    .describe(
+      'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+    ),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .describe("Переводы названия\/версии релиза на другие языки."),
   artists: zod
     .array(
       zod.object({
@@ -1563,6 +1725,24 @@ export const UpdateReleaseStatusResponse = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod
+    .enum(["none", "some", "all"])
+    .nullish()
+    .describe("Раскрытие AI для обложки (Symphonic-style). NULL = не указано."),
+  upcRequestPending: zod
+    .boolean()
+    .describe(
+      'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+    ),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .describe("Переводы названия\/версии релиза на другие языки."),
   artists: zod
     .array(
       zod.object({
@@ -1707,6 +1887,24 @@ export const ImportReleaseByUpcResponse = zod.object({
   cLine: zod.string().nullish(),
   pLineYear: zod.number().nullish(),
   cLineYear: zod.number().nullish(),
+  coverAiUsage: zod
+    .enum(["none", "some", "all"])
+    .nullish()
+    .describe("Раскрытие AI для обложки (Symphonic-style). NULL = не указано."),
+  upcRequestPending: zod
+    .boolean()
+    .describe(
+      'Пользователь нажал \"I need a UPC\" в гейте — UPC присваивается на сабмите.\nUI должен показывать UPC поле как \"Assigned on submission\".\n',
+    ),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .describe("Переводы названия\/версии релиза на другие языки."),
   artists: zod
     .array(
       zod.object({
@@ -1966,6 +2164,24 @@ export const ListTracksResponse = zod.object({
             ),
         }),
       ),
+      spatialAudioUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Путь к Dolby Atmos \/ spatial audio файлу (отдельно от стерео).",
+        ),
+      spatialIsrc: zod.string().nullish(),
+      spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+      spatialBillingStatus: zod
+        .enum(["none", "pending", "charged", "waived"])
+        .describe("Статус биллинга spatial трека ($24.99 в Symphonic)."),
+      metadataTranslations: zod.array(
+        zod.object({
+          language: zod.string(),
+          title: zod.string(),
+          version: zod.string().nullish(),
+        }),
+      ),
       createdAt: zod.string(),
       updatedAt: zod.string(),
     }),
@@ -2068,6 +2284,18 @@ export const CreateTrackBody = zod.object({
       }),
     )
     .optional(),
+  spatialAudioUrl: zod.string().nullish(),
+  spatialIsrc: zod.string().nullish(),
+  spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -2156,6 +2384,24 @@ export const GetTrackResponse = zod.object({
         .describe(
           "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
         ),
+    }),
+  ),
+  spatialAudioUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Путь к Dolby Atmos \/ spatial audio файлу (отдельно от стерео).",
+    ),
+  spatialIsrc: zod.string().nullish(),
+  spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  spatialBillingStatus: zod
+    .enum(["none", "pending", "charged", "waived"])
+    .describe("Статус биллинга spatial трека ($24.99 в Symphonic)."),
+  metadataTranslations: zod.array(
+    zod.object({
+      language: zod.string(),
+      title: zod.string(),
+      version: zod.string().nullish(),
     }),
   ),
   createdAt: zod.string(),
@@ -2256,6 +2502,18 @@ export const UpdateTrackBody = zod.object({
       }),
     )
     .optional(),
+  spatialAudioUrl: zod.string().nullish(),
+  spatialIsrc: zod.string().nullish(),
+  spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  metadataTranslations: zod
+    .array(
+      zod.object({
+        language: zod.string(),
+        title: zod.string(),
+        version: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const updateTrackResponseClipStartSecondsMin = 0;
@@ -2337,6 +2595,24 @@ export const UpdateTrackResponse = zod.object({
         .describe(
           "producer | recording_engineer | mixing_engineer | mastering_engineer | other.",
         ),
+    }),
+  ),
+  spatialAudioUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Путь к Dolby Atmos \/ spatial audio файлу (отдельно от стерео).",
+    ),
+  spatialIsrc: zod.string().nullish(),
+  spatialAiUsage: zod.enum(["none", "some", "all"]).nullish(),
+  spatialBillingStatus: zod
+    .enum(["none", "pending", "charged", "waived"])
+    .describe("Статус биллинга spatial трека ($24.99 в Symphonic)."),
+  metadataTranslations: zod.array(
+    zod.object({
+      language: zod.string(),
+      title: zod.string(),
+      version: zod.string().nullish(),
     }),
   ),
   createdAt: zod.string(),

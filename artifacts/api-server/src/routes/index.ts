@@ -6,6 +6,7 @@ import artistsRouter from "./artists";
 import labelsRouter from "./labels";
 import releasesRouter from "./releases";
 import releasesExtrasRouter from "./releases-extras";
+import releaseFlowRouter from "./release-flow";
 import tracksRouter from "./tracks";
 import usersRouter from "./users";
 import crmRouter from "./crm";
@@ -83,6 +84,7 @@ router.use("/labels", adminOnly, requireManagerPermission("catalog"));     // la
 router.use(labelsRouter);
 router.use(releasesRouter);           // scoped per-route inside
 router.use(releasesExtrasRouter);     // /dsp-catalog + /releases/:id/{artists,dsps,validate}
+router.use(releaseFlowRouter);        // Symphonic-flow: /releases/check-upc, /tracks/reusable, reorder, /issues
 router.use(tracksRouter);             // scoped per-route inside
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
 // authenticated users (their own profile / password change).

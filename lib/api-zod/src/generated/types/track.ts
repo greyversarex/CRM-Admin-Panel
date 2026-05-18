@@ -9,8 +9,11 @@ import type { TrackAiUsage } from "./trackAiUsage";
 import type { TrackAudioStyle } from "./trackAudioStyle";
 import type { TrackDisplayArtist } from "./trackDisplayArtist";
 import type { TrackExplicitStatus } from "./trackExplicitStatus";
+import type { TrackMetadataTranslationsItem } from "./trackMetadataTranslationsItem";
 import type { TrackPerformer } from "./trackPerformer";
 import type { TrackProductionMember } from "./trackProductionMember";
+import type { TrackSpatialAiUsage } from "./trackSpatialAiUsage";
+import type { TrackSpatialBillingStatus } from "./trackSpatialBillingStatus";
 import type { TrackWriter } from "./trackWriter";
 
 export interface Track {
@@ -49,6 +52,13 @@ export interface Track {
   writers: TrackWriter[];
   performers: TrackPerformer[];
   production: TrackProductionMember[];
+  /** Путь к Dolby Atmos / spatial audio файлу (отдельно от стерео). */
+  spatialAudioUrl?: string | null;
+  spatialIsrc?: string | null;
+  spatialAiUsage?: TrackSpatialAiUsage;
+  /** Статус биллинга spatial трека ($24.99 в Symphonic). */
+  spatialBillingStatus: TrackSpatialBillingStatus;
+  metadataTranslations: TrackMetadataTranslationsItem[];
   createdAt: string;
   updatedAt: string;
 }

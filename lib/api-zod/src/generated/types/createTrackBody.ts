@@ -8,6 +8,8 @@
 import type { CreateTrackBodyAiUsage } from "./createTrackBodyAiUsage";
 import type { CreateTrackBodyAudioStyle } from "./createTrackBodyAudioStyle";
 import type { CreateTrackBodyExplicitStatus } from "./createTrackBodyExplicitStatus";
+import type { CreateTrackBodyMetadataTranslationsItem } from "./createTrackBodyMetadataTranslationsItem";
+import type { CreateTrackBodySpatialAiUsage } from "./createTrackBodySpatialAiUsage";
 import type { TrackDisplayArtist } from "./trackDisplayArtist";
 import type { TrackPerformer } from "./trackPerformer";
 import type { TrackProductionMember } from "./trackProductionMember";
@@ -40,4 +42,8 @@ export interface CreateTrackBody {
   writers?: TrackWriter[];
   performers?: TrackPerformer[];
   production?: TrackProductionMember[];
+  spatialAudioUrl?: string | null;
+  spatialIsrc?: string | null;
+  spatialAiUsage?: CreateTrackBodySpatialAiUsage;
+  metadataTranslations?: CreateTrackBodyMetadataTranslationsItem[];
 }

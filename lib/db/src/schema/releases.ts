@@ -57,6 +57,25 @@ export const releasesTable = pgTable("releases", {
   cLineYear: integer("c_line_year"),
   statusNote: text("status_note"),
   /**
+   * Раскрытие использования AI для обложки: none | some | all. NULL = не указано
+   * (Symphonic: обязательное поле для отправки на модерацию).
+   */
+  coverAiUsage: text("cover_ai_usage"),
+  /**
+   * Пользователь нажал "I need a UPC" в UPC-гейте — UPC будет присвоен на сабмите.
+   * До сабмита UPC поле заблокировано в UI и показывает "Assigned on submission".
+   */
+  upcRequestPending: boolean("upc_request_pending").notNull().default(false),
+  /**
+   * Переводы названия/версии релиза для разных языков: [{language, title, version}].
+   * Symphonic "+ Add Translation" — необязательное многоязычие метаданных.
+   */
+  metadataTranslations: jsonb("metadata_translations").$type<Array<{
+    language: string;
+    title: string;
+    version?: string | null;
+  }>>().notNull().default(sql`'[]'::jsonb`),
+  /**
    * Композитный risk-score 0..100, перерасчитывается risk-engine'ом при
    * submit/approve/scan. 0 = чисто, 100 = максимальный риск отказа DSP.
    */

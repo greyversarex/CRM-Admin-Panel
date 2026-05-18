@@ -5,6 +5,8 @@
  * Music Distribution CRM API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateReleaseBodyCoverAiUsage } from "./createReleaseBodyCoverAiUsage";
+import type { CreateReleaseBodyMetadataTranslationsItem } from "./createReleaseBodyMetadataTranslationsItem";
 import type { CreateReleaseBodyReleaseType } from "./createReleaseBodyReleaseType";
 
 export interface CreateReleaseBody {
@@ -29,4 +31,8 @@ export interface CreateReleaseBody {
   cLine?: string | null;
   pLineYear?: number | null;
   cLineYear?: number | null;
+  coverAiUsage?: CreateReleaseBodyCoverAiUsage;
+  /** true если выбран "I need a UPC" в гейте. */
+  upcRequestPending?: boolean;
+  metadataTranslations?: CreateReleaseBodyMetadataTranslationsItem[];
 }

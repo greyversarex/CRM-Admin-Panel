@@ -109,6 +109,19 @@ export const ReleaseStatus = {
   removed: "removed",
 } as const;
 
+/**
+ * Раскрытие AI для обложки (Symphonic-style). NULL = не указано.
+ */
+export type ReleaseCoverAiUsage =
+  | (typeof ReleaseCoverAiUsage)[keyof typeof ReleaseCoverAiUsage]
+  | null;
+
+export const ReleaseCoverAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
 export type ReleaseArtistRefRole =
   (typeof ReleaseArtistRefRole)[keyof typeof ReleaseArtistRefRole];
 
@@ -152,6 +165,12 @@ export const ReleaseRiskFactorsItemSeverity = {
   high: "high",
 } as const;
 
+export type ReleaseMetadataTranslationsItem = {
+  language: string;
+  title: string;
+  version?: string | null;
+};
+
 export type ReleaseRiskFactorsItem = {
   code: string;
   message: string;
@@ -192,6 +211,14 @@ export interface Release {
   cLine?: string | null;
   pLineYear?: number | null;
   cLineYear?: number | null;
+  /** Раскрытие AI для обложки (Symphonic-style). NULL = не указано. */
+  coverAiUsage?: ReleaseCoverAiUsage;
+  /** Пользователь нажал "I need a UPC" в гейте — UPC присваивается на сабмите.
+UI должен показывать UPC поле как "Assigned on submission".
+ */
+  upcRequestPending: boolean;
+  /** Переводы названия/версии релиза на другие языки. */
+  metadataTranslations: ReleaseMetadataTranslationsItem[];
   /** Multi-primary contributors на уровне релиза. */
   artists: ReleaseArtistRef[];
   /** Выбранные DSP-площадки (коды из dsp_catalog). */
@@ -307,6 +334,35 @@ export interface TrackProductionMember {
   role: string;
 }
 
+export type TrackSpatialAiUsage =
+  | (typeof TrackSpatialAiUsage)[keyof typeof TrackSpatialAiUsage]
+  | null;
+
+export const TrackSpatialAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
+/**
+ * Статус биллинга spatial трека ($24.99 в Symphonic).
+ */
+export type TrackSpatialBillingStatus =
+  (typeof TrackSpatialBillingStatus)[keyof typeof TrackSpatialBillingStatus];
+
+export const TrackSpatialBillingStatus = {
+  none: "none",
+  pending: "pending",
+  charged: "charged",
+  waived: "waived",
+} as const;
+
+export type TrackMetadataTranslationsItem = {
+  language: string;
+  title: string;
+  version?: string | null;
+};
+
 export interface Track {
   id: number;
   title: string;
@@ -343,6 +399,13 @@ export interface Track {
   writers: TrackWriter[];
   performers: TrackPerformer[];
   production: TrackProductionMember[];
+  /** Путь к Dolby Atmos / spatial audio файлу (отдельно от стерео). */
+  spatialAudioUrl?: string | null;
+  spatialIsrc?: string | null;
+  spatialAiUsage?: TrackSpatialAiUsage;
+  /** Статус биллинга spatial трека ($24.99 в Symphonic). */
+  spatialBillingStatus: TrackSpatialBillingStatus;
+  metadataTranslations: TrackMetadataTranslationsItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -447,6 +510,22 @@ export const CreateReleaseBodyReleaseType = {
   compilation: "compilation",
 } as const;
 
+export type CreateReleaseBodyCoverAiUsage =
+  | (typeof CreateReleaseBodyCoverAiUsage)[keyof typeof CreateReleaseBodyCoverAiUsage]
+  | null;
+
+export const CreateReleaseBodyCoverAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
+export type CreateReleaseBodyMetadataTranslationsItem = {
+  language: string;
+  title: string;
+  version?: string | null;
+};
+
 export interface CreateReleaseBody {
   title: string;
   releaseVersion?: string | null;
@@ -469,6 +548,10 @@ export interface CreateReleaseBody {
   cLine?: string | null;
   pLineYear?: number | null;
   cLineYear?: number | null;
+  coverAiUsage?: CreateReleaseBodyCoverAiUsage;
+  /** true если выбран "I need a UPC" в гейте. */
+  upcRequestPending?: boolean;
+  metadataTranslations?: CreateReleaseBodyMetadataTranslationsItem[];
 }
 
 export type UpdateReleaseStatusBodyStatus =
@@ -683,6 +766,22 @@ export const CreateTrackBodyAudioStyle = {
   vocal: "vocal",
 } as const;
 
+export type CreateTrackBodySpatialAiUsage =
+  | (typeof CreateTrackBodySpatialAiUsage)[keyof typeof CreateTrackBodySpatialAiUsage]
+  | null;
+
+export const CreateTrackBodySpatialAiUsage = {
+  none: "none",
+  some: "some",
+  all: "all",
+} as const;
+
+export type CreateTrackBodyMetadataTranslationsItem = {
+  language: string;
+  title: string;
+  version?: string | null;
+};
+
 export interface CreateTrackBody {
   title: string;
   trackVersion?: string | null;
@@ -710,6 +809,10 @@ export interface CreateTrackBody {
   writers?: TrackWriter[];
   performers?: TrackPerformer[];
   production?: TrackProductionMember[];
+  spatialAudioUrl?: string | null;
+  spatialIsrc?: string | null;
+  spatialAiUsage?: CreateTrackBodySpatialAiUsage;
+  metadataTranslations?: CreateTrackBodyMetadataTranslationsItem[];
 }
 
 export interface PaginatedTracks {

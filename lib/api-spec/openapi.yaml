@@ -2408,6 +2408,26 @@ components:
         cLineYear:
           type: integer
           nullable: true
+        coverAiUsage:
+          type: string
+          enum: [none, some, all]
+          nullable: true
+          description: Раскрытие AI для обложки (Symphonic-style). NULL = не указано.
+        upcRequestPending:
+          type: boolean
+          description: |
+            Пользователь нажал "I need a UPC" в гейте — UPC присваивается на сабмите.
+            UI должен показывать UPC поле как "Assigned on submission".
+        metadataTranslations:
+          type: array
+          description: Переводы названия/версии релиза на другие языки.
+          items:
+            type: object
+            properties:
+              language: { type: string }
+              title: { type: string }
+              version: { type: string, nullable: true }
+            required: [language, title]
         artists:
           type: array
           description: Multi-primary contributors на уровне релиза.
@@ -2464,7 +2484,7 @@ components:
               message: { type: string }
               severity: { type: string, enum: [low, medium, high] }
             required: [code, message, severity]
-      required: [id, title, releaseType, status, artistId, artistName, isExplicit, isCompilation, isVariousArtists, territories, totalTracks, artists, dsps, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, riskScore, riskFactors]
+      required: [id, title, releaseType, status, artistId, artistName, isExplicit, isCompilation, isVariousArtists, territories, totalTracks, artists, dsps, upcRequestPending, metadataTranslations, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, riskScore, riskFactors]
 
     ReleaseDetail:
       allOf:
@@ -2542,6 +2562,23 @@ components:
         cLineYear:
           type: integer
           nullable: true
+        coverAiUsage:
+          type: string
+          enum: [none, some, all]
+          nullable: true
+        upcRequestPending:
+          type: boolean
+          default: false
+          description: true если выбран "I need a UPC" в гейте.
+        metadataTranslations:
+          type: array
+          items:
+            type: object
+            properties:
+              language: { type: string }
+              title: { type: string }
+              version: { type: string, nullable: true }
+            required: [language, title]
       required: [title, releaseType, artistId]
 
     UpdateReleaseStatusBody:
@@ -2911,11 +2948,35 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TrackProductionMember"
+        spatialAudioUrl:
+          type: string
+          nullable: true
+          description: Путь к Dolby Atmos / spatial audio файлу (отдельно от стерео).
+        spatialIsrc:
+          type: string
+          nullable: true
+        spatialAiUsage:
+          type: string
+          enum: [none, some, all]
+          nullable: true
+        spatialBillingStatus:
+          type: string
+          enum: [none, pending, charged, waived]
+          description: Статус биллинга spatial трека ($24.99 в Symphonic).
+        metadataTranslations:
+          type: array
+          items:
+            type: object
+            properties:
+              language: { type: string }
+              title: { type: string }
+              version: { type: string, nullable: true }
+            required: [language, title]
         createdAt:
           type: string
         updatedAt:
           type: string
-      required: [id, title, artistId, artistName, isExplicit, explicitStatus, aiUsage, clipStartSeconds, audioStyle, displayArtists, writers, performers, production, createdAt, updatedAt]
+      required: [id, title, artistId, artistName, isExplicit, explicitStatus, aiUsage, clipStartSeconds, audioStyle, displayArtists, writers, performers, production, spatialBillingStatus, metadataTranslations, createdAt, updatedAt]
 
     CreateTrackBody:
       type: object
@@ -3001,6 +3062,25 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TrackProductionMember"
+        spatialAudioUrl:
+          type: string
+          nullable: true
+        spatialIsrc:
+          type: string
+          nullable: true
+        spatialAiUsage:
+          type: string
+          enum: [none, some, all]
+          nullable: true
+        metadataTranslations:
+          type: array
+          items:
+            type: object
+            properties:
+              language: { type: string }
+              title: { type: string }
+              version: { type: string, nullable: true }
+            required: [language, title]
       required: [title, artistId]
 
     PaginatedTracks:
