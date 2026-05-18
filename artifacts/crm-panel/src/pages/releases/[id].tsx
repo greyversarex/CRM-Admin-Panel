@@ -377,7 +377,30 @@ export default function ReleaseDetail() {
                   <KV label="P-Line" value={release.pLine || "—"} />
                   <KV label="C-Line" value={release.cLine || "—"} />
                   <KV label="Territories" value={(release.territories || ["WW"]).join(", ")} />
+                  <KV
+                    label="AI Cover"
+                    value={
+                      (release as any).coverAiUsage === "none" ? "AI не использовался"
+                      : (release as any).coverAiUsage === "some" ? "AI частично"
+                      : (release as any).coverAiUsage === "all"  ? "Полностью AI"
+                      : "Не указано"
+                    }
+                  />
                 </div>
+                {Array.isArray((release as any).metadataTranslations) && (release as any).metadataTranslations.length > 0 && (
+                  <div className="pt-3 mt-1 border-t border-border/40">
+                    <div className="text-xs text-muted-foreground mb-1.5">Переводы метаданных</div>
+                    <ul className="space-y-1">
+                      {((release as any).metadataTranslations as Array<{language: string; title: string; version?: string | null}>).map((t, i) => (
+                        <li key={i} className="text-xs text-foreground bg-background/40 border border-border/40 rounded px-2 py-1 flex flex-wrap gap-x-2">
+                          <span className="text-muted-foreground uppercase font-mono text-[10px] self-center">{t.language}</span>
+                          <span className="font-medium">{t.title}</span>
+                          {t.version && <span className="text-muted-foreground">· {t.version}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
             <CoverUploader
@@ -520,6 +543,8 @@ function EditDetailsForm({
     cLine:        release.cLine ?? "",
     isExplicit:   !!release.isExplicit,
     territories:  (release.territories ?? ["WW"]).join(", "),
+    coverAiUsage: ((release as any).coverAiUsage as "none" | "some" | "all" | null) ?? null,
+    translations: (((release as any).metadataTranslations as Array<{ language: string; title: string; version?: string | null }>) ?? []),
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -534,6 +559,10 @@ function EditDetailsForm({
     // UpdateReleaseBody на бэке требует title/releaseType/artistId; labelId/coverUrl — nullable.
     // Для не-привилегированных пользователей бэк отклоняет смену artistId/labelId,
     // поэтому подставляем существующие значения релиза без изменений.
+    // Чистим переводы: убираем пустые ряды (без language или без title).
+    const translations = form.translations
+      .map((t) => ({ language: (t.language || "").trim(), title: (t.title || "").trim(), version: (t.version || "").trim() || null }))
+      .filter((t) => t.language && t.title);
     const data: CreateReleaseBody = {
       title:       form.title.trim(),
       releaseType: form.releaseType as CreateReleaseBody["releaseType"],
@@ -548,7 +577,9 @@ function EditDetailsForm({
       cLine:       form.cLine.trim() || null,
       isExplicit:  form.isExplicit,
       territories: territories.length > 0 ? territories : ["WW"],
-    };
+      coverAiUsage: form.coverAiUsage ?? undefined,
+      metadataTranslations: translations,
+    } as CreateReleaseBody;
     try {
       await updateRelease.mutateAsync({ id: release.id, data });
       toast({ title: "Изменения сохранены", description: "Метаданные релиза обновлены." });
@@ -619,6 +650,92 @@ function EditDetailsForm({
           <p className="text-xs text-muted-foreground">Пометить релиз как explicit на музыкальных площадках.</p>
         </div>
         <SwitchUI checked={form.isExplicit} onCheckedChange={(v) => set("isExplicit", v)} />
+      </div>
+
+      {/* AI Usage Disclosure — обязательно перед отправкой на модерацию (Symphonic). */}
+      <FormField label="Использование AI при создании обложки *">
+        <Select
+          value={form.coverAiUsage ?? ""}
+          onValueChange={(v) => set("coverAiUsage", (v || null) as typeof form.coverAiUsage)}
+        >
+          <SelectTrigger className="bg-background/40">
+            <SelectValue placeholder="Выберите вариант" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">AI не использовался</SelectItem>
+            <SelectItem value="some">AI помогал частично (доработка/редактирование)</SelectItem>
+            <SelectItem value="all">Обложка целиком сгенерирована AI</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground/80 mt-1">
+          DSP-платформы (Spotify, Apple Music) требуют явного раскрытия использования AI.
+        </p>
+      </FormField>
+
+      {/* Переводы метаданных — необязательное многоязычие названия/версии. */}
+      <div className="space-y-2 p-3 rounded-md bg-background/40 border border-border/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <FieldLabel className="text-sm">Переводы метаданных</FieldLabel>
+            <p className="text-[11px] text-muted-foreground">
+              Дополнительные локализации названия и версии релиза. Необязательно.
+            </p>
+          </div>
+          <Button
+            type="button" variant="outline" size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setForm((p) => ({ ...p, translations: [...p.translations, { language: "", title: "", version: null }] }))}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Добавить перевод
+          </Button>
+        </div>
+        {form.translations.length === 0 && (
+          <div className="text-[11px] text-muted-foreground/70 italic">Переводов пока нет.</div>
+        )}
+        {form.translations.map((tr, i) => (
+          <div key={i} className="grid grid-cols-1 sm:grid-cols-[160px_1fr_160px_auto] gap-2 items-start">
+            <Select
+              value={tr.language || ""}
+              onValueChange={(v) => setForm((p) => {
+                const next = [...p.translations];
+                next[i] = { ...next[i], language: v };
+                return { ...p, translations: next };
+              })}
+            >
+              <SelectTrigger className="bg-background/60 h-9 text-xs"><SelectValue placeholder="Язык" /></SelectTrigger>
+              <SelectContent>
+                {META_LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input
+              value={tr.title}
+              onChange={(e) => setForm((p) => {
+                const next = [...p.translations];
+                next[i] = { ...next[i], title: e.target.value };
+                return { ...p, translations: next };
+              })}
+              placeholder="Переведённое название"
+              className="bg-background/60 h-9 text-xs"
+            />
+            <Input
+              value={tr.version || ""}
+              onChange={(e) => setForm((p) => {
+                const next = [...p.translations];
+                next[i] = { ...next[i], version: e.target.value };
+                return { ...p, translations: next };
+              })}
+              placeholder="Версия (опц.)"
+              className="bg-background/60 h-9 text-xs"
+            />
+            <Button
+              type="button" variant="ghost" size="sm"
+              className="h-9 px-2 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10"
+              onClick={() => setForm((p) => ({ ...p, translations: p.translations.filter((_, idx) => idx !== i) }))}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
       </div>
 
       <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
