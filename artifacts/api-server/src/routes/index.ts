@@ -107,7 +107,9 @@ router.use("/finance/ingest", adminOnly, requireManagerPermission("finance"));
 router.use("/finance/imports", adminOnly, requireManagerPermission("finance"));
 router.use(ingestionRouter);
 router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id forced from session)
-router.use("/splits", adminOnly, requireManagerPermission("finance"));
+// Splits: GET endpoints are scoped (artist/label can view splits for their own
+// releases); POST/PUT/DELETE are admin/manager-only — guards enforced per-route
+// inside splitsRouter. We therefore mount it with just requireAuth here.
 router.use(splitsRouter);
 router.use("/publishing", adminOnly, requireManagerPermission("rights"));
 router.use(publishingRouter);

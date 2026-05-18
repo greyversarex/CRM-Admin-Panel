@@ -2,10 +2,11 @@ import { Layout } from "@/components/layout";
 import {
   useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
   useDeliverRelease, useSubmitReleaseForReview,
+  useUpdateTrack, useGetReleaseDsps, useUpdateReleaseDsps, useListSplits,
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
   getListDeliveriesQueryKey,
   type Track, type DeliveryTarget,
-  type ReleaseDetail, type CreateReleaseBody,
+  type ReleaseDetail, type CreateReleaseBody, type Split,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useParams, useLocation, Link } from "wouter";
@@ -22,7 +23,8 @@ import {
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -419,6 +421,19 @@ export default function ReleaseDetail() {
               <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
             </CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
+              {release.isEditable && (release.tracks?.length ?? 0) > 1 && (
+                <ReorderTracksDialog
+                  releaseId={release.id}
+                  tracks={release.tracks ?? []}
+                  onSaved={invalidateAll}
+                />
+              )}
+              {release.isEditable && (release.tracks?.length ?? 0) > 0 && (
+                <MultiEditTracksDialog
+                  tracks={release.tracks ?? []}
+                  onSaved={invalidateAll}
+                />
+              )}
               {release.isEditable && (
                 <ReuseExistingTrackDialog
                   releaseId={id}
@@ -459,56 +474,11 @@ export default function ReleaseDetail() {
           </CardContent>
         </Card>
 
-        {/* Release Availability */}
-        <Card className="bg-card/50 backdrop-blur border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Globe2 className="h-4 w-4" /> Release Availability
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-start gap-4 p-3 rounded-md border border-border/50 bg-background/40">
-              <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm">Timeline</span>
-                  <StatusBadge status={release.status} className="text-[10px] px-1.5 py-0 h-4" />
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">Territory: {(release.territories || ["WW"]).join(", ")}</div>
-                <div className="text-xs text-muted-foreground">Partners: All — {DSPS.join(", ")}</div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {DSPS.map((d) => <DspPill key={d} name={d} />)}
-            </div>
-            <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-2 border-t border-border/40">
-              With this release now approved and submitted, you have agreed to the terms of the agreement you have signed with Tajik Music Distribution. You confirm that all samples, musical works, vocals, and other compositions used within this release are owned by the label/artist or properly licensed for distribution to the partners chosen. Tajik Music Distribution will not be held responsible for any possible legal repercussions from misrepresented content.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Release Availability — реальный редактор DSP (Фаза 6) */}
+        <ReleaseAvailabilityCard release={release} isEditable={!!release.isEditable} />
 
-        {/* SplitShare — заглушка, полноценная страница появится в Фазе 6.
-            Здесь показываем краткую сводку и ссылку. */}
-        <Card className="bg-card/50 backdrop-blur border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Share2 className="h-4 w-4" /> SplitShare — распределение доходов
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>
-              Разделение роялти между соавторами настраивается отдельно для каждого трека.
-              Сумма долей по треку должна давать ровно 100%. До отправки на модерацию
-              шаги SplitShare можно изменить без согласований.
-            </p>
-            <p className="text-xs text-muted-foreground/80">
-              Полноценный редактор SplitShare появится в одном из ближайших обновлений.
-              Текущие доли можно увидеть в карточке каждого трека.
-            </p>
-          </CardContent>
-        </Card>
+        {/* SplitShare — реальная сводка по трекам (Фаза 6) */}
+        <SplitShareCard release={release} />
           </div>
           {/* ── ПРАВАЯ КОЛОНКА: sticky sidebar ─────────────────────────────── */}
           <ReleaseHubSidebar
@@ -2000,5 +1970,430 @@ function ReuseExistingTrackDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// ФАЗА 6 — Reorder / Multi-edit / Release Availability / SplitShare
+// ═════════════════════════════════════════════════════════════════════════
+
+// ─── Reorder tracks ─────────────────────────────────────────────────────
+// Simple up/down editor (без drag-and-drop, чтобы не тянуть лишних зависимостей
+// и сохранить совместимость с touch-устройствами). Save → POST /releases/:id/tracks/reorder.
+function ReorderTracksDialog({
+  releaseId, tracks, onSaved,
+}: {
+  releaseId: number;
+  tracks: Track[];
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [order, setOrder] = useState<Track[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setOrder([...tracks].sort((a, b) => (a.trackNumber ?? 0) - (b.trackNumber ?? 0)));
+  }, [open, tracks]);
+
+  const move = (i: number, delta: number) => {
+    const j = i + delta;
+    if (j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrder(next);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await adminApi(`/api/releases/${releaseId}/tracks/reorder`, {
+        method: "POST",
+        body: JSON.stringify({ order: order.map((t) => t.id) }),
+      });
+      toast({ title: "Порядок треков сохранён" });
+      onSaved();
+      setOpen(false);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось сохранить порядок", description: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="bg-card text-xs">
+          <ListChecks className="h-3.5 w-3.5 mr-1" /> Порядок
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Порядок треков на релизе</DialogTitle>
+          <DialogDescription>
+            Перетаскивать кнопками: стрелка вверх/вниз. Этот порядок будет показан на всех DSP.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+          {order.map((t, i) => (
+            <div key={t.id} className="flex items-center gap-2 p-2 rounded-md border border-border/50 bg-background/40">
+              <span className="text-xs font-mono w-7 text-muted-foreground text-center">{i + 1}</span>
+              <span className="text-sm flex-1 truncate">{t.title}</span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={i === 0} onClick={() => move(i, -1)}>↑</Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={i === order.length - 1} onClick={() => move(i, 1)}>↓</Button>
+            </div>
+          ))}
+          {order.length === 0 && (
+            <div className="text-xs text-muted-foreground text-center py-6">Треков нет.</div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Отмена</Button>
+          <Button onClick={save} disabled={saving || order.length < 2}>
+            {saving ? "Сохраняю…" : "Сохранить порядок"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Multi-edit tracks ──────────────────────────────────────────────────
+// Применяет общие поля (genre / language / explicitStatus / aiUsage) сразу
+// к нескольким выбранным трекам через PUT /tracks/:id в цикле.
+function MultiEditTracksDialog({
+  tracks, onSaved,
+}: {
+  tracks: Track[];
+  onSaved: () => void;
+}) {
+  const updateTrack = useUpdateTrack();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [genre, setGenre] = useState<string>("");
+  const [language, setLanguage] = useState<string>("");
+  const [explicit, setExplicit] = useState<"" | "non_explicit" | "explicit" | "censored">("");
+  // ВАЖНО: пустая строка = «не менять». Для значения «Без AI» используем
+  // настоящее серверное значение "none". Раньше оба варианта имели value="none"
+  // в Select и сваливались в один и тот же ключ — выбрать «Без AI» было нельзя.
+  const [ai, setAi] = useState<"" | "none" | "some" | "all">("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setSelected(new Set());
+      setGenre(""); setLanguage(""); setExplicit(""); setAi("");
+    }
+  }, [open]);
+
+  const allOn = selected.size === tracks.length && tracks.length > 0;
+  const toggleAll = () => setSelected(allOn ? new Set() : new Set(tracks.map((t) => t.id)));
+  const toggle = (id: number) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+
+  const save = async () => {
+    if (selected.size === 0) {
+      toast({ title: "Сначала выберите треки", variant: "destructive" });
+      return;
+    }
+    if (!genre && !language && !explicit && !ai) {
+      toast({ title: "Нечего применять", description: "Заполните хотя бы одно поле." });
+      return;
+    }
+    setSaving(true);
+    let ok = 0; let fail = 0; let firstErr = "";
+    const toApply = tracks.filter((t) => selected.has(t.id));
+    for (const t of toApply) {
+      try {
+        await updateTrack.mutateAsync({
+          id: t.id,
+          data: {
+            artistId: t.artistId,
+            title: t.title,
+            ...(genre    ? { genre } : {}),
+            ...(language ? { language } : {}),
+            ...(explicit ? { explicitStatus: explicit, isExplicit: explicit === "explicit" } : {}),
+            ...(ai       ? { aiUsage: ai } : {}),
+          },
+        });
+        ok++;
+      } catch (e) {
+        fail++;
+        if (!firstErr) firstErr = (e as Error).message;
+      }
+    }
+    setSaving(false);
+    if (fail === 0) {
+      toast({ title: "Обновлено", description: `Изменения применены к ${ok} ${ok === 1 ? "треку" : "трекам"}.` });
+    } else {
+      toast({
+        variant: "destructive",
+        title: `Не удалось обновить ${fail} из ${ok + fail}`,
+        description: firstErr,
+      });
+    }
+    onSaved();
+    if (fail === 0) setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="bg-card text-xs">
+          <Pencil className="h-3.5 w-3.5 mr-1" /> Массовое редактирование
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Массовое редактирование треков</DialogTitle>
+          <DialogDescription>
+            Выберите треки, заполните только те поля, которые нужно поменять — остальные останутся как были.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="border border-border/50 rounded-md bg-background/30">
+            <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2">
+              <Checkbox checked={allOn} onCheckedChange={toggleAll} />
+              <span className="text-xs text-muted-foreground">
+                {selected.size === 0 ? "Выбрать все" : `Выбрано ${selected.size} из ${tracks.length}`}
+              </span>
+            </div>
+            <div className="max-h-[200px] overflow-y-auto">
+              {tracks.map((t) => (
+                <label key={t.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 cursor-pointer text-sm">
+                  <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggle(t.id)} />
+                  <span className="truncate flex-1">{t.title}</span>
+                  <span className="text-[10px] text-muted-foreground">#{t.trackNumber ?? "—"}</span>
+                </label>
+              ))}
+              {tracks.length === 0 && (
+                <div className="text-xs text-muted-foreground text-center py-4">Треков нет.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel className="text-xs">Жанр</FieldLabel>
+              <Select value={genre || "none"} onValueChange={(v) => setGenre(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— не менять</SelectItem>
+                  {META_GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <FieldLabel className="text-xs">Язык метаданных</FieldLabel>
+              <Select value={language || "none"} onValueChange={(v) => setLanguage(v === "none" ? "" : v)}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— не менять</SelectItem>
+                  {["Tajik","Russian","English","Persian","Uzbek","Arabic","Turkish"].map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <FieldLabel className="text-xs">Explicit</FieldLabel>
+              <Select value={explicit || "none"} onValueChange={(v) => setExplicit(v === "none" ? "" : (v as any))}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— не менять</SelectItem>
+                  <SelectItem value="non_explicit">Чистая версия</SelectItem>
+                  <SelectItem value="explicit">EXPLICIT</SelectItem>
+                  <SelectItem value="censored">Цензурированная</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <FieldLabel className="text-xs">AI</FieldLabel>
+              <Select value={ai || "__keep"} onValueChange={(v) => setAi(v === "__keep" ? "" : (v as any))}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__keep">— не менять</SelectItem>
+                  <SelectItem value="none">Без AI</SelectItem>
+                  <SelectItem value="some">Частично</SelectItem>
+                  <SelectItem value="all">Полностью AI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Отмена</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Сохраняю…" : `Применить (${selected.size})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Release Availability (real) ────────────────────────────────────────
+// Заменяет старую заглушку. Реально загружает выбранные DSP через
+// useGetReleaseDsps, открывает DspPickerDialog и сохраняет через
+// useUpdateReleaseDsps. Территории показываются read-only с подсказкой,
+// что они правятся в «Деталях релиза» (там уже есть поле).
+function ReleaseAvailabilityCard({ release, isEditable }: { release: ReleaseDetail; isEditable: boolean }) {
+  const qc = useQueryClient();
+  const { data: selected = [], refetch } = useGetReleaseDsps(release.id);
+  const update = useUpdateReleaseDsps();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const save = async (codes: string[]) => {
+    try {
+      await update.mutateAsync({ id: release.id, data: { dsps: codes } });
+      toast({ title: "Площадки сохранены", description: `${codes.length} DSP выбрано.` });
+      // Освежаем и список DSP, и сам релиз — Show Issues и сайдбар читают его статус.
+      await Promise.all([
+        refetch(),
+        qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) }),
+      ]);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось сохранить", description: (e as Error).message });
+    }
+  };
+
+  return (
+    <Card className="bg-card/50 backdrop-blur border-border/50">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Globe2 className="h-4 w-4" /> Доступность релиза
+        </CardTitle>
+        {isEditable && (
+          <Button variant="outline" size="sm" className="bg-card text-xs" onClick={() => setPickerOpen(true)}>
+            <Pencil className="h-3.5 w-3.5 mr-1" /> Изменить
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-start gap-4 p-3 rounded-md border border-border/50 bg-background/40">
+          <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center">
+            <Calendar className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm">Таймлайн</span>
+              <StatusBadge status={release.status} className="text-[10px] px-1.5 py-0 h-4" />
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Территории: {(release.territories || ["WW"]).join(", ")}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Выбрано площадок: {selected.length || "— не выбрано"}
+            </div>
+          </div>
+        </div>
+        {selected.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {selected.map((d) => <DspPill key={d} name={d} />)}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded p-3 text-center">
+            Площадки не выбраны. {isEditable && "Нажмите «Изменить», чтобы выбрать DSP для доставки."}
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-2 border-t border-border/40">
+          Отправляя релиз на модерацию, вы подтверждаете, что все мастера, обложка и метаданные принадлежат вам
+          или лицензированы для распространения на выбранных площадках. Tajik Music Distribution не несёт
+          ответственности за претензии правообладателей по неверно заявленному контенту.
+        </p>
+
+        <DspPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          value={selected}
+          onChange={(codes) => { void save(codes); }}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── SplitShare (real per-track view) ───────────────────────────────────
+// Заменяет заглушку. Загружает все splits релиза одним запросом и показывает
+// строку на каждый трек со статусом сплита. Создание/редактирование — только
+// admin/manager через прямую ссылку на /splits (где уже есть полный редактор).
+function SplitShareCard({ release }: { release: ReleaseDetail }) {
+  const { data: splits } = useListSplits({ release_id: release.id, limit: 100 });
+  const tracks = release.tracks ?? [];
+  const byTrack = useMemo(() => {
+    const m = new Map<number, Split>();
+    for (const s of splits?.data ?? []) {
+      if (s.trackId) m.set(s.trackId, s);
+    }
+    return m;
+  }, [splits]);
+
+  const splitStatus = (s: Split | undefined) => {
+    if (!s) return { label: "Не настроено", tone: "amber" as const };
+    const ps = s.participants ?? [];
+    const total = ps.reduce((a, p) => a + (p.percentage || 0), 0);
+    if (Math.abs(total - 100) > 0.01) return { label: `Сумма ${total}% ≠ 100`, tone: "rose" as const };
+    const states = ps.map((p) => (p as any).acceptanceStatus ?? "pending");
+    if (states.every((s) => s === "accepted")) return { label: "Подписано всеми", tone: "emerald" as const };
+    if (states.some((s) => s === "rejected"))   return { label: "Отклонено", tone: "rose" as const };
+    if (states.every((s) => s === "pending"))   return { label: "Ожидает подписи", tone: "amber" as const };
+    return { label: "Частично подписано", tone: "amber" as const };
+  };
+
+  return (
+    <Card className="bg-card/50 backdrop-blur border-border/50">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Share2 className="h-4 w-4" /> SplitShare — распределение доходов
+        </CardTitle>
+        <Link href="/splits">
+          <Button variant="outline" size="sm" className="bg-card text-xs">
+            Все сплиты
+          </Button>
+        </Link>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {tracks.length === 0 ? (
+          <div className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border/40 rounded">
+            Сначала добавьте треки — сплиты настраиваются на каждом треке отдельно.
+          </div>
+        ) : (
+          tracks.map((t) => {
+            const s = byTrack.get(t.id);
+            const st = splitStatus(s);
+            const toneClass =
+              st.tone === "emerald" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" :
+              st.tone === "rose"    ? "bg-rose-500/15 text-rose-300 border-rose-500/30" :
+                                      "bg-amber-500/15 text-amber-300 border-amber-500/30";
+            return (
+              <div key={t.id} className="flex items-center gap-3 p-2 rounded-md border border-border/50 bg-background/40">
+                <span className="text-xs font-mono w-7 text-muted-foreground text-center">{t.trackNumber ?? "—"}</span>
+                <span className="text-sm truncate flex-1">{t.title}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${toneClass}`}>{st.label}</span>
+                {s && (
+                  <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                    {s.participants.length} {s.participants.length === 1 ? "участник" : "участников"}
+                  </span>
+                )}
+                <Link href={s ? `/splits?id=${s.id}` : `/splits?release_id=${release.id}&track_id=${t.id}`}>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                    {s ? "Открыть" : "Создать"}
+                  </Button>
+                </Link>
+              </div>
+            );
+          })
+        )}
+        <p className="text-[11px] text-muted-foreground/70 pt-2 border-t border-border/40">
+          Сумма долей на каждом треке должна равняться 100 %. Полный редактор сплитов
+          (создание, изменение, отправка соавторам на подпись) — в разделе «Сплиты».
+        </p>
+      </CardContent>
+    </Card>
   );
 }

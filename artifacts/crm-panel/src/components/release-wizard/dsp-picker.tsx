@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useListDspCatalog, type DspCatalogItem } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -22,11 +22,13 @@ export function DspPickerDialog({
   const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
 
-  // Каждый раз при открытии модалки — синхронизируем draft с внешним value.
-  // Нужно потому что в этом компоненте draft переживает между открытиями.
-  if (open && draft.length === 0 && value.length > 0 && !draft.some((c) => value.includes(c))) {
-    setDraft(value);
-  }
+  // Каждый раз при открытии модалки — синхронизируем draft со свежим value
+  // (родитель мог обновить выбор после сохранения и refetch). Без этого
+  // повторное открытие показывало бы устаревший draft из прошлой сессии.
+  useEffect(() => {
+    if (open) setDraft(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, value.join(",")]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
