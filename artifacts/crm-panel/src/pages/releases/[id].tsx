@@ -346,7 +346,7 @@ export default function ReleaseDetail() {
         <RiskPanel release={release} onChanged={invalidateAll} />
 
         {/* Release Details */}
-        <Card className="bg-card/50 backdrop-blur border-border/50">
+        <Card id="card-release-details" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Release Details</CardTitle>
             {metaEditing && (
@@ -415,7 +415,7 @@ export default function ReleaseDetail() {
         </Card>
 
         {/* Tracks */}
-        <Card className="bg-card/50 backdrop-blur border-border/50">
+        <Card id="card-tracks" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
@@ -493,6 +493,14 @@ export default function ReleaseDetail() {
             onDeliverClick={() => setDeliverOpen(true)}
             onTakedownClick={() => setTakedownOpen(true)}
             onContinueWizard={() => setLocation(`/releases/${id}/edit`)}
+            onJumpToIssue={(issue) => {
+              jumpToIssue(issue, {
+                releaseId: id,
+                isDraft: release.status === "draft",
+                enableEditing: () => setMetaEditing(true),
+                navigate: (path) => setLocation(path),
+              });
+            }}
           />
         </div>
       </div>
@@ -771,7 +779,7 @@ function TrackRow({
 }: { t: Track; index: number; release: any; onChange: () => void }) {
   const deleteTrack = useDeleteTrack();
   return (
-    <div className="rounded-md border border-border/50 bg-background/40 p-4 space-y-3">
+    <div id={`track-${t.id}`} className="rounded-md border border-border/50 bg-background/40 p-4 space-y-3 scroll-mt-4 transition-shadow">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="font-semibold text-sm flex items-center gap-2">
           <span className="text-muted-foreground">Трек {index + 1}</span>
@@ -1573,6 +1581,7 @@ function SegmentTimeline({ segments }: { segments: NonNullable<AcrCheckRow["segm
 function ReleaseHubSidebar({
   release, user, onEditClick, metaEditing,
   onSubmitClick, onDeliverClick, onTakedownClick, onContinueWizard,
+  onJumpToIssue,
 }: {
   release: ReleaseDetail;
   user: { role?: string } | null;
@@ -1582,6 +1591,7 @@ function ReleaseHubSidebar({
   onDeliverClick: () => void;
   onTakedownClick: () => void;
   onContinueWizard: () => void;
+  onJumpToIssue: (issue: IssueItem) => void;
 }) {
   return (
     <div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto flex flex-col gap-4 pr-1">
@@ -1670,6 +1680,7 @@ function ReleaseHubSidebar({
         releaseId={release.id}
         status={release.status}
         updatedAt={String(release.updatedAt)}
+        onJump={onJumpToIssue}
       />
     </div>
   );
@@ -1680,14 +1691,19 @@ function ReleaseHubSidebar({
 // Автоматически обновляется при изменении release.status, чтобы после
 // сохранений показывать актуальные проблемы.
 type IssueItem = {
-  section: "release" | "tracks" | "delivery" | "splits";
+  // Бэкенд (release-flow.ts) шлёт: release | tracks | delivery | contributors.
+  // Старое значение "splits" тоже допускаем для обратной совместимости.
+  section: "release" | "tracks" | "delivery" | "contributors" | "splits";
   field: string;
   message: string;
   severity: "error" | "warning";
 };
 type IssuesResponse = { ok: boolean; issues: IssueItem[] };
 
-function ShowIssuesPanel({ releaseId, status, updatedAt }: { releaseId: number; status: string; updatedAt: string }) {
+function ShowIssuesPanel({ releaseId, status, updatedAt, onJump }: {
+  releaseId: number; status: string; updatedAt: string;
+  onJump?: (issue: IssueItem) => void;
+}) {
   const [data, setData] = useState<IssuesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1757,8 +1773,16 @@ function ShowIssuesPanel({ releaseId, status, updatedAt }: { releaseId: number; 
                 <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
                 <ul className="space-y-1">
                   {items.map((it, i) => (
-                    <li key={i} className="text-xs text-rose-100/90 bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1.5 leading-snug">
-                      {it.message}
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => onJump?.(it)}
+                        disabled={!onJump}
+                        className="w-full text-left text-xs text-rose-100/90 bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1.5 leading-snug hover:bg-rose-500/20 transition disabled:cursor-default disabled:hover:bg-rose-500/10"
+                        title={onJump ? "Перейти к проблемному полю" : undefined}
+                      >
+                        {it.message}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -1776,8 +1800,16 @@ function ShowIssuesPanel({ releaseId, status, updatedAt }: { releaseId: number; 
                 <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
                 <ul className="space-y-1">
                   {items.map((it, i) => (
-                    <li key={i} className="text-xs text-amber-100/90 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-snug">
-                      {it.message}
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => onJump?.(it)}
+                        disabled={!onJump}
+                        className="w-full text-left text-xs text-amber-100/90 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-snug hover:bg-amber-500/20 transition disabled:cursor-default disabled:hover:bg-amber-500/10"
+                        title={onJump ? "Перейти к проблемному полю" : undefined}
+                      >
+                        {it.message}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -1795,7 +1827,119 @@ const SECTION_LABEL: Record<string, string> = {
   tracks:  "Треки",
   delivery: "Доставка",
   splits:  "SplitShare",
+  contributors: "Соавторы",
 };
+
+// ─── jumpToIssue: deep-link из Show Issues к проблемному месту ────────────
+// Логика:
+//   • section=release           → подсветить карточку Release Details, для draft
+//                                  включить inline-редактор (metaEditing=true).
+//   • section=tracks, field=track:<id>:<sub> → перейти на /releases/:id/tracks/:tid/edit
+//                                  (отдельная страница trackEdit с 5 секциями, Фаза 5).
+//   • section=tracks без id     → подсветить карточку Tracks.
+//   • section=delivery          → подсветить карточку «Доступность релиза».
+//   • section=contributors, field=splits|split:N → SplitShare карточка.
+//   • section=contributors, field=artists       → Release Details (артист правится там).
+// Подсветка: временный ring через CSS-класс на 1.5 секунды.
+// Глобальные таймеры — чтобы быстрые повторные клики не «съедали» подсветку
+// предыдущей цели и не запускали несколько параллельных переходов.
+let _jumpRingTimer: number | null = null;
+let _jumpRingEl: Element | null = null;
+let _jumpNavTimer: number | null = null;
+const RING_CLASSES = ["ring-2", "ring-primary", "ring-offset-2", "ring-offset-background"];
+
+function clearActiveRing() {
+  if (_jumpRingTimer !== null) { window.clearTimeout(_jumpRingTimer); _jumpRingTimer = null; }
+  if (_jumpRingEl) { _jumpRingEl.classList.remove(...RING_CLASSES); _jumpRingEl = null; }
+}
+
+// Подсветить элемент: scroll + ring на 1.5с. Если элемент ещё не примонтирован
+// (например, был только что добавлен), ждём один RAF и пробуем ещё раз — это
+// покрывает случай, когда issue приходит сразу после refetch и DOM ещё не успел
+// обновиться.
+function flashElement(id: string) {
+  const apply = (el: Element) => {
+    clearActiveRing();
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add(...RING_CLASSES);
+    _jumpRingEl = el;
+    _jumpRingTimer = window.setTimeout(() => {
+      el.classList.remove(...RING_CLASSES);
+      _jumpRingEl = null;
+      _jumpRingTimer = null;
+    }, 1500);
+  };
+  const el = document.getElementById(id);
+  if (el) { apply(el); return; }
+  // Один retry на следующем кадре + короткий таймаут — после этого сдаёмся,
+  // чтобы не цикловать на отсутствующих якорях.
+  requestAnimationFrame(() => {
+    const el2 = document.getElementById(id);
+    if (el2) apply(el2);
+    else window.setTimeout(() => {
+      const el3 = document.getElementById(id);
+      if (el3) apply(el3);
+    }, 120);
+  });
+}
+
+function jumpToIssue(
+  issue: IssueItem,
+  opts: {
+    releaseId: number | string;
+    isDraft: boolean;
+    enableEditing: () => void;
+    navigate: (path: string) => void;
+  },
+) {
+  // Сначала отменяем ранее запланированный переход — чтобы быстрые клики не
+  // запускали навигации по очереди.
+  if (_jumpNavTimer !== null) { window.clearTimeout(_jumpNavTimer); _jumpNavTimer = null; }
+
+  // tracks: ветвимся ПЕРВЫМ ДЕЛОМ по секции, потом разбираем field. Поле может
+  // быть null (например: «в релизе нет треков»), тогда показываем карточку Tracks.
+  if (issue.section === "tracks") {
+    const m = issue.field ? /^track:(\d+):/.exec(issue.field) : null;
+    if (m) {
+      const tid = m[1];
+      const row = document.getElementById(`track-${tid}`);
+      if (row) {
+        flashElement(`track-${tid}`);
+        // Открываем страницу редактирования трека (Фаза 5) после короткой паузы.
+        _jumpNavTimer = window.setTimeout(() => {
+          _jumpNavTimer = null;
+          opts.navigate(`/releases/${opts.releaseId}/tracks/${tid}/edit`);
+        }, 350);
+      } else {
+        opts.navigate(`/releases/${opts.releaseId}/tracks/${tid}/edit`);
+      }
+      return;
+    }
+    flashElement("card-tracks");
+    return;
+  }
+
+  if (issue.section === "release") {
+    if (opts.isDraft) opts.enableEditing();
+    flashElement("card-release-details");
+    return;
+  }
+
+  if (issue.section === "delivery") {
+    flashElement("card-availability");
+    return;
+  }
+
+  if (issue.section === "contributors" || issue.section === "splits") {
+    if (issue.field === "artists") {
+      if (opts.isDraft) opts.enableEditing();
+      flashElement("card-release-details");
+      return;
+    }
+    flashElement("card-splitshare");
+    return;
+  }
+}
 
 // ─── Reuse Existing Track ────────────────────────────────────────────────
 // Открывает модалку поиска по ранее одобренным трекам лейбла/артиста.
@@ -2263,7 +2407,7 @@ function ReleaseAvailabilityCard({ release, isEditable }: { release: ReleaseDeta
   };
 
   return (
-    <Card className="bg-card/50 backdrop-blur border-border/50">
+    <Card id="card-availability" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
           <Globe2 className="h-4 w-4" /> Доступность релиза
@@ -2346,7 +2490,7 @@ function SplitShareCard({ release }: { release: ReleaseDetail }) {
   };
 
   return (
-    <Card className="bg-card/50 backdrop-blur border-border/50">
+    <Card id="card-splitshare" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
           <Share2 className="h-4 w-4" /> SplitShare — распределение доходов
