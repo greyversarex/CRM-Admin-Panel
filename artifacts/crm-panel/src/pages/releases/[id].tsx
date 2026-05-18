@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
-  ShieldAlert, ScanSearch, Database, Activity,
+  ShieldAlert, ScanSearch, Database, Activity, ListChecks, Share2, RefreshCw,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
@@ -158,13 +158,22 @@ export default function ReleaseDetail() {
           <ChevronLeft className="h-3.5 w-3.5" /> Back to Releases
         </button>
 
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Review your release for any issues before submitting to our review team for a final guideline check.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Просмотрите релиз перед отправкой на проверку. Все обязательные поля и предупреждения собраны справа в «Show Issues».
+          </p>
+        </div>
+
+        {/* ── Symphonic-style Release Hub: 2-колоночная сетка ──────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+          {/* ── ЛЕВАЯ КОЛОНКА: контент релиза ─────────────────────────────── */}
+          <div className="flex flex-col gap-5 min-w-0">
+        {/* Старая верхняя панель действий — отключена. Все действия переехали
+            в правую колонку «Release Hub». Блок ниже скрыт, чтобы сохранить
+            обработчики (submitOpen/deliverOpen/takedownOpen/editOpen) для
+            существующих диалогов без переписывания. */}
+        <div className="hidden" aria-hidden>
           <div className="flex gap-2 flex-wrap">
             {/* Send to Moderation: только из draft/rejected, доступно владельцу */}
             {release.canSubmit && (
@@ -445,6 +454,43 @@ export default function ReleaseDetail() {
             </p>
           </CardContent>
         </Card>
+
+        {/* SplitShare — заглушка, полноценная страница появится в Фазе 6.
+            Здесь показываем краткую сводку и ссылку. */}
+        <Card className="bg-card/50 backdrop-blur border-border/50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Share2 className="h-4 w-4" /> SplitShare — распределение доходов
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              Разделение роялти между соавторами настраивается отдельно для каждого трека.
+              Сумма долей по треку должна давать ровно 100%. До отправки на модерацию
+              шаги SplitShare можно изменить без согласований.
+            </p>
+            <p className="text-xs text-muted-foreground/80">
+              Полноценный редактор SplitShare появится в одном из ближайших обновлений.
+              Текущие доли можно увидеть в карточке каждого трека.
+            </p>
+          </CardContent>
+        </Card>
+          </div>
+          {/* ── ПРАВАЯ КОЛОНКА: sticky sidebar ─────────────────────────────── */}
+          <ReleaseHubSidebar
+            release={release}
+            user={user}
+            onEditClick={() => {
+              if (release.status === "draft") setMetaEditing((v) => !v);
+              else setEditOpen(true);
+            }}
+            metaEditing={metaEditing}
+            onSubmitClick={() => setSubmitOpen(true)}
+            onDeliverClick={() => setDeliverOpen(true)}
+            onTakedownClick={() => setTakedownOpen(true)}
+            onContinueWizard={() => setLocation(`/releases/${id}/edit`)}
+          />
+        </div>
       </div>
     </Layout>
   );
@@ -1415,3 +1461,233 @@ function SegmentTimeline({ segments }: { segments: NonNullable<AcrCheckRow["segm
     </div>
   );
 }
+
+// ─── Release Hub Sidebar (sticky правая колонка, Symphonic-стиль) ────────
+// Содержит: статус релиза, основные действия (Submit/Deliver/Take Down/Edit),
+// и панель "Show Issues" с живой подгрузкой проверок с сервера.
+function ReleaseHubSidebar({
+  release, user, onEditClick, metaEditing,
+  onSubmitClick, onDeliverClick, onTakedownClick, onContinueWizard,
+}: {
+  release: ReleaseDetail;
+  user: { role?: string } | null;
+  onEditClick: () => void;
+  metaEditing: boolean;
+  onSubmitClick: () => void;
+  onDeliverClick: () => void;
+  onTakedownClick: () => void;
+  onContinueWizard: () => void;
+}) {
+  return (
+    <div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto flex flex-col gap-4 pr-1">
+      {/* Статус + дата */}
+      <Card className="bg-card/70 backdrop-blur border-border/60">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Статус</span>
+            <StatusBadge status={release.status} className="text-xs" />
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Обновлён {new Date(release.updatedAt).toLocaleString("ru-RU")}
+          </div>
+          {release.upc ? (
+            <div className="text-[11px] text-muted-foreground">UPC <span className="font-mono text-foreground">{release.upc}</span></div>
+          ) : (
+            <div className="text-[11px] text-muted-foreground">UPC будет присвоен на отправке</div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Действия */}
+      <Card className="bg-card/70 backdrop-blur border-border/60">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Действия</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 space-y-2">
+          {release.canSubmit && (
+            <Button
+              className="w-full bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
+              onClick={onSubmitClick}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" /> Отправить на модерацию
+            </Button>
+          )}
+          {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
+            <Button
+              variant="outline"
+              className="w-full bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+              onClick={onDeliverClick}
+            >
+              <Send className="mr-2 h-4 w-4" /> Доставить на DSP
+            </Button>
+          )}
+          {release.isEditable ? (
+            <>
+              <Button
+                variant="outline"
+                className={"w-full " + (metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card")}
+                onClick={onEditClick}
+              >
+                <Edit3 className="mr-2 h-4 w-4" />
+                {release.status === "draft"
+                  ? (metaEditing ? "Завершить редактирование" : "Редактировать детали")
+                  : "Edit Release"}
+              </Button>
+              {release.status === "draft" && (
+                <Button
+                  variant="ghost"
+                  className="w-full text-xs h-8 text-muted-foreground hover:text-foreground"
+                  onClick={onContinueWizard}
+                >
+                  Открыть полный мастер →
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button variant="outline" disabled className="w-full bg-card opacity-60 cursor-not-allowed">
+              <Lock className="mr-2 h-4 w-4" /> Редактирование закрыто
+            </Button>
+          )}
+          {release.allowedTransitions.includes("takedown_requested") && (
+            <Button
+              variant="outline"
+              className="w-full bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+              onClick={onTakedownClick}
+            >
+              <XCircle className="mr-2 h-4 w-4" /> Запрос на снятие
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Show Issues — комплексная проверка готовности */}
+      <ShowIssuesPanel
+        releaseId={release.id}
+        status={release.status}
+        updatedAt={String(release.updatedAt)}
+      />
+    </div>
+  );
+}
+
+// ─── Show Issues panel ────────────────────────────────────────────────────
+// Дергает GET /api/releases/:id/issues и показывает сгруппированный список.
+// Автоматически обновляется при изменении release.status, чтобы после
+// сохранений показывать актуальные проблемы.
+type IssueItem = {
+  section: "release" | "tracks" | "delivery" | "splits";
+  field: string;
+  message: string;
+  severity: "error" | "warning";
+};
+type IssuesResponse = { ok: boolean; issues: IssueItem[] };
+
+function ShowIssuesPanel({ releaseId, status, updatedAt }: { releaseId: number; status: string; updatedAt: string }) {
+  const [data, setData] = useState<IssuesResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await adminApi<IssuesResponse>(`/api/releases/${releaseId}/issues`);
+      setData(r);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Перезапрашиваем при смене статуса И при любом обновлении релиза
+  // (release.updatedAt меняется после inline-save, добавления трека и т.д.).
+  useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [releaseId, status, updatedAt]);
+
+  const errors   = (data?.issues || []).filter((i) => i.severity === "error");
+  const warnings = (data?.issues || []).filter((i) => i.severity === "warning");
+  const grouped = (items: IssueItem[]) => {
+    const map: Record<string, IssueItem[]> = {};
+    for (const it of items) {
+      const k = SECTION_LABEL[it.section] || it.section;
+      (map[k] ||= []).push(it);
+    }
+    return Object.entries(map);
+  };
+
+  return (
+    <Card className="bg-card/70 backdrop-blur border-border/60">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <ListChecks className="h-4 w-4" /> Show Issues
+        </CardTitle>
+        <button
+          onClick={() => void refresh()}
+          className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent/40"
+          title="Перепроверить"
+          disabled={loading}
+        >
+          <RefreshCw className={"h-3 w-3 " + (loading ? "animate-spin" : "")} /> Обновить
+        </button>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-3">
+        {loading && !data && <div className="text-xs text-muted-foreground">Проверяем…</div>}
+        {error && (
+          <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded px-2 py-1.5">
+            Не удалось проверить: {error}
+          </div>
+        )}
+        {data && data.ok && (
+          <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-2 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Релиз готов к отправке — критичных замечаний нет.
+          </div>
+        )}
+        {errors.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-rose-300/90 font-semibold">
+              Ошибки ({errors.length})
+            </div>
+            {grouped(errors).map(([section, items]) => (
+              <div key={"e-" + section} className="space-y-1">
+                <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
+                <ul className="space-y-1">
+                  {items.map((it, i) => (
+                    <li key={i} className="text-xs text-rose-100/90 bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1.5 leading-snug">
+                      {it.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-amber-300/90 font-semibold">
+              Предупреждения ({warnings.length})
+            </div>
+            {grouped(warnings).map(([section, items]) => (
+              <div key={"w-" + section} className="space-y-1">
+                <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
+                <ul className="space-y-1">
+                  {items.map((it, i) => (
+                    <li key={i} className="text-xs text-amber-100/90 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-snug">
+                      {it.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const SECTION_LABEL: Record<string, string> = {
+  release: "Релиз",
+  tracks:  "Треки",
+  delivery: "Доставка",
+  splits:  "SplitShare",
+};
