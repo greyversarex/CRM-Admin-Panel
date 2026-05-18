@@ -185,11 +185,15 @@ export default function ReleaseDetail() {
                     <ShieldCheck className="mr-2 h-4 w-4" /> Send to Moderation
                   </Button>
                 </DialogTrigger>
-                <SubmitForReviewDialog
-                  releaseId={id}
-                  release={release}
-                  onClose={() => { setSubmitOpen(false); invalidateAll(); }}
-                />
+                {/* Mount only when open: гарантирует свежий fetch /issues при каждом открытии. */}
+                {submitOpen && (
+                  <SubmitForReviewDialog
+                    releaseId={id}
+                    release={release}
+                    enableEditing={() => setMetaEditing(true)}
+                    onClose={() => { setSubmitOpen(false); invalidateAll(); }}
+                  />
+                )}
               </Dialog>
             )}
             {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
@@ -984,41 +988,98 @@ function EditReleaseDialog({
   );
 }
 
-// ─── Submit for Review dialog ─────────────────────────────────────────────
-// Чек-лист готовности зеркалит серверную проверку в POST /releases/:id/submit.
-// Если всё ок — кнопка активна; если нет — пользователь сразу видит, что чинить.
+// ─── Submit for Review dialog (Phase 8: preflight через /issues) ──────────
+// Источник истины — серверная проверка GET /api/releases/:id/issues, тот же
+// движок, который питает ShowIssuesPanel. Логика:
+//   1. На открытии — fetch /issues (loading).
+//   2. Если есть errors → submit заблокирован, показываем список со ссылками
+//      на проблемные поля (как в Show Issues).
+//   3. Если только warnings → submit разрешён, но требуется подтверждение
+//      "Понимаю предупреждения" + основной чек.
+//   4. Если всё чисто → требуется только основной чек.
+// При ошибке от backend (race с серверной валидацией) показываем toast и
+// перезапрашиваем /issues, чтобы пользователь увидел актуальную картину.
 function SubmitForReviewDialog({
-  releaseId, release, onClose,
+  releaseId, release, enableEditing, onClose,
 }: {
   releaseId: number;
-  release: { title: string; coverUrl?: string | null; releaseDate?: string | null; genre?: string | null;
-    tracks?: Array<{ id: number; title: string; audioUrl?: string | null }>; status: string };
+  release: { title: string; status: string };
+  enableEditing: () => void;
   onClose: () => void;
 }) {
+  const [, setLocation] = useLocation();
   const submit = useSubmitReleaseForReview();
   const [confirmed, setConfirmed] = useState(false);
+  const [warningsAck, setWarningsAck] = useState(false);
 
-  const tracks = release.tracks ?? [];
-  const tracksWithoutAudio = tracks.filter((t) => !t.audioUrl);
+  const [issues, setIssues] = useState<IssuesResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
-  // Список тех же требований, что проверяет backend.
-  const checks: Array<{ ok: boolean; label: string }> = [
-    { ok: !!release.title?.trim(),                        label: "Название релиза" },
-    { ok: !!release.coverUrl,                             label: "Обложка загружена" },
-    { ok: !!release.releaseDate,                          label: "Указана дата релиза" },
-    { ok: !!release.genre,                                label: "Указан жанр" },
-    { ok: tracks.length > 0,                              label: `Хотя бы один трек (сейчас: ${tracks.length})` },
-    { ok: tracks.length > 0 && tracksWithoutAudio.length === 0,
-      label: tracksWithoutAudio.length === 0
-        ? "Аудио загружено для всех треков"
-        : `Аудио для всех треков (без аудио: ${tracksWithoutAudio.length})` },
-  ];
-  const allReady = checks.every((c) => c.ok);
+  // Сигнатура текущего набора предупреждений — чтобы при /refresh, если состав
+  // warning'ов поменялся, сбросить ack (иначе пользователь подтвердил один набор
+  // предупреждений, а отправит — с другим).
+  const warningsSig = (issues?.issues || [])
+    .filter((i) => i.severity === "warning")
+    .map((i) => `${i.section}:${i.field}:${i.message}`)
+    .sort()
+    .join("|");
+
+  const refresh = async () => {
+    setLoading(true);
+    setLoadErr(null);
+    try {
+      const r = await adminApi<IssuesResponse>(`/api/releases/${releaseId}/issues`);
+      const newSig = (r.issues || [])
+        .filter((i) => i.severity === "warning")
+        .map((i) => `${i.section}:${i.field}:${i.message}`)
+        .sort()
+        .join("|");
+      if (newSig !== warningsSig) setWarningsAck(false);
+      setIssues(r);
+    } catch (e) {
+      setLoadErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Mount-only fetch. Родитель монтирует диалог при каждом открытии,
+  // так что preflight всегда свежий.
+  useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [releaseId]);
+
+  const errors   = (issues?.issues || []).filter((i) => i.severity === "error");
+  const warnings = (issues?.issues || []).filter((i) => i.severity === "warning");
+  const grouped = (items: IssueItem[]) => {
+    const map: Record<string, IssueItem[]> = {};
+    for (const it of items) {
+      const k = SECTION_LABEL[it.section] || it.section;
+      (map[k] ||= []).push(it);
+    }
+    return Object.entries(map);
+  };
 
   const isResubmit = release.status === "rejected";
+  const canSubmit  = !loading && !loadErr && errors.length === 0
+                   && confirmed && (warnings.length === 0 || warningsAck);
+
+  // Клик по конкретной проблеме закрывает диалог и прыгает к полю (как в Show Issues).
+  const handleJump = (issue: IssueItem) => {
+    onClose();
+    // Дать диалогу анимированно закрыться, чтобы scrollIntoView сработал по
+    // финальному layout без перекрытия. Передаём настоящий enableEditing
+    // от родителя, чтобы для draft-релиза сразу открылся inline-редактор.
+    window.setTimeout(() => {
+      jumpToIssue(issue, {
+        releaseId,
+        isDraft: release.status === "draft",
+        enableEditing,
+        navigate: (path) => setLocation(path),
+      });
+    }, 180);
+  };
 
   return (
-    <DialogContent className="bg-card border-border max-w-lg">
+    <DialogContent className="bg-card border-border max-w-xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{isResubmit ? "Повторная отправка на модерацию" : "Отправить релиз на модерацию"}</DialogTitle>
         <DialogDescription>
@@ -1028,42 +1089,130 @@ function SubmitForReviewDialog({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-2">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">Готовность к отправке</div>
-        <ul className="space-y-1.5 text-sm">
-          {checks.map((c) => (
-            <li key={c.label} className="flex items-start gap-2">
-              {c.ok
-                ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                : <XCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />}
-              <span className={c.ok ? "text-foreground" : "text-rose-300"}>{c.label}</span>
-            </li>
-          ))}
-        </ul>
+      {/* Preflight статус */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Проверка готовности</div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent/40 disabled:opacity-50"
+          >
+            <RefreshCw className={"h-3 w-3 " + (loading ? "animate-spin" : "")} /> Перепроверить
+          </button>
+        </div>
+
+        {loading && !issues && (
+          <div className="text-xs text-muted-foreground py-4 text-center">Проверяем релиз…</div>
+        )}
+
+        {loadErr && (
+          <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded px-2 py-1.5">
+            Не удалось проверить: {loadErr}
+          </div>
+        )}
+
+        {issues && errors.length === 0 && warnings.length === 0 && (
+          <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-2 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Релиз готов к отправке — замечаний нет.
+          </div>
+        )}
+
+        {/* Errors */}
+        {errors.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-rose-300/90 font-semibold">
+              Ошибки ({errors.length}) — нужно исправить
+            </div>
+            {grouped(errors).map(([section, items]) => (
+              <div key={"se-" + section} className="space-y-1">
+                <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
+                <ul className="space-y-1">
+                  {items.map((it, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => handleJump(it)}
+                        className="w-full text-left text-xs text-rose-100/90 bg-rose-500/10 border border-rose-500/20 rounded px-2 py-1.5 leading-snug hover:bg-rose-500/20 transition"
+                        title="Перейти к проблемному полю"
+                      >
+                        {it.message}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Warnings */}
+        {warnings.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wider text-amber-300/90 font-semibold">
+              Предупреждения ({warnings.length}) — можно отправить, но рекомендуется исправить
+            </div>
+            {grouped(warnings).map(([section, items]) => (
+              <div key={"sw-" + section} className="space-y-1">
+                <div className="text-[10px] uppercase text-muted-foreground/70">{section}</div>
+                <ul className="space-y-1">
+                  {items.map((it, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => handleJump(it)}
+                        className="w-full text-left text-xs text-amber-100/90 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 leading-snug hover:bg-amber-500/20 transition"
+                        title="Перейти к полю"
+                      >
+                        {it.message}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {!allReady && (
-        <div className="text-xs bg-rose-500/10 border border-rose-500/30 rounded p-3 text-rose-200">
-          Заполните все пункты и загрузите аудио, прежде чем отправлять релиз модератору.
-        </div>
-      )}
-
-      {allReady && (
+      {/* Внимание о блокировке редактирования */}
+      {!loading && !loadErr && errors.length === 0 && (
         <div className="text-xs bg-amber-500/10 border border-amber-500/30 rounded p-3 text-amber-300/90">
           <span className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Внимание:</span>
           После отправки релиз будет заблокирован для редактирования до решения модератора.
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-        <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} disabled={!allReady} />
-        Подтверждаю отправку на модерацию
-      </label>
+      {/* Чекбоксы подтверждения */}
+      <div className="space-y-2">
+        {warnings.length > 0 && errors.length === 0 && (
+          <label className="flex items-start gap-2 text-xs text-amber-200/90 cursor-pointer leading-snug">
+            <Checkbox
+              className="mt-0.5"
+              checked={warningsAck}
+              onCheckedChange={(v) => setWarningsAck(!!v)}
+              disabled={loading}
+            />
+            Вижу предупреждения ({warnings.length}) и всё равно хочу отправить релиз на модерацию.
+          </label>
+        )}
+        <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer leading-snug">
+          <Checkbox
+            className="mt-0.5"
+            checked={confirmed}
+            onCheckedChange={(v) => setConfirmed(!!v)}
+            disabled={loading || errors.length > 0}
+          />
+          Подтверждаю отправку на модерацию.
+        </label>
+      </div>
 
       <DialogFooter className="gap-2">
         <Button variant="outline" onClick={onClose}>Отмена</Button>
         <Button
-          disabled={!allReady || !confirmed || submit.isPending}
+          disabled={!canSubmit || submit.isPending}
           onClick={async () => {
             try {
               await submit.mutateAsync({ id: releaseId });
@@ -1073,7 +1222,7 @@ function SubmitForReviewDialog({
               });
               onClose();
             } catch (e) {
-              // 409 от backend — readiness разошлась с клиентским чек-листом (race condition).
+              // 409 от backend — клиентский preflight разошёлся с серверным (race).
               const err = e as { response?: { data?: { error?: string; missing?: string[] } }; message?: string };
               const data = err?.response?.data;
               const missing = data?.missing?.length ? ` Не хватает: ${data.missing.join(", ")}.` : "";
@@ -1082,6 +1231,10 @@ function SubmitForReviewDialog({
                 description: (data?.error ?? err?.message ?? "Неизвестная ошибка") + missing,
                 variant: "destructive",
               });
+              // Перезапросим /issues — пользователь увидит, что именно изменилось.
+              void refresh();
+              setConfirmed(false);
+              setWarningsAck(false);
             }
           }}
         >
