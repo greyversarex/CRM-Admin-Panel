@@ -8,7 +8,7 @@ import {
   type ReleaseDetail, type CreateReleaseBody,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
-  ShieldAlert, ScanSearch, Database, Activity, ListChecks, Share2, RefreshCw,
+  ShieldAlert, ScanSearch, Database, Activity, ListChecks, Share2, RefreshCw, Pencil,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
@@ -811,6 +811,13 @@ function TrackRow({
           <div className="text-xs text-muted-foreground">
             Язык: <span className="text-foreground">{t.language || "—"}</span>
           </div>
+          {release.isEditable && (
+            <Link href={`/releases/${release.id}/tracks/${t.id}/edit`}>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Редактировать
+              </Button>
+            </Link>
+          )}
           <Button
             variant="ghost" size="sm"
             className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-7 px-2"

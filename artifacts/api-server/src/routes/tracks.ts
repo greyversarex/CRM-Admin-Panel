@@ -178,7 +178,18 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
     }
   }
 
-  const [track] = await db.update(tracksTable).set(parsed.data).where(eq(tracksTable.id, params.data.id)).returning();
+  // Если клиент очищает spatial-файл (spatialAudioUrl=null), синхронно
+  // сбрасываем биллинг-статус Atmos в "none", иначе остаётся "pending"/"charged"
+  // от прошлой загрузки и пользователь повторно платит.
+  const patch: Record<string, unknown> = { ...parsed.data };
+  if (
+    Object.prototype.hasOwnProperty.call(parsed.data, "spatialAudioUrl") &&
+    (parsed.data as any).spatialAudioUrl == null
+  ) {
+    patch.spatialBillingStatus = "none";
+  }
+
+  const [track] = await db.update(tracksTable).set(patch).where(eq(tracksTable.id, params.data.id)).returning();
   if (!track) {
     res.status(404).json({ error: "Track not found" });
     return;
