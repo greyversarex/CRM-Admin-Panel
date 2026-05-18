@@ -418,14 +418,25 @@ export default function ReleaseDetail() {
             <CardTitle className="text-lg flex items-center gap-2">
               <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
             </CardTitle>
-            <BulkTracksDialog
-              releaseId={id}
-              artistId={release.artistId}
-              defaultLanguage={release.language || "Tajik"}
-              defaultGenre={release.genre || "Pop"}
-              startTrackNumber={(release.tracks?.length ?? 0) + 1}
-              onUploaded={invalidateAll}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              {release.isEditable && (
+                <ReuseExistingTrackDialog
+                  releaseId={id}
+                  releaseArtistId={release.artistId}
+                  currentReleaseTitle={release.title}
+                  nextTrackNumber={(release.tracks?.length ?? 0) + 1}
+                  onReused={invalidateAll}
+                />
+              )}
+              <BulkTracksDialog
+                releaseId={id}
+                artistId={release.artistId}
+                defaultLanguage={release.language || "Tajik"}
+                defaultGenre={release.genre || "Pop"}
+                startTrackNumber={(release.tracks?.length ?? 0) + 1}
+                onUploaded={invalidateAll}
+              />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {(release.tracks ?? []).length === 0 ? (
@@ -1808,3 +1819,179 @@ const SECTION_LABEL: Record<string, string> = {
   delivery: "Доставка",
   splits:  "SplitShare",
 };
+
+// ─── Reuse Existing Track ────────────────────────────────────────────────
+// Открывает модалку поиска по ранее одобренным трекам лейбла/артиста.
+// При выборе создаёт новый track-row на текущем релизе, скопировав ключевые
+// метаданные (title/isrc/audioUrl/duration/artistId) — пользователь дальше
+// может отредактировать через TrackRow или Track Edit (Фаза 5).
+type ReusableTrack = {
+  id: number;
+  title: string;
+  isrc: string | null;
+  durationSeconds: number | null;
+  audioUrl: string | null;
+  releaseId: number | null;
+  releaseTitle: string;
+  artistId: number;
+  artistName: string;
+};
+
+function ReuseExistingTrackDialog({
+  releaseId, releaseArtistId, currentReleaseTitle, nextTrackNumber, onReused,
+}: {
+  releaseId: number;
+  releaseArtistId: number;
+  currentReleaseTitle: string;
+  nextTrackNumber: number;
+  onReused: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<ReusableTrack[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const createTrack = useCreateTrack();
+
+  const search = async () => {
+    setLoading(true); setError(null);
+    try {
+      const url = `/api/tracks/reusable?excludeReleaseId=${releaseId}` + (q.trim() ? `&q=${encodeURIComponent(q.trim())}` : "");
+      const r = await adminApi<{ data: ReusableTrack[] }>(url);
+      setItems(r.data);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // При открытии — сразу подгружаем первые 50.
+  useEffect(() => {
+    if (open && items === null) void search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const reuse = async (src: ReusableTrack) => {
+    setBusyId(src.id);
+    try {
+      // ВАЖНО: artistId нового трека должен совпадать с artistId релиза
+      // (бэкенд проверяет это в POST /tracks и возвращает 403, если разные).
+      // Если исходный трек принадлежал другому артисту того же лейбла —
+      // мы переписываем artistId на текущий, имена авторов всё равно
+      // редактируются дальше через Track Edit.
+      await createTrack.mutateAsync({
+        data: {
+          title:           src.title,
+          isrc:            src.isrc,
+          audioUrl:        src.audioUrl,
+          durationSeconds: src.durationSeconds,
+          releaseId:       releaseId,
+          artistId:        releaseArtistId,
+          trackNumber:     nextTrackNumber,
+        },
+      });
+      toast({
+        title: "Трек добавлен",
+        description: `«${src.title}» переиспользован из релиза «${src.releaseTitle}».`,
+      });
+      onReused();
+      setOpen(false);
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось добавить трек",
+        description: (e as Error).message,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="bg-card text-xs">
+          <Database className="h-3.5 w-3.5 mr-1" /> Использовать существующий
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Переиспользовать трек</DialogTitle>
+          <DialogDescription>
+            Выберите трек из ранее одобренных релизов лейбла, чтобы добавить его
+            в «{currentReleaseTitle}» (например, для сборника или перевыпуска).
+            Метаданные (название, ISRC) скопируются, дальше их можно редактировать.
+            Аудиофайл переиспользуется по ссылке — если исходный трек будет удалён,
+            рекомендуется перезалить аудио на новый трек.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2">
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void search(); }}
+            placeholder="Поиск по названию или ISRC…"
+            className="bg-background/40"
+          />
+          <Button variant="outline" onClick={() => void search()} disabled={loading}>
+            <ScanSearch className={"h-4 w-4 mr-1 " + (loading ? "animate-spin" : "")} />
+            Найти
+          </Button>
+        </div>
+
+        <div className="max-h-[420px] overflow-y-auto -mx-2 px-2 mt-2 space-y-2">
+          {error && (
+            <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded px-2 py-1.5">
+              {error}
+            </div>
+          )}
+          {loading && items === null && (
+            <div className="text-sm text-muted-foreground py-6 text-center">Загрузка…</div>
+          )}
+          {items !== null && items.length === 0 && !loading && (
+            <div className="text-sm text-muted-foreground py-6 text-center border border-dashed border-border/40 rounded-md">
+              Нет одобренных треков, подходящих под запрос.
+            </div>
+          )}
+          {items?.map((t) => {
+            const dur = t.durationSeconds
+              ? `${Math.floor(t.durationSeconds / 60)}:${String(t.durationSeconds % 60).padStart(2, "0")}`
+              : "—";
+            return (
+              <div
+                key={t.id}
+                className="flex items-start justify-between gap-3 p-3 rounded-md border border-border/50 bg-background/40 hover:bg-accent/30 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-sm truncate">{t.title}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {t.artistName} · {t.releaseTitle}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground/80 mt-1 flex flex-wrap gap-x-3 font-mono">
+                    {t.isrc && <span>ISRC {t.isrc}</span>}
+                    <span>{dur}</span>
+                    {t.audioUrl ? <span className="text-emerald-400/80">аудио есть</span> : <span className="text-amber-400/80">без аудио</span>}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => void reuse(t)}
+                  disabled={busyId === t.id}
+                  className="shrink-0"
+                >
+                  {busyId === t.id ? "Добавляем…" : "Использовать"}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Закрыть</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
