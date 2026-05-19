@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Globe2, Film, TrendingUp, TrendingDown, Music2, Disc3, Award, Users as UsersIcon } from "lucide-react";
+import { Globe2, Film, TrendingUp, TrendingDown, Music2, Disc3, Award, Users as UsersIcon, Video } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { ResponsiveContainer, Tooltip, PieChart, Pie, Cell } from "recharts";
 import { useQuery } from "@tanstack/react-query";
@@ -396,6 +396,96 @@ type ArtistTableRow = {
   streams: number;
   revenue: number;
 };
+
+/* ───── UGC Summary (Reels / Shorts / TikTok) ───── */
+
+type UgcSummary = {
+  totals: { views: number; likes: number; shares: number; videos: number; revenueCents: number };
+  byPlatform: { platform: string; views: number; likes: number; shares: number; videos: number; revenueCents: number }[];
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  youtube_cms: "YouTube",
+  tiktok: "TikTok",
+  meta: "Meta",
+  instagram: "Instagram",
+};
+
+function fmtCompact(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+export function UgcSummaryCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard.ugc-summary"],
+    queryFn: () => fetchJson<UgcSummary>("/api/dashboard/ugc-summary"),
+  });
+
+  const totals = data?.totals ?? { views: 0, likes: 0, shares: 0, videos: 0, revenueCents: 0 };
+  const byPlatform = data?.byPlatform ?? [];
+  const revenue = totals.revenueCents / 100;
+
+  return (
+    <Card className="card-surface border-border/60 h-full flex flex-col">
+      <CardHeader className="pb-2 shrink-0">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Video className="h-3.5 w-3.5 text-primary" />
+          UGC · Reels / Shorts / TikTok
+        </CardTitle>
+        <CardDescription className="text-[11px]">
+          Совокупные просмотры/лайки и доход от пользовательского контента
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-0 flex-1 overflow-y-auto min-h-0">
+        {isLoading ? (
+          <Skeleton className="h-[180px] w-full" />
+        ) : totals.videos === 0 && totals.views === 0 ? (
+          <div className="h-[180px] flex items-center justify-center text-[11px] text-muted-foreground">
+            Нет данных за период
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Просмотры</div>
+                <div className="text-lg font-bold tabular-nums">{fmtCompact(totals.views)}</div>
+              </div>
+              <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Видео</div>
+                <div className="text-lg font-bold tabular-nums">{fmtCompact(totals.videos)}</div>
+              </div>
+              <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Лайки</div>
+                <div className="text-base font-semibold tabular-nums">{fmtCompact(totals.likes)}</div>
+              </div>
+              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">Доход</div>
+                <div className="text-base font-semibold tabular-nums text-emerald-300">
+                  ${revenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+            {byPlatform.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {byPlatform.map((p) => (
+                  <div key={p.platform} className="flex items-center justify-between text-[11px] border-b border-border/25 last:border-0 py-1">
+                    <span className="font-medium">{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {fmtCompact(p.views)} просм. · ${(p.revenueCents / 100).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ArtistsStatsTableCard() {
   const { data, isLoading } = useQuery({

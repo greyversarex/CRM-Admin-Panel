@@ -54,6 +54,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/marketing/presave":   ["admin", "manager", "label", "artist"],
   "/marketing/links":     ["admin", "manager", "label", "artist"],
   "/marketing/assets":    ["admin", "manager", "label", "artist"],
+  "/marketing/playlists": ["admin", "manager", "label", "artist"],
 };
 
 /**

@@ -12,7 +12,7 @@ import {
 import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
-  TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard,
+  TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
 } from "@/components/dashboard-sections";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -324,6 +324,11 @@ export default function Dashboard() {
               <div className="lg:col-span-2">
                 <RoyaltySummaryCard />
               </div>
+            </div>
+
+            {/* UGC widget — реальные данные из ugc_metrics, scoped по треков-владению */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <UgcSummaryCard />
             </div>
 
             {/* Таблица артистов — только админ/менеджер, лейблу не нужна

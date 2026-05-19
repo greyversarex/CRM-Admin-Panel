@@ -516,4 +516,236 @@ router.post("/finance/ingest/unmatched/:id/resolve", async (req, res): Promise<v
   });
 });
 
+/**
+ * POST /finance/ingest/unmatched/bulk-auto-resolve
+ *
+ * Пытается автоматически сопоставить ВСЕ pending unmatched-строки с треками
+ * по двум стратегиям (порядок важен — ISRC надёжнее):
+ *   1) Точное совпадение ISRC (case/whitespace-insensitive) с tracks.isrc.
+ *   2) Точное совпадение (lower-trim) rawTitle == tracks.title
+ *      И rawArtist == artists.name (для треков, где есть оба совпадения).
+ *
+ * Атомарность: для каждой совпавшей строки переиспользуется тот же CLAIM-механизм
+ * что и в /resolve — UPDATE ... WHERE resolved=false RETURNING. Гонок не будет.
+ *
+ * Возвращает summary: { scanned, matchedByIsrc, matchedByTitle, resolved, alreadyResolved,
+ *                       skippedAmbiguous, skippedNoMatch, errors }.
+ */
+router.post("/finance/ingest/unmatched/bulk-auto-resolve", async (req, res): Promise<void> => {
+  // Лимит: чтобы не делать неконтролируемых апдейтов на огромных корпусах.
+  // 1000 строк за один батч — типичный CSV-импорт меньше, повторный вызов добивает.
+  const MAX_ROWS = 1000;
+
+  // Берём только pending. Уже resolved пропускаем сразу (для них ничего делать не нужно).
+  const pending = await db.select().from(ingestionUnmatchedTable)
+    .where(eq(ingestionUnmatchedTable.resolved, false))
+    .limit(MAX_ROWS);
+
+  const summary = {
+    scanned: pending.length,
+    matchedByIsrc: 0,
+    matchedByTitle: 0,
+    resolved: 0,
+    alreadyResolved: 0,
+    skippedAmbiguous: 0,
+    skippedNoMatch: 0,
+    errors: 0,
+  };
+
+  if (pending.length === 0) { res.json(summary); return; }
+
+  // ── Шаг 1: предзагрузка справочников для пакетного матчинга ─────────────
+  // Чтобы не делать N+1 запросов, грузим один раз карту isrc→trackId и
+  // мапу (lower(title), lower(artistName)) → [trackId,...] для всех треков.
+
+  const allTracks = await db
+    .select({
+      id: tracksTable.id,
+      title: tracksTable.title,
+      isrc: tracksTable.isrc,
+      artistName: artistsTable.name,
+    })
+    .from(tracksTable)
+    .leftJoin(artistsTable, eq(artistsTable.id, tracksTable.artistId));
+
+  // ISRC хранится по-разному: с/без дефисов, в разном регистре. Нормализуем.
+  const normIsrc = (s: string | null | undefined): string =>
+    (s ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  // Fuzzy-нормализация для title/artist: убираем ВСЕ небуквенно-цифровые символы
+  // (пробелы, дефисы, апострофы, скобки, точки, пунктуацию) и приводим к нижнему
+  // регистру в Unicode. Это даёт устойчивость к расхождениям типа
+  // "Don't Stop" vs "Dont Stop", "feat. X" vs "feat X", "Артист (Remix)" vs "Артист Remix".
+  // Полноценный fuzzy (Левенштейн/триграммы) требует pg_trgm — здесь сознательно
+  // ограничиваемся детерминированной нормализацией, чтобы не плодить ложные положительные
+  // совпадения для близких, но РАЗНЫХ названий ("Love" vs "Love 2").
+  const normText = (s: string | null | undefined): string =>
+    (s ?? "")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\p{M}]/gu, "")           // diacritics
+      .replace(/[^\p{L}\p{N}]+/gu, "");   // всё кроме букв/цифр
+
+  // Map: normalized ISRC → trackId (если в каталоге дубль ISRC — не используем,
+  // оставляем оператору ручное разрешение).
+  const isrcMap = new Map<string, number | "ambiguous">();
+  for (const t of allTracks) {
+    if (!t.isrc) continue;
+    const k = normIsrc(t.isrc);
+    if (!k) continue;
+    if (isrcMap.has(k)) isrcMap.set(k, "ambiguous");
+    else isrcMap.set(k, t.id);
+  }
+
+  // Map: title|artist → trackId (только уникальные пары; иначе ambiguous).
+  const titleMap = new Map<string, number | "ambiguous">();
+  for (const t of allTracks) {
+    if (!t.title || !t.artistName) continue;
+    const k = `${normText(t.title)}|${normText(t.artistName)}`;
+    if (titleMap.has(k)) titleMap.set(k, "ambiguous");
+    else titleMap.set(k, t.id);
+  }
+
+  // ── Шаг 2: применяем resolve по каждому ряду через тот же CLAIM-механизм ──
+  class RaceLostError extends Error { constructor() { super("race_lost"); } }
+
+  for (const u of pending) {
+    // 1) ISRC matching (приоритетный)
+    let trackId: number | null = null;
+    let matchedBy: "isrc" | "title" | null = null;
+
+    const k1 = normIsrc(u.rawIsrc);
+    if (k1) {
+      const v = isrcMap.get(k1);
+      if (v === "ambiguous") { summary.skippedAmbiguous++; continue; }
+      if (typeof v === "number") { trackId = v; matchedBy = "isrc"; }
+    }
+
+    // 2) Title + Artist fallback
+    if (!trackId && u.rawTitle && u.rawArtist) {
+      const k2 = `${normText(u.rawTitle)}|${normText(u.rawArtist)}`;
+      const v = titleMap.get(k2);
+      if (v === "ambiguous") { summary.skippedAmbiguous++; continue; }
+      if (typeof v === "number") { trackId = v; matchedBy = "title"; }
+    }
+
+    if (!trackId) { summary.skippedNoMatch++; continue; }
+
+    // Подтягиваем releaseId/artistId для трека.
+    const [track] = await db.select({
+      id: tracksTable.id, releaseId: tracksTable.releaseId, artistId: tracksTable.artistId,
+    }).from(tracksTable).where(eq(tracksTable.id, trackId));
+    if (!track) { summary.errors++; continue; }
+
+    let labelId: number | null = null;
+    if (track.releaseId) {
+      const [rel] = await db.select({ labelId: releasesTable.labelId })
+        .from(releasesTable).where(eq(releasesTable.id, track.releaseId));
+      labelId = rel?.labelId ?? null;
+    }
+
+    let resolvedThisRow = false;
+    let transactionId: number | null = null;
+    let usageInserted = false;
+    let raceLost = false;
+
+    try {
+      await db.transaction(async (tx) => {
+        const claimed = await tx
+          .update(ingestionUnmatchedTable)
+          .set({ resolved: true })
+          .where(and(
+            eq(ingestionUnmatchedTable.id, u.id),
+            eq(ingestionUnmatchedTable.resolved, false),
+          ))
+          .returning({ id: ingestionUnmatchedTable.id });
+
+        if (claimed.length === 0) { raceLost = true; throw new RaceLostError(); }
+
+        const insertedUsage = await tx
+          .insert(usageReportsTable)
+          .values({
+            artistId: track.artistId,
+            releaseId: track.releaseId,
+            trackId: track.id,
+            platform: u.dsp,
+            period: u.period,
+            streams: u.streams,
+            revenue: u.revenue,
+            countryCode: u.countryCode,
+          })
+          .onConflictDoNothing()
+          .returning({ id: usageReportsTable.id });
+
+        usageInserted = insertedUsage.length > 0;
+
+        const revenue = parseFloat(u.revenue);
+        if (usageInserted && track.releaseId && revenue > 0) {
+          const [insertedTx] = await tx.insert(transactionsTable).values({
+            type: "dsp_revenue",
+            amount: u.revenue,
+            currency: u.currency,
+            artistId: track.artistId,
+            labelId,
+            releaseId: track.releaseId,
+            platform: u.dsp,
+            description: `Auto-match: unmatched #${u.id} → track #${track.id} (by ${matchedBy})`,
+            period: u.period,
+            source: "ingestion",
+            importId: u.importId,
+          }).returning({ id: transactionsTable.id });
+          transactionId = insertedTx?.id ?? null;
+        }
+
+        if (usageInserted) {
+          await tx.update(ingestionImportsTable).set({
+            unmatchedRows: sql`GREATEST(${ingestionImportsTable.unmatchedRows} - 1, 0)`,
+            insertedRows:  sql`${ingestionImportsTable.insertedRows} + 1`,
+            totalRevenue:  sql`${ingestionImportsTable.totalRevenue} + ${u.revenue}::numeric`,
+          }).where(eq(ingestionImportsTable.id, u.importId));
+        } else {
+          await tx.update(ingestionImportsTable).set({
+            unmatchedRows: sql`GREATEST(${ingestionImportsTable.unmatchedRows} - 1, 0)`,
+          }).where(eq(ingestionImportsTable.id, u.importId));
+        }
+
+        resolvedThisRow = true;
+      });
+    } catch (err) {
+      if (err instanceof RaceLostError || raceLost) { summary.alreadyResolved++; continue; }
+      summary.errors++;
+      continue;
+    }
+
+    if (resolvedThisRow) {
+      summary.resolved++;
+      if (matchedBy === "isrc") summary.matchedByIsrc++;
+      else if (matchedBy === "title") summary.matchedByTitle++;
+
+      void auditMutation(req, {
+        action: "update",
+        entityType: "ingestion_unmatched",
+        entityId: u.id,
+        before: { id: u.id, resolved: false, trackId: null, transactionId: null },
+        after: { id: u.id, resolved: true, trackId: track.id, transactionId, matchedBy, auto: true },
+      });
+      if (transactionId !== null) {
+        void auditMutation(req, {
+          action: "create",
+          entityType: "transaction",
+          entityId: transactionId,
+          before: null,
+          after: {
+            id: transactionId, type: "dsp_revenue", amount: u.revenue, currency: u.currency,
+            artistId: track.artistId, labelId, releaseId: track.releaseId, platform: u.dsp,
+            description: `Auto-match: unmatched #${u.id} → track #${track.id} (by ${matchedBy})`,
+            period: u.period,
+          },
+        });
+      }
+    }
+  }
+
+  res.json(summary);
+});
+
 export default router;

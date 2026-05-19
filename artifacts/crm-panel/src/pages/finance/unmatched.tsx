@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Search, AlertTriangle, ChevronLeft, Link2, CheckCircle2 } from "lucide-react";
+import { Search, AlertTriangle, ChevronLeft, Link2, CheckCircle2, Wand2, Loader2 } from "lucide-react";
 
 interface UnmatchedRow {
   id: number;
@@ -65,6 +65,41 @@ export default function FinanceUnmatched() {
   const [data, setData] = useState<UnmatchedListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerFor, setPickerFor] = useState<UnmatchedRow | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoSummary, setAutoSummary] = useState<null | {
+    scanned: number; matchedByIsrc: number; matchedByTitle: number;
+    resolved: number; alreadyResolved: number; skippedAmbiguous: number;
+    skippedNoMatch: number; errors: number;
+  }>(null);
+
+  async function runAutoResolve() {
+    if (autoBusy) return;
+    setAutoBusy(true);
+    try {
+      const res = await fetch("/api/finance/ingest/unmatched/bulk-auto-resolve", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const summary = await res.json();
+      setAutoSummary(summary);
+      toast({
+        title: "Авто-сопоставление завершено",
+        description:
+          `Просмотрено: ${summary.scanned}. ` +
+          `Сопоставлено: ${summary.resolved} ` +
+          `(по ISRC: ${summary.matchedByIsrc}, по названию+артист: ${summary.matchedByTitle}). ` +
+          `Не нашлось совпадений: ${summary.skippedNoMatch}. ` +
+          `Неоднозначные: ${summary.skippedAmbiguous}.`,
+      });
+      await reload();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Не удалось выполнить авто-сопоставление", description: e?.message });
+    } finally {
+      setAutoBusy(false);
+    }
+  }
 
   // Debounce поиска по списку (300мс) — чтобы не молотить API на каждый ввод.
   useEffect(() => {
@@ -122,7 +157,28 @@ export default function FinanceUnmatched() {
               </p>
             </div>
           </div>
+          <Button
+            onClick={runAutoResolve}
+            disabled={autoBusy || totalPending === 0}
+            data-testid="button-auto-resolve"
+          >
+            {autoBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
+            Авто-сопоставить
+          </Button>
         </div>
+
+        {autoSummary && (
+          <Card className="bg-emerald-500/5 border-emerald-500/20">
+            <CardContent className="py-3 text-sm flex flex-wrap gap-x-6 gap-y-1">
+              <span><b>{autoSummary.resolved}</b> сопоставлено</span>
+              <span className="text-muted-foreground">по ISRC: {autoSummary.matchedByIsrc}</span>
+              <span className="text-muted-foreground">по названию+артист: {autoSummary.matchedByTitle}</span>
+              <span className="text-muted-foreground">без совпадений: {autoSummary.skippedNoMatch}</span>
+              <span className="text-muted-foreground">неоднозначные: {autoSummary.skippedAmbiguous}</span>
+              {autoSummary.errors > 0 && <span className="text-rose-400">ошибок: {autoSummary.errors}</span>}
+            </CardContent>
+          </Card>
+        )}
 
         {/* KPI */}
         <div className="grid gap-4 md:grid-cols-2">

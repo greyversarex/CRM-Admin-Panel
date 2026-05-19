@@ -225,8 +225,12 @@ export default function Publishing() {
         <Tabs defaultValue="works" className="w-full">
           <TabsList>
             <TabsTrigger value="works">Произведения</TabsTrigger>
+            <TabsTrigger value="writers">{t.nav.pub_writers}</TabsTrigger>
+            <TabsTrigger value="splits">{t.nav.pub_splits}</TabsTrigger>
             <TabsTrigger value="conflicts">Конфликты</TabsTrigger>
+            <TabsTrigger value="partners">{t.nav.pub_partners}</TabsTrigger>
             <TabsTrigger value="registration">Регистрация в PRO</TabsTrigger>
+            <TabsTrigger value="reports">{t.nav.pub_reports}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="works" className="mt-4 space-y-6">
@@ -395,8 +399,12 @@ export default function Publishing() {
         </Card>
           </TabsContent>
 
+          <TabsContent value="writers" className="mt-4"><WritersTab works={works} loading={loading} /></TabsContent>
+          <TabsContent value="splits" className="mt-4"><SplitsTab works={works} loading={loading} /></TabsContent>
           <TabsContent value="conflicts" className="mt-4"><ConflictsTab /></TabsContent>
+          <TabsContent value="partners" className="mt-4"><PartnersTab works={works} loading={loading} /></TabsContent>
           <TabsContent value="registration" className="mt-4"><RegistrationTab /></TabsContent>
+          <TabsContent value="reports" className="mt-4"><ReportsTab works={works} loading={loading} /></TabsContent>
         </Tabs>
       </div>
 
@@ -718,5 +726,317 @@ function WorkDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Writers Tab ────────────────────────────────────────────────────────────
+// Агрегирует авторов из всех publishing_works.writers: уникальные имена,
+// количество произведений, средняя/суммарная доля. Все данные — реальные,
+// никаких заглушек. Если works пустые, показываем honest empty state.
+
+function WritersTab({ works, loading }: { works: PublishingWork[]; loading: boolean }) {
+  const writers = useMemo(() => {
+    const map = new Map<string, {
+      name: string; role: string; caeIpi: string | null;
+      worksCount: number; totalShare: number;
+    }>();
+    for (const w of works) {
+      for (const wr of w.writers || []) {
+        const key = `${wr.name.trim().toLowerCase()}|${wr.caeIpi ?? ""}`;
+        const prev = map.get(key);
+        if (prev) {
+          prev.worksCount += 1;
+          prev.totalShare += Number.isFinite(wr.share) ? wr.share : 0;
+        } else {
+          map.set(key, {
+            name: wr.name, role: wr.role, caeIpi: wr.caeIpi ?? null,
+            worksCount: 1, totalShare: Number.isFinite(wr.share) ? wr.share : 0,
+          });
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.worksCount - a.worksCount);
+  }, [works]);
+
+  if (loading) {
+    return <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground"><Spinner /></Card>;
+  }
+  if (writers.length === 0) {
+    return (
+      <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground">
+        Авторов ещё нет. Добавьте произведения с авторами в табе «Произведения».
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="card-surface border-border/60 overflow-hidden">
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border/40 hover:bg-transparent">
+              <TableHead>Автор</TableHead>
+              <TableHead>Роль</TableHead>
+              <TableHead>CAE / IPI</TableHead>
+              <TableHead className="text-right">Произведений</TableHead>
+              <TableHead className="text-right">Сумма долей</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {writers.map((w, i) => (
+              <TableRow key={i} className="border-border/40 hover:bg-accent/15">
+                <TableCell className="font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">
+                      {initialsOf(w.name)}
+                    </span>
+                    {w.name}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{w.role}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{w.caeIpi ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{w.worksCount}</TableCell>
+                <TableCell className="text-right tabular-nums font-semibold">{w.totalShare.toFixed(1)}%</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Splits Tab ─────────────────────────────────────────────────────────────
+// Показывает per-work breakdown долей. Подсвечивает работы, где сумма ≠ 100%.
+
+function SplitsTab({ works, loading }: { works: PublishingWork[]; loading: boolean }) {
+  if (loading) {
+    return <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground"><Spinner /></Card>;
+  }
+  if (works.length === 0) {
+    return (
+      <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground">
+        Произведений ещё нет — добавьте их, чтобы увидеть распределение долей.
+      </Card>
+    );
+  }
+  const invalid = works.filter(w => Math.round(sumShares(w.writers)) !== 100);
+  return (
+    <div className="space-y-3">
+      {invalid.length > 0 && (
+        <Card className="bg-amber-500/5 border-amber-500/30">
+          <CardContent className="py-3 text-sm">
+            <AlertTriangle className="h-4 w-4 inline mr-2 text-amber-400" />
+            У <b>{invalid.length}</b> произведения{invalid.length === 1 ? "" : "й"} сумма долей ≠ 100%. Откройте работу в табе «Произведения» и исправьте.
+          </CardContent>
+        </Card>
+      )}
+      <Card className="card-surface border-border/60 overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Произведение</TableHead>
+                <TableHead>Авторы и доли</TableHead>
+                <TableHead className="text-right">Сумма</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {works.map((w) => {
+                const total = sumShares(w.writers);
+                const valid = Math.round(total) === 100;
+                return (
+                  <TableRow key={w.id} className="border-border/40 hover:bg-accent/15">
+                    <TableCell className="font-medium">{w.title}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1.5 max-w-[480px]">
+                        {w.writers.length === 0 ? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        ) : w.writers.map((wr, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-full px-2 py-0.5 text-[11px]">
+                            <span className="truncate max-w-[140px]">{wr.name}</span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-muted-foreground">{wr.role}</span>
+                            <span className="text-white/50">{wr.share}%</span>
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums font-semibold ${valid ? "text-emerald-300" : "text-amber-300"}`}>
+                      {total}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Partners Tab ───────────────────────────────────────────────────────────
+// Список издателей (publisher) и PRO/CMO (registeredWith + ascap/bmi/songtrust),
+// агрегированных по всем работам.
+
+function PartnersTab({ works, loading }: { works: PublishingWork[]; loading: boolean }) {
+  const partners = useMemo(() => {
+    const publishers = new Map<string, number>();
+    const pros = new Map<string, number>();
+    for (const w of works) {
+      if (w.publisher && w.publisher.trim()) {
+        publishers.set(w.publisher, (publishers.get(w.publisher) ?? 0) + 1);
+      }
+      for (const r of w.registeredWith || []) {
+        pros.set(r, (pros.get(r) ?? 0) + 1);
+      }
+      if (w.ascap) pros.set("ASCAP", (pros.get("ASCAP") ?? 0) + 1);
+      if (w.bmi) pros.set("BMI", (pros.get("BMI") ?? 0) + 1);
+      if (w.songtrust) pros.set("Songtrust", (pros.get("Songtrust") ?? 0) + 1);
+    }
+    return {
+      publishers: Array.from(publishers.entries()).sort((a, b) => b[1] - a[1]),
+      pros: Array.from(pros.entries()).sort((a, b) => b[1] - a[1]),
+    };
+  }, [works]);
+
+  if (loading) {
+    return <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground"><Spinner /></Card>;
+  }
+  if (partners.publishers.length === 0 && partners.pros.length === 0) {
+    return (
+      <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground">
+        Издателей и PRO/CMO ещё не указано. Заполните поля «Publisher» и регистрации в произведениях.
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card className="card-surface border-border/60">
+        <CardContent className="p-0">
+          <div className="px-4 py-3 border-b border-border/40 font-semibold text-sm">Издатели (Publishers)</div>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>Название</TableHead><TableHead className="text-right">Произведений</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
+              {partners.publishers.length === 0 ? (
+                <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-6">Нет данных</TableCell></TableRow>
+              ) : partners.publishers.map(([name, count]) => (
+                <TableRow key={name}>
+                  <TableCell className="font-medium">{name}</TableCell>
+                  <TableCell className="text-right tabular-nums">{count}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <Card className="card-surface border-border/60">
+        <CardContent className="p-0">
+          <div className="px-4 py-3 border-b border-border/40 font-semibold text-sm">PRO / CMO</div>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>Организация</TableHead><TableHead className="text-right">Произведений</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
+              {partners.pros.length === 0 ? (
+                <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-6">Нет данных</TableCell></TableRow>
+              ) : partners.pros.map(([name, count]) => (
+                <TableRow key={name}>
+                  <TableCell><Badge variant="outline" className="bg-violet-500/10 text-violet-300 border-violet-500/25 font-bold">{name}</Badge></TableCell>
+                  <TableCell className="text-right tabular-nums">{count}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Reports Tab ────────────────────────────────────────────────────────────
+// Сводка по статусам/территориям/PRO. Это операционный отчёт по каталогу
+// произведений — НЕ финансовый. Финансовая часть издательских роялти живёт
+// в /finance + /royalties (там реальные транзакции из dsp-импорта).
+
+function ReportsTab({ works, loading }: { works: PublishingWork[]; loading: boolean }) {
+  const report = useMemo(() => {
+    const byStatus: Record<string, number> = {};
+    const byTerritory: Record<string, number> = {};
+    let withIswc = 0, withMlc = 0, splitsOk = 0;
+    for (const w of works) {
+      byStatus[w.status] = (byStatus[w.status] ?? 0) + 1;
+      for (const t of w.territory || []) byTerritory[t] = (byTerritory[t] ?? 0) + 1;
+      if (w.iswc) withIswc += 1;
+      if (w.mlcSongCode) withMlc += 1;
+      if (Math.round(sumShares(w.writers)) === 100) splitsOk += 1;
+    }
+    return { byStatus, byTerritory, withIswc, withMlc, splitsOk, total: works.length };
+  }, [works]);
+
+  if (loading) {
+    return <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground"><Spinner /></Card>;
+  }
+  if (works.length === 0) {
+    return (
+      <Card className="card-surface border-border/60 p-8 text-center text-muted-foreground">
+        Отчёт появится, как только в каталоге будут произведения.
+      </Card>
+    );
+  }
+
+  const pct = (n: number) => report.total === 0 ? 0 : Math.round((n / report.total) * 100);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card className="card-surface border-border/60">
+        <CardContent className="pt-6 space-y-3">
+          <h3 className="font-semibold text-sm">Готовность каталога</h3>
+          <div className="space-y-2 text-sm">
+            <Row label="Произведений всего" value={String(report.total)} />
+            <Row label="Сумма долей корректна (= 100%)" value={`${report.splitsOk} (${pct(report.splitsOk)}%)`} />
+            <Row label="С присвоенным ISWC" value={`${report.withIswc} (${pct(report.withIswc)}%)`} />
+            <Row label="С кодом MLC" value={`${report.withMlc} (${pct(report.withMlc)}%)`} />
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="card-surface border-border/60">
+        <CardContent className="pt-6 space-y-3">
+          <h3 className="font-semibold text-sm">По статусам</h3>
+          <div className="space-y-2 text-sm">
+            {Object.entries(report.byStatus).sort((a, b) => b[1] - a[1]).map(([s, c]) => (
+              <Row key={s} label={s} value={`${c} (${pct(c)}%)`} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="card-surface border-border/60 md:col-span-2">
+        <CardContent className="pt-6 space-y-3">
+          <h3 className="font-semibold text-sm">По территориям</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(report.byTerritory).sort((a, b) => b[1] - a[1]).map(([t, c]) => (
+              <Badge key={t} variant="outline" className="text-xs">{t}: <b className="ml-1">{c}</b></Badge>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground pt-2">
+            Финансовая часть издательских роялти — в разделах «Финансы» и «Роялти»,
+            где собираются реальные суммы из DSP-импорта.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border/30 pb-1.5 last:border-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
   );
 }
