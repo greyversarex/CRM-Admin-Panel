@@ -168,6 +168,12 @@ const labelNavGroups: NavGroup[] = [
     ],
   },
   {
+    titleKey: "publishing_group",
+    items: [
+      { nameKey: "publishing", href: "/publishing", icon: BookMarked, iconColor: "text-violet-400" },
+    ],
+  },
+  {
     titleKey: "analytics_group",
     items: [
       { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
@@ -176,7 +182,9 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "marketing_group", href: "/marketing/links", icon: Megaphone, iconColor: "text-pink-400" },
+      { nameKey: "smart_links",  href: "/marketing/links",     icon: Link2,     iconColor: "text-pink-400" },
+      { nameKey: "playlists",    href: "/marketing/playlists", icon: Music2,    iconColor: "text-pink-400" },
+      { nameKey: "promo_assets", href: "/marketing/assets",    icon: ImagePlay, iconColor: "text-pink-400" },
     ],
   },
   {
@@ -219,7 +227,9 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "marketing_group", href: "/marketing/links", icon: Megaphone, iconColor: "text-pink-400" },
+      { nameKey: "presave",      href: "/marketing/presave", icon: Megaphone, iconColor: "text-pink-400" },
+      { nameKey: "smart_links",  href: "/marketing/links",   icon: Link2,     iconColor: "text-pink-400" },
+      { nameKey: "promo_assets", href: "/marketing/assets",  icon: ImagePlay, iconColor: "text-pink-400" },
     ],
   },
   {

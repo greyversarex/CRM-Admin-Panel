@@ -111,7 +111,9 @@ router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id
 // releases); POST/PUT/DELETE are admin/manager-only — guards enforced per-route
 // inside splitsRouter. We therefore mount it with just requireAuth here.
 router.use(splitsRouter);
-router.use("/publishing", adminOnly, requireManagerPermission("rights"));
+// Publishing: доступ admin/manager/label. Лейбл видит общий каталог произведений
+// (per-label scoping произведений потребует доп. колонки label_id, пока отсутствует).
+router.use("/publishing", requireRole("admin", "manager", "label"), requireManagerPermission("rights"));
 router.use(publishingRouter);
 // Publishing extras: PRO registration + conflict detection (под /publishing → admin-only выше).
 router.use(publishingExtrasRouter);
