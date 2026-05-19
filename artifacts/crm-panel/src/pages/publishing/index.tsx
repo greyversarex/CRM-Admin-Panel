@@ -116,7 +116,7 @@ export default function Publishing() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const { t } = useLang();
-  const isAdmin = user?.role === "admin" || user?.role === "manager" || user?.role === "label";
+  const isAdmin = user?.role === "admin" || user?.role === "manager";
 
   const STATUS_LABEL: Record<WorkStatus, string> = {
     draft:      t.common.draft,

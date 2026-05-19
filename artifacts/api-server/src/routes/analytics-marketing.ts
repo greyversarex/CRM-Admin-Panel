@@ -93,20 +93,32 @@ const PlaylistBody = z.object({
   labelId: z.number().int().positive().nullish(),
 });
 
-router.post("/playlists", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.post("/playlists", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
   const parsed = PlaylistBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+  const scope = getDataScope(req);
+
+  // Лейбл может создавать плейлисты только в своей области:
+  // labelId фиксируем по сессии, чужие artist/label игнорируем.
+  let labelId  = parsed.data.labelId  ?? null;
+  let artistId = parsed.data.artistId ?? null;
+  if (scope.role === "label") {
+    if (!scope.labelId) { res.status(403).json({ error: "Forbidden: no label scope" }); return; }
+    labelId  = scope.labelId;
+    artistId = null;
+  }
+
   const [row] = await db.insert(playlistStatsTable).values({
     ...parsed.data,
-    artistId: parsed.data.artistId ?? null,
-    labelId:  parsed.data.labelId ?? null,
+    artistId,
+    labelId,
     lastUpdated: new Date(),
   }).returning();
   void auditMutation(req, { action: "create", entityType: "playlist_stat", entityId: row.id, before: null, after: row });
   res.status(201).json(row);
 });
 
-router.put("/playlists/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.put("/playlists/:id", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PlaylistBody.partial().safeParse(req.body);
@@ -115,20 +127,40 @@ router.put("/playlists/:id", requireRole("admin", "manager"), async (req, res): 
   const [before] = await db.select().from(playlistStatsTable).where(eq(playlistStatsTable.id, id));
   if (!before) { res.status(404).json({ error: "Not found" }); return; }
 
-  const [row] = await db.update(playlistStatsTable).set({
-    ...parsed.data,
-    lastUpdated: new Date(),
-  }).where(eq(playlistStatsTable.id, id)).returning();
+  const scope = getDataScope(req);
+  if (scope.role === "label") {
+    if (!scope.labelId || before.labelId !== scope.labelId) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+  }
+
+  // Никогда не позволяем лейблу переназначить плейлист другому лейблу.
+  const patch: Record<string, unknown> = { ...parsed.data, lastUpdated: new Date() };
+  if (scope.role === "label") {
+    delete patch.labelId;
+    delete patch.artistId;
+  }
+
+  const [row] = await db.update(playlistStatsTable).set(patch)
+    .where(eq(playlistStatsTable.id, id)).returning();
 
   void auditMutation(req, { action: "update", entityType: "playlist_stat", entityId: id, before, after: row });
   res.json(row);
 });
 
-router.delete("/playlists/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.delete("/playlists/:id", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [before] = await db.select().from(playlistStatsTable).where(eq(playlistStatsTable.id, id));
   if (!before) { res.status(404).json({ error: "Not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (scope.role === "label") {
+    if (!scope.labelId || before.labelId !== scope.labelId) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+  }
+
   await db.delete(playlistStatsTable).where(eq(playlistStatsTable.id, id));
   void auditMutation(req, { action: "delete", entityType: "playlist_stat", entityId: id, before, after: null });
   res.status(204).end();

@@ -28,8 +28,6 @@ import {
   LifeBuoy,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  Megaphone as MegaphoneIcon,
   ShieldCheck,
   MessageSquare,
   Workflow,
@@ -170,18 +168,6 @@ const labelNavGroups: NavGroup[] = [
     ],
   },
   {
-    titleKey: "publishing_group",
-    items: [
-      { nameKey: "pub_works",        href: "/publishing?tab=works",         icon: BookMarked,  iconColor: "text-violet-400" },
-      { nameKey: "pub_writers",      href: "/publishing?tab=writers",       icon: Mic2,        iconColor: "text-violet-400" },
-      { nameKey: "pub_splits",       href: "/publishing?tab=splits",        icon: PieChart,    iconColor: "text-violet-400" },
-      { nameKey: "pub_registration", href: "/publishing?tab=registration",  icon: ShieldCheck, iconColor: "text-violet-400" },
-      { nameKey: "pub_partners",     href: "/publishing?tab=partners",      icon: Building2,   iconColor: "text-violet-400" },
-      { nameKey: "pub_reports",      href: "/publishing?tab=reports",       icon: BarChart3,   iconColor: "text-violet-400" },
-      { nameKey: "pub_conflicts",    href: "/publishing?tab=conflicts",     icon: XCircle,     iconColor: "text-violet-400" },
-    ],
-  },
-  {
     titleKey: "analytics_group",
     items: [
       { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
@@ -190,10 +176,7 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "smart_links",  href: "/marketing/links",     icon: Link2,      iconColor: "text-pink-400" },
-      { nameKey: "playlists",    href: "/marketing/playlists", icon: Music2,     iconColor: "text-pink-400" },
-      { nameKey: "trends",       href: "/marketing/trends",    icon: BarChart3,  iconColor: "text-pink-400" },
-      { nameKey: "promo_assets", href: "/marketing/assets",    icon: ImagePlay,  iconColor: "text-pink-400" },
+      { nameKey: "marketing_group", href: "/marketing/links", icon: Megaphone, iconColor: "text-pink-400" },
     ],
   },
   {
@@ -236,9 +219,7 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "presave",      href: "/marketing/presave", icon: Megaphone, iconColor: "text-pink-400" },
-      { nameKey: "smart_links",  href: "/marketing/links",   icon: Link2,     iconColor: "text-pink-400" },
-      { nameKey: "promo_assets", href: "/marketing/assets",  icon: ImagePlay, iconColor: "text-pink-400" },
+      { nameKey: "marketing_group", href: "/marketing/links", icon: Megaphone, iconColor: "text-pink-400" },
     ],
   },
   {
@@ -300,31 +281,6 @@ export function SidebarNav() {
     try { localStorage.setItem("sidebar-collapsed", String(collapsed)); } catch { /* ignore */ }
   }, [collapsed]);
 
-  // Группы-аккордеоны: Marketing и Publishing рендерятся как одна кнопка
-  // с раскрытием вложенных пунктов.
-  const COLLAPSIBLE_GROUPS = new Set(["marketing_group", "publishing_group"]);
-  const GROUP_ICONS: Record<string, React.ElementType> = {
-    marketing_group:  MegaphoneIcon,
-    publishing_group: BookMarked,
-  };
-  const GROUP_COLORS: Record<string, string> = {
-    marketing_group:  "text-pink-400",
-    publishing_group: "text-violet-400",
-  };
-
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
-    try {
-      const raw = localStorage.getItem("sidebar-expanded-groups");
-      if (raw) return JSON.parse(raw);
-    } catch { /* ignore */ }
-    return {};
-  });
-  useEffect(() => {
-    try { localStorage.setItem("sidebar-expanded-groups", JSON.stringify(expandedGroups)); } catch { /* ignore */ }
-  }, [expandedGroups]);
-  const toggleGroup = (key: string) =>
-    setExpandedGroups((s) => ({ ...s, [key]: !s[key] }));
-
   const navGroups = pickGroupsForRole(user?.role);
 
   return (
@@ -367,88 +323,6 @@ export function SidebarNav() {
             : [];
           if (visibleItems.length === 0) return null;
           const groupTitle = nav[group.titleKey] ?? "";
-          const isCollapsibleGroup = COLLAPSIBLE_GROUPS.has(group.titleKey);
-
-          // ─── Раскрывающаяся группа (Marketing, Publishing) ──────────────
-          if (isCollapsibleGroup && !collapsed) {
-            const expanded = !!expandedGroups[group.titleKey];
-            // Активна, если открыта любая страница из её пунктов.
-            const hasActiveChild = visibleItems.some((it) => {
-              const [p] = it.href.split("?");
-              return location === p || location.startsWith(p + "/");
-            });
-            const GIcon = GROUP_ICONS[group.titleKey] ?? BookMarked;
-            const gColor = GROUP_COLORS[group.titleKey] ?? "text-primary";
-            return (
-              <div key={group.titleKey} className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.titleKey)}
-                  className={cn(
-                    "nav-item group relative flex items-center w-full rounded-xl cursor-pointer px-2.5 py-[7px]",
-                    hasActiveChild ? "nav-item-active" : "nav-item-inactive"
-                  )}
-                  data-testid={`sidebar-group-toggle-${group.titleKey}`}
-                >
-                  <span className={cn(
-                    "nav-icon-wrap flex items-center justify-center rounded-lg shrink-0 h-[28px] w-[28px] mr-2.5",
-                    hasActiveChild ? "nav-icon-active" : "nav-icon-idle"
-                  )}>
-                    <GIcon className={cn("h-[15px] w-[15px] transition-all duration-220",
-                      hasActiveChild
-                        ? cn(gColor, "opacity-100 drop-shadow-[0_0_8px_currentColor]")
-                        : cn(gColor, "opacity-55 group-hover:opacity-90")
-                    )} strokeWidth={1.9} />
-                  </span>
-                  <span className={cn(
-                    "flex-1 truncate text-[13px] text-left transition-colors duration-200",
-                    hasActiveChild ? "text-white font-semibold" : "text-white/65 font-medium group-hover:text-white/95"
-                  )}>
-                    {groupTitle}
-                  </span>
-                  <ChevronDown className={cn(
-                    "h-3.5 w-3.5 text-white/45 transition-transform duration-200 shrink-0",
-                    expanded && "rotate-180"
-                  )} />
-                </button>
-                {expanded && (
-                  <div className="mt-0.5 ml-3 pl-2.5 border-l border-white/10 space-y-0.5">
-                    {visibleItems.map((item) => {
-                      const Icon = item.icon;
-                      const [itemPath, itemQuery = ""] = item.href.split("?");
-                      const currentSearch = (search ?? "").replace(/^\?/, "");
-                      const isActive = itemQuery
-                        ? location === itemPath && currentSearch === itemQuery
-                        : location === itemPath && !currentSearch;
-                      const labelKey = (user && item.nameKeyByRole?.[user.role]) ?? item.nameKey;
-                      const labelText = nav[labelKey] ?? labelKey;
-                      return (
-                        <Link key={item.href} href={item.href}>
-                          <span className={cn(
-                            "nav-item group relative flex items-center rounded-lg cursor-pointer px-2 py-[6px]",
-                            isActive ? "nav-item-active" : "nav-item-inactive"
-                          )}>
-                            <Icon className={cn("h-[13px] w-[13px] mr-2 shrink-0",
-                              isActive
-                                ? cn(item.iconColor ?? "text-primary", "opacity-100")
-                                : cn(item.iconColor ?? "text-white/45", "opacity-65 group-hover:opacity-95")
-                            )} strokeWidth={1.9} />
-                            <span className={cn(
-                              "flex-1 truncate text-[12.5px] transition-colors duration-200",
-                              isActive ? "text-white font-semibold" : "text-white/60 group-hover:text-white/90"
-                            )}>
-                              {labelText}
-                            </span>
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
-
           // Не показываем заголовок для технических "overview" / одиночных групп,
           // где он визуально пуст или дублирует единственный пункт.
           const showTitle =

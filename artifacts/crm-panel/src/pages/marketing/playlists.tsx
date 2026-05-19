@@ -56,7 +56,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export default function PlaylistsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const canEdit = user?.role === "admin" || user?.role === "manager";
+  const canEdit = user?.role === "admin" || user?.role === "manager" || user?.role === "label";
 
   const [rows, setRows] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
