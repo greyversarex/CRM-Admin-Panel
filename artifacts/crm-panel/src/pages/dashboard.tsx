@@ -298,10 +298,10 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* ══ Admin/Manager-only widgets (реальные данные из API) ══ */}
-        {(role === "admin" || role === "manager") && (
+        {/* ══ Расширенные виджеты (реальные данные из API, scoped по роли в бекенде) ══ */}
+        {(role === "admin" || role === "manager" || role === "label") && (
           <>
-            {/* Streams donut + Latest Releases */}
+            {/* Streams donut + Top Territories */}
             <div className="grid gap-4 lg:grid-cols-5">
               <div className="lg:col-span-2">
                 <TopDspCard metric="streams" />
@@ -313,7 +313,7 @@ export default function Dashboard() {
 
             <LatestReleasesGridCard />
 
-            {/* Top Tracks + Earnings + Royalty Summary */}
+            {/* Top Tracks + Earnings DSP + Royalty Summary */}
             <div className="grid gap-4 lg:grid-cols-7">
               <div className="lg:col-span-3">
                 <TopTracksCard />
@@ -326,7 +326,9 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <ArtistsStatsTableCard />
+            {/* Таблица артистов — только админ/менеджер, лейблу не нужна
+                агрегированная сводка по чужим артистам. */}
+            {(role === "admin" || role === "manager") && <ArtistsStatsTableCard />}
           </>
         )}
       </div>

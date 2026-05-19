@@ -74,6 +74,8 @@ const translations = {
       pub_partners: "Partners (PRO / CMO)",
       pub_reports: "Reports",
       pub_conflicts: "Conflict Detection",
+      playlists: "Playlists",
+      trends: "Trends",
     },
     header: {
       search: "Search catalog, artists, or ISRC...",
@@ -1405,6 +1407,8 @@ const translations = {
       pub_partners: "Партнёры (PRO / CMO)",
       pub_reports: "Отчёты",
       pub_conflicts: "Конфликты",
+      playlists: "Плейлисты",
+      trends: "Тренды",
     },
     header: {
       search: "Поиск каталога, исполнителей, ISRC...",
