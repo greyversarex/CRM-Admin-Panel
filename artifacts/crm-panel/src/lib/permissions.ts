@@ -114,6 +114,10 @@ export function canAccess(
   path: string,
   mgrPerms?: Record<ManagerPermissionKey, boolean>,
 ): boolean {
+  // Отрезаем query/hash — ссылки вида "/publishing?tab=writers" должны
+  // проверяться по базовому пути "/publishing".
+  const qIdx = path.search(/[?#]/);
+  if (qIdx >= 0) path = path.slice(0, qIdx);
   // 1. Проверяем roles (exact или longest prefix)
   const exact = ROUTE_ROLES[path];
   let allowed: Role[] | undefined = exact;

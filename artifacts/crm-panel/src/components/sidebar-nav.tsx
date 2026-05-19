@@ -339,9 +339,22 @@ export function SidebarNav() {
             ? group.items.filter((item) => canAccess(user.role, item.href, perms))
             : [];
           if (visibleItems.length === 0) return null;
+          const groupTitle = nav[group.titleKey] ?? "";
+          // Не показываем заголовок для технических "overview" / одиночных групп,
+          // где он визуально пуст или дублирует единственный пункт.
+          const showTitle =
+            !collapsed &&
+            groupTitle &&
+            group.titleKey !== "overview" &&
+            group.titleKey !== "system";
           return (
-          <div key={group.titleKey}>
+          <div key={group.titleKey} className={cn(!collapsed && "mb-2")}>
             {collapsed && <div className="h-px bg-white/[0.07] mb-2 mx-1" />}
+            {showTitle && (
+              <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/35 select-none">
+                {groupTitle}
+              </div>
+            )}
 
             <div className="space-y-0.5">
               {visibleItems.map((item) => {
