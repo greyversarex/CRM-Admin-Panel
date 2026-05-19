@@ -165,21 +165,18 @@ const labelNavGroups: NavGroup[] = [
       { nameKey: "artists",       href: "/artists",            icon: Mic2,            iconColor: "text-emerald-400" },
       { nameKey: "transfer",      href: "/releases/transfer",  icon: ArrowRightLeft,  iconColor: "text-emerald-400" },
       { nameKey: "release_cal",   href: "/releases/calendar",  icon: CalendarDays,    iconColor: "text-emerald-400" },
-      { nameKey: "isrc_codes",    href: "/catalog/codes",      icon: Hash,            iconColor: "text-slate-400" },
-    ],
-  },
-  {
-    titleKey: "distribution_status_group",
-    items: [
-      { nameKey: "delivery",  href: "/delivery",         icon: Truck,     iconColor: "text-amber-400" },
-      { nameKey: "takedown",  href: "/releases/takedown", icon: XCircle,  iconColor: "text-red-400" },
     ],
   },
   {
     titleKey: "publishing_group",
     items: [
-      { nameKey: "publishing", href: "/publishing", icon: BookMarked, iconColor: "text-violet-400" },
-      { nameKey: "rights",     href: "/rights",     icon: ShieldCheck, iconColor: "text-violet-400" },
+      { nameKey: "pub_works",        href: "/publishing?tab=works",         icon: BookMarked,  iconColor: "text-violet-400" },
+      { nameKey: "pub_writers",      href: "/publishing?tab=writers",       icon: Mic2,        iconColor: "text-violet-400" },
+      { nameKey: "pub_splits",       href: "/publishing?tab=splits",        icon: PieChart,    iconColor: "text-violet-400" },
+      { nameKey: "pub_registration", href: "/publishing?tab=registration",  icon: ShieldCheck, iconColor: "text-violet-400" },
+      { nameKey: "pub_partners",     href: "/publishing?tab=partners",      icon: Building2,   iconColor: "text-violet-400" },
+      { nameKey: "pub_reports",      href: "/publishing?tab=reports",       icon: BarChart3,   iconColor: "text-violet-400" },
+      { nameKey: "pub_conflicts",    href: "/publishing?tab=conflicts",     icon: XCircle,     iconColor: "text-violet-400" },
     ],
   },
   {
@@ -200,7 +197,6 @@ const labelNavGroups: NavGroup[] = [
     titleKey: "earnings_group",
     items: [
       { nameKey: "royalties", href: "/royalties", icon: Coins,    iconColor: "text-green-400", nameKeyByRole: { label: "earnings" } },
-      { nameKey: "splits",    href: "/splits",    icon: PieChart, iconColor: "text-green-400" },
       { nameKey: "payouts",   href: "/payouts",   icon: Wallet,   iconColor: "text-green-400" },
     ],
   },
@@ -213,8 +209,7 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "account_group",
     items: [
-      { nameKey: "settings", href: "/settings", icon: Settings2,  iconColor: "text-slate-400" },
-      { nameKey: "profile",  href: "/profile",  icon: CircleUser, iconColor: "text-pink-400" },
+      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
     ],
   },
 ];
