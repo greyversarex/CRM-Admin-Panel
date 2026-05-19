@@ -19,11 +19,12 @@ import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
   ShieldAlert, ScanSearch, Database, Activity, ListChecks, Share2, RefreshCw, Pencil,
+  Upload, FilePlus2, FolderInput,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
-import { CoverUploader, AudioUploader, assetHref } from "@/components/asset-uploader";
+import { CoverUploader, AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -104,6 +105,12 @@ export default function ReleaseDetail() {
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [addTrackOpen, setAddTrackOpen] = useState(false);
+  // Сбрасываем форму добавления трека, если релиз перестал быть редактируемым
+  // (например, ушёл на модерацию) — иначе UI оставался бы открытым, а POST падал бы с 409.
+  useEffect(() => {
+    if (release && !release.isEditable && addTrackOpen) setAddTrackOpen(false);
+  }, [release?.isEditable, addTrackOpen]);
   // Инлайн-режим редактирования метаданных карточки Release Details.
   // Включается кнопкой «Edit Release» для черновика (без диалога/смены статуса).
   const [metaEditing, setMetaEditing] = useState(false);
@@ -439,12 +446,13 @@ export default function ReleaseDetail() {
                 />
               )}
               {release.isEditable && (
-                <ReuseExistingTrackDialog
+                <BulkAudioUploadButton
                   releaseId={id}
-                  releaseArtistId={release.artistId}
-                  currentReleaseTitle={release.title}
-                  nextTrackNumber={(release.tracks?.length ?? 0) + 1}
-                  onReused={invalidateAll}
+                  artistId={release.artistId}
+                  defaultLanguage={release.language || "Tajik"}
+                  defaultGenre={release.genre || "Pop"}
+                  startTrackNumber={(release.tracks?.length ?? 0) + 1}
+                  onUploaded={invalidateAll}
                 />
               )}
               <BulkTracksDialog
@@ -467,14 +475,57 @@ export default function ReleaseDetail() {
                 <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />
               ))
             )}
-            <AddTrackForm
-              releaseId={id}
-              artistId={release.artistId}
-              defaultLanguage={release.language || "Tajik"}
-              defaultGenre={release.genre || "Pop"}
-              nextTrackNumber={(release.tracks?.length ?? 0) + 1}
-              onAdded={invalidateAll}
-            />
+
+            {/* Inline-форма создания трека (раскрывается по «Создать трек»). */}
+            {release.isEditable && (
+              <AddTrackForm
+                releaseId={id}
+                artistId={release.artistId}
+                defaultLanguage={release.language || "Tajik"}
+                defaultGenre={release.genre || "Pop"}
+                nextTrackNumber={(release.tracks?.length ?? 0) + 1}
+                onAdded={invalidateAll}
+                open={addTrackOpen}
+                onOpenChange={setAddTrackOpen}
+              />
+            )}
+
+            {/* ── Symphonic-style две карточки внизу: Создать новый / Переиспользовать ── */}
+            {release.isEditable && !addTrackOpen && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAddTrackOpen(true)}
+                  className="text-left rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-4 hover-elevate transition"
+                  data-testid="card-create-track"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                      <FilePlus2 className="h-4 w-4 text-emerald-300" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm">Создать новый трек</div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Создайте сколько угодно треков для этого релиза: загрузите аудио и заполните метаданные.
+                      </p>
+                      <div className="mt-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border/50 text-xs">
+                          <Plus className="h-3 w-3" /> Создать трек
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                <ReuseExistingTrackCard
+                  releaseId={id}
+                  releaseArtistId={release.artistId}
+                  currentReleaseTitle={release.title}
+                  nextTrackNumber={(release.tracks?.length ?? 0) + 1}
+                  onReused={invalidateAll}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -834,16 +885,43 @@ function TrackRow({
 // ─── Add Track form ───────────────────────────────────────────────────────
 function AddTrackForm({
   releaseId, artistId, defaultLanguage, defaultGenre, nextTrackNumber, onAdded,
+  open, onOpenChange,
 }: {
   releaseId: number; artistId: number;
   defaultLanguage: string; defaultGenre: string;
   nextTrackNumber: number; onAdded: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [isrc, setIsrc] = useState("");
   const [isExplicit, setIsExplicit] = useState(false);
+  const [audioPath, setAudioPath] = useState<string | null>(null);
+  const [audioName, setAudioName] = useState<string | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const createTrack = useCreateTrack();
+  const { upload: uploadAudio, isUploading: audioUploading, progress: audioProgress } = useAssetUpload();
+  const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setTitle(""); setIsrc(""); setIsExplicit(false);
+    setAudioPath(null); setAudioName(null); setAudioDuration(null);
+  };
+
+  const onPickAudio = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      // attach=false: создаём asset без привязки, потом сошлёмся на него при создании трека.
+      const asset = await uploadAudio(file, { kind: "audio", releaseId, attach: false });
+      setAudioPath(asset.objectPath);
+      setAudioName(file.name);
+      setAudioDuration(asset.durationSeconds ?? null);
+      if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, ""));
+      toast({ title: "Аудио загружено", description: file.name });
+    } catch (e: any) {
+      toast({ title: "Не удалось загрузить аудио", description: e?.message ?? "Ошибка", variant: "destructive" });
+    }
+  };
 
   const submit = async () => {
     if (!title.trim()) {
@@ -860,23 +938,20 @@ function AddTrackForm({
           genre: defaultGenre,
           isrc: isrc.trim() || null,
           isExplicit,
+          audioUrl: audioPath ?? null,
+          durationSeconds: audioDuration ?? null,
         },
       });
-      setTitle(""); setIsrc(""); setIsExplicit(false); setOpen(false);
-      toast({ title: "Трек добавлен", description: "Теперь загрузи аудиофайл." });
+      reset();
+      onOpenChange(false);
+      toast({ title: "Трек добавлен", description: audioPath ? "Аудио уже привязано." : "Не забудь загрузить аудиофайл." });
       onAdded();
     } catch (e: any) {
       toast({ title: "Не удалось добавить трек", description: e?.message ?? "Ошибка", variant: "destructive" });
     }
   };
 
-  if (!open) {
-    return (
-      <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => setOpen(true)}>
-        <Plus className="h-3.5 w-3.5 mr-1.5" /> Добавить трек
-      </Button>
-    );
-  }
+  if (!open) return null;
   return (
     <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-4 space-y-3">
       <div className="text-sm font-semibold">Новый трек #{nextTrackNumber}</div>
@@ -890,13 +965,44 @@ function AddTrackForm({
           <Input value={isrc} onChange={(e) => setIsrc(e.target.value)} placeholder="USRC17607839" className="bg-background/40 font-mono" />
         </div>
       </div>
+
+      {/* Аудиофайл — можно сразу при создании. */}
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">Аудиофайл (опционально, можно загрузить позже)</label>
+        <input
+          ref={audioInputRef} type="file" className="hidden"
+          accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mpeg,audio/mp4,audio/aac"
+          onChange={(e) => onPickAudio(e.target.files?.[0])}
+        />
+        {audioPath ? (
+          <div className="flex items-center gap-2 p-2 rounded-md bg-background/40 border border-emerald-500/30">
+            <Music2 className="h-3.5 w-3.5 text-emerald-300" />
+            <span className="text-xs flex-1 truncate">{audioName}</span>
+            {audioDuration != null && (
+              <span className="text-[11px] text-muted-foreground font-mono">
+                {Math.floor(audioDuration / 60)}:{String(audioDuration % 60).padStart(2, "0")}
+              </span>
+            )}
+            <Button type="button" variant="ghost" size="sm" onClick={() => audioInputRef.current?.click()} disabled={audioUploading}>
+              Заменить
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" variant="outline" size="sm" className="w-full justify-start"
+            disabled={audioUploading} onClick={() => audioInputRef.current?.click()}>
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            {audioUploading ? `Загрузка ${audioProgress}%…` : "Загрузить аудио (WAV/FLAC/MP3, ≤200 МБ)"}
+          </Button>
+        )}
+      </div>
+
       <div className="flex items-center justify-between p-2 rounded-md bg-background/40 border border-border/50">
         <span className="text-xs text-muted-foreground">Explicit Content</span>
         <Switch checked={isExplicit} onCheckedChange={setIsExplicit} />
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Отмена</Button>
-        <Button size="sm" onClick={submit} disabled={createTrack.isPending}>
+        <Button variant="ghost" size="sm" onClick={() => { reset(); onOpenChange(false); }}>Отмена</Button>
+        <Button size="sm" onClick={submit} disabled={createTrack.isPending || audioUploading}>
           {createTrack.isPending ? "Сохраняю…" : "Сохранить"}
         </Button>
       </div>
@@ -2112,13 +2218,14 @@ type ReusableTrack = {
 };
 
 function ReuseExistingTrackDialog({
-  releaseId, releaseArtistId, currentReleaseTitle, nextTrackNumber, onReused,
+  releaseId, releaseArtistId, currentReleaseTitle, nextTrackNumber, onReused, trigger,
 }: {
   releaseId: number;
   releaseArtistId: number;
   currentReleaseTitle: string;
   nextTrackNumber: number;
   onReused: () => void;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -2185,9 +2292,11 @@ function ReuseExistingTrackDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="bg-card text-xs">
-          <Database className="h-3.5 w-3.5 mr-1" /> Использовать существующий
-        </Button>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="bg-card text-xs">
+            <Database className="h-3.5 w-3.5 mr-1" /> Использовать существующий
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -2692,5 +2801,124 @@ function SplitShareCard({ release }: { release: ReleaseDetail }) {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Reuse Existing Track — card-shaped trigger (Symphonic-style) ────────
+function ReuseExistingTrackCard(props: {
+  releaseId: number;
+  releaseArtistId: number;
+  currentReleaseTitle: string;
+  nextTrackNumber: number;
+  onReused: () => void;
+}) {
+  return (
+    <ReuseExistingTrackDialog
+      {...props}
+      trigger={
+        <button
+          type="button"
+          className="text-left rounded-md border border-dashed border-indigo-400/40 bg-indigo-400/[0.04] p-4 hover-elevate transition w-full"
+          data-testid="card-reuse-track"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-8 w-8 rounded-md bg-indigo-400/15 border border-indigo-400/30 flex items-center justify-center shrink-0">
+              <FolderInput className="h-4 w-4 text-indigo-300" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Переиспользовать существующий трек</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Возьмите трек из ранее одобренного релиза — например, для сборника или перевыпуска.
+                Аудио и метаданные подтянутся автоматически.
+              </p>
+              <div className="mt-3">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border/50 text-xs">
+                  <Database className="h-3 w-3" /> Выбрать трек
+                </span>
+              </div>
+            </div>
+          </div>
+        </button>
+      }
+    />
+  );
+}
+
+// ─── Bulk Audio Upload — header button (multiple files → tracks) ─────────
+function BulkAudioUploadButton({
+  releaseId, artistId, defaultLanguage, defaultGenre, startTrackNumber, onUploaded,
+}: {
+  releaseId: number;
+  artistId: number;
+  defaultLanguage: string;
+  defaultGenre: string;
+  startTrackNumber: number;
+  onUploaded: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { upload } = useAssetUpload();
+  const createTrack = useCreateTrack();
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const onPick = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    setBusy(true);
+    setProgress({ done: 0, total: list.length });
+    let okCount = 0;
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      try {
+        const asset = await upload(f, { kind: "audio", releaseId, attach: false });
+        const baseTitle = f.name.replace(/\.[^.]+$/, "").trim() || `Track ${startTrackNumber + i}`;
+        await createTrack.mutateAsync({
+          data: {
+            title: baseTitle,
+            artistId, releaseId,
+            trackNumber: startTrackNumber + i,
+            language: defaultLanguage,
+            genre: defaultGenre,
+            audioUrl: asset.objectPath,
+            durationSeconds: asset.durationSeconds ?? null,
+          },
+        });
+        okCount++;
+      } catch (e: any) {
+        toast({
+          title: `Не удалось загрузить «${f.name}»`,
+          description: e?.message ?? "Ошибка",
+          variant: "destructive",
+        });
+      }
+      setProgress({ done: i + 1, total: list.length });
+    }
+    setBusy(false);
+    setProgress(null);
+    if (okCount > 0) {
+      toast({ title: "Загрузка завершена", description: `Добавлено треков: ${okCount} из ${list.length}.` });
+      onUploaded();
+    }
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef} type="file" multiple className="hidden"
+        accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mpeg,audio/mp4,audio/aac"
+        onChange={(e) => onPick(e.target.files)}
+      />
+      <Button
+        variant="outline" size="sm" className="bg-card text-xs"
+        onClick={() => inputRef.current?.click()} disabled={busy}
+        data-testid="button-upload-audio"
+      >
+        <Upload className="h-3.5 w-3.5 mr-1" />
+        {busy && progress
+          ? `Загрузка ${progress.done}/${progress.total}…`
+          : "Загрузить аудио"}
+      </Button>
+    </>
   );
 }
