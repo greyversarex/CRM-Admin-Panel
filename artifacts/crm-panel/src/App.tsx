@@ -50,6 +50,7 @@ import PresaveCampaigns from "@/pages/marketing/presave";
 import SmartLinks from "@/pages/marketing/links";
 import PromoAssets from "@/pages/marketing/assets";
 import PlaylistsPage from "@/pages/marketing/playlists";
+import MarketingTrendsPage from "@/pages/marketing/trends";
 import ReleaseCalendar from "@/pages/releases/calendar";
 import TakedownRequests from "@/pages/releases/takedown";
 import Delivery from "@/pages/delivery";
@@ -146,6 +147,7 @@ function Router() {
       <ProtectedRoute path="/marketing/links"     component={SmartLinks} />
       <ProtectedRoute path="/marketing/assets"    component={PromoAssets} />
       <ProtectedRoute path="/marketing/playlists" component={PlaylistsPage} />
+      <ProtectedRoute path="/marketing/trends"    component={MarketingTrendsPage} />
       <ProtectedRoute path="/releases/calendar" component={ReleaseCalendar} />
       <ProtectedRoute path="/releases/takedown" component={TakedownRequests} />
       <ProtectedRoute path="/delivery"          component={Delivery} />
