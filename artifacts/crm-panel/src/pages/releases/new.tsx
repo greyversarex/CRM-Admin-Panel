@@ -217,46 +217,22 @@ export default function CreateRelease() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Создание релиза</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Шаг {step === "upc" ? "1" : "2"} из 2 — {step === "upc" ? "тип релиза и штрихкод (UPC)" : "детали релиза"}
+              Шаг {step === "upc" ? "1" : "2"} из 2 — {step === "upc" ? "штрихкод (UPC)" : "детали релиза"}
             </p>
           </div>
           <Button variant="ghost" onClick={() => setLocation("/releases")}>Отмена</Button>
         </div>
 
-        {/* ─── STEP 1: Release Type + UPC ───────────────────────────────────── */}
+        {/* ─── STEP 1: UPC Gate ─────────────────────────────────────────────── */}
         {step === "upc" && (
           <Card>
             <CardHeader>
-              <CardTitle>Тип релиза</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Barcode className="h-5 w-5" /> Есть ли у вас UPC?
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {RELEASE_TYPES.map((rt) => {
-                  const Icon = RELEASE_TYPE_ICONS[rt.value] ?? Music2;
-                  const active = releaseType === rt.value;
-                  return (
-                    <button
-                      key={rt.value}
-                      type="button"
-                      onClick={() => setReleaseType(rt.value)}
-                      data-testid={`release-type-${rt.value}`}
-                      className={`text-left rounded-md border p-3 transition hover-elevate ${active ? "border-primary bg-primary/5" : ""}`}
-                    >
-                      <Icon className={`h-5 w-5 mb-2 ${active ? "text-primary" : "text-muted-foreground"}`} />
-                      <div className="font-medium text-sm">{rt.label}</div>
-                      <div className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                        {RELEASE_TYPE_HINTS[rt.value]}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Barcode className="h-5 w-5" />
-                  <h3 className="font-semibold">Есть ли у вас UPC?</h3>
-                </div>
+              <div>
                 <p className="text-sm text-muted-foreground mb-4">
                   UPC — это 12–13-значный штрихкод релиза. Если релиз уже выходил с UPC — введите его.
                   Если нет — мы выдадим UPC автоматически при отправке на модерацию.
@@ -346,6 +322,34 @@ export default function CreateRelease() {
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
+
+              {/* ─── Release Type tiles ──────────────────────────────────── */}
+              <div className="space-y-2">
+                <FieldLabel className="text-sm font-semibold">Тип релиза <span className="text-rose-400">*</span></FieldLabel>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {RELEASE_TYPES.map((rt) => {
+                    const Icon = RELEASE_TYPE_ICONS[rt.value] ?? Music2;
+                    const active = releaseType === rt.value;
+                    return (
+                      <button
+                        key={rt.value}
+                        type="button"
+                        onClick={() => setReleaseType(rt.value)}
+                        data-testid={`release-type-${rt.value}`}
+                        className={`text-left rounded-md border p-3 transition hover-elevate ${active ? "border-primary bg-primary/5" : ""}`}
+                      >
+                        <Icon className={`h-5 w-5 mb-2 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                        <div className="font-medium text-sm">{rt.label}</div>
+                        <div className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                          {RELEASE_TYPE_HINTS[rt.value]}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <hr className="border-border/40" />
 
               {/* ─── Cover Art + AI usage ────────────────────────────────── */}
               <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 items-start">
