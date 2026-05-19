@@ -100,17 +100,12 @@ export default function ReleaseDetail() {
     } as never,
   });
   const queryClient = useQueryClient();
+  const createTrack = useCreateTrack();
 
   const [editOpen, setEditOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [addTrackOpen, setAddTrackOpen] = useState(false);
-  // Сбрасываем форму добавления трека, если релиз перестал быть редактируемым
-  // (например, ушёл на модерацию) — иначе UI оставался бы открытым, а POST падал бы с 409.
-  useEffect(() => {
-    if (release && !release.isEditable && addTrackOpen) setAddTrackOpen(false);
-  }, [release?.isEditable, addTrackOpen]);
   // Инлайн-режим редактирования метаданных карточки Release Details.
   // Включается кнопкой «Edit Release» для черновика (без диалога/смены статуса).
   const [metaEditing, setMetaEditing] = useState(false);
@@ -476,27 +471,33 @@ export default function ReleaseDetail() {
               ))
             )}
 
-            {/* Inline-форма создания трека (раскрывается по «Создать трек»). */}
-            {release.isEditable && (
-              <AddTrackForm
-                releaseId={id}
-                artistId={release.artistId}
-                defaultLanguage={release.language || "Tajik"}
-                defaultGenre={release.genre || "Pop"}
-                nextTrackNumber={(release.tracks?.length ?? 0) + 1}
-                onAdded={invalidateAll}
-                open={addTrackOpen}
-                onOpenChange={setAddTrackOpen}
-              />
-            )}
-
             {/* ── Symphonic-style две карточки внизу: Создать новый / Переиспользовать ── */}
-            {release.isEditable && !addTrackOpen && (
+            {release.isEditable && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setAddTrackOpen(true)}
-                  className="text-left rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-4 hover-elevate transition"
+                  disabled={createTrack.isPending}
+                  onClick={async () => {
+                    try {
+                      const nextNum = (release.tracks?.length ?? 0) + 1;
+                      await createTrack.mutateAsync({
+                        data: {
+                          title: `Трек ${nextNum}`,
+                          artistId: release.artistId,
+                          releaseId: id,
+                          trackNumber: nextNum,
+                          language: release.language || "Tajik",
+                          genre: release.genre || "Pop",
+                          isExplicit: false,
+                        } as any,
+                      });
+                      toast({ title: "Трек создан", description: "Нажмите «Редактировать», чтобы заполнить детали." });
+                      invalidateAll();
+                    } catch (e: any) {
+                      toast({ title: "Не удалось создать трек", description: e?.message ?? "Ошибка", variant: "destructive" });
+                    }
+                  }}
+                  className="text-left rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-4 hover-elevate transition disabled:opacity-50"
                   data-testid="card-create-track"
                 >
                   <div className="flex items-start gap-3">
@@ -828,183 +829,155 @@ function KV({
   );
 }
 
-// ─── Track row ────────────────────────────────────────────────────────────
+// ─── Track row (Symphonic-style read-only card with Edit/Delete) ────────
+const DASH = "------";
+function TrackField({ label, value, chip }: { label: string; value: React.ReactNode; chip?: boolean }) {
+  const empty = value === DASH || value == null || value === "";
+  return (
+    <div className="space-y-0.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      {chip && !empty ? (
+        <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 w-fit">
+          {value}
+        </span>
+      ) : (
+        <div className={"text-sm " + (empty ? "text-muted-foreground/60" : "text-foreground font-medium")}>
+          {empty ? DASH : value}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TrackRow({
   t, index, release, onChange,
 }: { t: Track; index: number; release: any; onChange: () => void }) {
   const deleteTrack = useDeleteTrack();
+  const displayArtists: Array<{ name: string; role: string }> = Array.isArray((t as any).displayArtists) ? (t as any).displayArtists : [];
+  const primaries  = displayArtists.filter(d => d.role === "primary");
+  const featurings = displayArtists.filter(d => d.role === "featuring");
+  const remixers   = displayArtists.filter(d => d.role === "remixer");
+  const writers     = Array.isArray((t as any).writers) ? (t as any).writers : [];
+  const performers  = Array.isArray((t as any).performers) ? (t as any).performers : [];
+  const production  = Array.isArray((t as any).production) ? (t as any).production : [];
+  const audioStyle  = (t as any).audioStyle as string | undefined;
+  const explicitSt  = (t as any).explicitStatus as string | undefined;
+  const aiUseSpat   = (t as any).spatialAiUsage as string | undefined;
+  const recYear     = (t as any).recordingYear as number | undefined;
+  const trackVer    = (t as any).trackVersion as string | undefined;
+
+  const namesOrDash = (arr: { name: string }[]) => arr.length ? arr.map(x => x.name).join(", ") : DASH;
+  const explicitLabel = explicitSt === "explicit" ? "Explicit" : explicitSt === "censored" ? "Censored" : explicitSt === "non_explicit" ? "Non-explicit" : DASH;
+  const previewStart  = (t as any).clipStartSeconds ?? 0;
+  const previewMm     = Math.floor(previewStart / 60);
+  const previewSs     = String(previewStart % 60).padStart(2, "0");
+
   return (
-    <div id={`track-${t.id}`} className="rounded-md border border-border/50 bg-background/40 p-4 space-y-3 scroll-mt-4 transition-shadow">
+    <div id={`track-${t.id}`} className="rounded-md border border-border/50 bg-background/40 p-4 space-y-4 scroll-mt-4 transition-shadow">
+      {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="font-semibold text-sm flex items-center gap-2">
-          <span className="text-muted-foreground">Трек {index + 1}</span>
-          <span className="text-foreground">· {t.title}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-muted-foreground">
-            Язык: <span className="text-foreground">{t.language || "—"}</span>
-          </div>
-          {release.isEditable && (
-            <Link href={`/releases/${release.id}/tracks/${t.id}/edit`}>
-              <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                <Pencil className="h-3.5 w-3.5 mr-1" /> Редактировать
-              </Button>
-            </Link>
-          )}
+        <div className="font-semibold text-base text-muted-foreground">Трек {index + 1}</div>
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost" size="sm"
-            className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-7 px-2"
+            className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-2 text-xs"
             onClick={async () => {
-              if (!confirm(`Удалить трек "${t.title}"?`)) return;
+              if (!confirm(`Удалить трек "${t.title || `#${index + 1}`}"?`)) return;
               await deleteTrack.mutateAsync({ id: t.id });
               toast({ title: "Трек удалён" });
               onChange();
             }}
             disabled={deleteTrack.isPending}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Удалить
           </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <KV label="Артист" value={release.artistName} mini />
-        <KV label="ISRC" value={t.isrc || "—"} mini mono />
-        <KV label="Жанр" value={t.genre || "—"} mini />
-        <KV label="Explicit" value={t.isExplicit ? "EXPLICIT" : "Чисто"} mini />
-      </div>
-      <AudioUploader
-        value={t.audioUrl ?? null}
-        trackId={t.id}
-        durationSeconds={t.durationSeconds ?? null}
-        onChange={() => onChange()}
-      />
-    </div>
-  );
-}
-
-// ─── Add Track form ───────────────────────────────────────────────────────
-function AddTrackForm({
-  releaseId, artistId, defaultLanguage, defaultGenre, nextTrackNumber, onAdded,
-  open, onOpenChange,
-}: {
-  releaseId: number; artistId: number;
-  defaultLanguage: string; defaultGenre: string;
-  nextTrackNumber: number; onAdded: () => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [isrc, setIsrc] = useState("");
-  const [isExplicit, setIsExplicit] = useState(false);
-  const [audioPath, setAudioPath] = useState<string | null>(null);
-  const [audioName, setAudioName] = useState<string | null>(null);
-  const [audioDuration, setAudioDuration] = useState<number | null>(null);
-  const createTrack = useCreateTrack();
-  const { upload: uploadAudio, isUploading: audioUploading, progress: audioProgress } = useAssetUpload();
-  const audioInputRef = useRef<HTMLInputElement>(null);
-
-  const reset = () => {
-    setTitle(""); setIsrc(""); setIsExplicit(false);
-    setAudioPath(null); setAudioName(null); setAudioDuration(null);
-  };
-
-  const onPickAudio = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      // attach=false: создаём asset без привязки, потом сошлёмся на него при создании трека.
-      const asset = await uploadAudio(file, { kind: "audio", releaseId, attach: false });
-      setAudioPath(asset.objectPath);
-      setAudioName(file.name);
-      setAudioDuration(asset.durationSeconds ?? null);
-      if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, ""));
-      toast({ title: "Аудио загружено", description: file.name });
-    } catch (e: any) {
-      toast({ title: "Не удалось загрузить аудио", description: e?.message ?? "Ошибка", variant: "destructive" });
-    }
-  };
-
-  const submit = async () => {
-    if (!title.trim()) {
-      toast({ title: "Укажи название трека", variant: "destructive" });
-      return;
-    }
-    try {
-      await createTrack.mutateAsync({
-        data: {
-          title: title.trim(),
-          artistId, releaseId,
-          trackNumber: nextTrackNumber,
-          language: defaultLanguage,
-          genre: defaultGenre,
-          isrc: isrc.trim() || null,
-          isExplicit,
-          audioUrl: audioPath ?? null,
-          durationSeconds: audioDuration ?? null,
-        },
-      });
-      reset();
-      onOpenChange(false);
-      toast({ title: "Трек добавлен", description: audioPath ? "Аудио уже привязано." : "Не забудь загрузить аудиофайл." });
-      onAdded();
-    } catch (e: any) {
-      toast({ title: "Не удалось добавить трек", description: e?.message ?? "Ошибка", variant: "destructive" });
-    }
-  };
-
-  if (!open) return null;
-  return (
-    <div className="rounded-md border border-primary/30 bg-primary/[0.04] p-4 space-y-3">
-      <div className="text-sm font-semibold">Новый трек #{nextTrackNumber}</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Название *</label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Track title" className="bg-background/40" />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">ISRC (опционально)</label>
-          <Input value={isrc} onChange={(e) => setIsrc(e.target.value)} placeholder="USRC17607839" className="bg-background/40 font-mono" />
+          {release.isEditable && (
+            <Link href={`/releases/${release.id}/tracks/${t.id}/edit`}>
+              <Button size="sm" className="h-8 px-3 text-xs">
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Редактировать
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Аудиофайл — можно сразу при создании. */}
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Аудиофайл (опционально, можно загрузить позже)</label>
-        <input
-          ref={audioInputRef} type="file" className="hidden"
-          accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mpeg,audio/mp4,audio/aac"
-          onChange={(e) => onPickAudio(e.target.files?.[0])}
+      {/* Row 1: Title / Mix Version / Metadata Language */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <TrackField label="Название трека" value={t.title || DASH} />
+        <TrackField label="Версия (Mix Version)" value={trackVer || DASH} />
+        <TrackField label="Язык метаданных" value={t.language || DASH} />
+      </div>
+
+      {/* Row 2: Primary chip + Featuring + Remixer */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <TrackField
+          label="Primary"
+          value={primaries.length ? primaries.map(p => p.name).join(", ") : (release.artistName || DASH)}
+          chip
         />
-        {audioPath ? (
-          <div className="flex items-center gap-2 p-2 rounded-md bg-background/40 border border-emerald-500/30">
-            <Music2 className="h-3.5 w-3.5 text-emerald-300" />
-            <span className="text-xs flex-1 truncate">{audioName}</span>
-            {audioDuration != null && (
-              <span className="text-[11px] text-muted-foreground font-mono">
-                {Math.floor(audioDuration / 60)}:{String(audioDuration % 60).padStart(2, "0")}
-              </span>
-            )}
-            <Button type="button" variant="ghost" size="sm" onClick={() => audioInputRef.current?.click()} disabled={audioUploading}>
-              Заменить
-            </Button>
-          </div>
-        ) : (
-          <Button type="button" variant="outline" size="sm" className="w-full justify-start"
-            disabled={audioUploading} onClick={() => audioInputRef.current?.click()}>
-            <Upload className="h-3.5 w-3.5 mr-1.5" />
-            {audioUploading ? `Загрузка ${audioProgress}%…` : "Загрузить аудио (WAV/FLAC/MP3, ≤200 МБ)"}
-          </Button>
-        )}
+        <TrackField label="Featuring" value={namesOrDash(featurings)} />
+        <TrackField label="Remixer" value={namesOrDash(remixers)} />
       </div>
 
-      <div className="flex items-center justify-between p-2 rounded-md bg-background/40 border border-border/50">
-        <span className="text-xs text-muted-foreground">Explicit Content</span>
-        <Switch checked={isExplicit} onCheckedChange={setIsExplicit} />
+      {/* Row 3: 4-col details grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+        {/* Left column — track metadata */}
+        <div className="space-y-3">
+          <TrackField label="Explicit status" value={explicitLabel} />
+          <TrackField label="Жанр" value={t.genre || DASH} />
+          <TrackField label="Сабжанр" value={(t as any).subgenre || DASH} />
+          <TrackField label="Год записи" value={recYear ? String(recYear) : DASH} />
+          <TrackField label="ISRC" value={t.isrc ? <span className="font-mono">{t.isrc}</span> : DASH} />
+          <TrackField label="Stereo AI Use" value={(t as any).aiUsage && (t as any).aiUsage !== "none" ? (t as any).aiUsage : DASH} />
+          {aiUseSpat && (<TrackField label="Spatial AI Use" value={aiUseSpat} />)}
+        </div>
+        {/* Writers */}
+        <div>
+          <TrackField label="Writers" value={writers.length ? writers.map((w: any) => w.name).join(", ") : DASH} />
+        </div>
+        {/* Performers / Production */}
+        <div>
+          <TrackField
+            label="Performers / Production"
+            value={
+              performers.length + production.length === 0
+                ? DASH
+                : [...performers, ...production].map((p: any) => p.name).join(", ")
+            }
+          />
+        </div>
+        {/* Lyrics */}
+        <div>
+          <TrackField
+            label="Lyrics"
+            value={audioStyle === "instrumental" ? "Instrumental" : (t as any).lyrics ? "Есть текст" : DASH}
+          />
+          {audioStyle === "instrumental" && (
+            <div className="text-[11px] text-muted-foreground mt-1">No Lyrics</div>
+          )}
+        </div>
       </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={() => { reset(); onOpenChange(false); }}>Отмена</Button>
-        <Button size="sm" onClick={submit} disabled={createTrack.isPending || audioUploading}>
-          {createTrack.isPending ? "Сохраняю…" : "Сохранить"}
-        </Button>
+
+      {/* Footer: audio status + preview start */}
+      <div className="pt-3 border-t border-border/40">
+        {t.audioUrl ? (
+          <AudioUploader
+            value={t.audioUrl}
+            trackId={t.id}
+            durationSeconds={t.durationSeconds ?? null}
+            onChange={() => onChange()}
+          />
+        ) : (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="flex-1 text-center">Аудиофайл не загружен</span>
+            <span>Preview Start Time: {previewMm}:{previewSs}</span>
+          </div>
+        )}
+        {t.audioUrl && (
+          <div className="text-[11px] text-muted-foreground text-right mt-1">
+            Preview Start Time: {previewMm}:{previewSs}
+          </div>
+        )}
       </div>
     </div>
   );
