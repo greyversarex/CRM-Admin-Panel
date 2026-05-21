@@ -303,7 +303,7 @@ export default function Dashboard() {
         {(role === "admin" || role === "manager" || role === "label") && (
           <>
             {/* Streams donut + Top Territories */}
-            <div className="grid gap-4 lg:grid-cols-5">
+            <div className="grid gap-4 lg:grid-cols-5 items-start">
               <div className="lg:col-span-2">
                 <TopDspCard metric="streams" />
               </div>
@@ -328,9 +328,7 @@ export default function Dashboard() {
             </div>
 
             {/* UGC widget — реальные данные из ugc_metrics, scoped по треков-владению */}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <UgcSummaryCard />
-            </div>
+            <UgcSummaryCard />
 
             {/* Таблица артистов — только админ/менеджер, лейблу не нужна
                 агрегированная сводка по чужим артистам. */}
