@@ -113,7 +113,15 @@ router.use(royaltiesRouter);          // scoped per-route inside (entity_type/id
 router.use(splitsRouter);
 // Publishing: доступ admin/manager/label. Лейбл видит общий каталог произведений
 // (per-label scoping произведений потребует доп. колонки label_id, пока отсутствует).
-router.use("/publishing", requireRole("admin", "manager", "label"), requireManagerPermission("rights"));
+router.use("/publishing", requireRole("admin", "manager", "label"), (req, res, next) => {
+  // requireManagerPermission проверяем только для manager'а; admin/label пропускаем
+  // (admin — всегда, label — по requireRole выше; per-label скоупинг — задача хендлеров).
+  if (req.session?.user?.role === "manager") {
+    requireManagerPermission("rights")(req, res, next);
+    return;
+  }
+  next();
+});
 router.use(publishingRouter);
 // Publishing extras: PRO registration + conflict detection (под /publishing → admin-only выше).
 router.use(publishingExtrasRouter);
