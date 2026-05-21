@@ -297,6 +297,66 @@ export function TopTracksCard() {
   );
 }
 
+type TopArtist = {
+  id: number;
+  name: string;
+  imageUrl: string | null;
+  country: string | null;
+  totalStreams: number;
+  revenue: number;
+  trend: number;
+};
+
+export function TopArtistsCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard.top-artists"],
+    queryFn: () => fetchJson<TopArtist[]>("/api/dashboard/top-artists"),
+  });
+
+  return (
+    <Card className="card-surface border-border/60 flex flex-col h-full">
+      <CardHeader className="pb-3 shrink-0">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <UsersIcon className="h-4 w-4 text-violet-400" />
+          Top Artists
+        </CardTitle>
+        <CardDescription className="text-[12px]">Лидеры по прослушиваниям и доходу</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 px-4 overflow-y-auto min-h-0">
+        {isLoading ? (
+          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        ) : !data || data.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground text-center py-6">Нет данных</p>
+        ) : (
+          <div className="space-y-1">
+            {data.slice(0, 6).map((a, i) => (
+              <div key={a.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1 transition-colors cursor-default">
+                <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
+                  {a.imageUrl ? <img src={assetHref(a.imageUrl)} alt={a.name} className="w-full h-full object-cover" /> : <UsersIcon className="h-3.5 w-3.5 text-violet-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium truncate">{a.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {(a.totalStreams / 1000).toFixed(0)}K streams{a.country ? ` · ${a.country}` : ""}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[12px] font-semibold tabular-nums text-emerald-400">${a.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                  <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${a.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {a.trend >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                    {a.trend >= 0 ? "+" : ""}{a.trend}%
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ───── Royalty Summary ───── */
 
 type RoyaltySummary = {
@@ -306,6 +366,7 @@ type RoyaltySummary = {
   mtd: number;
   topArtists: { id: number; name: string; revenue: number; share: number }[];
   topReleases: { id: number; title: string; coverUrl: string | null; revenue: number; share: number }[];
+  topLabels: { id: number; name: string; logoUrl: string | null; revenue: number; share: number }[];
 };
 
 export function RoyaltySummaryCard() {
@@ -344,7 +405,7 @@ export function RoyaltySummaryCard() {
               </div>
             </div>
             {/* Top Earners grid */}
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Earning Artists</p>
                 <div className="space-y-1.5">
@@ -355,6 +416,20 @@ export function RoyaltySummaryCard() {
                       <span className="flex-1 truncate">{a.name}</span>
                       <span className="font-semibold tabular-nums text-emerald-400">${a.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                       <span className="text-muted-foreground/70 w-10 text-right tabular-nums">{a.share}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Labels Earnings</p>
+                <div className="space-y-1.5">
+                  {(!data.topLabels || data.topLabels.length === 0) && <p className="text-[11px] text-muted-foreground">Нет данных</p>}
+                  {(data.topLabels ?? []).map((l, i) => (
+                    <div key={l.id} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-4 text-right text-muted-foreground/40 font-bold shrink-0">{i + 1}</span>
+                      <span className="flex-1 truncate">{l.name}</span>
+                      <span className="font-semibold tabular-nums text-emerald-400">${l.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                      <span className="text-muted-foreground/70 w-10 text-right tabular-nums">{l.share}%</span>
                     </div>
                   ))}
                 </div>

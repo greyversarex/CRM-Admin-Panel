@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable } from "@workspace/db";
+import { db, artistsTable, labelsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable } from "@workspace/db";
 import { count, sum, eq, desc, gte, sql, and, inArray, between, isNotNull } from "drizzle-orm";
 import { getDataScope, type DataScope } from "../lib/auth";
 
@@ -541,7 +541,7 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   const txS = txScope(scope);
   if (txS === false) {
-    res.json({ totalRoyalties: 0, dspRoyalties: 0, publishingRoyalties: 0, mtd: 0, topArtists: [], topReleases: [] });
+    res.json({ totalRoyalties: 0, dspRoyalties: 0, publishingRoyalties: 0, mtd: 0, topArtists: [], topReleases: [], topLabels: [] });
     return;
   }
 
@@ -596,6 +596,24 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
     .orderBy(desc(sql`sum(${transactionsTable.amount})`))
     .limit(5);
 
+  // Top earners by label
+  const topLabels = await db.select({
+    id: labelsTable.id,
+    name: labelsTable.name,
+    logoUrl: labelsTable.logoUrl,
+    revenue: sum(transactionsTable.amount),
+  })
+    .from(transactionsTable)
+    .leftJoin(labelsTable, eq(transactionsTable.labelId, labelsTable.id))
+    .where(withCond(
+      eq(transactionsTable.type, "dsp_revenue"),
+      sql`${transactionsTable.labelId} is not null`,
+      txS,
+    ))
+    .groupBy(labelsTable.id, labelsTable.name, labelsTable.logoUrl)
+    .orderBy(desc(sql`sum(${transactionsTable.amount})`))
+    .limit(5);
+
   const totalDsp = parseFloat(totalResult.total ?? "0");
 
   res.json({
@@ -615,6 +633,13 @@ router.get("/dashboard/royalty-summary", async (req, res): Promise<void> => {
       coverUrl: r.coverUrl,
       revenue: parseFloat(r.revenue ?? "0"),
       share: totalDsp > 0 ? Math.round((parseFloat(r.revenue ?? "0") / totalDsp) * 1000) / 10 : 0,
+    })),
+    topLabels: topLabels.map(l => ({
+      id: l.id,
+      name: l.name ?? "Unknown",
+      logoUrl: l.logoUrl,
+      revenue: parseFloat(l.revenue ?? "0"),
+      share: totalDsp > 0 ? Math.round((parseFloat(l.revenue ?? "0") / totalDsp) * 1000) / 10 : 0,
     })),
   });
 });

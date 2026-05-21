@@ -12,7 +12,7 @@ import {
 import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library, Search, MoreVertical, ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
-  TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
+  TopArtistsCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
 } from "@/components/dashboard-sections";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -317,7 +317,7 @@ export default function Dashboard() {
             {/* Top Tracks + Earnings DSP + Royalty Summary */}
             <div className="grid gap-4 lg:grid-cols-7">
               <div className="lg:col-span-3">
-                <TopTracksCard />
+                <TopArtistsCard />
               </div>
               <div className="lg:col-span-2">
                 <TopDspCard metric="revenue" title="Top DSP · Earnings" />
