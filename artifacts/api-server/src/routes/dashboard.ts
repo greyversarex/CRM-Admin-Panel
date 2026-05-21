@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable } from "@workspace/db";
+import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable } from "@workspace/db";
 import { count, sum, eq, desc, gte, sql, and, inArray, between, isNotNull } from "drizzle-orm";
 import { getDataScope, type DataScope } from "../lib/auth";
 
@@ -729,6 +729,47 @@ router.get("/dashboard/finance-kpis", async (req, res): Promise<void> => {
     readyToPay: { count: readyToPay?.cnt ?? 0, sum: parseFloat(readyToPay?.sum ?? "0") },
     openFraudAlerts,
     openClaims,
+  });
+});
+
+// ─── Operational KPIs (admin/manager only) ────────────────────────────────
+// Delivered / Failed / Dispute / Takedown / Review Pending / Users / Contracts
+router.get("/dashboard/ops-kpis", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "admin_only" }); return; }
+
+  const [delivered] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(deliveriesTable).where(eq(deliveriesTable.status, "sent"));
+
+  const [failed] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(deliveriesTable).where(eq(deliveriesTable.status, "failed"));
+
+  const [takedown] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(takedownRequestsTable).where(eq(takedownRequestsTable.status, "pending"));
+
+  const [reviewPending] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(releasesTable).where(eq(releasesTable.status, "pending_review"));
+
+  const [users] = await db.select({ c: sql<number>`count(*)::int` }).from(usersTable);
+
+  const [contracts] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(dspDealsTable).where(eq(dspDealsTable.status, "active"));
+
+  // Dispute = ownership_claims со статусом 'disputed' (опциональная таблица).
+  let dispute = 0;
+  try {
+    const r = await db.execute(sql`SELECT count(*)::int AS c FROM ownership_claims WHERE status = 'disputed'`);
+    dispute = Number((r.rows?.[0] as { c?: number } | undefined)?.c ?? 0);
+  } catch { /* table may not exist yet */ }
+
+  res.json({
+    delivered: delivered?.c ?? 0,
+    failed: failed?.c ?? 0,
+    dispute,
+    takedown: takedown?.c ?? 0,
+    reviewPending: reviewPending?.c ?? 0,
+    users: users?.c ?? 0,
+    contracts: contracts?.c ?? 0,
   });
 });
 
