@@ -147,6 +147,7 @@ export default function Dashboard() {
 
         {(role === "admin" || role === "manager") && <OpsKpiRow />}
         {(role === "admin" || role === "manager") && <PublishingKpiRow />}
+        {(role === "admin" || role === "manager") && <LatestPublishingWorksCard />}
         {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
         {/* ── Charts row ── */}
@@ -395,6 +396,121 @@ function OpsKpiRow() {
       <KpiCard label="Users" value={num(k.users)} icon={Users} iconColor="text-primary" iconBg="bg-primary/12" iconBorder="border-primary/20" />
       <KpiCard label="Contracts" value={num(k.contracts)} icon={FileText} iconColor="text-sky-400" iconBg="bg-sky-500/12" iconBorder="border-sky-500/20" />
     </div>
+  );
+}
+
+type DashWriter = { name: string; role: string; share: number };
+type DashWork = {
+  id: number; title: string;
+  iswc: string | null; isrc: string | null;
+  status: string;
+  writers: DashWriter[];
+  publisher: string | null;
+  registeredWith: string[];
+  mlcSongCode: string | null;
+  songtrust: boolean; ascap: boolean; bmi: boolean;
+};
+
+function LatestPublishingWorksCard() {
+  const [works, setWorks] = useState<DashWork[] | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/publishing/works?limit=10", { credentials: "same-origin" });
+        if (r.ok) {
+          const j = await r.json();
+          setWorks(Array.isArray(j?.data) ? j.data : []);
+        } else setWorks([]);
+      } catch { setWorks([]); }
+    })();
+  }, []);
+  const statusCls: Record<string, string> = {
+    draft:      "bg-white/[0.05] text-white/65 border-white/10",
+    pending:    "bg-amber-500/15 text-amber-300 border-amber-500/30",
+    registered: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    active:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    rejected:   "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  };
+  return (
+    <Card className="card-surface border-border/60">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base font-semibold">Publishing — последние произведения</CardTitle>
+          <CardDescription className="text-[12px]">Топ-10 из каталога Паблишинга</CardDescription>
+        </div>
+        <a href="/publishing" className="text-[12px] text-primary hover:underline">Открыть Паблишинг →</a>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-white/45">
+                <th className="px-4 py-2 font-semibold">Work Title</th>
+                <th className="px-4 py-2 font-semibold">Composer(s)</th>
+                <th className="px-4 py-2 font-semibold">Lyricist(s)</th>
+                <th className="px-4 py-2 font-semibold">ISWC / ISRC</th>
+                <th className="px-4 py-2 font-semibold">PRO</th>
+                <th className="px-4 py-2 font-semibold text-right">Share</th>
+                <th className="px-4 py-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {works === null ? (
+                <tr><td colSpan={7} className="text-center h-24 text-muted-foreground">Загрузка…</td></tr>
+              ) : works.length === 0 ? (
+                <tr><td colSpan={7} className="text-center h-24 text-muted-foreground">Произведений пока нет</td></tr>
+              ) : works.map((w) => {
+                const composers = (w.writers ?? []).filter((wr) => wr.role === "composer");
+                const lyricists = (w.writers ?? []).filter((wr) => wr.role === "lyricist");
+                const total = (w.writers ?? []).reduce((s, x) => s + (Number.isFinite(x.share) ? x.share : 0), 0);
+                const pros = [
+                  ...(w.ascap ? ["ASCAP"] : []),
+                  ...(w.bmi ? ["BMI"] : []),
+                  ...(w.songtrust ? ["Songtrust"] : []),
+                  ...(w.mlcSongCode ? ["The MLC"] : []),
+                  ...(w.registeredWith ?? []),
+                ];
+                const renderNames = (list: DashWriter[]) => list.length === 0
+                  ? <span className="text-white/30">—</span>
+                  : <span className="text-white/85">{list.map((p) => p.name).join(", ")}</span>;
+                return (
+                  <tr key={w.id} className="border-b border-border/30 hover:bg-accent/15">
+                    <td className="px-4 py-2 font-medium text-white">{w.title}</td>
+                    <td className="px-4 py-2">{renderNames(composers)}</td>
+                    <td className="px-4 py-2">{renderNames(lyricists)}</td>
+                    <td className="px-4 py-2 font-mono text-[11px] text-white/55 tabular-nums">
+                      {w.iswc ?? "—"}{w.isrc && <div className="text-white/40">{w.isrc}</div>}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {pros.length === 0 ? <span className="text-white/30">—</span> : pros.map((p) => {
+                          const pl = p.toLowerCase();
+                          const cls =
+                            pl === "ascap"     ? "bg-blue-500/12 text-blue-300 border-blue-500/30" :
+                            pl === "bmi"       ? "bg-rose-500/12 text-rose-300 border-rose-500/30" :
+                            pl === "songtrust" ? "bg-violet-500/12 text-violet-300 border-violet-500/30" :
+                            pl === "the mlc" || pl === "mlc" ? "bg-emerald-500/12 text-emerald-300 border-emerald-500/30" :
+                            "bg-white/[0.05] text-white/70 border-white/15";
+                          return (
+                            <Badge key={p} variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-bold ${cls}`}>{p}</Badge>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-white/85">{Math.round(total)}%</td>
+                    <td className="px-4 py-2">
+                      <Badge variant="outline" className={`text-[10px] font-bold ${statusCls[w.status] ?? statusCls.draft}`}>
+                        {w.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
