@@ -56,9 +56,9 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
       </CardHeader>
       <CardContent className="pt-0 flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
-          <Skeleton className="h-[200px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
         ) : chartData.length === 0 ? (
-          <div className="h-[200px] flex items-center justify-center text-[11px] text-muted-foreground">Нет данных</div>
+          <div className="h-[60px] flex items-center justify-center text-[11px] text-muted-foreground">Нет данных</div>
         ) : (
           <div className="flex items-center gap-3">
             <div className="h-[180px] w-[180px] shrink-0 relative">
