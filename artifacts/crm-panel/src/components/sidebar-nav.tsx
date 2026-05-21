@@ -441,11 +441,19 @@ export function SidebarNav() {
 
           // Не показываем заголовок для технических "overview" / одиночных групп,
           // где он визуально пуст или дублирует единственный пункт.
+          const HIDDEN_TITLE_KEYS = new Set([
+            "overview",
+            "system",
+            "catalog_group",
+            "distribution_group",
+            "finance_group",
+            "analytics_group",
+            "crm_group",
+          ]);
           const showTitle =
             !collapsed &&
             groupTitle &&
-            group.titleKey !== "overview" &&
-            group.titleKey !== "system";
+            !HIDDEN_TITLE_KEYS.has(group.titleKey);
           return (
           <div key={group.titleKey} className={cn(!collapsed && "mb-2")}>
             {collapsed && <div className="h-px bg-white/[0.07] mb-2 mx-1" />}
