@@ -9,7 +9,7 @@ import {
   useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
   TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
@@ -146,6 +146,7 @@ export default function Dashboard() {
         </div>
 
         {(role === "admin" || role === "manager") && <OpsKpiRow />}
+        {(role === "admin" || role === "manager") && <PublishingKpiRow />}
         {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
         {/* ── Charts row ── */}
@@ -393,6 +394,34 @@ function OpsKpiRow() {
       <KpiCard label="Review Pending" value={num(k.reviewPending)} icon={Hourglass} iconColor="text-amber-400" iconBg="bg-amber-500/12" iconBorder="border-amber-500/20" />
       <KpiCard label="Users" value={num(k.users)} icon={Users} iconColor="text-primary" iconBg="bg-primary/12" iconBorder="border-primary/20" />
       <KpiCard label="Contracts" value={num(k.contracts)} icon={FileText} iconColor="text-sky-400" iconBg="bg-sky-500/12" iconBorder="border-sky-500/20" />
+    </div>
+  );
+}
+
+function PublishingKpiRow() {
+  const [k, setK] = useState<{
+    accepted: number; pendingRegistrations: number; rejected: number;
+    overclaims: number; royalties: number; totalWorks: number;
+  } | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/dashboard/publishing-kpis", { credentials: "same-origin" });
+        if (r.ok) setK(await r.json());
+      } catch {}
+    })();
+  }, []);
+  if (!k) return null;
+  const num = (n: number) => n.toLocaleString();
+  const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+      <KpiCard label="Accepted" value={num(k.accepted)} icon={BookCheck} iconColor="text-emerald-400" iconBg="bg-emerald-500/12" iconBorder="border-emerald-500/20" />
+      <KpiCard label="Pending Registrations" value={num(k.pendingRegistrations)} icon={ClipboardList} iconColor="text-amber-400" iconBg="bg-amber-500/12" iconBorder="border-amber-500/20" />
+      <KpiCard label="Rejected" value={num(k.rejected)} icon={FileX} iconColor="text-rose-400" iconBg="bg-rose-500/12" iconBorder="border-rose-500/20" />
+      <KpiCard label="Overclaims Tool" value={num(k.overclaims)} icon={AlertOctagon} iconColor="text-orange-400" iconBg="bg-orange-500/12" iconBorder="border-orange-500/20" />
+      <KpiCard label="Publishing Royalties" value={usd(k.royalties)} icon={Coins} iconColor="text-emerald-400" iconBg="bg-emerald-500/12" iconBorder="border-emerald-500/20" />
+      <KpiCard label="Total Works" value={num(k.totalWorks)} icon={Library} iconColor="text-primary" iconBg="bg-primary/12" iconBorder="border-primary/20" />
     </div>
   );
 }

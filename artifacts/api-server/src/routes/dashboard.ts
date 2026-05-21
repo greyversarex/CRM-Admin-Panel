@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable } from "@workspace/db";
+import { db, artistsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable } from "@workspace/db";
 import { count, sum, eq, desc, gte, sql, and, inArray, between, isNotNull } from "drizzle-orm";
 import { getDataScope, type DataScope } from "../lib/auth";
 
@@ -770,6 +770,53 @@ router.get("/dashboard/ops-kpis", async (req, res): Promise<void> => {
     reviewPending: reviewPending?.c ?? 0,
     users: users?.c ?? 0,
     contracts: contracts?.c ?? 0,
+  });
+});
+
+// ─── Publishing KPIs (admin/manager only) ─────────────────────────────────
+// Accepted / Pending Registrations / Rejected / Overclaims / Royalties / Total Works
+router.get("/dashboard/publishing-kpis", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "admin_only" }); return; }
+
+  const [accepted] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(publishingWorksTable)
+    .where(inArray(publishingWorksTable.status, ["registered", "active"]));
+
+  const [pendingReg] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(publishingWorksTable).where(eq(publishingWorksTable.status, "pending"));
+
+  const [rejected] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(publishingWorksTable).where(eq(publishingWorksTable.status, "rejected"));
+
+  const [totalWorks] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(publishingWorksTable);
+
+  // Overclaims = неразрешённые конфликты по дубликатам ISWC / перекрытию долей.
+  const [overclaims] = await db.select({ c: sql<number>`count(*)::int` })
+    .from(publishingConflictsTable)
+    .where(and(
+      eq(publishingConflictsTable.resolved, false),
+      inArray(publishingConflictsTable.conflictType, ["duplicate_iswc", "split_overlap", "unclaimed_share"]),
+    ));
+
+  // Publishing royalties: суммируем кредитные транзакции, где description / type
+  // указывают на издательский доход (mechanical / performance / publishing).
+  const [royalties] = await db
+    .select({ s: sql<string>`coalesce(sum(${transactionsTable.amount}), 0)::text` })
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.type, "credit"),
+      sql`(${transactionsTable.description} ILIKE '%publishing%' OR ${transactionsTable.description} ILIKE '%mechanical%' OR ${transactionsTable.description} ILIKE '%performance%')`,
+    ));
+
+  res.json({
+    accepted: accepted?.c ?? 0,
+    pendingRegistrations: pendingReg?.c ?? 0,
+    rejected: rejected?.c ?? 0,
+    overclaims: overclaims?.c ?? 0,
+    royalties: parseFloat(royalties?.s ?? "0"),
+    totalWorks: totalWorks?.c ?? 0,
   });
 });
 

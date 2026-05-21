@@ -280,11 +280,11 @@ export default function Publishing() {
               <TableHeader>
                 <TableRow className="border-border/40 hover:bg-transparent">
                   <TableHead>{t.publishing.table.title}</TableHead>
-                  <TableHead>{t.publishing.table.writers}</TableHead>
-                  <TableHead>{t.publishing.table.codes}</TableHead>
-                  <TableHead>{t.publishing.table.publisher}</TableHead>
-                  <TableHead>{t.publishing.table.pro}</TableHead>
-                  <TableHead className="text-right">%</TableHead>
+                  <TableHead>Composer(s)</TableHead>
+                  <TableHead>Lyricist(s)</TableHead>
+                  <TableHead>ISWC / ISRC</TableHead>
+                  <TableHead>PRO</TableHead>
+                  <TableHead className="text-right">Share</TableHead>
                   <TableHead>{t.publishing.table.status}</TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
@@ -306,53 +306,67 @@ export default function Publishing() {
                   pageRows.map((w) => {
                     const total = sumShares(w.writers);
                     const valid = Math.round(total) === 100;
+                    const composers = w.writers.filter((wr) => wr.role === "composer");
+                    const lyricists = w.writers.filter((wr) => wr.role === "lyricist");
+                    const others = w.writers.filter((wr) => wr.role !== "composer" && wr.role !== "lyricist");
                     const pros = [
                       ...(w.ascap ? ["ASCAP"] : []),
                       ...(w.bmi ? ["BMI"] : []),
                       ...(w.songtrust ? ["Songtrust"] : []),
+                      ...(w.mlcSongCode ? ["The MLC"] : []),
                       ...w.registeredWith,
                     ];
+                    const renderPeople = (list: typeof w.writers) =>
+                      list.length === 0 ? (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {list.map((wr, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded px-1.5 py-0.5 text-[11px] text-white/85" title={`${wr.name} · ${wr.share}%`}>
+                              <span className="truncate max-w-[110px]">{wr.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      );
                     return (
                       <TableRow key={w.id} className="border-border/40 hover:bg-accent/15">
                         <TableCell className="font-medium text-foreground">
                           <div className="flex items-center gap-2">
                             <span>{w.title}</span>
-                            {w.mlcSongCode && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono">
-                                MLC {w.mlcSongCode}
-                              </Badge>
+                            {w.publisher && (
+                              <span className="text-[10px] text-white/40">· {w.publisher}</span>
                             )}
                           </div>
+                          {others.length > 0 && (
+                            <div className="mt-1 text-[10px] text-white/40">
+                              {others.map((o) => `${o.name} (${o.role})`).join(", ")}
+                            </div>
+                          )}
                         </TableCell>
-                        <TableCell className="text-white/85 text-sm">
-                          <div className="flex flex-wrap gap-1.5 max-w-[260px]">
-                            {w.writers.length === 0 ? (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            ) : w.writers.map((wr, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-full pl-0.5 pr-2 py-0.5 text-[11px]">
-                                <span className="h-4 w-4 rounded-full bg-primary/20 text-primary text-[8px] font-bold flex items-center justify-center">
-                                  {initialsOf(wr.name)}
-                                </span>
-                                <span className="truncate max-w-[110px]">{wr.name}</span>
-                                <span className="text-white/45">{wr.share}%</span>
-                              </span>
-                            ))}
-                          </div>
-                        </TableCell>
+                        <TableCell>{renderPeople(composers)}</TableCell>
+                        <TableCell>{renderPeople(lyricists)}</TableCell>
                         <TableCell className="font-mono text-[11px] text-white/55 tabular-nums">
                           {w.iswc ? <div>{w.iswc}</div> : <div className="text-white/30">—</div>}
                           {w.isrc && <div className="text-white/40">{w.isrc}</div>}
                         </TableCell>
-                        <TableCell className="text-white/65 text-sm">{w.publisher ?? "—"}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {pros.length === 0 ? (
                               <span className="text-muted-foreground text-xs">—</span>
-                            ) : pros.map((p) => (
-                              <Badge key={p} variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-bold bg-violet-500/10 text-violet-300 border-violet-500/25">
-                                {p}
-                              </Badge>
-                            ))}
+                            ) : pros.map((p) => {
+                              const pl = p.toLowerCase();
+                              const cls =
+                                pl === "ascap"     ? "bg-blue-500/12 text-blue-300 border-blue-500/30" :
+                                pl === "bmi"       ? "bg-rose-500/12 text-rose-300 border-rose-500/30" :
+                                pl === "songtrust" ? "bg-violet-500/12 text-violet-300 border-violet-500/30" :
+                                pl === "the mlc" || pl === "mlc" ? "bg-emerald-500/12 text-emerald-300 border-emerald-500/30" :
+                                "bg-white/[0.05] text-white/70 border-white/15";
+                              return (
+                                <Badge key={p} variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-bold ${cls}`}>
+                                  {p}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
