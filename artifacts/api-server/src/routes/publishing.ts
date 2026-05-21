@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, publishingWorksTable } from "@workspace/db";
-import { count, eq, desc } from "drizzle-orm";
+import { db, publishingWorksTable, tracksTable, releasesTable, artistsTable } from "@workspace/db";
+import { count, eq, desc, and, or, ilike, inArray, type SQL } from "drizzle-orm";
 import { CreatePublishingWorkBody, UpdatePublishingWorkBody, GetPublishingWorkParams, UpdatePublishingWorkParams } from "@workspace/api-zod";
+import { getDataScope } from "../lib/auth";
 
 const router = Router();
 
@@ -43,11 +44,87 @@ router.get("/publishing/works", async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  const works = await db.select().from(publishingWorksTable).limit(limit).offset(offset).orderBy(desc(publishingWorksTable.createdAt));
-  const [totalResult] = await db.select({ count: count() }).from(publishingWorksTable);
+  const scope = getDataScope(req);
+  const q = ((req.query.q as string) ?? "").trim();
+  const statusParam = ((req.query.status as string) ?? "").trim().toLowerCase();
+
+  const conds: SQL[] = [];
+  // Label scoping: works are tied via track→release→{labelId, artistId}.
+  // A label sees works whose release.labelId matches OR whose track.artistId
+  // belongs to their roster. Admin/manager see all.
+  if (!scope.fullAccess) {
+    if (scope.role === "label" && scope.labelId != null) {
+      const lid = scope.labelId;
+      const labelArtistIds = await db
+        .select({ id: artistsTable.id })
+        .from(artistsTable)
+        .where(eq(artistsTable.labelId, lid));
+      const artistIds = labelArtistIds.map((r) => r.id);
+      const orParts: SQL[] = [eq(releasesTable.labelId, lid)];
+      if (artistIds.length > 0) orParts.push(inArray(tracksTable.artistId, artistIds));
+      conds.push(or(...orParts)!);
+    } else {
+      // any other non-privileged role: no access
+      res.json({ data: [], pagination: { page: 1, limit, total: 0, totalPages: 0 } });
+      return;
+    }
+  }
+
+  if (q.length > 0) {
+    const like = `%${q}%`;
+    conds.push(or(
+      ilike(publishingWorksTable.title, like),
+      ilike(artistsTable.name, like),
+      ilike(publishingWorksTable.isrc, like),
+      ilike(publishingWorksTable.iswc, like),
+    )!);
+  }
+
+  if (statusParam && statusParam !== "all") {
+    // "active" filter from UI must include both `active` and `registered`
+    const map: Record<string, string[]> = {
+      active: ["active", "registered"],
+      accepted: ["active", "registered"],
+      pending: ["pending"],
+      rejected: ["rejected"],
+      draft: ["draft"],
+    };
+    const list = map[statusParam] ?? [statusParam];
+    conds.push(inArray(publishingWorksTable.status, list as any));
+  }
+
+  const whereClause = conds.length > 0 ? and(...conds) : undefined;
+
+  const rowsQuery = db
+    .select({
+      work: publishingWorksTable,
+      artistName: artistsTable.name,
+      artistImageUrl: artistsTable.imageUrl,
+      coverUrl: releasesTable.coverUrl,
+    })
+    .from(publishingWorksTable)
+    .leftJoin(tracksTable, eq(tracksTable.id, publishingWorksTable.trackId))
+    .leftJoin(releasesTable, eq(releasesTable.id, tracksTable.releaseId))
+    .leftJoin(artistsTable, eq(artistsTable.id, tracksTable.artistId));
+
+  const rows = await (whereClause ? rowsQuery.where(whereClause) : rowsQuery)
+    .limit(limit).offset(offset).orderBy(desc(publishingWorksTable.createdAt));
+
+  const totalQuery = db
+    .select({ count: count() })
+    .from(publishingWorksTable)
+    .leftJoin(tracksTable, eq(tracksTable.id, publishingWorksTable.trackId))
+    .leftJoin(releasesTable, eq(releasesTable.id, tracksTable.releaseId))
+    .leftJoin(artistsTable, eq(artistsTable.id, tracksTable.artistId));
+  const [totalResult] = await (whereClause ? totalQuery.where(whereClause) : totalQuery);
 
   res.json({
-    data: works.map(formatWork),
+    data: rows.map((r) => ({
+      ...formatWork(r.work),
+      artistName: r.artistName,
+      artistImageUrl: r.artistImageUrl,
+      coverUrl: r.coverUrl,
+    })),
     pagination: {
       page,
       limit,

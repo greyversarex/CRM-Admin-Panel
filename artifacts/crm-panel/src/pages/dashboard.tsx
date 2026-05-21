@@ -9,7 +9,7 @@ import {
   useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
-import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library } from "lucide-react";
+import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library, Search, MoreVertical, ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
   TopTracksCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
@@ -146,8 +146,6 @@ export default function Dashboard() {
         </div>
 
         {(role === "admin" || role === "manager") && <OpsKpiRow />}
-        {(role === "admin" || role === "manager") && <PublishingKpiRow />}
-        {(role === "admin" || role === "manager") && <LatestPublishingWorksCard />}
         {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
         {/* ── Charts row ── */}
@@ -337,6 +335,20 @@ export default function Dashboard() {
             {/* Таблица артистов — только админ/менеджер, лейблу не нужна
                 агрегированная сводка по чужим артистам. */}
             {(role === "admin" || role === "manager") && <ArtistsStatsTableCard />}
+
+            {(role === "admin" || role === "manager") && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white tracking-tight">Publishing Catalog</h2>
+                    <p className="text-[12px] text-white/55">Регистрация прав, роялти и метаданные произведений</p>
+                  </div>
+                  <a href="/publishing" className="text-[12px] text-primary hover:underline">Открыть Паблишинг →</a>
+                </div>
+                <PublishingKpiRow />
+                <LatestPublishingWorksCard />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -409,60 +421,124 @@ type DashWork = {
   registeredWith: string[];
   mlcSongCode: string | null;
   songtrust: boolean; ascap: boolean; bmi: boolean;
+  artistName: string | null;
+  artistImageUrl: string | null;
+  coverUrl: string | null;
 };
 
 function LatestPublishingWorksCard() {
   const [works, setWorks] = useState<DashWork[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending" | "rejected" | "draft">("all");
+
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, perPage]);
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/publishing/works?limit=10", { credentials: "same-origin" });
-        if (r.ok) {
-          const j = await r.json();
-          setWorks(Array.isArray(j?.data) ? j.data : []);
-        } else setWorks([]);
-      } catch { setWorks([]); }
+        const params = new URLSearchParams({ limit: String(perPage), page: String(page) });
+        if (debouncedSearch) params.set("q", debouncedSearch);
+        if (statusFilter !== "all") params.set("status", statusFilter);
+        const r = await fetch(`/api/publishing/works?${params}`, { credentials: "same-origin" });
+        if (!r.ok) { if (!cancelled) { setWorks([]); setTotal(0); } return; }
+        const j = await r.json();
+        if (cancelled) return;
+        setWorks(Array.isArray(j?.data) ? j.data : []);
+        setTotal(Number(j?.pagination?.total) || 0);
+      } catch { if (!cancelled) { setWorks([]); setTotal(0); } }
     })();
-  }, []);
-  const statusCls: Record<string, string> = {
-    draft:      "bg-white/[0.05] text-white/65 border-white/10",
-    pending:    "bg-amber-500/15 text-amber-300 border-amber-500/30",
-    registered: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    active:     "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    rejected:   "bg-rose-500/15 text-rose-300 border-rose-500/30",
+    return () => { cancelled = true; };
+  }, [page, perPage, debouncedSearch, statusFilter]);
+
+  const filtered = works ?? [];
+
+  const statusPill: Record<string, { cls: string; dot: string; label: string }> = {
+    draft:      { cls: "bg-white/[0.05] text-white/75 border-white/15",          dot: "bg-white/45",     label: "draft" },
+    pending:    { cls: "bg-amber-500/12 text-amber-300 border-amber-500/30",      dot: "bg-amber-400",   label: "pending" },
+    registered: { cls: "bg-emerald-500/12 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400", label: "Accepted" },
+    active:     { cls: "bg-emerald-500/12 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400", label: "Accepted" },
+    rejected:   { cls: "bg-rose-500/12 text-rose-300 border-rose-500/30",          dot: "bg-rose-400",    label: "Conflict" },
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, total);
+
+  const pageNums: number[] = [];
+  const startP = Math.max(1, page - 2);
+  const endP = Math.min(totalPages, startP + 4);
+  for (let i = startP; i <= endP; i++) pageNums.push(i);
+
   return (
-    <Card className="card-surface border-border/60">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-base font-semibold">Publishing — последние произведения</CardTitle>
-          <CardDescription className="text-[12px]">Топ-10 из каталога Паблишинга</CardDescription>
+    <Card className="card-surface border-border/60 overflow-hidden">
+      <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between border-b border-border/40">
+        <div className="flex items-center gap-2 text-[12px] text-white/70">
+          <span className="font-medium text-white">Showing {from}–{to}</span>
+          <span className="text-white/40">of {total.toLocaleString()} works</span>
         </div>
-        <a href="/publishing" className="text-[12px] text-primary hover:underline">Открыть Паблишинг →</a>
-      </CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search works"
+              className="h-8 w-56 rounded-md border border-border/50 bg-background/60 pl-8 pr-3 text-[12px] text-white placeholder:text-white/35 focus:outline-none focus:border-primary/60"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-border/50 bg-background/60 px-2 h-8">
+            <span className="text-[11px] text-white/55">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-transparent text-[12px] text-white focus:outline-none cursor-pointer"
+            >
+              <option value="all" className="bg-background">All</option>
+              <option value="active" className="bg-background">Accepted</option>
+              <option value="pending" className="bg-background">Pending</option>
+              <option value="rejected" className="bg-background">Conflict</option>
+              <option value="draft" className="bg-background">Draft</option>
+            </select>
+          </div>
+          <button className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border/50 bg-background/60 text-[12px] text-white/75 hover:bg-accent/20">
+            <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
+          </button>
+        </div>
+      </div>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-white/45">
-                <th className="px-4 py-2 font-semibold">Work Title</th>
-                <th className="px-4 py-2 font-semibold">Composer(s)</th>
-                <th className="px-4 py-2 font-semibold">Lyricist(s)</th>
-                <th className="px-4 py-2 font-semibold">ISWC / ISRC</th>
-                <th className="px-4 py-2 font-semibold">PRO</th>
-                <th className="px-4 py-2 font-semibold text-right">Share</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
+              <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-white/45 bg-white/[0.015]">
+                <th className="pl-5 pr-2 py-2.5 w-8"><input type="checkbox" className="accent-primary cursor-pointer" /></th>
+                <th className="px-3 py-2.5 font-semibold">Work Title</th>
+                <th className="px-3 py-2.5 font-semibold">Composer(s)</th>
+                <th className="px-3 py-2.5 font-semibold">Lyricist(s)</th>
+                <th className="px-3 py-2.5 font-semibold">ISRC / ISWC</th>
+                <th className="px-3 py-2.5 font-semibold">PRO</th>
+                <th className="px-3 py-2.5 font-semibold text-right">Share</th>
+                <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="px-3 py-2.5 w-8"></th>
               </tr>
             </thead>
             <tbody>
               {works === null ? (
-                <tr><td colSpan={7} className="text-center h-24 text-muted-foreground">Загрузка…</td></tr>
-              ) : works.length === 0 ? (
-                <tr><td colSpan={7} className="text-center h-24 text-muted-foreground">Произведений пока нет</td></tr>
-              ) : works.map((w) => {
+                <tr><td colSpan={9} className="text-center h-32 text-muted-foreground">Загрузка…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={9} className="text-center h-32 text-muted-foreground">Произведений не найдено</td></tr>
+              ) : filtered.map((w) => {
                 const composers = (w.writers ?? []).filter((wr) => wr.role === "composer");
                 const lyricists = (w.writers ?? []).filter((wr) => wr.role === "lyricist");
-                const total = (w.writers ?? []).reduce((s, x) => s + (Number.isFinite(x.share) ? x.share : 0), 0);
+                const totalShare = (w.writers ?? []).reduce((s, x) => s + (Number.isFinite(x.share) ? x.share : 0), 0);
                 const pros = [
                   ...(w.ascap ? ["ASCAP"] : []),
                   ...(w.bmi ? ["BMI"] : []),
@@ -473,15 +549,32 @@ function LatestPublishingWorksCard() {
                 const renderNames = (list: DashWriter[]) => list.length === 0
                   ? <span className="text-white/30">—</span>
                   : <span className="text-white/85">{list.map((p) => p.name).join(", ")}</span>;
+                const pill = statusPill[w.status] ?? statusPill.draft;
                 return (
-                  <tr key={w.id} className="border-b border-border/30 hover:bg-accent/15">
-                    <td className="px-4 py-2 font-medium text-white">{w.title}</td>
-                    <td className="px-4 py-2">{renderNames(composers)}</td>
-                    <td className="px-4 py-2">{renderNames(lyricists)}</td>
-                    <td className="px-4 py-2 font-mono text-[11px] text-white/55 tabular-nums">
-                      {w.iswc ?? "—"}{w.isrc && <div className="text-white/40">{w.isrc}</div>}
+                  <tr key={w.id} className="border-b border-border/25 hover:bg-accent/10 transition-colors">
+                    <td className="pl-5 pr-2 py-2.5"><input type="checkbox" className="accent-primary cursor-pointer" /></td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 min-w-[220px]">
+                        {w.coverUrl ? (
+                          <img src={w.coverUrl} alt="" className="h-8 w-8 rounded object-cover border border-border/40 flex-shrink-0" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-white/[0.05] border border-border/40 flex items-center justify-center flex-shrink-0">
+                            <Music2 className="h-3.5 w-3.5 text-white/35" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{w.title}</div>
+                          {w.artistName && <div className="text-[11px] text-white/45 truncate">{w.artistName}</div>}
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-3 py-2.5">{renderNames(composers)}</td>
+                    <td className="px-3 py-2.5">{renderNames(lyricists)}</td>
+                    <td className="px-3 py-2.5 font-mono text-[11px] text-white/55 tabular-nums">
+                      {w.isrc ?? <span className="text-white/30">—</span>}
+                      {w.iswc && <div className="text-white/35">{w.iswc}</div>}
+                    </td>
+                    <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {pros.length === 0 ? <span className="text-white/30">—</span> : pros.map((p) => {
                           const pl = p.toLowerCase();
@@ -497,17 +590,60 @@ function LatestPublishingWorksCard() {
                         })}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-white/85">{Math.round(total)}%</td>
-                    <td className="px-4 py-2">
-                      <Badge variant="outline" className={`text-[10px] font-bold ${statusCls[w.status] ?? statusCls.draft}`}>
-                        {w.status}
-                      </Badge>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-white/85">{Math.round(totalShare)}%</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${pill.cls}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
+                        {pill.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-white/40 hover:text-white/80 cursor-pointer">
+                      <MoreVertical className="h-3.5 w-3.5" />
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 px-5 py-3 border-t border-border/40 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 text-[12px] text-white/55">
+            <span>Show</span>
+            <select
+              value={perPage}
+              onChange={(e) => { setPerPage(parseInt(e.target.value, 10)); setPage(1); }}
+              className="h-7 rounded-md border border-border/50 bg-background/60 px-2 text-[12px] text-white focus:outline-none cursor-pointer"
+            >
+              <option value={10} className="bg-background">10</option>
+              <option value={25} className="bg-background">25</option>
+              <option value={50} className="bg-background">50</option>
+            </select>
+            <span>per page</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[12px] text-white/55 mr-2">{from}–{to} of {total.toLocaleString()}</span>
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border/50 bg-background/60 text-white/70 hover:bg-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
+            ><ChevronLeft className="h-3.5 w-3.5" /></button>
+            {pageNums.map((n) => (
+              <button
+                key={n}
+                onClick={() => setPage(n)}
+                className={`h-7 min-w-7 px-2 inline-flex items-center justify-center rounded-md border text-[12px] ${
+                  n === page
+                    ? "border-primary/60 bg-primary/15 text-white font-semibold"
+                    : "border-border/50 bg-background/60 text-white/70 hover:bg-accent/20"
+                }`}
+              >{n}</button>
+            ))}
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border/50 bg-background/60 text-white/70 hover:bg-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
+            ><ChevronRight className="h-3.5 w-3.5" /></button>
+          </div>
         </div>
       </CardContent>
     </Card>
