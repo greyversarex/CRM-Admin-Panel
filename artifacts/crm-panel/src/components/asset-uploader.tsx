@@ -135,9 +135,49 @@ export function CoverUploader({
         {value ? (
           <img src={assetHref(value)} alt="Cover" className="h-full w-full object-cover" />
         ) : (
-          <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground/50 gap-2 bg-gradient-to-br from-indigo-900/20 to-violet-900/30">
-            <ImageIcon className="h-10 w-10" />
-            <span className="text-xs">Нет обложки</span>
+          <div className="h-full w-full relative overflow-hidden bg-gradient-to-br from-[#0f0c29] via-[#1a1040] to-[#0d0820]">
+            {/* Ambient glow blobs */}
+            <div className="absolute inset-0">
+              <div className="absolute top-[15%] left-[10%] w-[55%] h-[55%] rounded-full bg-indigo-600/20 blur-3xl" />
+              <div className="absolute bottom-[10%] right-[5%] w-[45%] h-[45%] rounded-full bg-violet-500/15 blur-3xl" />
+              <div className="absolute top-[50%] left-[40%] w-[30%] h-[30%] rounded-full bg-fuchsia-500/10 blur-2xl" />
+            </div>
+            {/* Vinyl record SVG */}
+            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+              {/* Outer vinyl */}
+              <circle cx="100" cy="100" r="72" fill="#0a0a12" stroke="#2a2050" strokeWidth="1.5" />
+              {/* Groove rings */}
+              {[62,55,48,41,34,28,22].map((r, i) => (
+                <circle key={i} cx="100" cy="100" r={r} fill="none" stroke="#ffffff08" strokeWidth="1" />
+              ))}
+              {/* Label */}
+              <circle cx="100" cy="100" r="20" fill="url(#labelGrad)" />
+              {/* Shine on label */}
+              <ellipse cx="94" cy="93" rx="8" ry="5" fill="#ffffff10" transform="rotate(-20 94 93)" />
+              {/* Spindle hole */}
+              <circle cx="100" cy="100" r="3" fill="#0a0a12" />
+              {/* Highlight arc on vinyl */}
+              <path d="M 48 68 A 60 60 0 0 1 95 30" stroke="#ffffff06" strokeWidth="6" fill="none" strokeLinecap="round" />
+              {/* Floating music notes */}
+              <text x="28" y="55"  fontSize="13" fill="#a78bfa60" fontFamily="serif">♪</text>
+              <text x="155" y="75" fontSize="10" fill="#818cf840" fontFamily="serif">♫</text>
+              <text x="145" y="145" fontSize="14" fill="#c084fc50" fontFamily="serif">♩</text>
+              <text x="22" y="148" fontSize="9"  fill="#7c3aed40" fontFamily="serif">♬</text>
+              <text x="80" y="26"  fontSize="8"  fill="#a855f730" fontFamily="serif">♪</text>
+              <text x="160" y="110" fontSize="7" fill="#818cf830" fontFamily="serif">♫</text>
+              {/* Defs */}
+              <defs>
+                <radialGradient id="labelGrad" cx="40%" cy="38%" r="70%">
+                  <stop offset="0%"   stopColor="#7c3aed" />
+                  <stop offset="60%"  stopColor="#4f1d96" />
+                  <stop offset="100%" stopColor="#2e1065" />
+                </radialGradient>
+              </defs>
+            </svg>
+            {/* Upload hint */}
+            <div className="absolute bottom-0 inset-x-0 py-2.5 text-center">
+              <span className="text-[10px] text-white/30 tracking-wide uppercase">No cover art</span>
+            </div>
           </div>
         )}
         {isUploading && (
