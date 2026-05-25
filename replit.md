@@ -4,6 +4,15 @@
 
 A comprehensive Music Distribution CRM and Admin Panel for a Tajik music label. This full-stack application provides catalog management, CRM functionalities, analytics, financial management, DDEX delivery, and publishing rights management. The project aims to streamline operations for music labels, offering tools for managing artists, releases, royalties, and external DSP integrations, thereby optimizing operational efficiency and revenue management.
 
+## Development Principles (ОБЯЗАТЕЛЬНО)
+
+- **Никаких моков и заглушек**: Любая функция должна иметь полноценную реализацию. Никакой фальши, недоработок или временных решений.
+- **Бизнес-логика пользователей**: Перед реализацией любой функции внимательно изучить роли (admin, manager, label, artist) и корректно отразить их взаимодействие.
+- **Ориентир — Symphonic**: Функциональность и UX строятся по образцу платформы Symphonic Distribution.
+- **Глубокое изучение кода перед правками**: Перед каждой задачей тщательно изучать затрагиваемый код, чтобы не сломать смежные функции.
+- **Максимальное качество**: Каждая задача выполняется ответственно и полноценно. Никогда бегло и поверхностно.
+- **Сайт критически важен**: Это продакшен-проект реальной музыкальной компании. Любая ошибка затрагивает реальных пользователей.
+
 ## User Preferences
 
 - **Workflow on Replit**: Should simply run dev-servers (`pnpm --filter ... run dev`). Do not change them to `pnpm build && pnpm start` or production mode, as this will break the preview.
