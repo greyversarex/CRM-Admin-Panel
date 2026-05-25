@@ -309,7 +309,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
   const goNext = async () => {
     if (step === "details") {
       const id = await saveStep1();
-      if (id != null) setStep("tracks");
+      if (id != null) setLocation(`/releases/${id}`);
     } else if (step === "tracks") {
       setStep("delivery");
     } else if (step === "delivery") {

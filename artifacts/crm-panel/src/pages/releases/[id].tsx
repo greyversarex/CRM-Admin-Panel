@@ -165,14 +165,12 @@ export default function ReleaseDetail() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Просмотрите релиз перед отправкой на проверку. Все обязательные поля и предупреждения собраны справа в «Show Issues».
+            Review your release for any issues before submitting to our review team for a final guidelines check.
           </p>
         </div>
 
-        {/* ── Symphonic-style Release Hub: 2-колоночная сетка ──────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
-          {/* ── ЛЕВАЯ КОЛОНКА: контент релиза ─────────────────────────────── */}
-          <div className="flex flex-col gap-5 min-w-0">
+        {/* ── Single-column content ─────────────────────────────────────── */}
+        <div className="flex flex-col gap-5">
         {/* Старая верхняя панель действий — отключена. Все действия переехали
             в правую колонку «Release Hub». Блок ниже скрыт, чтобы сохранить
             обработчики (submitOpen/deliverOpen/takedownOpen/editOpen) для
@@ -353,13 +351,33 @@ export default function ReleaseDetail() {
 
         {/* Release Details */}
         <Card id="card-release-details" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="text-lg">Release Details</CardTitle>
-            {metaEditing && (
-              <span className="text-[11px] text-primary/90 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
-                Режим редактирования
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {metaEditing && (
+                <span className="text-[11px] text-primary/90 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
+                  Режим редактирования
+                </span>
+              )}
+              {release.isEditable ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
+                  onClick={() => {
+                    if (release.status === "draft") setMetaEditing((v) => !v);
+                    else setEditOpen(true);
+                  }}
+                >
+                  <Edit3 className="h-3.5 w-3.5 mr-1" />
+                  {metaEditing ? "Done" : "Edit"}
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" disabled className="bg-card opacity-60 cursor-not-allowed">
+                  <Lock className="h-3.5 w-3.5 mr-1" /> Locked
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
             {metaEditing ? (
@@ -535,29 +553,54 @@ export default function ReleaseDetail() {
 
         {/* SplitShare — реальная сводка по трекам (Фаза 6) */}
         <SplitShareCard release={release} />
+
+        {/* ── Show Issues inline (перемещён из сайдбара) ──────────────── */}
+        <ShowIssuesPanel
+          releaseId={release.id}
+          status={release.status}
+          updatedAt={String(release.updatedAt)}
+          onJump={(issue) =>
+            jumpToIssue(issue, {
+              releaseId: id,
+              isDraft: release.status === "draft",
+              enableEditing: () => setMetaEditing(true),
+              navigate: (path) => setLocation(path),
+            })
+          }
+        />
+
+        {/* ── Bottom action bar ─────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
+              <Button
+                variant="outline"
+                className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+                onClick={() => setDeliverOpen(true)}
+              >
+                <Send className="mr-2 h-4 w-4" /> Доставить на DSP
+              </Button>
+            )}
+            {release.allowedTransitions.includes("takedown_requested") && (
+              <Button
+                variant="outline"
+                className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                onClick={() => setTakedownOpen(true)}
+              >
+                <XCircle className="mr-2 h-4 w-4" /> Запрос на снятие
+              </Button>
+            )}
           </div>
-          {/* ── ПРАВАЯ КОЛОНКА: sticky sidebar ─────────────────────────────── */}
-          <ReleaseHubSidebar
-            release={release}
-            user={user}
-            onEditClick={() => {
-              if (release.status === "draft") setMetaEditing((v) => !v);
-              else setEditOpen(true);
-            }}
-            metaEditing={metaEditing}
-            onSubmitClick={() => setSubmitOpen(true)}
-            onDeliverClick={() => setDeliverOpen(true)}
-            onTakedownClick={() => setTakedownOpen(true)}
-            onContinueWizard={() => setLocation(`/releases/${id}/edit`)}
-            onJumpToIssue={(issue) => {
-              jumpToIssue(issue, {
-                releaseId: id,
-                isDraft: release.status === "draft",
-                enableEditing: () => setMetaEditing(true),
-                navigate: (path) => setLocation(path),
-              });
-            }}
-          />
+          {release.canSubmit && (
+            <Button
+              className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
+              onClick={() => setSubmitOpen(true)}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" /> Submit Release
+            </Button>
+          )}
+        </div>
+
         </div>
       </div>
     </Layout>
