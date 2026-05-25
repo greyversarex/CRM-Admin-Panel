@@ -15,7 +15,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
-import { useAssetUpload, CoverUploader } from "@/components/asset-uploader";
+import { useAssetUpload, assetHref } from "@/components/asset-uploader";
 import { ArtistFormDialog } from "@/components/artist-form-dialog";
 import { LabelFormDialog } from "@/components/label-form-dialog";
 
@@ -23,13 +23,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Progress } from "@/components/ui/progress";
 import {
-  ChevronLeft, ChevronRight, Save, Plus, CheckCircle2, AlertTriangle, AlertCircle,
-  ListMusic, Send, Loader2, Settings2, MapPin, Calendar, Globe, Upload,
+  ChevronLeft, ChevronRight, Plus, CheckCircle2, AlertTriangle, AlertCircle,
+  ListMusic, Send, Loader2, Settings2, MapPin, Calendar, Globe, Upload, ImageIcon,
 } from "lucide-react";
 
 import { RELEASE_TYPES, GENRES, SUBGENRES, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
@@ -59,6 +60,7 @@ type Form = {
   pLineYear: number | null;
   cLine: string;
   cLineYear: number | null;
+  coverAiUsage: "none" | "some" | "all" | null;
 };
 
 const EMPTY: Form = {
@@ -70,6 +72,7 @@ const EMPTY: Form = {
   isExplicit: false, isCompilation: false, isVariousArtists: false,
   pLine: "", pLineYear: new Date().getFullYear(),
   cLine: "", cLineYear: new Date().getFullYear(),
+  coverAiUsage: null,
 };
 
 // ─── Wizard component ──────────────────────────────────────────────────────
@@ -131,6 +134,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
         pLineYear: release.pLineYear ?? new Date().getFullYear(),
         cLine: release.cLine ?? "",
         cLineYear: release.cLineYear ?? new Date().getFullYear(),
+        coverAiUsage: (release.coverAiUsage as Form["coverAiUsage"]) ?? null,
       });
     }
   }, [release]);
@@ -200,6 +204,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
       pLineYear: form.pLineYear ?? null,
       cLine: form.cLine || null,
       cLineYear: form.cLineYear ?? null,
+      coverAiUsage: form.coverAiUsage ?? null,
     };
     try {
       let id: number;
@@ -464,6 +469,102 @@ function StepIndicator({
   );
 }
 
+// ─── Год для CLine/PLine — выпадающий список ────────────────────────────────
+const YEAR_NOW = new Date().getFullYear();
+const YEARS = Array.from({ length: YEAR_NOW - 1950 + 3 }, (_, i) => YEAR_NOW + 2 - i);
+
+// ─── Drag-&-drop загрузчик обложки в стиле Symphonic ────────────────────────
+function WizardCoverUploader({
+  value, onChange,
+}: {
+  value: string | null;
+  onChange: (objectPath: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const { upload, isUploading, progress } = useAssetUpload();
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const asset = await upload(file, { kind: "cover", attach: false });
+      onChange(asset.objectPath);
+      toast({ title: "Обложка загружена", description: file.name });
+    } catch (err: any) {
+      toast({ title: "Не удалось загрузить обложку", description: err?.message ?? "Ошибка", variant: "destructive" });
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  return (
+    <div className="flex flex-col gap-2" style={{ width: 200 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Загрузить обложку"
+        className={[
+          "relative rounded-lg overflow-hidden cursor-pointer transition-all select-none",
+          "border-2 border-dashed",
+          isDragging
+            ? "border-primary bg-primary/10 scale-[1.02]"
+            : value
+              ? "border-border/40 hover:border-primary/60"
+              : "border-border/50 bg-muted/20 hover:bg-muted/30 hover:border-primary/40",
+        ].join(" ")}
+        style={{ width: 200, height: 200 }}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {value ? (
+          <img src={assetHref(value)} alt="Cover" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-3 text-center text-muted-foreground">
+            <ImageIcon className="h-9 w-9 opacity-35 mb-1" />
+            <span className="text-xs leading-snug">Click here or drag and drop an image</span>
+            <span className="text-[10px] opacity-60">Format: jpg, png, jpeg</span>
+            <span className="text-[10px] opacity-60">Maximum size: 25 MB</span>
+          </div>
+        )}
+        {isUploading && (
+          <div className="absolute inset-0 bg-background/75 backdrop-blur-sm flex flex-col items-center justify-center gap-2 p-4">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <Progress value={progress} className="w-full h-1.5" />
+            <span className="text-[11px] text-muted-foreground">{progress}%</span>
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/jpg"
+        className="hidden"
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
+      <Button
+        type="button"
+        size="sm"
+        className="w-full"
+        disabled={isUploading}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-3.5 w-3.5 mr-1.5" />
+        Upload Cover Art
+      </Button>
+    </div>
+  );
+}
+
 // ─── STEP 1: Details ────────────────────────────────────────────────────────
 function Step1Details({
   form, setForm, artists, setArtists,
@@ -484,8 +585,7 @@ function Step1Details({
   const myLabel  = labelsData?.data?.find((l: any) => l.id === user?.labelId);
   const subgenresFor = form.genre ? (SUBGENRES[form.genre] ?? []) : [];
 
-  // Когда multi-artist picker меняется — синхронизируем «primary» в form.artistId,
-  // потому что бэкенд требует одиночный legacy-id для совместимости.
+  // Синхронизируем form.artistId с primary артистом из multi-picker.
   useEffect(() => {
     const primary = artists.find((a) => a.role === "primary");
     if (primary && primary.artistId !== form.artistId) {
@@ -494,176 +594,272 @@ function Step1Details({
   }, [artists]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
-      <Card className="bg-card/50 backdrop-blur border-border/50">
-        <CardHeader><CardTitle className="text-lg">Информация о релизе</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2 space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Название релиза *</FieldLabel>
-              <Input value={form.title} onChange={(e) => set("title", e.target.value)}
-                placeholder="Кош Кабутар Мебудам" className="bg-background/40" />
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Версия (опц.)</FieldLabel>
-              <Input value={form.releaseVersion} onChange={(e) => set("releaseVersion", e.target.value)}
-                placeholder="Deluxe, Live, Remix..." className="bg-background/40" />
+    <Card className="bg-card/50 backdrop-blur border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Release details</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          We follow strict guidelines set forth by Apple Music, Spotify and more.
+          Upload artwork, choose the release type, add release information, and add your project artists.
+        </p>
+      </CardHeader>
+
+      <CardContent className="space-y-6">
+
+        {/* ── Cover Art + AI Usage ─────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-3">
+            <FieldLabel className="text-sm font-semibold">Cover Art</FieldLabel>
+            <span className="text-muted-foreground text-sm">?</span>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-6 items-start">
+            <WizardCoverUploader
+              value={form.coverUrl || null}
+              onChange={(p) => set("coverUrl", p ?? "")}
+            />
+            <div className="flex-1 space-y-3 pt-1">
+              <p className="text-sm text-muted-foreground leading-snug">
+                What amount of generative AI tools were used in the creation of this cover art?
+              </p>
+              <RadioGroup
+                value={form.coverAiUsage ?? "none"}
+                onValueChange={(v) => set("coverAiUsage", v as Form["coverAiUsage"])}
+                className="gap-2"
+              >
+                {(["none", "some", "all"] as const).map((v) => (
+                  <div key={v} className="flex items-center gap-2">
+                    <RadioGroupItem value={v} id={`ai-${v}`} />
+                    <FieldLabel htmlFor={`ai-${v}`} className="text-sm capitalize cursor-pointer font-normal">
+                      {v === "none" ? "None" : v === "some" ? "Some" : "All"}
+                    </FieldLabel>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Тип релиза *</FieldLabel>
-              <Select value={form.releaseType} onValueChange={(v) => set("releaseType", v as Form["releaseType"])}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RELEASE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Каталожный номер</FieldLabel>
-              <Input value={form.catalogNumber} disabled
-                placeholder="Сгенерируется как CAT{id}" className="bg-background/40 font-mono" />
-            </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">UPC (опц.)</FieldLabel>
-              <Input value={form.upc} onChange={(e) => set("upc", e.target.value)}
-                placeholder="195502855390" className="bg-background/40 font-mono" />
-            </div>
-          </div>
-
-          {/* Multi-primary artists */}
+        {/* ── Release Title / Version / Language ───────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">Исполнители (мин. 1 Primary) *</FieldLabel>
-            {isArtist ? (
-              <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
-                <span className="flex-1">{myArtist?.name ?? "Ваш артист"}</span>
-                <Badge variant="outline" className="text-[10px]">Primary · Вы</Badge>
-              </div>
-            ) : (
-              <>
-                <MultiArtistPicker value={artists} onChange={setArtists} labelId={isLabel ? user?.labelId : null} />
-                {(isAdminLike || isLabel) && (
-                  <Button type="button" variant="ghost" size="sm" className="text-xs"
-                    onClick={() => setArtistDialogOpen(true)}>
-                    <Plus className="h-3 w-3 mr-1" /> Создать нового артиста
-                  </Button>
-                )}
-              </>
-            )}
+            <FieldLabel className="text-xs text-muted-foreground">Release Title *</FieldLabel>
+            <Input
+              value={form.title}
+              onChange={(e) => set("title", e.target.value)}
+              placeholder="Кош Кабутар Мебудам"
+              className="bg-background/40"
+            />
           </div>
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Release Version (Optional)</FieldLabel>
+            <Input
+              value={form.releaseVersion}
+              onChange={(e) => set("releaseVersion", e.target.value)}
+              placeholder="Deluxe, Live, Remix..."
+              className="bg-background/40"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Metadata Language</FieldLabel>
+            <Select value={form.language} onValueChange={(v) => set("language", v)}>
+              <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* ── Release Type ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Release Type *</FieldLabel>
+            <Select value={form.releaseType} onValueChange={(v) => set("releaseType", v as Form["releaseType"])}>
+              <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RELEASE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* ── Primary Artists ──────────────────────────────────────────── */}
+        <div className="space-y-2">
+          <FieldLabel className="text-xs text-muted-foreground">Primary Artists *</FieldLabel>
+          {isArtist ? (
+            <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
+              <span className="flex-1">{myArtist?.name ?? "Ваш артист"}</span>
+              <Badge variant="outline" className="text-[10px]">Primary · Вы</Badge>
+            </div>
+          ) : (
+            <>
+              <MultiArtistPicker value={artists} onChange={setArtists} labelId={isLabel ? user?.labelId : null} />
+              {(isAdminLike || isLabel) && (
+                <Button type="button" variant="ghost" size="sm" className="text-xs"
+                  onClick={() => setArtistDialogOpen(true)}>
+                  <Plus className="h-3 w-3 mr-1" /> Создать нового артиста
+                </Button>
+              )}
+            </>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer mt-1">
+            <Checkbox
+              checked={form.isVariousArtists}
+              onCheckedChange={(v) => set("isVariousArtists", !!v)}
+            />
+            <span className="text-sm text-muted-foreground">
+              Various Artists{" "}
+              <span className="text-xs opacity-60">Select if 5+ artists</span>
+            </span>
+          </label>
+        </div>
+
+        {/* ── UPC / Genre / Subgenre ───────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">UPC</FieldLabel>
+            <Input
+              value={form.upc}
+              onChange={(e) => set("upc", e.target.value)}
+              placeholder="Assigned on submission"
+              className="bg-background/40 font-mono"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Genre</FieldLabel>
+            <Select value={form.genre} onValueChange={(v) => { set("genre", v); set("subgenre", ""); }}>
+              <SelectTrigger className="bg-background/40 h-10">
+                <SelectValue placeholder="Please select" />
+              </SelectTrigger>
+              <SelectContent>
+                {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Subgenre</FieldLabel>
+            <Select value={form.subgenre} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
+              <SelectTrigger className="bg-background/40 h-10">
+                <SelectValue placeholder="Please select" />
+              </SelectTrigger>
+              <SelectContent>
+                {subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* ── Label Name / © CLine / ℗ PLine ──────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
           {/* Label */}
-          {!isLabel && !isArtist && (
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Лейбл</FieldLabel>
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Label Name</FieldLabel>
+            {isLabel ? (
+              <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
+                <span className="flex-1">{myLabel?.name ?? "Ваш лейбл"}</span>
+                <Badge variant="outline" className="text-[10px]">Ваш лейбл</Badge>
+              </div>
+            ) : isArtist ? (
+              <div className="bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm text-muted-foreground">
+                Независимый
+              </div>
+            ) : (
               <div className="flex items-center gap-2">
                 <Select value={form.labelId ? String(form.labelId) : "none"}
                   onValueChange={(v) => set("labelId", v === "none" ? null : Number(v))}>
-                  <SelectTrigger className="bg-background/40"><SelectValue placeholder="Независимый" /></SelectTrigger>
+                  <SelectTrigger className="bg-background/40">
+                    <SelectValue placeholder="Please select" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Независимый</SelectItem>
-                    {labelsData?.data.map((l: any) => (
+                    {labelsData?.data?.map((l: any) => (
                       <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {isAdminLike && (
-                  <Button type="button" variant="outline" size="icon" className="bg-background/40"
+                  <Button type="button" variant="outline" size="icon" className="bg-background/40 shrink-0"
                     onClick={() => setLabelDialogOpen(true)} title="Создать новый лейбл">
                     <Plus className="h-4 w-4" />
                   </Button>
                 )}
               </div>
-            </div>
-          )}
-          {isLabel && (
-            <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
-              <span className="flex-1">{myLabel?.name ?? "Ваш лейбл"}</span>
-              <Badge variant="outline" className="text-[10px]">Ваш лейбл</Badge>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Genre / Subgenre — отдельная строка на 2 колонки, чтобы списки не сжимались */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Жанр</FieldLabel>
-              <Select value={form.genre} onValueChange={(v) => { set("genre", v); set("subgenre", ""); }}>
-                <SelectTrigger className="bg-background/40 h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+          {/* © C-Line */}
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">© CLine</FieldLabel>
+            <div className="flex gap-2">
+              <Select value={String(form.cLineYear ?? YEAR_NOW)} onValueChange={(v) => set("cLineYear", Number(v))}>
+                <SelectTrigger className="bg-background/40 w-[90px] shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
               </Select>
+              <Input
+                value={form.cLine}
+                onChange={(e) => set("cLine", e.target.value)}
+                placeholder="Tajik Music"
+                className="bg-background/40 min-w-0"
+              />
             </div>
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">
-                Сабжанр {subgenresFor.length === 0 && <span className="text-muted-foreground/60">(для жанра «{form.genre}» список пуст)</span>}
-              </FieldLabel>
-              <Select value={form.subgenre} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
-                <SelectTrigger className="bg-background/40 h-10"><SelectValue placeholder={subgenresFor.length === 0 ? "—" : "Выберите сабжанр"} /></SelectTrigger>
-                <SelectContent>{subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </div>
+
+          {/* ℗ P-Line */}
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">℗ PLine</FieldLabel>
+            <div className="flex gap-2">
+              <Select value={String(form.pLineYear ?? YEAR_NOW)} onValueChange={(v) => set("pLineYear", Number(v))}>
+                <SelectTrigger className="bg-background/40 w-[90px] shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
               </Select>
+              <Input
+                value={form.pLine}
+                onChange={(e) => set("pLine", e.target.value)}
+                placeholder="Tajik Music"
+                className="bg-background/40 min-w-0"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Язык метаданных (дата выхода настраивается на Шаге 3 «Доставка на DSP») */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <FieldLabel className="text-xs text-muted-foreground">Язык метаданных</FieldLabel>
-              <Select value={form.language} onValueChange={(v) => set("language", v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-                <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
-              </Select>
+        {/* ── Catalogue / Compilation ──────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <FieldLabel className="text-xs text-muted-foreground">Catalogue</FieldLabel>
+            <p className="text-[11px] text-muted-foreground/70">Your internal identifier for this release</p>
+            <Input
+              value={form.catalogNumber}
+              disabled
+              placeholder="Сгенерируется автоматически"
+              className="bg-background/40 font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <FieldLabel className="text-xs text-muted-foreground">Compilation</FieldLabel>
+            <div className="space-y-2 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={form.isCompilation}
+                  onCheckedChange={(v) => set("isCompilation", !!v)}
+                />
+                <span className="text-sm">Yes, this is a compilation</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!form.isCompilation}
+                  onCheckedChange={(v) => set("isCompilation", !v)}
+                />
+                <span className="text-sm">Yes, this is a standard release</span>
+              </label>
             </div>
           </div>
+        </div>
 
-          {/* P-Line + C-Line */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="grid grid-cols-[80px_1fr] gap-2 items-end">
-              <div className="space-y-1.5">
-                <FieldLabel className="text-xs text-muted-foreground">℗ Год</FieldLabel>
-                <Input type="number" min={1900} max={2100} value={form.pLineYear ?? ""}
-                  onChange={(e) => set("pLineYear", e.target.value ? Number(e.target.value) : null)}
-                  className="bg-background/40" />
-              </div>
-              <div className="space-y-1.5">
-                <FieldLabel className="text-xs text-muted-foreground">℗ Правообладатель записи</FieldLabel>
-                <Input value={form.pLine} onChange={(e) => set("pLine", e.target.value)}
-                  placeholder="Tajik Music" className="bg-background/40" />
-              </div>
-            </div>
-            <div className="grid grid-cols-[80px_1fr] gap-2 items-end">
-              <div className="space-y-1.5">
-                <FieldLabel className="text-xs text-muted-foreground">© Год</FieldLabel>
-                <Input type="number" min={1900} max={2100} value={form.cLineYear ?? ""}
-                  onChange={(e) => set("cLineYear", e.target.value ? Number(e.target.value) : null)}
-                  className="bg-background/40" />
-              </div>
-              <div className="space-y-1.5">
-                <FieldLabel className="text-xs text-muted-foreground">© Правообладатель композиции</FieldLabel>
-                <Input value={form.cLine} onChange={(e) => set("cLine", e.target.value)}
-                  placeholder="Tajik Music" className="bg-background/40" />
-              </div>
-            </div>
-          </div>
-
-          {/* Toggles */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Toggle label="Explicit-контент" hint="Маркируется на DSP."
-              checked={form.isExplicit} onChange={(v) => set("isExplicit", v)} />
-            <Toggle label="Compilation" hint="Сборник из разных треков."
-              checked={form.isCompilation} onChange={(v) => set("isCompilation", v)} />
-            <Toggle label="Various Artists" hint="Сборник разных артистов."
-              checked={form.isVariousArtists} onChange={(v) => set("isVariousArtists", v)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-card/50 backdrop-blur border-border/50 h-fit">
-        <CardHeader><CardTitle className="text-base">Обложка *</CardTitle></CardHeader>
-        <CardContent>
-          <CoverUploader value={form.coverUrl || null} onChange={(p) => set("coverUrl", p ?? "")} attach={false} />
-        </CardContent>
-      </Card>
+      </CardContent>
 
       {(isAdminLike || isLabel) && (
         <ArtistFormDialog open={artistDialogOpen} onOpenChange={setArtistDialogOpen}
@@ -673,21 +869,7 @@ function Step1Details({
         <LabelFormDialog open={labelDialogOpen} onOpenChange={setLabelDialogOpen}
           onSaved={(id) => set("labelId", id)} />
       )}
-    </div>
-  );
-}
-
-function Toggle({ label, hint, checked, onChange }: {
-  label: string; hint: string; checked: boolean; onChange: (b: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between p-3 rounded-md bg-background/40 border border-border/50">
-      <div className="min-w-0">
-        <FieldLabel className="text-sm">{label}</FieldLabel>
-        <p className="text-[11px] text-muted-foreground truncate">{hint}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
+    </Card>
   );
 }
 
