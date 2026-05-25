@@ -19,7 +19,7 @@ import {
   ChevronLeft, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
   ShieldAlert, ScanSearch, Database, Activity, ListChecks, Share2, RefreshCw, Pencil,
-  Upload, FilePlus2, FolderInput,
+  Upload, FilePlus2, FolderInput, Loader2,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
@@ -332,18 +332,19 @@ export default function ReleaseDetail() {
           </Card>
         )}
 
-        {/* Status */}
-        <Card className="bg-card/50 backdrop-blur border-border/50">
-          <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Status</span>
-              <StatusBadge status={release.status} className="text-xs" />
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Updated {new Date(release.updatedAt).toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
+        {/* ── Status row ────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Status</span>
+            <StatusBadge status={release.status} className="text-xs" />
+            <span className="text-xs text-muted-foreground hidden sm:block">
+              · Updated {new Date(release.updatedAt).toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          {release.isEditable && (
+            <DeleteReleaseButton releaseId={release.id} releaseTitle={release.title} onDeleted={() => setLocation("/releases")} />
+          )}
+        </div>
 
         {/* Risk panel — модератор/админ видит композитную оценку и факторы.
             Артист тоже видит, но только в read-only — кнопки сканов скрыты. */}
@@ -869,6 +870,65 @@ function KV({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Delete Release button + confirmation dialog ─────────────────────────
+function DeleteReleaseButton({
+  releaseId, releaseTitle, onDeleted,
+}: { releaseId: number; releaseTitle: string; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  const handleDelete = async () => {
+    setPending(true);
+    try {
+      await adminApi(`/api/releases/${releaseId}`, { method: "DELETE" });
+      toast({ title: "Релиз удалён", description: `«${releaseTitle}» был удалён.` });
+      onDeleted();
+    } catch (e: any) {
+      toast({ title: "Не удалось удалить", description: e?.message ?? "Ошибка", variant: "destructive" });
+    } finally {
+      setPending(false);
+      setOpen(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete release
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle>Удалить релиз?</DialogTitle>
+            <DialogDescription>
+              Вы собираетесь удалить релиз <span className="font-semibold text-foreground">«{releaseTitle}»</span>.
+              Это действие необратимо — все треки, метаданные и файлы этого релиза будут удалены.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={pending}
+            >
+              {pending ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Удаляю…</> : "Да, удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
