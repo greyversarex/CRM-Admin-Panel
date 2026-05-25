@@ -212,275 +212,278 @@ export default function CreateRelease() {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto py-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Создание релиза</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Шаг {step === "upc" ? "1" : "2"} из 2 — {step === "upc" ? "штрихкод (UPC)" : "детали релиза"}
-            </p>
-          </div>
-          <Button variant="ghost" onClick={() => setLocation("/releases")}>Отмена</Button>
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border/50 px-6 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => setLocation("/releases")} className="gap-1.5 text-muted-foreground hover:text-foreground">
+            <ChevronLeft className="h-4 w-4" /> Назад
+          </Button>
+          <div className="h-4 w-px bg-border/60" />
+          <h1 className="text-sm font-semibold">Новый релиз</h1>
         </div>
 
-        {/* ─── STEP 1: UPC Gate ─────────────────────────────────────────────── */}
+        {/* Step pills */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-colors ${
+            step === "upc" ? "bg-primary text-primary-foreground" : "bg-emerald-500/15 text-emerald-400"
+          }`}>
+            {step !== "upc" && <CheckCircle2 className="h-3 w-3" />}
+            1 · UPC
+          </span>
+          <div className="w-6 h-px bg-border" />
+          <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-colors ${
+            step === "details" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+          }`}>
+            2 · Детали
+          </span>
+        </div>
+
+        <div className="w-24" />
+      </div>
+
+      <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
+
+        {/* ─── STEP 1: UPC Gate ─────────────────────────────────────────── */}
         {step === "upc" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Barcode className="h-5 w-5" /> Есть ли у вас UPC?
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  UPC — это 12–13-значный штрихкод релиза. Если релиз уже выходил с UPC — введите его.
-                  Если нет — мы выдадим UPC автоматически при отправке на модерацию.
-                </p>
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold">Есть ли у вас UPC?</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                UPC — это 12–13-значный штрихкод релиза. Если релиз уже выходил — введите его. Иначе мы присвоим автоматически.
+              </p>
+            </div>
 
-                <RadioGroup
-                  value={upcChoice ?? ""}
-                  onValueChange={(v) => { setUpcChoice(v as UpcChoice); setUpcCheck(null); }}
-                  className="space-y-3"
+            <RadioGroup
+              value={upcChoice ?? ""}
+              onValueChange={(v) => { setUpcChoice(v as UpcChoice); setUpcCheck(null); }}
+              className="space-y-3"
+            >
+              {[
+                {
+                  value: "have",
+                  title: "У меня есть UPC",
+                  hint: "Подходит, если релиз уже выходил у других дистрибьюторов или физически. Мы проверим, что код не занят.",
+                  testid: "upc-choice-have",
+                },
+                {
+                  value: "need",
+                  title: "Мне нужен UPC",
+                  hint: "Мы присвоим UPC автоматически при отправке на модерацию. Бесплатно.",
+                  testid: "upc-choice-need",
+                },
+              ].map((opt) => (
+                <label
+                  key={opt.value}
+                  data-testid={opt.testid}
+                  className={`flex items-start gap-4 rounded-xl border p-5 cursor-pointer transition-all ${
+                    upcChoice === opt.value
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border/60 hover:border-border hover:bg-muted/20"
+                  }`}
                 >
-                  <label className="flex items-start gap-3 rounded-md border p-4 cursor-pointer hover-elevate" data-testid="upc-choice-have">
-                    <RadioGroupItem value="have" className="mt-1" />
-                    <div className="flex-1">
-                      <div className="font-medium">У меня есть UPC</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Подходит, если релиз уже выходил на других дистрибьюторах или физически.
-                        Мы проверим, что UPC не занят в нашем каталоге.
-                      </div>
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 rounded-md border p-4 cursor-pointer hover-elevate" data-testid="upc-choice-need">
-                    <RadioGroupItem value="need" className="mt-1" />
-                    <div className="flex-1">
-                      <div className="font-medium">Мне нужен UPC</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Мы присвоим UPC автоматически при отправке на модерацию. Бесплатно.
-                      </div>
-                    </div>
-                  </label>
-                </RadioGroup>
-
-                {upcChoice === "have" && (
-                  <div className="space-y-3 rounded-md border p-4 bg-muted/30 mt-4">
-                    <FieldLabel htmlFor="upc">UPC код</FieldLabel>
-                    <div className="flex gap-2">
-                      <Input
-                        id="upc" data-testid="input-upc" placeholder="Например, 5901234123457"
-                        value={upc}
-                        onChange={(e) => setUpc(e.target.value.replace(/[^\d]/g, "").slice(0, 14))}
-                        className="font-mono"
-                      />
-                      <Button onClick={handleCheckUpc} disabled={!upc.trim() || upcCheckLoading} data-testid="button-check-upc">
-                        {upcCheckLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Проверить"}
-                      </Button>
-                    </div>
-                    {upcCheck && upcCheck.available && (
-                      <Alert className="border-emerald-500/50 bg-emerald-500/10">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        <AlertDescription>UPC свободен и может быть использован.</AlertDescription>
-                      </Alert>
-                    )}
-                    {upcCheck && !upcCheck.available && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          {upcCheck.reason}
-                          {upcCheck.conflictRelease && (
-                            <div className="mt-1 text-xs">
-                              Конфликт: релиз «{upcCheck.conflictRelease.title}»{" "}
-                              <Badge variant="outline" className="ml-1">{upcCheck.conflictRelease.status}</Badge>
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                  <RadioGroupItem value={opt.value} className="mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-medium text-sm">{opt.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{opt.hint}</div>
                   </div>
+                </label>
+              ))}
+            </RadioGroup>
+
+            {upcChoice === "have" && (
+              <div className="rounded-xl border border-border/60 bg-muted/10 p-5 space-y-3">
+                <FieldLabel htmlFor="upc" className="text-sm font-medium">UPC код</FieldLabel>
+                <div className="flex gap-2">
+                  <Input
+                    id="upc" data-testid="input-upc"
+                    placeholder="Например, 5901234123457"
+                    value={upc}
+                    onChange={(e) => setUpc(e.target.value.replace(/[^\d]/g, "").slice(0, 14))}
+                    className="font-mono"
+                  />
+                  <Button onClick={handleCheckUpc} disabled={!upc.trim() || upcCheckLoading} data-testid="button-check-upc">
+                    {upcCheckLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Проверить"}
+                  </Button>
+                </div>
+                {upcCheck?.available && (
+                  <Alert className="border-emerald-500/40 bg-emerald-500/10">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <AlertDescription className="text-emerald-400">UPC свободен и может быть использован.</AlertDescription>
+                  </Alert>
+                )}
+                {upcCheck && !upcCheck.available && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {upcCheck.reason}
+                      {upcCheck.conflictRelease && (
+                        <span className="ml-2 text-xs opacity-80">
+                          Конфликт: «{upcCheck.conflictRelease.title}»{" "}
+                          <Badge variant="outline" className="ml-1">{upcCheck.conflictRelease.status}</Badge>
+                        </span>
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
+            )}
 
-              <div className="flex justify-end pt-2">
-                <Button onClick={() => setStep("details")} disabled={!canGoDetails} data-testid="button-upc-next">
-                  Далее <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setStep("details")} disabled={!canGoDetails} data-testid="button-upc-next" size="lg" className="px-8">
+                Далее <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
         )}
 
-        {/* ─── STEP 2: Release Details (Symphonic 1:1) ──────────────────────── */}
+        {/* ─── STEP 2: Release Details ──────────────────────────────────── */}
         {step === "details" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Детали релиза</CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Заполните метаданные по стандартам Apple Music / Spotify. Эти поля попадут в DDEX-файл,
-                который пойдёт на DSP. После создания вы сможете загрузить треки и доработать поля.
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-xl font-semibold">Детали релиза</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Заполните метаданные по стандартам Apple Music / Spotify. После создания вы сможете загрузить треки.
               </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </div>
 
-              {/* ─── Release Type tiles ──────────────────────────────────── */}
-              <div className="space-y-2">
-                <FieldLabel className="text-sm font-semibold">Тип релиза <span className="text-rose-400">*</span></FieldLabel>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {RELEASE_TYPES.map((rt) => {
-                    const Icon = RELEASE_TYPE_ICONS[rt.value] ?? Music2;
-                    const active = releaseType === rt.value;
-                    return (
-                      <button
-                        key={rt.value}
-                        type="button"
-                        onClick={() => setReleaseType(rt.value)}
-                        data-testid={`release-type-${rt.value}`}
-                        className={`text-left rounded-md border p-3 transition hover-elevate ${active ? "border-primary bg-primary/5" : ""}`}
-                      >
-                        <Icon className={`h-5 w-5 mb-2 ${active ? "text-primary" : "text-muted-foreground"}`} />
-                        <div className="font-medium text-sm">{rt.label}</div>
-                        <div className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                          {RELEASE_TYPE_HINTS[rt.value]}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* ─── Release Type tiles ─────────────────────────────────── */}
+            <section className="space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Тип релиза</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {RELEASE_TYPES.map((rt) => {
+                  const Icon = RELEASE_TYPE_ICONS[rt.value] ?? Music2;
+                  const active = releaseType === rt.value;
+                  return (
+                    <button
+                      key={rt.value}
+                      type="button"
+                      onClick={() => setReleaseType(rt.value)}
+                      data-testid={`release-type-${rt.value}`}
+                      className={`text-left rounded-xl border p-4 transition-all hover:shadow-sm ${
+                        active
+                          ? "border-primary bg-primary/8 shadow-md shadow-primary/10"
+                          : "border-border/60 hover:border-border hover:bg-muted/20"
+                      }`}
+                    >
+                      <Icon className={`h-5 w-5 mb-3 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className={`font-semibold text-sm ${active ? "text-primary" : ""}`}>{rt.label}</div>
+                      <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{RELEASE_TYPE_HINTS[rt.value]}</div>
+                    </button>
+                  );
+                })}
               </div>
+            </section>
 
-              <hr className="border-border/40" />
+            <div className="h-px bg-border/40" />
 
-              {/* ─── Cover Art + AI usage ────────────────────────────────── */}
-              <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 items-start">
-                <div className="space-y-2">
-                  <FieldLabel className="text-sm font-semibold">Обложка</FieldLabel>
-                  <CoverUploader value={coverUrl || null} onChange={(p) => setCoverUrl(p ?? "")} attach={false} />
-                </div>
-
-                <div className="space-y-2">
-                  <FieldLabel className="text-sm font-semibold">
-                    Использовался ли AI при создании обложки? <span className="text-rose-400">*</span>
-                  </FieldLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Требование Apple Music / Spotify — обязательно указать перед отправкой на модерацию.
-                  </p>
-                  <RadioGroup
-                    value={coverAiUsage} onValueChange={(v) => setCoverAiUsage(v as any)}
-                    className="flex gap-6 pt-2"
-                  >
-                    <label className="flex items-center gap-2 cursor-pointer text-sm">
-                      <RadioGroupItem value="none" /> Не использовался
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-sm">
-                      <RadioGroupItem value="some" /> Частично
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-sm">
-                      <RadioGroupItem value="all" /> Полностью AI
-                    </label>
+            {/* ─── Cover Art ──────────────────────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Обложка</div>
+              <div className="flex gap-6 items-start">
+                <CoverUploader value={coverUrl || null} onChange={(p) => setCoverUrl(p ?? "")} attach={false} />
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <FieldLabel className="text-sm font-medium">
+                      Использовался ли AI при создании обложки? <span className="text-rose-400">*</span>
+                    </FieldLabel>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Обязательное поле — требование Apple Music и Spotify.
+                    </p>
+                  </div>
+                  <RadioGroup value={coverAiUsage} onValueChange={(v) => setCoverAiUsage(v as any)} className="space-y-2">
+                    {[
+                      { value: "none", label: "Нет — создано без AI" },
+                      { value: "some", label: "Частично — AI помог в создании" },
+                      { value: "all",  label: "Полностью создано с помощью AI" },
+                    ].map((opt) => (
+                      <label key={opt.value} className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer text-sm transition-all ${
+                        coverAiUsage === opt.value ? "border-primary bg-primary/5" : "border-border/50 hover:border-border hover:bg-muted/15"
+                      }`}>
+                        <RadioGroupItem value={opt.value} />
+                        {opt.label}
+                      </label>
+                    ))}
                   </RadioGroup>
                 </div>
               </div>
+            </section>
 
-              <hr className="border-border/40" />
+            <div className="h-px bg-border/40" />
 
-              {/* ─── Title / Version / Metadata Language ────────────────── */}
+            {/* ─── Title / Version / Language ─────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Название и язык</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="title">Название релиза <span className="text-rose-400">*</span></FieldLabel>
-                  <Input
-                    id="title" data-testid="input-title"
-                    value={title} onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Без featuring и (Remix)"
-                  />
+                <div className="space-y-1.5">
+                  <FieldLabel htmlFor="title" className="text-sm">Название релиза <span className="text-rose-400">*</span></FieldLabel>
+                  <Input id="title" data-testid="input-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Без featuring и (Remix)" />
                 </div>
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="version">Версия (необязательно)</FieldLabel>
-                  <Input
-                    id="version" data-testid="input-version"
-                    value={releaseVersion} onChange={(e) => setReleaseVersion(e.target.value)}
-                    placeholder="Deluxe, Remastered, Live..."
-                  />
+                <div className="space-y-1.5">
+                  <FieldLabel htmlFor="version" className="text-sm">Версия</FieldLabel>
+                  <Input id="version" data-testid="input-version" value={releaseVersion} onChange={(e) => setReleaseVersion(e.target.value)} placeholder="Deluxe, Remastered, Live…" />
                 </div>
-                <div className="space-y-2">
-                  <FieldLabel>Язык метаданных <span className="text-rose-400">*</span></FieldLabel>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">Язык метаданных <span className="text-rose-400">*</span></FieldLabel>
                   <Select value={language} onValueChange={setLanguage}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
 
-              {/* ─── + Add Translation ──────────────────────────────────── */}
+              {/* Translations */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <FieldLabel className="text-xs text-muted-foreground">Переводы метаданных (необязательно)</FieldLabel>
+                  <span className="text-xs text-muted-foreground">Переводы метаданных (необязательно)</span>
                   <Button type="button" variant="outline" size="sm" onClick={addTranslation}>
                     <Plus className="h-3.5 w-3.5 mr-1" /> Добавить перевод
                   </Button>
                 </div>
-                {translations.length > 0 && (
-                  <div className="space-y-2">
-                    {translations.map((t, i) => (
-                      <div key={i} className="grid grid-cols-[140px_1fr_180px_auto] gap-2 items-end bg-muted/20 border border-border/40 rounded-md p-2">
-                        <div className="space-y-1">
-                          <FieldLabel className="text-[10px] text-muted-foreground">Язык</FieldLabel>
-                          <Select value={t.language} onValueChange={(v) => updateTranslation(i, { language: v })}>
-                            <SelectTrigger className="bg-background/40 h-9"><SelectValue placeholder="—" /></SelectTrigger>
-                            <SelectContent>
-                              {LANGS.filter((l) => l.value !== language).map((l) => (
-                                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <FieldLabel className="text-[10px] text-muted-foreground">Название</FieldLabel>
-                          <Input className="bg-background/40 h-9" value={t.title}
-                            onChange={(e) => updateTranslation(i, { title: e.target.value })} />
-                        </div>
-                        <div className="space-y-1">
-                          <FieldLabel className="text-[10px] text-muted-foreground">Версия</FieldLabel>
-                          <Input className="bg-background/40 h-9" value={t.version ?? ""}
-                            onChange={(e) => updateTranslation(i, { version: e.target.value })}
-                            placeholder="(необязательно)" />
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeTranslation(i)} title="Удалить">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                {translations.map((t, i) => (
+                  <div key={i} className="grid grid-cols-[140px_1fr_180px_auto] gap-2 items-end bg-muted/15 border border-border/40 rounded-lg p-3">
+                    <div className="space-y-1">
+                      <FieldLabel className="text-[10px] text-muted-foreground">Язык</FieldLabel>
+                      <Select value={t.language} onValueChange={(v) => updateTranslation(i, { language: v })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>{LANGS.filter((l) => l.value !== language).map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel className="text-[10px] text-muted-foreground">Название</FieldLabel>
+                      <Input className="h-8 text-xs" value={t.title} onChange={(e) => updateTranslation(i, { title: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <FieldLabel className="text-[10px] text-muted-foreground">Версия</FieldLabel>
+                      <Input className="h-8 text-xs" value={t.version ?? ""} onChange={(e) => updateTranslation(i, { version: e.target.value })} placeholder="(необязательно)" />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeTranslation(i)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                )}
+                ))}
               </div>
+            </section>
 
-              <hr className="border-border/40" />
+            <div className="h-px bg-border/40" />
 
-              {/* ─── Primary Artist + Various Artists ───────────────────── */}
+            {/* ─── Primary Artist ─────────────────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Исполнитель</div>
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <FieldLabel>Основной исполнитель <span className="text-rose-400">*</span></FieldLabel>
-                  <Select
-                    value={artistId ? String(artistId) : ""}
-                    onValueChange={(v) => setArtistId(Number(v))}
-                  >
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">Основной исполнитель <span className="text-rose-400">*</span></FieldLabel>
+                  <Select value={artistId ? String(artistId) : ""} onValueChange={(v) => setArtistId(Number(v))}>
                     <SelectTrigger data-testid="select-artist"><SelectValue placeholder="Выберите артиста" /></SelectTrigger>
-                    <SelectContent>
-                      {artistOptions.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{artistOptions.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
                   </Select>
                   {artistOptions.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      В каталоге нет артистов. Сначала добавьте артиста в разделе «Артисты».
-                    </p>
+                    <p className="text-xs text-muted-foreground">В каталоге нет артистов. Добавьте артиста в разделе «Артисты».</p>
                   )}
                   <p className="text-[11px] text-muted-foreground">
                     Дополнительных артистов (featuring, remixer и т.д.) добавите внутри релиза после создания.
                   </p>
                 </div>
-                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <label className="flex items-start gap-2.5 text-sm cursor-pointer rounded-lg border border-border/50 p-3 hover:bg-muted/15 transition-colors">
                   <Checkbox checked={isVariousArtists} onCheckedChange={(v) => setIsVariousArtists(!!v)} className="mt-0.5" />
                   <span>
                     Various Artists
@@ -488,48 +491,47 @@ export default function CreateRelease() {
                   </span>
                 </label>
               </div>
+            </section>
 
-              <hr className="border-border/40" />
+            <div className="h-px bg-border/40" />
 
-              {/* ─── UPC / Genre / Subgenre ──────────────────────────────── */}
+            {/* ─── Genre / Subgenre / UPC ──────────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Жанр и штрихкод</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <FieldLabel>UPC</FieldLabel>
-                  {upcChoice === "have" ? (
-                    <Input value={upc} readOnly className="font-mono bg-muted/40 cursor-not-allowed" />
-                  ) : (
-                    <Input value="" readOnly placeholder="Будет присвоен на сабмите" className="bg-muted/40 cursor-not-allowed text-muted-foreground" />
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <FieldLabel>Жанр <span className="text-rose-400">*</span></FieldLabel>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">Жанр <span className="text-rose-400">*</span></FieldLabel>
                   <Select value={genre} onValueChange={setGenre}>
                     <SelectTrigger><SelectValue placeholder="Выберите жанр" /></SelectTrigger>
-                    <SelectContent>
-                      {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <FieldLabel>Сабжанр</FieldLabel>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">Сабжанр</FieldLabel>
                   <Select value={subgenre} onValueChange={setSubgenre} disabled={subgenresFor.length === 0}>
                     <SelectTrigger><SelectValue placeholder={subgenresFor.length === 0 ? "—" : "Выберите"} /></SelectTrigger>
-                    <SelectContent>
-                      {subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">UPC</FieldLabel>
+                  {upcChoice === "have"
+                    ? <Input value={upc} readOnly className="font-mono bg-muted/30 cursor-not-allowed" />
+                    : <Input value="" readOnly placeholder="Будет присвоен автоматически" className="bg-muted/30 cursor-not-allowed text-muted-foreground" />
+                  }
+                </div>
               </div>
+            </section>
 
-              {/* ─── Label / CLine / PLine ──────────────────────────────── */}
+            <div className="h-px bg-border/40" />
+
+            {/* ─── Label / P-Line / C-Line ─────────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Лейбл и права</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <FieldLabel>Лейбл</FieldLabel>
-                  <Select
-                    value={labelId ? String(labelId) : "none"}
-                    onValueChange={(v) => setLabelId(v === "none" ? null : Number(v))}
-                    disabled={user?.role === "label"}
-                  >
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">Лейбл</FieldLabel>
+                  <Select value={labelId ? String(labelId) : "none"} onValueChange={(v) => setLabelId(v === "none" ? null : Number(v))} disabled={user?.role === "label"}>
                     <SelectTrigger data-testid="select-label"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Без лейбла</SelectItem>
@@ -537,67 +539,63 @@ export default function CreateRelease() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <FieldLabel>℗ Год / Правообладатель записи</FieldLabel>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">℗ Правообладатель записи</FieldLabel>
                   <div className="flex gap-2">
-                    <Input
-                      type="number" min={1900} max={2100} className="w-24"
-                      value={pLineYear} onChange={(e) => setPLineYear(e.target.value ? Number(e.target.value) : "")}
-                    />
+                    <Input type="number" min={1900} max={2100} className="w-20 shrink-0" value={pLineYear} onChange={(e) => setPLineYear(e.target.value ? Number(e.target.value) : "")} />
                     <Input value={pLine} onChange={(e) => setPLine(e.target.value)} placeholder="Tajik Music" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <FieldLabel>© Год / Правообладатель композиции</FieldLabel>
+                <div className="space-y-1.5">
+                  <FieldLabel className="text-sm">© Правообладатель композиции</FieldLabel>
                   <div className="flex gap-2">
-                    <Input
-                      type="number" min={1900} max={2100} className="w-24"
-                      value={cLineYear} onChange={(e) => setCLineYear(e.target.value ? Number(e.target.value) : "")}
-                    />
+                    <Input type="number" min={1900} max={2100} className="w-20 shrink-0" value={cLineYear} onChange={(e) => setCLineYear(e.target.value ? Number(e.target.value) : "")} />
                     <Input value={cLine} onChange={(e) => setCLine(e.target.value)} placeholder="Tajik Music" />
                   </div>
                 </div>
               </div>
+            </section>
 
-              {/* ─── Catalog # (info) + Compilation ──────────────────────── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <FieldLabel>Каталожный номер</FieldLabel>
-                  <Input value="CAT…" readOnly className="bg-muted/40 cursor-not-allowed text-muted-foreground font-mono" />
-                  <p className="text-[11px] text-muted-foreground">
-                    Внутренний идентификатор, присваивается автоматически после создания черновика.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <FieldLabel>Compilation <span className="text-rose-400">*</span></FieldLabel>
-                  <RadioGroup
-                    value={isCompilation === null ? "" : isCompilation ? "yes" : "no"}
-                    onValueChange={(v) => setIsCompilation(v === "yes")}
-                    className="flex flex-col gap-2 pt-1"
-                  >
-                    <label className="flex items-start gap-2 cursor-pointer text-sm">
-                      <RadioGroupItem value="yes" className="mt-0.5" />
-                      <span><b>Да</b>, это сборник</span>
-                    </label>
-                    <label className="flex items-start gap-2 cursor-pointer text-sm">
-                      <RadioGroupItem value="no" className="mt-0.5" />
-                      <span><b>Нет</b>, обычный релиз</span>
-                    </label>
-                  </RadioGroup>
-                </div>
-              </div>
+            <div className="h-px bg-border/40" />
 
-              <div className="flex justify-between pt-2 border-t">
-                <Button variant="outline" onClick={() => setStep("upc")} data-testid="button-back-upc">
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Назад
-                </Button>
-                <Button onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
-                  {createMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                  Сохранить черновик
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            {/* ─── Compilation ────────────────────────────────────────── */}
+            <section className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Сборник</div>
+              <RadioGroup
+                value={isCompilation === null ? "" : isCompilation ? "yes" : "no"}
+                onValueChange={(v) => setIsCompilation(v === "yes")}
+                className="grid grid-cols-2 gap-3"
+              >
+                {[
+                  { value: "no",  label: "Нет",  hint: "Обычный релиз одного или нескольких артистов" },
+                  { value: "yes", label: "Да",   hint: "Сборник треков нескольких разных артистов" },
+                ].map((opt) => (
+                  <label key={opt.value} className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer text-sm transition-all ${
+                    (isCompilation === null ? "" : isCompilation ? "yes" : "no") === opt.value
+                      ? "border-primary bg-primary/5"
+                      : "border-border/50 hover:border-border hover:bg-muted/15"
+                  }`}>
+                    <RadioGroupItem value={opt.value} className="mt-0.5 shrink-0" />
+                    <span>
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="block text-[11px] text-muted-foreground mt-0.5">{opt.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </section>
+
+            {/* ─── Bottom action bar ──────────────────────────────────── */}
+            <div className="sticky bottom-0 -mx-4 px-6 py-4 bg-background/95 backdrop-blur border-t border-border/50 flex items-center justify-between">
+              <Button variant="outline" onClick={() => setStep("upc")} data-testid="button-back-upc">
+                <ChevronLeft className="h-4 w-4 mr-1" /> Назад
+              </Button>
+              <Button onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release" size="lg" className="px-8">
+                {createMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Сохранить черновик
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </Layout>
