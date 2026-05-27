@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
 
@@ -50,6 +52,8 @@ export default function CreateRelease() {
   const [pLineYear, setPLineYear]       = useState<number | "">(CURRENT_YEAR);
   const [pLine, setPLine]               = useState("");
   const [isCompilation, setIsCompilation] = useState<boolean | null>(null);
+  const [artistOpen, setArtistOpen] = useState(false);
+  const [artistSearch, setArtistSearch] = useState("");
 
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
   useEffect(() => { if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre(""); }, [genre]);
@@ -262,17 +266,81 @@ export default function CreateRelease() {
           {/* ── Primary Artists ──────────────────────────────────────────── */}
           <div className="space-y-3">
             <FieldLabel className="text-sm font-medium block">Primary Artists</FieldLabel>
-            <Select
-              value={artistId ? String(artistId) : ""}
-              onValueChange={v => setArtistId(Number(v))}
-            >
-              <SelectTrigger data-testid="select-artist">
-                <SelectValue placeholder="Select artist" />
-              </SelectTrigger>
-              <SelectContent>
-                {artistOptions.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={artistOpen} onOpenChange={setArtistOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={artistOpen}
+                  data-testid="select-artist"
+                  className="w-full justify-between font-normal h-9 px-3"
+                >
+                  <span className={artistId ? "" : "text-foreground/40"}>
+                    {artistId
+                      ? (artistOptions.find(a => a.id === artistId)?.name ?? "Select artist")
+                      : "Select artist"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-0 w-[var(--radix-popover-trigger-width)]"
+                align="start"
+                sideOffset={4}
+              >
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search artist..."
+                    value={artistSearch}
+                    onValueChange={setArtistSearch}
+                  />
+                  <CommandList className="max-h-[210px]">
+                    <CommandEmpty className="py-4 text-sm text-center text-muted-foreground">
+                      No artists found.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {artistOptions
+                        .filter(a => a.name.toLowerCase().includes(artistSearch.toLowerCase()))
+                        .map(a => (
+                          <CommandItem
+                            key={a.id}
+                            value={String(a.id)}
+                            onSelect={() => {
+                              setArtistId(a.id);
+                              setArtistOpen(false);
+                              setArtistSearch("");
+                            }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${artistId === a.id ? "opacity-100" : "opacity-0"}`} />
+                            {a.name}
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                  {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
+                    <>
+                      <CommandSeparator />
+                      <div className="p-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-primary hover:text-primary"
+                          onClick={() => {
+                            setArtistOpen(false);
+                            window.location.href = "/artists/new";
+                          }}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Add new artist
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </Command>
+              </PopoverContent>
+            </Popover>
             {artistOptions.length === 0 && (
               <p className="text-xs text-muted-foreground">No artists found. Add an artist in the Artists section first.</p>
             )}
