@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronsUpDown, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
+import { ArtistFormDialog } from "@/components/artist-form-dialog";
 
 const CURRENT_YEAR = new Date().getFullYear();
 type Translation = { language: string; title: string; version?: string };
@@ -54,6 +55,7 @@ export default function CreateRelease() {
   const [isCompilation, setIsCompilation] = useState<boolean | null>(null);
   const [artistOpen, setArtistOpen] = useState(false);
   const [artistSearch, setArtistSearch] = useState("");
+  const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
 
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
   useEffect(() => { if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre(""); }, [genre]);
@@ -329,7 +331,7 @@ export default function CreateRelease() {
                           className="w-full justify-start text-primary hover:text-primary"
                           onClick={() => {
                             setArtistOpen(false);
-                            window.location.href = "/artists/new";
+                            setAddArtistDialogOpen(true);
                           }}
                         >
                           <UserPlus className="h-4 w-4 mr-2" />
@@ -493,6 +495,15 @@ export default function CreateRelease() {
           Save
         </Button>
       </div>
+
+      <ArtistFormDialog
+        open={addArtistDialogOpen}
+        onOpenChange={setAddArtistDialogOpen}
+        onSaved={(newArtistId) => {
+          setArtistId(newArtistId);
+          qc.invalidateQueries({ queryKey: ["listArtists"] });
+        }}
+      />
     </Layout>
   );
 }
