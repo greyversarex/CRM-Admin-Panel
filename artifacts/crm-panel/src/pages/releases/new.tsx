@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useListArtists, useListLabels, useCreateRelease,
-  getListReleasesQueryKey, getGetReleaseCountsQueryKey,
+  useListArtists, useListLabels, useCreateRelease, useCreateArtist,
+  getListReleasesQueryKey, getGetReleaseCountsQueryKey, getListArtistsQueryKey,
 } from "@workspace/api-client-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
@@ -19,7 +20,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronsUpDown, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
-import { ArtistFormDialog } from "@/components/artist-form-dialog";
 
 const CURRENT_YEAR = new Date().getFullYear();
 type Translation = { language: string; title: string; version?: string };
@@ -56,6 +56,8 @@ export default function CreateRelease() {
   const [artistOpen, setArtistOpen] = useState(false);
   const [artistSearch, setArtistSearch] = useState("");
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
+  const [quickArtistName, setQuickArtistName] = useState("");
+  const createArtistMut = useCreateArtist();
 
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
   useEffect(() => { if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre(""); }, [genre]);
@@ -119,6 +121,27 @@ export default function CreateRelease() {
   }
   function removeTranslation(idx: number) {
     setTranslations(p => p.filter((_, i) => i !== idx));
+  }
+
+  async function handleQuickCreateArtist() {
+    const name = quickArtistName.trim();
+    if (!name) return;
+    try {
+      const created = await createArtistMut.mutateAsync({
+        data: {
+          name,
+          labelId: user?.role === "label" ? (user.labelId ?? null) : null,
+          status: "active",
+        },
+      });
+      await qc.invalidateQueries({ queryKey: getListArtistsQueryKey() });
+      setArtistId(created.id);
+      setAddArtistDialogOpen(false);
+      setQuickArtistName("");
+      toast({ title: "Artist created", description: `«${created.name}» added and selected` });
+    } catch (e) {
+      toast({ title: "Failed to create artist", description: (e as Error).message, variant: "destructive" });
+    }
   }
 
   function handleCreate() {
@@ -496,14 +519,41 @@ export default function CreateRelease() {
         </Button>
       </div>
 
-      <ArtistFormDialog
+      {/* ── Quick Create Artist dialog (Symphonic-style) ─────────────────── */}
+      <Dialog
         open={addArtistDialogOpen}
-        onOpenChange={setAddArtistDialogOpen}
-        onSaved={(newArtistId) => {
-          setArtistId(newArtistId);
-          qc.invalidateQueries({ queryKey: ["listArtists"] });
-        }}
-      />
+        onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) setQuickArtistName(""); }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Create Artist</DialogTitle>
+            <DialogDescription>
+              Type your artist's name accurately (how it should be stylized).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              autoFocus
+              value={quickArtistName}
+              onChange={e => setQuickArtistName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && quickArtistName.trim()) handleQuickCreateArtist(); }}
+              placeholder="Artist name…"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickCreateArtist}
+              disabled={!quickArtistName.trim() || createArtistMut.isPending}
+            >
+              {createArtistMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Create Artist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
