@@ -164,7 +164,7 @@ export default function CreateRelease() {
           <div>
             <FieldLabel className="text-sm font-medium mb-3 block">Cover Art ?</FieldLabel>
             <div className="flex gap-6 items-start">
-              <div className="shrink-0">
+              <div className="shrink-0 w-52">
                 <CoverUploader value={coverUrl || null} onChange={p => setCoverUrl(p ?? "")} attach={false} />
               </div>
               <div className="flex-1 pt-1">
