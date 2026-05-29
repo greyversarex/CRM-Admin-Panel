@@ -273,6 +273,8 @@ export default function TrackEditPage() {
   const nextTrack = allTracks[trackIndex + 1] ?? null;
 
   const updateTrack = useUpdateTrack();
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const { upload: uploadAudio, isUploading: isAudioUploading, progress: audioProgress } = useAssetUpload();
 
   const [f, setF] = useState<FormState | null>(null);
   useEffect(() => {
@@ -337,17 +339,51 @@ export default function TrackEditPage() {
     );
   }
 
-  const isBusy = updateTrack.isPending;
+  const isBusy = updateTrack.isPending || isAudioUploading;
+
+  const YEARS = Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => new Date().getFullYear() - i);
+
+  const audioFileName = f.audioUrl
+    ? f.audioUrl.split("/").pop() ?? f.audioUrl
+    : null;
 
   return (
     <Layout>
-      <div className="flex flex-col gap-0">
+      {/* Hidden audio file input */}
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mpeg,audio/mp4,audio/aac"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          try {
+            const asset = await uploadAudio(file, { kind: "audio", trackId: track.id, attach: false });
+            const url = URL.createObjectURL(file);
+            const audioEl = new Audio(url);
+            const dur = await new Promise<number | null>((res) => {
+              audioEl.onloadedmetadata = () => res(isFinite(audioEl.duration) ? Math.round(audioEl.duration) : null);
+              audioEl.onerror = () => res(null);
+              setTimeout(() => res(null), 5000);
+            });
+            URL.revokeObjectURL(url);
+            setF({ ...f, audioUrl: asset.objectPath, durationSeconds: dur ?? f.durationSeconds });
+            toast({ title: "Audio uploaded", description: file.name });
+          } catch (e: any) {
+            toast({ title: "Upload failed", description: e?.message ?? "Error", variant: "destructive" });
+          }
+        }}
+      />
 
-        {/* ── Top bar: Back + track index ─────────────────────────────── */}
-        <div className="flex items-center justify-between pb-4 mb-2 border-b border-border/40">
+      <div className="max-w-2xl mx-auto pb-28">
+
+        {/* ── Back + track index ───────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => setLocation(`/releases/${releaseId}`)}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/40"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/30 border border-border/40"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
@@ -356,444 +392,354 @@ export default function TrackEditPage() {
           </span>
         </div>
 
-        {/* ── Scrollable content ───────────────────────────────────────── */}
-        <div className="space-y-6 pb-6">
+        {/* ── Single form container ────────────────────────────────────── */}
+        <div className="border border-border/50 rounded-lg bg-card/40 backdrop-blur divide-y divide-border/30">
 
-          {/* ── 1. Audio Details ──────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileAudio className="h-4 w-4" /> Audio Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          {/* ── 1. Audio Details ─────────────────────────────────────── */}
+          <div className="p-6 space-y-5">
+            <h3 className="text-base font-semibold">Audio Details</h3>
 
-              {/* Audio file + AI radios */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                {/* Left: file selector + uploader */}
-                <div className="space-y-3">
-                  <Label className="text-xs text-muted-foreground">Audio File</Label>
-                  <AudioUploader
-                    value={f.audioUrl}
-                    trackId={track.id}
-                    durationSeconds={f.durationSeconds}
-                    onChange={(path, dur) => setF({ ...f, audioUrl: path, durationSeconds: dur ?? f.durationSeconds })}
-                  />
-                </div>
-
-                {/* Right: AI usage RadioGroup */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground leading-relaxed">
-                    What amount of generative AI tools were used in the creation of the stereo track? ?
-                  </Label>
-                  <RadioGroup
-                    value={f.aiUsage}
-                    onValueChange={(v) => setF({ ...f, aiUsage: v as FormState["aiUsage"] })}
-                    className="gap-2"
-                  >
-                    {([["none", "None"], ["some", "Some"], ["all", "All"]] as const).map(([v, label]) => (
-                      <div key={v} className="flex items-center gap-2">
-                        <RadioGroupItem value={v} id={`ai-${v}`} />
-                        <Label htmlFor={`ai-${v}`} className="text-sm font-normal cursor-pointer">{label}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-              </div>
-
-              {/* ISRC + Clip Start + Preview */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">ISRC</Label>
-                  <div className="flex gap-1.5">
-                    <Input
-                      value={f.isrc}
-                      onChange={(e) => setF({ ...f, isrc: e.target.value })}
-                      placeholder="TJCTM2500001"
-                      className="bg-background/40 font-mono min-w-0"
-                    />
-                    <Button type="button" variant="outline" size="icon" title="Generate ISRC"
-                      onClick={() => setF({ ...f, isrc: generateIsrc() })}>
-                      <Wand2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground/70">Generate ISRC</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Clip Start Time</Label>
-                  <Input
-                    value={`${clipMm}:${clipSs}`}
-                    onChange={(e) => {
-                      const [mm, ss] = e.target.value.split(":").map(Number);
-                      setF({ ...f, clipStartSeconds: Math.max(0, (mm || 0) * 60 + (ss || 0)) });
-                    }}
-                    placeholder="00:00"
-                    className="bg-background/40 font-mono"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Preview Start Time</Label>
-                  <div className="bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm font-mono text-muted-foreground">
-                    {clipMm}:{clipSs}:00
-                  </div>
-                </div>
-              </div>
-
-              {/* ISWC + Duration */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">ISWC ? — Optional</Label>
-                  <Input
-                    value={f.iswc}
-                    onChange={(e) => setF({ ...f, iswc: e.target.value })}
-                    placeholder="T-123.456.789-0"
-                    className="bg-background/40 font-mono"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Duration</Label>
-                  <div className="bg-background/20 border border-border/60 rounded-md px-3 py-2 text-sm font-mono text-muted-foreground">
-                    {fmtDuration(f.durationSeconds)}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground/70">Auto-detected from audio file.</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── 2. Spatial Audio (Dolby Atmos) ─────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Headphones className="h-4 w-4" /> Spatial Audio (Dolby Atmos)
-                <Badge variant="outline" className="text-[10px] ml-1 border-violet-500/40 text-violet-300">+$24.99</Badge>
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Apple Music shows the Dolby Atmos badge when this file is uploaded.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {f.spatialAudioUrl ? (
-                <div className="rounded-md border border-violet-500/30 bg-violet-500/5 p-2 flex items-center gap-2 text-xs">
-                  <Badge className="bg-violet-500/20 border-violet-500/40 text-violet-200">Dolby Atmos</Badge>
-                  <span className="text-muted-foreground">
-                    {track.spatialBillingStatus === "charged" ? "оплачено"
-                      : track.spatialBillingStatus === "pending" ? "будет списано $24.99 при отправке"
-                      : track.spatialBillingStatus === "waived" ? "освобождено" : "не активно"}
-                  </span>
-                </div>
-              ) : (
-                <div className="rounded-md border border-border/40 bg-background/40 p-2 text-xs text-muted-foreground flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />
-                  Spatial-файл не загружен. Загрузка добавит $24.99 к счёту.
-                </div>
-              )}
-              <SpatialAudioUploader
-                value={f.spatialAudioUrl}
-                trackId={track.id}
-                onChange={(path) => setF({ ...f, spatialAudioUrl: path })}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Spatial ISRC</Label>
-                  <Input value={f.spatialIsrc}
-                    onChange={(e) => setF({ ...f, spatialIsrc: e.target.value })}
-                    placeholder="Отдельный ISRC для Atmos-версии"
-                    className="bg-background/40 font-mono" />
-                  <p className="text-[10px] text-muted-foreground/70">
-                    Если пустое — используется основной ISRC.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">AI в spatial-версии</Label>
-                  <Select value={f.spatialAiUsage || "none"}
-                    onValueChange={(v) => setF({ ...f, spatialAiUsage: v as FormState["spatialAiUsage"] })}>
-                    <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Без AI</SelectItem>
-                      <SelectItem value="some">Частично</SelectItem>
-                      <SelectItem value="all">Полностью AI</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── 3. Track Details ────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Music2 className="h-4 w-4" /> Track Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Song Name ?</Label>
-                  <Input
-                    value={f.title}
-                    onChange={(e) => setF({ ...f, title: e.target.value })}
-                    placeholder="Track title"
-                    className="bg-background/40"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Version (Optional)</Label>
-                  <Input
-                    value={f.trackVersion}
-                    onChange={(e) => setF({ ...f, trackVersion: e.target.value })}
-                    placeholder="Acoustic, Remix…"
-                    className="bg-background/40"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Metadata Language</Label>
-                  <Select value={f.language || "none"}
-                    onValueChange={(v) => setF({ ...f, language: v === "none" ? "" : v })}>
-                    <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— Не указано</SelectItem>
-                      {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Lyrics + metadata translations */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Lyrics (Optional)</Label>
-                  {f.isExplicit && (
-                    <span className="text-[10px] text-amber-300">⚠ Contains EXPLICIT content</span>
-                  )}
-                </div>
-                <Textarea
-                  value={f.lyrics}
-                  onChange={(e) => setF({ ...f, lyrics: e.target.value })}
-                  rows={5}
-                  placeholder="Leave empty if you don't want synced lyrics on DSP."
-                  className="bg-background/40 font-mono text-xs"
-                />
-              </div>
-
+            {/* Audio file row + AI radios */}
+            <div className="grid grid-cols-2 gap-6 items-start">
+              {/* Left */}
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Languages className="h-3 w-3" /> Metadata Translations
+                <Label className="text-xs text-muted-foreground">Audio File</Label>
+                <div className="flex gap-2">
+                  <div className="flex-1 h-9 border border-border/60 rounded-md px-3 flex items-center text-sm text-muted-foreground/70 overflow-hidden">
+                    <span className="truncate">{audioFileName ?? "Select Audio File"}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={isAudioUploading}
+                    onClick={() => audioInputRef.current?.click()}
+                  >
+                    {isAudioUploading
+                      ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{audioProgress}%</>
+                      : "Upload Audio"}
+                  </Button>
+                </div>
+                {isAudioUploading && (
+                  <div className="h-1 bg-muted rounded overflow-hidden">
+                    <div className="h-full bg-primary transition-all" style={{ width: `${audioProgress}%` }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Right: AI usage */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground leading-relaxed">
+                  What amount of generative AI tools were used in the creation of the stereo track? ?
                 </Label>
-                <MetadataTranslationsEditor
-                  value={f.metadataTranslations}
-                  onChange={(v) => setF({ ...f, metadataTranslations: v })}
-                />
+                <RadioGroup
+                  value={f.aiUsage}
+                  onValueChange={(v) => setF({ ...f, aiUsage: v as FormState["aiUsage"] })}
+                  className="flex gap-4"
+                >
+                  {([["none", "None"], ["some", "Some"], ["all", "All"]] as const).map(([v, label]) => (
+                    <div key={v} className="flex items-center gap-1.5">
+                      <RadioGroupItem value={v} id={`ai-${v}`} />
+                      <Label htmlFor={`ai-${v}`} className="text-sm font-normal cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
+            </div>
 
-              {/* Track number */}
-              <div className="sm:max-w-[160px] space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Track Number</Label>
+            {/* Status line */}
+            <p className="text-xs text-muted-foreground/60">
+              {audioFileName
+                ? <><FileAudio className="inline h-3 w-3 mr-1" />{audioFileName}</>
+                : "No audio file linked"}
+            </p>
+
+            {/* ISRC + Clip Start + Preview Start */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">ISRC</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={f.isrc}
+                    onChange={(e) => setF({ ...f, isrc: e.target.value })}
+                    placeholder="TJCTM2500001"
+                    className="font-mono min-w-0"
+                  />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0"
+                    onClick={() => setF({ ...f, isrc: generateIsrc() })}>
+                    Generate ISRC
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Clip Start Time</Label>
                 <Input
-                  type="number" min={1}
-                  value={f.trackNumber ?? ""}
-                  onChange={(e) => setF({ ...f, trackNumber: e.target.value ? Number(e.target.value) : null })}
-                  className="bg-background/40"
+                  value={`${clipMm}:${clipSs}`}
+                  onChange={(e) => {
+                    const [mm, ss] = e.target.value.split(":").map(Number);
+                    setF({ ...f, clipStartSeconds: Math.max(0, (mm || 0) * 60 + (ss || 0)) });
+                  }}
+                  placeholder="00:00"
+                  className="font-mono w-24"
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* ── 4. Display Artists ──────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4" /> Display Artists ?
-              </CardTitle>
-              <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                Artists that appear as the main performers or in search items for the song.
-                Each track requires a primary artist to be specified. Include any additional
-                display artists who appear on this track.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <DisplayArtistsEditor
-                value={f.displayArtists}
-                onChange={(v) => setF({ ...f, displayArtists: v })}
-              />
-            </CardContent>
-          </Card>
-
-          {/* ── 5. Contributors ──────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <UserPlus className="h-4 w-4" /> Contributors ?
-              </CardTitle>
-              <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                Apple Music requires that tracks must have at least one role per contributor group
-                (Writers, Performers, Production &amp; Engineering). See the{" "}
-                <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer"
-                  className="text-primary underline">Apple Music Style Guide</a>.
-                Writer contributors must be entered with their real first and last names
-                (ex: "Austin Post", not "Post Malone").
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h5 className="text-sm font-semibold mb-3">Writers</h5>
-                <WritersEditor value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
-              </div>
-              <Separator className="opacity-30" />
-              <div>
-                <div className="flex items-baseline gap-2 mb-1">
-                  <h5 className="text-sm font-semibold">Performers</h5>
-                  <span className="text-xs text-muted-foreground">— OPTIONAL*</span>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground text-right block">
+                  Preview Start Time: {clipMm}:{clipSs}:00
+                </Label>
+                <div className="h-9 border border-border/40 rounded-md px-3 flex items-center text-sm font-mono text-muted-foreground/60">
+                  {clipMm}:{clipSs}:00
                 </div>
-                <p className="text-[11px] text-muted-foreground mb-3">*Required for Apple Music</p>
-                <PerformersEditor value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
               </div>
-              <Separator className="opacity-30" />
-              <div>
-                <div className="flex items-baseline gap-2 mb-1">
-                  <h5 className="text-sm font-semibold">Production &amp; Engineering</h5>
-                  <span className="text-xs text-muted-foreground">— OPTIONAL*</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground mb-3">*Required for Apple Music</p>
-                <ProductionEditor value={f.production} onChange={(v) => setF({ ...f, production: v })} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── Genre / Subgenre ─────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Genre</Label>
-              <Select value={f.genre || "none"}
-                onValueChange={(v) => setF({ ...f, genre: v === "none" ? "" : v, subgenre: "" })}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="Please select" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Not selected</SelectItem>
-                  {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Subgenre</Label>
-              <Select value={f.subgenre || "none"}
-                onValueChange={(v) => setF({ ...f, subgenre: v === "none" ? "" : v })}
-                disabled={subgenreOptions.length === 0}>
-                <SelectTrigger className="bg-background/40">
-                  <SelectValue placeholder={subgenreOptions.length === 0 ? "Select genre first" : "Please select"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Not selected</SelectItem>
-                  {subgenreOptions.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          {/* ── Recording Year / Country ──────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Recording Year</Label>
+            {/* ISWC */}
+            <div className="max-w-xs space-y-1.5">
+              <Label className="text-xs text-muted-foreground">ISWC ? — Optional</Label>
               <Input
-                type="number" min={1900} max={2100}
-                value={f.recordingYear ?? ""}
-                onChange={(e) => setF({ ...f, recordingYear: e.target.value ? Number(e.target.value) : null })}
-                className="bg-background/40"
-                placeholder={String(new Date().getFullYear())}
+                value={f.iswc}
+                onChange={(e) => setF({ ...f, iswc: e.target.value })}
+                placeholder="T-123.456.789-0"
+                className="font-mono"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Country of Recording</Label>
-              <Select value={f.countryOfRecording || "none"}
-                onValueChange={(v) => setF({ ...f, countryOfRecording: v === "none" ? "" : v })}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="Select a Country" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Not specified</SelectItem>
-                  {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name} ({c.code})</SelectItem>)}
-                </SelectContent>
-              </Select>
             </div>
           </div>
 
-          {/* ── Audio Style ──────────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Audio Style ?</Label>
-            <RadioGroup
-              value={f.audioStyle}
-              onValueChange={(v) => setF({ ...f, audioStyle: v as FormState["audioStyle"] })}
-              className="flex gap-6 flex-wrap"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="instrumental" id="style-instrumental" />
-                <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">Instrumental</Label>
+          {/* ── 2. Track Details ─────────────────────────────────────── */}
+          <div className="p-6 space-y-4">
+            <h3 className="text-base font-semibold">Track Details</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Song Name ?</Label>
+                <Input
+                  value={f.title}
+                  onChange={(e) => setF({ ...f, title: e.target.value })}
+                  placeholder=""
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="vocal" id="style-vocal" />
-                <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">Vocal</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Version (Optional)</Label>
+                <Input
+                  value={f.trackVersion}
+                  onChange={(e) => setF({ ...f, trackVersion: e.target.value })}
+                  placeholder=""
+                />
               </div>
-            </RadioGroup>
-            {f.audioStyle === "vocal" && (
-              <div className="sm:max-w-xs mt-2 space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Vocal Language</Label>
-                <Select value={f.vocalLanguage || "none"}
-                  onValueChange={(v) => setF({ ...f, vocalLanguage: v === "none" ? "" : v })}>
-                  <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Metadata Language</Label>
+                <Select value={f.language || "none"}
+                  onValueChange={(v) => setF({ ...f, language: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Not specified</SelectItem>
                     {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* ── Explicit Status ──────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Explicit Status ?</Label>
-            <RadioGroup
-              value={f.explicitStatus}
-              onValueChange={(v) => setF({
-                ...f,
-                explicitStatus: v as FormState["explicitStatus"],
-                isExplicit: v === "explicit",
-              })}
-              className="flex gap-6 flex-wrap"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="non_explicit" id="exp-clean" />
-                <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">Non-Explicit</Label>
+          {/* ── 3. Display Artists ───────────────────────────────────── */}
+          <div className="p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">Display Artists</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Artists that appear as the main performers or in search items for the song.
+                Each track requires a primary artist to be specified. Include any additional
+                display artists who appear on this track.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+              <span>Artist Name</span><span>Role</span>
+            </div>
+            <DisplayArtistsEditor
+              value={f.displayArtists}
+              onChange={(v) => setF({ ...f, displayArtists: v })}
+            />
+          </div>
+
+          {/* ── 4. Contributors ──────────────────────────────────────── */}
+          <div className="p-6 space-y-5">
+            <div>
+              <h3 className="text-base font-semibold">Contributors ?</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Apple Music requires that tracks delivered to Apple Music must have at least one role represented
+                per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
+                found in their{" "}
+                <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer"
+                  className="text-primary underline">Apple Music Style Guide</a>.
+                Writer contributors must be entered with their real first and last names
+                (ex: "Austin Post", not "Post Malone").
+              </p>
+            </div>
+
+            {/* Writers */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Writers</h4>
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+                <span>Artist Name</span><span>Role</span>
               </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="explicit" id="exp-explicit" />
-                <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">Explicit</Label>
+              <WritersEditor value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
+            </div>
+
+            <Separator className="opacity-20" />
+
+            {/* Performers */}
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Performers <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
+                <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
               </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="censored" id="exp-censored" />
-                <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">Censored</Label>
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+                <span>Artist Name</span><span>Role</span>
               </div>
-            </RadioGroup>
+              <PerformersEditor value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
+            </div>
+
+            <Separator className="opacity-20" />
+
+            {/* Production & Engineering */}
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Production &amp; Engineering <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
+                <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+                <span>Artist Name</span><span>Role</span>
+              </div>
+              <ProductionEditor value={f.production} onChange={(v) => setF({ ...f, production: v })} />
+            </div>
+          </div>
+
+          {/* ── 5. Genre + Subgenres ─────────────────────────────────── */}
+          <div className="p-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Genre</Label>
+                <Select value={f.genre || "none"}
+                  onValueChange={(v) => setF({ ...f, genre: v === "none" ? "" : v, subgenre: "" })}>
+                  <SelectTrigger><SelectValue placeholder="Please select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Not selected</SelectItem>
+                    {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Subgenres</Label>
+                <Select value={f.subgenre || "none"}
+                  onValueChange={(v) => setF({ ...f, subgenre: v === "none" ? "" : v })}
+                  disabled={subgenreOptions.length === 0}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={subgenreOptions.length === 0 ? "Select genre first" : "Please select"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Not selected</SelectItem>
+                    {subgenreOptions.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 6. Recording Year + Country ──────────────────────────── */}
+          <div className="p-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Recording Year</Label>
+                <Select
+                  value={f.recordingYear ? String(f.recordingYear) : "none"}
+                  onValueChange={(v) => setF({ ...f, recordingYear: v === "none" ? null : Number(v) })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent className="max-h-48">
+                    <SelectItem value="none">— Not specified</SelectItem>
+                    {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Country of Recording</Label>
+                <Select value={f.countryOfRecording || "none"}
+                  onValueChange={(v) => setF({ ...f, countryOfRecording: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Select a Country of Recording" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Not specified</SelectItem>
+                    {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name} ({c.code})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 7. Audio Style + Explicit Status ─────────────────────── */}
+          <div className="p-6 space-y-5">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Audio Style ?</Label>
+              <RadioGroup
+                value={f.audioStyle}
+                onValueChange={(v) => setF({ ...f, audioStyle: v as FormState["audioStyle"] })}
+                className="flex gap-6"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="instrumental" id="style-instrumental" />
+                  <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">Instrumental</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="vocal" id="style-vocal" />
+                  <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">Vocal</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Explicit Status ?</Label>
+              <RadioGroup
+                value={f.explicitStatus}
+                onValueChange={(v) => setF({
+                  ...f,
+                  explicitStatus: v as FormState["explicitStatus"],
+                  isExplicit: v === "explicit",
+                })}
+                className="flex gap-6"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="non_explicit" id="exp-clean" />
+                  <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">Non Explicit</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="explicit" id="exp-explicit" />
+                  <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">Explicit</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="censored" id="exp-censored" />
+                  <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">Censored</Label>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
 
         </div>
-
-        {/* ── Bottom action bar ─────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 pt-4 mt-2 border-t border-border/40">
-          <Button variant="outline" onClick={() => setLocation(`/releases/${releaseId}`)}>
-            Cancel
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={save} disabled={isBusy}>
-              {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              Save
-            </Button>
-            <Button onClick={saveAndGoNext} disabled={isBusy}>
-              {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              {nextTrack ? "Save & Next Track" : "Save & Finish"}
-            </Button>
-          </div>
-        </div>
-
       </div>
+
+      {/* ── Fixed bottom bar ─────────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-3 flex items-center justify-between">
+        <Button variant="outline" onClick={() => setLocation(`/releases/${releaseId}`)}>
+          Cancel
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={save} disabled={isBusy}>
+            {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+            Save
+          </Button>
+          <Button onClick={saveAndGoNext} disabled={isBusy}>
+            {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+            {nextTrack ? "Save & Next Track" : "Save & Finish"}
+          </Button>
+        </div>
+      </div>
+
     </Layout>
   );
 }
