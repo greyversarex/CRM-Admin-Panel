@@ -6,6 +6,7 @@ import type { TrackDisplayArtist, TrackWriter, TrackPerformer, TrackProductionMe
 import {
   WRITER_ROLES, DISPLAY_ARTIST_ROLES, PERFORMER_ROLES, PRODUCTION_ROLES,
 } from "./types";
+import { ArtistNameCombobox } from "./artist-name-combobox";
 
 // ─── Display Artists ────────────────────────────────────────────────────────
 export function DisplayArtistsEditor({
@@ -23,11 +24,10 @@ export function DisplayArtistsEditor({
       empty="At least 1 — shown on DSPs under the track title."
       renderRow={(row, i) => (
         <>
-          <Input
-            placeholder="Artist name"
+          <ArtistNameCombobox
             value={row.name}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="bg-background/40 flex-1 min-w-0"
+            onChange={(name) => update(i, { name })}
+            placeholder="Select or type an artist"
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
@@ -74,10 +74,10 @@ export function WritersEditor({
       empty="At least 1 writer. All writers' shares must total 100%."
       renderRow={(row, i) => (
         <>
-          <Input
-            placeholder="Writer full name" value={row.name}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="bg-background/40 flex-1 min-w-0"
+          <ArtistNameCombobox
+            value={row.name}
+            onChange={(name) => update(i, { name })}
+            placeholder="Select or type a writer"
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
@@ -118,10 +118,10 @@ export function PerformersEditor({
       empty="Optional. Musicians, instruments, backing vocals."
       renderRow={(row, i) => (
         <>
-          <Input
-            placeholder="Performer name" value={row.name}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="bg-background/40 flex-1 min-w-0"
+          <ArtistNameCombobox
+            value={row.name}
+            onChange={(name) => update(i, { name })}
+            placeholder="Select or type a performer"
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[180px]"><SelectValue /></SelectTrigger>
@@ -151,10 +151,10 @@ export function ProductionEditor({
       empty="Optional. Producer, sound engineer, mixing/mastering engineer."
       renderRow={(row, i) => (
         <>
-          <Input
-            placeholder="Name" value={row.name}
-            onChange={(e) => update(i, { name: e.target.value })}
-            className="bg-background/40 flex-1 min-w-0"
+          <ArtistNameCombobox
+            value={row.name}
+            onChange={(name) => update(i, { name })}
+            placeholder="Select or type a name"
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[200px]"><SelectValue /></SelectTrigger>
