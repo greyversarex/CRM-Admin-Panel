@@ -9,21 +9,22 @@ import {
 
 // ─── Display Artists ────────────────────────────────────────────────────────
 export function DisplayArtistsEditor({
-  value, onChange,
-}: { value: TrackDisplayArtist[]; onChange: (v: TrackDisplayArtist[]) => void }) {
+  value, onChange, hideTitle,
+}: { value: TrackDisplayArtist[]; onChange: (v: TrackDisplayArtist[]) => void; hideTitle?: boolean }) {
   const update = (i: number, patch: Partial<TrackDisplayArtist>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Исполнители (Display Artists)"
+      title="Display Artists"
+      hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "primary" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Минимум 1 — будет показан на DSP под названием трека."
+      empty="At least 1 — shown on DSPs under the track title."
       renderRow={(row, i) => (
         <>
           <Input
-            placeholder="Имя исполнителя"
+            placeholder="Artist name"
             value={row.name}
             onChange={(e) => update(i, { name: e.target.value })}
             className="bg-background/40 flex-1 min-w-0"
@@ -40,40 +41,41 @@ export function DisplayArtistsEditor({
   );
 }
 
-// ─── Writers (с долями) ─────────────────────────────────────────────────────
+// ─── Writers (with shares) ──────────────────────────────────────────────────
 export function WritersEditor({
-  value, onChange,
-}: { value: TrackWriter[]; onChange: (v: TrackWriter[]) => void }) {
+  value, onChange, hideTitle,
+}: { value: TrackWriter[]; onChange: (v: TrackWriter[]) => void; hideTitle?: boolean }) {
   const update = (i: number, patch: Partial<TrackWriter>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   const totalShare = value.reduce((s, w) => s + (Number(w.share) || 0), 0);
   const shareOk = Math.abs(totalShare - 100) < 0.01;
   return (
     <Editor
-      title="Авторы (Writers)"
+      title="Writers"
+      hideTitle={hideTitle}
       subtitle={
         <span className={shareOk ? "text-emerald-500" : "text-amber-500 inline-flex items-center gap-1"}>
           {!shareOk && <AlertTriangle className="h-3 w-3" />}
-          Сумма долей: {totalShare}% (нужно 100%)
+          Share total: {totalShare}% (needs 100%)
         </span>
       }
       rows={value}
       onAdd={() => {
-        // Раздаём поровну при добавлении нового автора.
+        // Split shares evenly when adding a new writer.
         const next: TrackWriter[] = [...value, { name: "", role: "songwriter", share: 0, caeIpi: null }];
         const each = Math.round((100 / next.length) * 100) / 100;
         next.forEach((w) => (w.share = each));
-        // Округление: добиваем разницу к первому.
+        // Rounding: push the remainder onto the first writer.
         const diff = 100 - next.reduce((s, w) => s + w.share, 0);
         if (next[0]) next[0].share = Math.round((next[0].share + diff) * 100) / 100;
         onChange(next);
       }}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Минимум 1 автор. Сумма долей всех авторов должна быть 100%."
+      empty="At least 1 writer. All writers' shares must total 100%."
       renderRow={(row, i) => (
         <>
           <Input
-            placeholder="ФИО автора" value={row.name}
+            placeholder="Writer full name" value={row.name}
             onChange={(e) => update(i, { name: e.target.value })}
             className="bg-background/40 flex-1 min-w-0"
           />
@@ -102,21 +104,22 @@ export function WritersEditor({
 
 // ─── Performers ─────────────────────────────────────────────────────────────
 export function PerformersEditor({
-  value, onChange,
-}: { value: TrackPerformer[]; onChange: (v: TrackPerformer[]) => void }) {
+  value, onChange, hideTitle,
+}: { value: TrackPerformer[]; onChange: (v: TrackPerformer[]) => void; hideTitle?: boolean }) {
   const update = (i: number, patch: Partial<TrackPerformer>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Музыканты (Performers)"
+      title="Performers"
+      hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "vocals" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Опционально. Музыканты, инструменты, бэк-вокал."
+      empty="Optional. Musicians, instruments, backing vocals."
       renderRow={(row, i) => (
         <>
           <Input
-            placeholder="Имя музыканта" value={row.name}
+            placeholder="Performer name" value={row.name}
             onChange={(e) => update(i, { name: e.target.value })}
             className="bg-background/40 flex-1 min-w-0"
           />
@@ -134,21 +137,22 @@ export function PerformersEditor({
 
 // ─── Production team ────────────────────────────────────────────────────────
 export function ProductionEditor({
-  value, onChange,
-}: { value: TrackProductionMember[]; onChange: (v: TrackProductionMember[]) => void }) {
+  value, onChange, hideTitle,
+}: { value: TrackProductionMember[]; onChange: (v: TrackProductionMember[]) => void; hideTitle?: boolean }) {
   const update = (i: number, patch: Partial<TrackProductionMember>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Продакшен (Production)"
+      title="Production"
+      hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "producer" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Опционально. Продюсер, звукоинженер, mixing/mastering engineer."
+      empty="Optional. Producer, sound engineer, mixing/mastering engineer."
       renderRow={(row, i) => (
         <>
           <Input
-            placeholder="Имя" value={row.name}
+            placeholder="Name" value={row.name}
             onChange={(e) => update(i, { name: e.target.value })}
             className="bg-background/40 flex-1 min-w-0"
           />
@@ -164,9 +168,9 @@ export function ProductionEditor({
   );
 }
 
-// ─── Универсальный список с add/remove ──────────────────────────────────────
+// ─── Generic add/remove list ────────────────────────────────────────────────
 function Editor<T>({
-  title, subtitle, rows, renderRow, onAdd, onRemove, empty,
+  title, subtitle, rows, renderRow, onAdd, onRemove, empty, hideTitle,
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -175,26 +179,29 @@ function Editor<T>({
   onAdd: () => void;
   onRemove: (i: number) => void;
   empty: string;
+  hideTitle?: boolean;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <h5 className="text-sm font-medium">{title}</h5>
-        {subtitle && <span className="text-[11px]">{subtitle}</span>}
-      </div>
-      {rows.length === 0 && <p className="text-xs text-muted-foreground italic">{empty}</p>}
+      {(!hideTitle || subtitle) && (
+        <div className="flex items-baseline justify-between">
+          {hideTitle ? <span /> : <h5 className="text-sm font-medium">{title}</h5>}
+          {subtitle && <span className="text-[11px]">{subtitle}</span>}
+        </div>
+      )}
+      {rows.length === 0 && <p className="text-sm text-muted-foreground italic">{empty}</p>}
       <div className="space-y-1.5">
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-2 bg-background/30 border border-border/40 rounded-md p-1.5">
             {renderRow(row, i)}
-            <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(i)} title="Удалить">
+            <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(i)} title="Remove">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         ))}
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-        <Plus className="h-4 w-4 mr-1" /> Добавить
+        <Plus className="h-4 w-4 mr-1" /> Add Artist
       </Button>
     </div>
   );

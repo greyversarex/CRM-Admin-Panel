@@ -531,7 +531,7 @@ export default function TrackEditPage() {
               {/* Right: spatial AI usage */}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground leading-relaxed">
-                  What amount of generative AI tools were used in the creation of this spatial file? ?
+                  What amount of generative AI tools were used in the creation of this spatial audio? ?
                 </Label>
                 <RadioGroup
                   value={f.spatialAiUsage || "none"}
@@ -608,6 +608,7 @@ export default function TrackEditPage() {
               <span>Artist Name</span><span>Role</span>
             </div>
             <DisplayArtistsEditor
+              hideTitle
               value={f.displayArtists}
               onChange={(v) => setF({ ...f, displayArtists: v })}
             />
@@ -634,7 +635,7 @@ export default function TrackEditPage() {
               <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
-              <WritersEditor value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
+              <WritersEditor hideTitle value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
             </div>
 
             <Separator className="opacity-20" />
@@ -648,7 +649,7 @@ export default function TrackEditPage() {
               <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
-              <PerformersEditor value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
+              <PerformersEditor hideTitle value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
             </div>
 
             <Separator className="opacity-20" />
@@ -662,7 +663,7 @@ export default function TrackEditPage() {
               <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
-              <ProductionEditor value={f.production} onChange={(v) => setF({ ...f, production: v })} />
+              <ProductionEditor hideTitle value={f.production} onChange={(v) => setF({ ...f, production: v })} />
             </div>
           </div>
 

@@ -864,7 +864,7 @@ function TrackRow({
         {/* Row 2: Primary Artist */}
         <div>
           <TrackField
-            label="Primary Artist"
+            label="Primary"
             value={primaries.length ? primaries.map(p => p.name).join(", ") : (release.artistName || DASH)}
             chip
           />
@@ -905,11 +905,14 @@ function TrackRow({
           <TrackField label="Subgenre" value={(t as any).subgenre || DASH} />
         </div>
 
-        {/* Row 6-8: Recorded / ISRC / Explicit Content */}
+        {/* Row 6-8: Recorded / ISRC / Stereo AI Use */}
         <div className="grid grid-cols-3 gap-4">
           <TrackField label="Recorded" value={recYear ? String(recYear) : DASH} />
           <TrackField label="ISRC" value={t.isrc ? <span className="font-mono text-xs">{t.isrc}</span> : DASH} />
-          <TrackField label="Explicit Content" value={(t as any).isExplicit ? "Yes" : "No"} />
+          <TrackField
+            label="Stereo AI Use"
+            value={(t as any).aiUsage === "some" ? "Some" : (t as any).aiUsage === "all" ? "All" : DASH}
+          />
         </div>
 
         {/* Footer: audio status + preview start */}

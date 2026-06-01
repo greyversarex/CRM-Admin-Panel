@@ -29,13 +29,13 @@ export const SUBGENRES: Record<string, string[]> = {
 };
 
 export const LANGS: Array<{ value: string; label: string }> = [
-  { value: "Tajik",   label: "Таджикский" },
-  { value: "Russian", label: "Русский" },
-  { value: "English", label: "Английский" },
-  { value: "Persian", label: "Персидский" },
-  { value: "Uzbek",   label: "Узбекский" },
-  { value: "Arabic",  label: "Арабский" },
-  { value: "Turkish", label: "Турецкий" },
+  { value: "Tajik",   label: "Tajik" },
+  { value: "Russian", label: "Russian" },
+  { value: "English", label: "English" },
+  { value: "Persian", label: "Persian" },
+  { value: "Uzbek",   label: "Uzbek" },
+  { value: "Arabic",  label: "Arabic" },
+  { value: "Turkish", label: "Turkish" },
 ];
 
 export const ARTIST_ROLES: Array<{ value: ReleaseArtistRefRole; label: string }> = [
@@ -69,17 +69,17 @@ export const PRODUCTION_ROLES = [
 ] as const;
 
 export const COUNTRIES: Array<{ code: string; name: string }> = [
-  { code: "TJ", name: "Таджикистан" },
-  { code: "RU", name: "Россия" },
-  { code: "UZ", name: "Узбекистан" },
-  { code: "KZ", name: "Казахстан" },
-  { code: "KG", name: "Кыргызстан" },
-  { code: "TR", name: "Турция" },
-  { code: "IR", name: "Иран" },
-  { code: "US", name: "США" },
-  { code: "GB", name: "Великобритания" },
-  { code: "DE", name: "Германия" },
-  { code: "FR", name: "Франция" },
+  { code: "TJ", name: "Tajikistan" },
+  { code: "RU", name: "Russia" },
+  { code: "UZ", name: "Uzbekistan" },
+  { code: "KZ", name: "Kazakhstan" },
+  { code: "KG", name: "Kyrgyzstan" },
+  { code: "TR", name: "Turkey" },
+  { code: "IR", name: "Iran" },
+  { code: "US", name: "United States" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "DE", name: "Germany" },
+  { code: "FR", name: "France" },
 ];
 
 export const DSP_CATEGORY_LABELS: Record<string, string> = {
