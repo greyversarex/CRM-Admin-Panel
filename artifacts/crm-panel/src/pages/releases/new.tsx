@@ -197,11 +197,11 @@ export default function CreateRelease() {
   return (
     <TooltipProvider delayDuration={200}>
     <Layout>
-      <div className="max-w-3xl mx-auto py-8 px-4 pb-24">
+      <div className="max-w-5xl mx-auto py-8 px-4 pb-24">
 
         {/* ── Page header ──────────────────────────────────────────────── */}
         <div className="mb-6">
-          <h1 className="text-xl font-semibold">Release details</h1>
+          <h1 className="text-2xl font-semibold">Release details</h1>
           <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
             We follow strict guidelines as set forth by Apple Music, Spotify and more.
             Upload artwork, enter the title, choose the release type, and add your project artists.

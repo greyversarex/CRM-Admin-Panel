@@ -377,7 +377,7 @@ export default function TrackEditPage() {
         }}
       />
 
-      <div className="max-w-2xl mx-auto pb-28">
+      <div className="max-w-5xl mx-auto pb-28">
 
         {/* ── Back + track index ───────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-4">
@@ -397,7 +397,7 @@ export default function TrackEditPage() {
 
           {/* ── 1. Audio Details ─────────────────────────────────────── */}
           <div className="p-6 space-y-5">
-            <h3 className="text-base font-semibold">Audio Details</h3>
+            <h3 className="text-lg font-semibold">Audio Details</h3>
 
             {/* Audio file row + AI radios */}
             <div className="grid grid-cols-2 gap-6 items-start">
@@ -509,7 +509,7 @@ export default function TrackEditPage() {
           {/* ── 1b. Spatial Audio ────────────────────────────────────── */}
           <div className="p-6 space-y-5">
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold">Spatial Audio ?</h3>
+              <h3 className="text-lg font-semibold">Spatial Audio ?</h3>
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
                 +$24.99
               </span>
@@ -562,7 +562,7 @@ export default function TrackEditPage() {
 
           {/* ── 2. Track Details ─────────────────────────────────────── */}
           <div className="p-6 space-y-4">
-            <h3 className="text-base font-semibold">Track Details</h3>
+            <h3 className="text-lg font-semibold">Track Details</h3>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Song Name ?</Label>
@@ -597,7 +597,7 @@ export default function TrackEditPage() {
           {/* ── 3. Display Artists ───────────────────────────────────── */}
           <div className="p-6 space-y-4">
             <div>
-              <h3 className="text-base font-semibold">Display Artists</h3>
+              <h3 className="text-lg font-semibold">Display Artists</h3>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 Artists that appear as the main performers or in search items for the song.
                 Each track requires a primary artist to be specified. Include any additional
@@ -616,7 +616,7 @@ export default function TrackEditPage() {
           {/* ── 4. Contributors ──────────────────────────────────────── */}
           <div className="p-6 space-y-5">
             <div>
-              <h3 className="text-base font-semibold">Contributors ?</h3>
+              <h3 className="text-lg font-semibold">Contributors ?</h3>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 Apple Music requires that tracks delivered to Apple Music must have at least one role represented
                 per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
