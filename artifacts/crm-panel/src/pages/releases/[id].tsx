@@ -155,13 +155,43 @@ export default function ReleaseDetail() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-5">
-        {/* back */}
-        <button onClick={() => setLocation("/releases")}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground self-start px-2 py-1 rounded hover:bg-accent/40">
+      {/* ── Dialogs (programmatic, no trigger buttons needed) ──────────── */}
+      {submitOpen && (
+        <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
+          <SubmitForReviewDialog
+            releaseId={id}
+            release={release}
+            enableEditing={() => setMetaEditing(true)}
+            onClose={() => { setSubmitOpen(false); invalidateAll(); }}
+          />
+        </Dialog>
+      )}
+      <Dialog open={deliverOpen} onOpenChange={setDeliverOpen}>
+        <DeliverDialog releaseId={id} onClose={() => { setDeliverOpen(false); invalidateAll(); }} />
+      </Dialog>
+      <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
+        <TakeDownDialog releaseId={id} onClose={() => { setTakedownOpen(false); invalidateAll(); }} />
+      </Dialog>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <EditReleaseDialog
+          releaseId={id}
+          title={release.title}
+          currentStatus={release.status}
+          onClose={() => { setEditOpen(false); invalidateAll(); }}
+        />
+      </Dialog>
+
+      <div className="max-w-2xl mx-auto flex flex-col gap-5 pb-8">
+
+        {/* Back */}
+        <button
+          onClick={() => setLocation("/releases")}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground self-start px-2 py-1 rounded border border-border/40 hover:bg-accent/30"
+        >
           <ChevronLeft className="h-3.5 w-3.5" /> Back to Releases
         </button>
 
+        {/* Title + subtitle */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -169,114 +199,7 @@ export default function ReleaseDetail() {
           </p>
         </div>
 
-        {/* ── Single-column content ─────────────────────────────────────── */}
-        <div className="flex flex-col gap-5">
-        {/* Старая верхняя панель действий — отключена. Все действия переехали
-            в правую колонку «Release Hub». Блок ниже скрыт, чтобы сохранить
-            обработчики (submitOpen/deliverOpen/takedownOpen/editOpen) для
-            существующих диалогов без переписывания. */}
-        <div className="hidden" aria-hidden>
-          <div className="flex gap-2 flex-wrap">
-            {/* Send to Moderation: только из draft/rejected, доступно владельцу */}
-            {release.canSubmit && (
-              <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95">
-                    <ShieldCheck className="mr-2 h-4 w-4" /> Send to Moderation
-                  </Button>
-                </DialogTrigger>
-                {/* Mount only when open: гарантирует свежий fetch /issues при каждом открытии. */}
-                {submitOpen && (
-                  <SubmitForReviewDialog
-                    releaseId={id}
-                    release={release}
-                    enableEditing={() => setMetaEditing(true)}
-                    onClose={() => { setSubmitOpen(false); invalidateAll(); }}
-                  />
-                )}
-              </Dialog>
-            )}
-            {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
-              <Dialog open={deliverOpen} onOpenChange={setDeliverOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
-                    <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
-                  </Button>
-                </DialogTrigger>
-                <DeliverDialog
-                  releaseId={id}
-                  onClose={() => { setDeliverOpen(false); invalidateAll(); }}
-                />
-              </Dialog>
-            )}
-            {/* Take Down: показываем только когда backend разрешает переход в takedown_requested */}
-            {release.allowedTransitions.includes("takedown_requested") && (
-              <Dialog open={takedownOpen} onOpenChange={setTakedownOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
-                    <XCircle className="mr-2 h-4 w-4" /> Take Down
-                  </Button>
-                </DialogTrigger>
-                <TakeDownDialog
-                  releaseId={id}
-                  onClose={() => { setTakedownOpen(false); invalidateAll(); }}
-                />
-              </Dialog>
-            )}
-            {/* Edit Release:
-                - draft: одной кнопкой включаем инлайн-редактирование метаданных
-                  прямо в карточке Release Details. Никаких диалогов и смены статуса.
-                - rejected: показываем диалог с подтверждением и переходом rejected→draft.
-                - всё остальное (live/approved/etc): кнопка Edit Locked. */}
-            {release.isEditable ? (
-              release.status === "draft" ? (
-                <>
-                  <Button
-                    variant="default"
-                    onClick={() => setLocation(`/releases/${id}/edit`)}
-                    title="Полный 4-шаговый мастер редактирования"
-                  >
-                    <Edit3 className="mr-2 h-4 w-4" /> Продолжить в мастере
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
-                    onClick={() => setMetaEditing((v) => !v)}
-                    title="Быстрое редактирование основных полей в карточке"
-                  >
-                    <Edit3 className="mr-2 h-4 w-4" />
-                    {metaEditing ? "Завершить" : "Быстрое ред."}
-                  </Button>
-                </>
-              ) : (
-                <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="bg-card">
-                      <Edit3 className="mr-2 h-4 w-4" /> Edit Release
-                    </Button>
-                  </DialogTrigger>
-                  <EditReleaseDialog
-                    releaseId={id}
-                    title={release.title}
-                    currentStatus={release.status}
-                    onClose={() => { setEditOpen(false); invalidateAll(); }}
-                  />
-                </Dialog>
-              )
-            ) : (
-              <Button
-                variant="outline"
-                disabled
-                className="bg-card opacity-60 cursor-not-allowed"
-                title="Релиз заблокирован для редактирования. Дождитесь решения модератора или запросите takedown."
-              >
-                <Lock className="mr-2 h-4 w-4" /> Edit Locked
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* ── Контекстные баннеры по статусу ─────────────────────────────── */}
+        {/* Status banners */}
         {release.status === "pending_review" && (
           <Card className="border-amber-500/30 bg-amber-500/5">
             <CardContent className="p-4 flex items-start gap-3">
@@ -285,14 +208,12 @@ export default function ReleaseDetail() {
                 <div className="font-semibold text-sm text-amber-300">Релиз на модерации</div>
                 <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
                   Модератор проверяет ваш релиз — обычно это занимает 1–2 рабочих дня.
-                  В это время редактирование закрыто. Как только проверка пройдёт,
-                  вы получите уведомление об одобрении или возврате с комментариями.
+                  В это время редактирование закрыто.
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
-
         {release.status === "rejected" && (
           <Card className="border-rose-500/40 bg-rose-500/5">
             <CardContent className="p-4 flex items-start gap-3">
@@ -307,14 +228,10 @@ export default function ReleaseDetail() {
                 ) : (
                   <p className="text-xs text-rose-200/80 mt-1">Модератор не оставил комментариев.</p>
                 )}
-                <p className="text-xs text-rose-200/70 mt-2">
-                  Внесите правки и нажмите «Send to Moderation», чтобы отправить релиз на повторную проверку.
-                </p>
               </div>
             </CardContent>
           </Card>
         )}
-
         {release.status === "approved" && (
           <Card className="border-emerald-500/30 bg-emerald-500/5">
             <CardContent className="p-4 flex items-start gap-3">
@@ -323,52 +240,42 @@ export default function ReleaseDetail() {
                 <div className="font-semibold text-sm text-emerald-300">Релиз одобрен</div>
                 <p className="text-xs text-emerald-200/80 mt-1">
                   Релиз прошёл модерацию и готов к доставке на платформы.
-                  {user?.role === "admin" || user?.role === "manager"
-                    ? " Нажмите «Deliver to DSPs», чтобы поставить в очередь."
-                    : " Дистрибьютор поставит его в очередь на отгрузку в DSP."}
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* ── Status row ────────────────────────────────────────────────── */}
+        {/* Status row */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">Status</span>
             <StatusBadge status={release.status} className="text-xs" />
-            <span className="text-xs text-muted-foreground hidden sm:block">
-              · Updated {new Date(release.updatedAt).toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-            </span>
           </div>
           {release.isEditable && (
             <DeleteReleaseButton releaseId={release.id} releaseTitle={release.title} onDeleted={() => setLocation("/releases")} />
           )}
         </div>
 
-        {/* Risk panel — модератор/админ видит композитную оценку и факторы.
-            Артист тоже видит, но только в read-only — кнопки сканов скрыты. */}
-        <RiskPanel release={release} onChanged={invalidateAll} />
-
         {/* Release Details */}
         <Card id="card-release-details" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle className="text-lg">Release Details</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">Release Details</CardTitle>
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 cursor-pointer"
+                onClick={() => jumpToIssue({ section: "release", field: "", message: "", severity: "error" }, { releaseId: id, isDraft: release.status === "draft", enableEditing: () => setMetaEditing(true), navigate: setLocation })}>
+                Show Issues
+              </span>
+            </div>
             <div className="flex items-center gap-2">
               {metaEditing && (
-                <span className="text-[11px] text-primary/90 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">
-                  Режим редактирования
-                </span>
+                <span className="text-[11px] text-primary/90 bg-primary/10 border border-primary/30 rounded px-2 py-0.5">Editing</span>
               )}
               {release.isEditable ? (
                 <Button
-                  size="sm"
-                  variant="outline"
+                  size="sm" variant="outline"
                   className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
-                  onClick={() => {
-                    if (release.status === "draft") setMetaEditing((v) => !v);
-                    else setEditOpen(true);
-                  }}
+                  onClick={() => { if (release.status === "draft") setMetaEditing((v) => !v); else setEditOpen(true); }}
                 >
                   <Edit3 className="h-3.5 w-3.5 mr-1" />
                   {metaEditing ? "Done" : "Edit"}
@@ -380,7 +287,7 @@ export default function ReleaseDetail() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-6">
+          <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-6">
             {metaEditing ? (
               <EditDetailsForm
                 release={release}
@@ -388,36 +295,27 @@ export default function ReleaseDetail() {
                 onSaved={() => { setMetaEditing(false); invalidateAll(); }}
               />
             ) : (
-              <div className="space-y-3">
-                <KV label="Release Title" value={release.title} highlight />
-                <KV label="Metadata Language" value={release.language || "English"} />
+              <div className="space-y-2">
+                <KV label="Releases Title" value={release.title} highlight />
+                <KV label="Release Version" value={(release as any).releaseVersion || (release as any).trackVersion || "—"} />
+                <KV label="Metadata" value={release.language || "English"} />
                 <KV label="Primary Artist" value={release.artistName} chip />
-                <KV label="Label" value={release.labelName || "Independent"} />
-                <KV label="Release Date" value={release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "TBD"} />
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                  <KV label="Genre" value={release.genre || "—"} />
-                  <KV label="Subgenre" value="—" />
-                  <KV label="UPC" value={release.upc || "Pending"} mono />
-                  <KV label="Release Type" value={release.releaseType} cap />
-                  <KV label="Tracks" value={String(release.totalTracks)} />
-                  <KV label="Explicit Content" value={release.isExplicit ? "Yes" : "No"} />
-                  <KV label="P-Line" value={release.pLine || "—"} />
-                  <KV label="C-Line" value={release.cLine || "—"} />
-                  <KV label="Territories" value={(release.territories || ["WW"]).join(", ")} />
-                  <KV
-                    label="AI Cover"
-                    value={
-                      (release as any).coverAiUsage === "none" ? "AI не использовался"
-                      : (release as any).coverAiUsage === "some" ? "AI частично"
-                      : (release as any).coverAiUsage === "all"  ? "Полностью AI"
-                      : "Не указано"
-                    }
-                  />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2 border-t border-border/30">
+                  <KV label="Genre" value={release.genre || "—"} mini />
+                  <KV label="UPC" value={release.upc || "Pending"} mono mini />
+                  <KV label="Subgenre" value="—" mini />
+                  <KV label="Catalog" value={(release as any).catalogNumber || release.upc || "—"} mini />
+                  <KV label="Release Type" value={release.releaseType} cap mini />
+                  <KV label="Label" value={release.labelName || "Independent"} mini />
+                  <KV label="Tracks" value={String(release.totalTracks)} mini />
+                  <KV label="CLINE" value={release.cLine || "—"} mini />
+                  <KV label="Explicit Content" value={release.isExplicit ? "Yes" : "No"} mini />
+                  <KV label="PLINE" value={release.pLine || "—"} mini />
                 </div>
                 {Array.isArray((release as any).metadataTranslations) && (release as any).metadataTranslations.length > 0 && (
-                  <div className="pt-3 mt-1 border-t border-border/40">
-                    <div className="text-xs text-muted-foreground mb-1.5">Переводы метаданных</div>
-                    <ul className="space-y-1">
+                  <div className="pt-2 mt-1 border-t border-border/30">
+                    <div className="text-[11px] text-muted-foreground mb-1">Metadata Translations</div>
+                    <ul className="space-y-0.5">
                       {((release as any).metadataTranslations as Array<{language: string; title: string; version?: string | null}>).map((t, i) => (
                         <li key={i} className="text-xs text-foreground bg-background/40 border border-border/40 rounded px-2 py-1 flex flex-wrap gap-x-2">
                           <span className="text-muted-foreground uppercase font-mono text-[10px] self-center">{t.language}</span>
@@ -430,69 +328,25 @@ export default function ReleaseDetail() {
                 )}
               </div>
             )}
-            <CoverUploader
-              value={release.coverUrl ?? null}
-              releaseId={id}
-              attach
-              onChange={() => invalidateAll()}
-            />
+            <CoverUploader value={release.coverUrl ?? null} releaseId={id} attach onChange={() => invalidateAll()} />
           </CardContent>
         </Card>
 
-        {/* Tracks */}
-        <Card id="card-tracks" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Music2 className="h-4 w-4" /> Треки ({release.tracks?.length ?? 0})
-            </CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
-              {release.isEditable && (release.tracks?.length ?? 0) > 1 && (
-                <ReorderTracksDialog
-                  releaseId={release.id}
-                  tracks={release.tracks ?? []}
-                  onSaved={invalidateAll}
-                />
-              )}
-              {release.isEditable && (release.tracks?.length ?? 0) > 0 && (
-                <MultiEditTracksDialog
-                  tracks={release.tracks ?? []}
-                  onSaved={invalidateAll}
-                />
-              )}
-              {release.isEditable && (
-                <BulkAudioUploadButton
-                  releaseId={id}
-                  artistId={release.artistId}
-                  defaultLanguage={release.language || "Tajik"}
-                  defaultGenre={release.genre || "Pop"}
-                  startTrackNumber={(release.tracks?.length ?? 0) + 1}
-                  onUploaded={invalidateAll}
-                />
-              )}
-              <BulkTracksDialog
-                releaseId={id}
-                artistId={release.artistId}
-                defaultLanguage={release.language || "Tajik"}
-                defaultGenre={release.genre || "Pop"}
-                startTrackNumber={(release.tracks?.length ?? 0) + 1}
-                onUploaded={invalidateAll}
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {(release.tracks ?? []).length === 0 ? (
-              <div className="text-sm text-muted-foreground py-6 text-center border border-dashed border-border/50 rounded-md">
-                Треков пока нет — добавь первый ниже.
-              </div>
-            ) : (
-              release.tracks!.map((t, i) => (
-                <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />
-              ))
-            )}
+        {/* Tracks — individual card per track */}
+        {(release.tracks ?? []).map((t, i) => (
+          <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />
+        ))}
+        {(release.tracks ?? []).length === 0 && (
+          <div className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border/50 rounded-lg">
+            No tracks yet — add the first one below.
+          </div>
+        )}
 
-            {/* ── Symphonic-style две карточки внизу: Создать новый / Переиспользовать ── */}
-            {release.isEditable && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+        {/* Create New Track */}
+        {release.isEditable && (
+          <Card id="card-tracks" className="bg-card/50 backdrop-blur border-border/50">
+            <CardContent className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button
                   type="button"
                   disabled={createTrack.isPending}
@@ -501,7 +355,7 @@ export default function ReleaseDetail() {
                       const nextNum = (release.tracks?.length ?? 0) + 1;
                       await createTrack.mutateAsync({
                         data: {
-                          title: `Трек ${nextNum}`,
+                          title: `Track ${nextNum}`,
                           artistId: release.artistId,
                           releaseId: id,
                           trackNumber: nextNum,
@@ -510,33 +364,33 @@ export default function ReleaseDetail() {
                           isExplicit: false,
                         } as any,
                       });
-                      toast({ title: "Трек создан", description: "Нажмите «Редактировать», чтобы заполнить детали." });
+                      toast({ title: "Track created", description: "Click \"Edit\" to fill in the details." });
                       invalidateAll();
                     } catch (e: any) {
-                      toast({ title: "Не удалось создать трек", description: e?.message ?? "Ошибка", variant: "destructive" });
+                      toast({ title: "Could not create track", description: e?.message ?? "Error", variant: "destructive" });
                     }
                   }}
-                  className="text-left rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-4 hover-elevate transition disabled:opacity-50"
+                  className="text-left rounded-lg border border-border/50 bg-background/30 p-5 hover:bg-accent/30 transition disabled:opacity-50"
                   data-testid="card-create-track"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                      <FilePlus2 className="h-4 w-4 text-emerald-300" />
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0">
+                      <Music2 className="h-6 w-6 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-sm">Создать новый трек</div>
+                      <div className="font-semibold text-sm text-primary">Create New Track</div>
+                      <p className="text-xs text-rose-300/80 mt-0.5">Need to create a new track for this release?</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Создайте сколько угодно треков для этого релиза: загрузите аудио и заполните метаданные.
+                        Create as many as you need, upload your audio, and fill out your track details.
                       </p>
                       <div className="mt-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border/50 text-xs">
-                          <Plus className="h-3 w-3" /> Создать трек
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+                          Create Track
                         </span>
                       </div>
                     </div>
                   </div>
                 </button>
-
                 <ReuseExistingTrackCard
                   releaseId={id}
                   releaseArtistId={release.artistId}
@@ -545,33 +399,18 @@ export default function ReleaseDetail() {
                   onReused={invalidateAll}
                 />
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Release Availability — реальный редактор DSP (Фаза 6) */}
+        {/* Scheduled (DSP Availability) */}
         <ReleaseAvailabilityCard release={release} isEditable={!!release.isEditable} />
 
-        {/* SplitShare — реальная сводка по трекам (Фаза 6) */}
-        <SplitShareCard release={release} />
+        {/* Timeline */}
+        <TimelineCard release={release} isEditable={!!release.isEditable} onEditClick={() => setEditOpen(true)} />
 
-        {/* ── Show Issues inline (перемещён из сайдбара) ──────────────── */}
-        <ShowIssuesPanel
-          releaseId={release.id}
-          status={release.status}
-          updatedAt={String(release.updatedAt)}
-          onJump={(issue) =>
-            jumpToIssue(issue, {
-              releaseId: id,
-              isDraft: release.status === "draft",
-              enableEditing: () => setMetaEditing(true),
-              navigate: (path) => setLocation(path),
-            })
-          }
-        />
-
-        {/* ── Bottom action bar ─────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
+        {/* Bottom action bar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
           <div className="flex items-center gap-2 flex-wrap">
             {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
               <Button
@@ -579,7 +418,7 @@ export default function ReleaseDetail() {
                 className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
                 onClick={() => setDeliverOpen(true)}
               >
-                <Send className="mr-2 h-4 w-4" /> Доставить на DSP
+                <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
               </Button>
             )}
             {release.allowedTransitions.includes("takedown_requested") && (
@@ -588,13 +427,13 @@ export default function ReleaseDetail() {
                 className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
                 onClick={() => setTakedownOpen(true)}
               >
-                <XCircle className="mr-2 h-4 w-4" /> Запрос на снятие
+                <XCircle className="mr-2 h-4 w-4" /> Take Down
               </Button>
             )}
           </div>
           {release.canSubmit && (
             <Button
-              className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
+              className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95 px-6"
               onClick={() => setSubmitOpen(true)}
             >
               <ShieldCheck className="mr-2 h-4 w-4" /> Submit Release
@@ -602,7 +441,6 @@ export default function ReleaseDetail() {
           )}
         </div>
 
-        </div>
       </div>
     </Layout>
   );
@@ -976,113 +814,108 @@ function TrackRow({
   const previewSs     = String(previewStart % 60).padStart(2, "0");
 
   return (
-    <div id={`track-${t.id}`} className="rounded-md border border-border/50 bg-background/40 p-4 space-y-4 scroll-mt-4 transition-shadow">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="font-semibold text-base text-muted-foreground">Трек {index + 1}</div>
+    <Card id={`track-${t.id}`} className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
+      {/* Card header: Tracks · Show Issues | Delete | Edit */}
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">Tracks</CardTitle>
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+            Show Issues
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost" size="sm"
-            className="text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-2 text-xs"
+            variant="outline" size="sm"
+            className="border-rose-500/30 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-3 text-xs"
             onClick={async () => {
-              if (!confirm(`Удалить трек "${t.title || `#${index + 1}`}"?`)) return;
+              if (!confirm(`Delete track "${t.title || `#${index + 1}`}"?`)) return;
               await deleteTrack.mutateAsync({ id: t.id });
-              toast({ title: "Трек удалён" });
+              toast({ title: "Track deleted" });
               onChange();
             }}
             disabled={deleteTrack.isPending}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-1" /> Удалить
+            Delete
           </Button>
           {release.isEditable && (
             <Link href={`/releases/${release.id}/tracks/${t.id}/edit`}>
-              <Button size="sm" className="h-8 px-3 text-xs">
-                <Pencil className="h-3.5 w-3.5 mr-1" /> Редактировать
+              <Button size="sm" variant="outline" className="h-8 px-3 text-xs bg-card">
+                Edit
               </Button>
             </Link>
           )}
         </div>
-      </div>
+      </CardHeader>
 
-      {/* Row 1: Title / Mix Version / Metadata Language */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <TrackField label="Название трека" value={t.title || DASH} />
-        <TrackField label="Версия (Mix Version)" value={trackVer || DASH} />
-        <TrackField label="Язык метаданных" value={t.language || DASH} />
-      </div>
+      <CardContent className="space-y-4 pt-0">
+        {/* Sub-heading */}
+        <div className="font-semibold text-sm">Track {index + 1}</div>
 
-      {/* Row 2: Primary chip + Featuring + Remixer */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <TrackField
-          label="Primary"
-          value={primaries.length ? primaries.map(p => p.name).join(", ") : (release.artistName || DASH)}
-          chip
-        />
-        <TrackField label="Featuring" value={namesOrDash(featurings)} />
-        <TrackField label="Remixer" value={namesOrDash(remixers)} />
-      </div>
-
-      {/* Row 3: 4-col details grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-        {/* Left column — track metadata */}
-        <div className="space-y-3">
-          <TrackField label="Explicit status" value={explicitLabel} />
-          <TrackField label="Жанр" value={t.genre || DASH} />
-          <TrackField label="Сабжанр" value={(t as any).subgenre || DASH} />
-          <TrackField label="Год записи" value={recYear ? String(recYear) : DASH} />
-          <TrackField label="ISRC" value={t.isrc ? <span className="font-mono">{t.isrc}</span> : DASH} />
-          <TrackField label="Stereo AI Use" value={(t as any).aiUsage && (t as any).aiUsage !== "none" ? (t as any).aiUsage : DASH} />
-          {aiUseSpat && (<TrackField label="Spatial AI Use" value={aiUseSpat} />)}
+        {/* Row 1: Track Title / Mix Version / Metadata Language */}
+        <div className="grid grid-cols-3 gap-4">
+          <TrackField label="Track Title" value={t.title || DASH} />
+          <TrackField label="Mix Version" value={trackVer || DASH} />
+          <TrackField label="Metadata Language" value={t.language || DASH} />
         </div>
-        {/* Writers */}
-        <div>
-          <TrackField label="Writers" value={writers.length ? writers.map((w: any) => w.name).join(", ") : DASH} />
-        </div>
-        {/* Performers / Production */}
+
+        {/* Row 2: Primary Artist */}
         <div>
           <TrackField
-            label="Performers / Production"
+            label="Primary Artist"
+            value={primaries.length ? primaries.map(p => p.name).join(", ") : (release.artistName || DASH)}
+            chip
+          />
+        </div>
+
+        {/* Row 3: Featuring / Remixer */}
+        <div className="grid grid-cols-2 gap-4">
+          <TrackField label="Featuring" value={namesOrDash(featurings)} />
+          <TrackField label="Remixer" value={namesOrDash(remixers)} />
+        </div>
+
+        {/* Row 4: 4-col contributors */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+          <TrackField label="Explicit status" value={explicitLabel} />
+          <TrackField label="Writers" value={writers.length ? writers.map((w: any) => w.name).join(", ") : DASH} />
+          <TrackField
+            label="Performers/Production"
             value={
               performers.length + production.length === 0
                 ? DASH
                 : [...performers, ...production].map((p: any) => p.name).join(", ")
             }
           />
+          <div className="space-y-0.5">
+            <div className="text-[11px] text-muted-foreground">Lyrics</div>
+            <div className="text-sm font-medium text-foreground">
+              {audioStyle === "instrumental" ? "Instrumental" : (t as any).lyrics ? "Has lyrics" : DASH}
+            </div>
+            {audioStyle === "instrumental" && (
+              <div className="text-[11px] text-muted-foreground">No Lyrics</div>
+            )}
+          </div>
         </div>
-        {/* Lyrics */}
-        <div>
-          <TrackField
-            label="Lyrics"
-            value={audioStyle === "instrumental" ? "Instrumental" : (t as any).lyrics ? "Есть текст" : DASH}
-          />
-          {audioStyle === "instrumental" && (
-            <div className="text-[11px] text-muted-foreground mt-1">No Lyrics</div>
-          )}
-        </div>
-      </div>
 
-      {/* Footer: audio status + preview start */}
-      <div className="pt-3 border-t border-border/40">
-        {t.audioUrl ? (
-          <AudioUploader
-            value={t.audioUrl}
-            trackId={t.id}
-            durationSeconds={t.durationSeconds ?? null}
-            onChange={() => onChange()}
-          />
-        ) : (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex-1 text-center">Аудиофайл не загружен</span>
-            <span>Preview Start Time: {previewMm}:{previewSs}</span>
-          </div>
-        )}
-        {t.audioUrl && (
-          <div className="text-[11px] text-muted-foreground text-right mt-1">
-            Preview Start Time: {previewMm}:{previewSs}
-          </div>
-        )}
-      </div>
-    </div>
+        {/* Row 5: Genre / Subgenre */}
+        <div className="grid grid-cols-2 gap-4">
+          <TrackField label="Genre" value={t.genre || DASH} />
+          <TrackField label="Subgenre" value={(t as any).subgenre || DASH} />
+        </div>
+
+        {/* Row 6-8: Recorded / ISRC / Explicit Content */}
+        <div className="grid grid-cols-3 gap-4">
+          <TrackField label="Recorded" value={recYear ? String(recYear) : DASH} />
+          <TrackField label="ISRC" value={t.isrc ? <span className="font-mono text-xs">{t.isrc}</span> : DASH} />
+          <TrackField label="Explicit Content" value={(t as any).isExplicit ? "Yes" : "No"} />
+        </div>
+
+        {/* Footer: audio status + preview start */}
+        <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground/70">
+          <span>{t.audioUrl ? "Audio file linked" : "No audio file linked"}</span>
+          <span>Preview Start Time: {previewMm}:{previewSs}:00</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2733,68 +2566,118 @@ function ReleaseAvailabilityCard({ release, isEditable }: { release: ReleaseDeta
   const save = async (codes: string[]) => {
     try {
       await update.mutateAsync({ id: release.id, data: { dsps: codes } });
-      toast({ title: "Площадки сохранены", description: `${codes.length} DSP выбрано.` });
-      // Освежаем и список DSP, и сам релиз — Show Issues и сайдбар читают его статус.
+      toast({ title: "DSPs saved", description: `${codes.length} platforms selected.` });
       await Promise.all([
         refetch(),
         qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) }),
       ]);
     } catch (e) {
-      toast({ variant: "destructive", title: "Не удалось сохранить", description: (e as Error).message });
+      toast({ variant: "destructive", title: "Could not save", description: (e as Error).message });
     }
   };
 
   return (
     <Card id="card-availability" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Globe2 className="h-4 w-4" /> Доступность релиза
-        </CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">Scheduled</CardTitle>
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+            Show Issues
+          </span>
+        </div>
         {isEditable && (
           <Button variant="outline" size="sm" className="bg-card text-xs" onClick={() => setPickerOpen(true)}>
-            <Pencil className="h-3.5 w-3.5 mr-1" /> Изменить
+            <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
           </Button>
         )}
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-start gap-4 p-3 rounded-md border border-border/50 bg-background/40">
-          <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center">
-            <Calendar className="h-5 w-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">Таймлайн</span>
-              <StatusBadge status={release.status} className="text-[10px] px-1.5 py-0 h-4" />
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Территории: {(release.territories || ["WW"]).join(", ")}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Выбрано площадок: {selected.length || "— не выбрано"}
-            </div>
-          </div>
-        </div>
         {selected.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {selected.map((d) => <DspPill key={d} name={d} />)}
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded p-3 text-center">
-            Площадки не выбраны. {isEditable && "Нажмите «Изменить», чтобы выбрать DSP для доставки."}
+          <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded p-4 text-center">
+            No platforms selected.{isEditable && " Click «Edit» to choose DSPs for distribution."}
           </div>
         )}
         <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-2 border-t border-border/40">
-          Отправляя релиз на модерацию, вы подтверждаете, что все мастера, обложка и метаданные принадлежат вам
-          или лицензированы для распространения на выбранных площадках. Tajik Music Distribution не несёт
-          ответственности за претензии правообладателей по неверно заявленному контенту.
+          By submitting your release, you confirm that all masters, artwork, and metadata belong to you
+          or are licensed for distribution on the selected platforms.
         </p>
-
         <DspPickerDialog
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           value={selected}
           onChange={(codes) => { void save(codes); }}
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Timeline Card ───────────────────────────────────────────────────────────
+// Shows release date, territory rights, and selected distribution platforms.
+function TimelineCard({
+  release, isEditable, onEditClick,
+}: {
+  release: ReleaseDetail;
+  isEditable: boolean;
+  onEditClick: () => void;
+}) {
+  const { data: selected = [] } = useGetReleaseDsps(release.id);
+
+  const dateLabel = (() => {
+    if (!release.releaseDate) return "TBD";
+    const d = new Date(release.releaseDate);
+    const base = d.toLocaleDateString("en-CA"); // YYYY-MM-DD
+    const diff = Date.now() - d.getTime();
+    const days = Math.round(diff / 86_400_000);
+    if (Math.abs(days) < 1) return base + " (today)";
+    if (days > 0) {
+      const months = Math.round(days / 30);
+      return base + (months >= 2 ? ` (about ${months} months ago)` : ` (${days} days ago)`);
+    }
+    const futureDays = Math.abs(days);
+    const futureMonths = Math.round(futureDays / 30);
+    return base + (futureMonths >= 2 ? ` (in about ${futureMonths} months)` : ` (in ${futureDays} days)`);
+  })();
+
+  return (
+    <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+        <CardTitle className="text-base">Timeline</CardTitle>
+        {isEditable && (
+          <Button variant="outline" size="sm" className="bg-card text-xs" onClick={onEditClick}>
+            <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-0.5">Release Date</div>
+            <div className="font-medium text-xs leading-relaxed">{dateLabel}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-0.5">Territory Rights</div>
+            <div className="font-medium text-sm">
+              {(release.territories || ["WW"]).includes("WW") || (release.territories || []).length === 0
+                ? "World"
+                : (release.territories || []).join(", ")}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-0.5">Distribution Platforms</div>
+            {selected.length > 0 ? (
+              <div className="text-xs text-foreground">
+                {selected.length === 1 ? selected[0] : `All — ${selected.slice(0, 4).join(", ")}${selected.length > 4 ? ` +${selected.length - 4}` : ""}`}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Not set</div>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
