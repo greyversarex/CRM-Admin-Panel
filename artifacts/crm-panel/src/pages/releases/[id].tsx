@@ -632,7 +632,7 @@ function EditDetailsForm({
                 return { ...p, translations: next };
               })}
             >
-              <SelectTrigger className="bg-background/60 h-9 text-xs"><SelectValue placeholder="Язык" /></SelectTrigger>
+              <SelectTrigger className="bg-background/60 h-9 text-sm"><SelectValue placeholder="Язык" /></SelectTrigger>
               <SelectContent>
                 {META_LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
               </SelectContent>
@@ -645,7 +645,7 @@ function EditDetailsForm({
                 return { ...p, translations: next };
               })}
               placeholder="Переведённое название"
-              className="bg-background/60 h-9 text-xs"
+              className="bg-background/60 h-9 text-sm"
             />
             <Input
               value={tr.version || ""}
@@ -655,7 +655,7 @@ function EditDetailsForm({
                 return { ...p, translations: next };
               })}
               placeholder="Версия (опц.)"
-              className="bg-background/60 h-9 text-xs"
+              className="bg-background/60 h-9 text-sm"
             />
             <Button
               type="button" variant="ghost" size="sm"
@@ -681,7 +681,7 @@ function EditDetailsForm({
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <FieldLabel className="text-xs text-muted-foreground">{label}</FieldLabel>
+      <FieldLabel className="text-sm text-muted-foreground">{label}</FieldLabel>
       {children}
     </div>
   );
@@ -695,16 +695,16 @@ function KV({
 }) {
   return (
     <div className={mini ? "" : "grid grid-cols-[160px_1fr] items-baseline gap-4"}>
-      <div className={"text-xs text-muted-foreground " + (mini ? "block mb-0.5" : "")}>{label}</div>
+      <div className={"text-sm text-muted-foreground " + (mini ? "block mb-0.5" : "")}>{label}</div>
       {chip ? (
         <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 w-fit">
           {value}
         </span>
       ) : (
         <div className={
-          (mini ? "text-sm " : "text-[15px] ") +
+          (mini ? "text-[15px] " : "text-base ") +
           (highlight ? "font-semibold text-foreground " : "text-foreground ") +
-          (mono ? "font-mono text-xs " : "") +
+          (mono ? "font-mono text-sm " : "") +
           (cap ? "capitalize " : "")
         }>
           {value}

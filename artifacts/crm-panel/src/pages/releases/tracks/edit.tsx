@@ -222,7 +222,7 @@ function MetadataTranslationsEditor({
   return (
     <div className="space-y-2">
       {value.length === 0 && (
-        <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded px-2 py-3 text-center">
+        <div className="text-sm text-muted-foreground border border-dashed border-border/40 rounded px-2 py-3 text-center">
           Нет переводов. Добавьте, если название трека звучит на другом языке.
         </div>
       )}
@@ -230,13 +230,13 @@ function MetadataTranslationsEditor({
         <div key={i} className="grid grid-cols-12 gap-2 items-center">
           <Input placeholder="Код (en, ru…)" value={row.language}
             onChange={(e) => update(i, { language: e.target.value })}
-            className="col-span-3 bg-background/40 text-xs" />
+            className="col-span-3 bg-background/40 text-sm" />
           <Input placeholder="Название" value={row.title}
             onChange={(e) => update(i, { title: e.target.value })}
-            className="col-span-6 bg-background/40 text-xs" />
+            className="col-span-6 bg-background/40 text-sm" />
           <Input placeholder="Версия" value={row.version ?? ""}
             onChange={(e) => update(i, { version: e.target.value })}
-            className="col-span-2 bg-background/40 text-xs" />
+            className="col-span-2 bg-background/40 text-sm" />
           <Button variant="ghost" size="sm" className="text-rose-300 col-span-1"
             onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -383,7 +383,7 @@ export default function TrackEditPage() {
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => setLocation(`/releases/${releaseId}`)}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/30 border border-border/40"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/30 border border-border/40"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
@@ -403,7 +403,7 @@ export default function TrackEditPage() {
             <div className="grid grid-cols-2 gap-6 items-start">
               {/* Left */}
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Audio File</Label>
+                <Label className="text-sm text-muted-foreground">Audio File</Label>
                 <div className="flex gap-2">
                   <div className="flex-1 h-9 border border-border/60 rounded-md px-3 flex items-center text-sm text-muted-foreground/70 overflow-hidden">
                     <span className="truncate">{audioFileName ?? "Select Audio File"}</span>
@@ -430,7 +430,7 @@ export default function TrackEditPage() {
 
               {/* Right: AI usage */}
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground leading-relaxed">
+                <Label className="text-sm text-muted-foreground leading-relaxed">
                   What amount of generative AI tools were used in the creation of the stereo track? ?
                 </Label>
                 <RadioGroup
@@ -449,7 +449,7 @@ export default function TrackEditPage() {
             </div>
 
             {/* Status line */}
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-sm text-muted-foreground/60">
               {audioFileName
                 ? <><FileAudio className="inline h-3 w-3 mr-1" />{audioFileName}</>
                 : "No audio file linked"}
@@ -458,7 +458,7 @@ export default function TrackEditPage() {
             {/* ISRC + Clip Start + Preview Start */}
             <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">ISRC</Label>
+                <Label className="text-sm text-muted-foreground">ISRC</Label>
                 <div className="flex gap-1.5">
                   <Input
                     value={f.isrc}
@@ -473,7 +473,7 @@ export default function TrackEditPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Clip Start Time</Label>
+                <Label className="text-sm text-muted-foreground">Clip Start Time</Label>
                 <Input
                   value={`${clipMm}:${clipSs}`}
                   onChange={(e) => {
@@ -485,7 +485,7 @@ export default function TrackEditPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground text-right block">
+                <Label className="text-sm text-muted-foreground text-right block">
                   Preview Start Time: {clipMm}:{clipSs}:00
                 </Label>
                 <div className="h-9 border border-border/40 rounded-md px-3 flex items-center text-sm font-mono text-muted-foreground/60">
@@ -496,7 +496,7 @@ export default function TrackEditPage() {
 
             {/* ISWC */}
             <div className="max-w-xs space-y-1.5">
-              <Label className="text-xs text-muted-foreground">ISWC ? — Optional</Label>
+              <Label className="text-sm text-muted-foreground">ISWC ? — Optional</Label>
               <Input
                 value={f.iswc}
                 onChange={(e) => setF({ ...f, iswc: e.target.value })}
@@ -514,14 +514,14 @@ export default function TrackEditPage() {
                 +$24.99
               </span>
             </div>
-            <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">$24.99</span> per spatial audio track will be charged to your account balance upon release approval.
             </div>
 
             <div className="grid grid-cols-2 gap-6 items-start">
               {/* Left: spatial file */}
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Spatial Audio File (Dolby Atmos)</Label>
+                <Label className="text-sm text-muted-foreground">Spatial Audio File (Dolby Atmos)</Label>
                 <SpatialAudioUploader
                   value={f.spatialAudioUrl}
                   trackId={track.id}
@@ -530,7 +530,7 @@ export default function TrackEditPage() {
               </div>
               {/* Right: spatial AI usage */}
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground leading-relaxed">
+                <Label className="text-sm text-muted-foreground leading-relaxed">
                   What amount of generative AI tools were used in the creation of this spatial file? ?
                 </Label>
                 <RadioGroup
@@ -549,7 +549,7 @@ export default function TrackEditPage() {
             </div>
 
             <div className="max-w-xs space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Spatial ISRC ? — Optional</Label>
+              <Label className="text-sm text-muted-foreground">Spatial ISRC ? — Optional</Label>
               <Input
                 value={f.spatialIsrc}
                 onChange={(e) => setF({ ...f, spatialIsrc: e.target.value })}
@@ -565,7 +565,7 @@ export default function TrackEditPage() {
             <h3 className="text-lg font-semibold">Track Details</h3>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Song Name ?</Label>
+                <Label className="text-sm text-muted-foreground">Song Name ?</Label>
                 <Input
                   value={f.title}
                   onChange={(e) => setF({ ...f, title: e.target.value })}
@@ -573,7 +573,7 @@ export default function TrackEditPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Version (Optional)</Label>
+                <Label className="text-sm text-muted-foreground">Version (Optional)</Label>
                 <Input
                   value={f.trackVersion}
                   onChange={(e) => setF({ ...f, trackVersion: e.target.value })}
@@ -581,7 +581,7 @@ export default function TrackEditPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Metadata Language</Label>
+                <Label className="text-sm text-muted-foreground">Metadata Language</Label>
                 <Select value={f.language || "none"}
                   onValueChange={(v) => setF({ ...f, language: v === "none" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
@@ -598,13 +598,13 @@ export default function TrackEditPage() {
           <div className="p-6 space-y-4">
             <div>
               <h3 className="text-lg font-semibold">Display Artists</h3>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Artists that appear as the main performers or in search items for the song.
                 Each track requires a primary artist to be specified. Include any additional
                 display artists who appear on this track.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+            <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
               <span>Artist Name</span><span>Role</span>
             </div>
             <DisplayArtistsEditor
@@ -617,7 +617,7 @@ export default function TrackEditPage() {
           <div className="p-6 space-y-5">
             <div>
               <h3 className="text-lg font-semibold">Contributors ?</h3>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Apple Music requires that tracks delivered to Apple Music must have at least one role represented
                 per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
                 found in their{" "}
@@ -631,7 +631,7 @@ export default function TrackEditPage() {
             {/* Writers */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Writers</h4>
-              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
               <WritersEditor value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
@@ -645,7 +645,7 @@ export default function TrackEditPage() {
                 <h4 className="text-sm font-semibold">Performers <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
                 <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
               <PerformersEditor value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
@@ -659,7 +659,7 @@ export default function TrackEditPage() {
                 <h4 className="text-sm font-semibold">Production &amp; Engineering <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
                 <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground px-0.5">
+              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
                 <span>Artist Name</span><span>Role</span>
               </div>
               <ProductionEditor value={f.production} onChange={(v) => setF({ ...f, production: v })} />
@@ -670,7 +670,7 @@ export default function TrackEditPage() {
           <div className="p-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Genre</Label>
+                <Label className="text-sm text-muted-foreground">Genre</Label>
                 <Select value={f.genre || "none"}
                   onValueChange={(v) => setF({ ...f, genre: v === "none" ? "" : v, subgenre: "" })}>
                   <SelectTrigger><SelectValue placeholder="Please select" /></SelectTrigger>
@@ -681,7 +681,7 @@ export default function TrackEditPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Subgenres</Label>
+                <Label className="text-sm text-muted-foreground">Subgenres</Label>
                 <Select value={f.subgenre || "none"}
                   onValueChange={(v) => setF({ ...f, subgenre: v === "none" ? "" : v })}
                   disabled={subgenreOptions.length === 0}>
@@ -701,7 +701,7 @@ export default function TrackEditPage() {
           <div className="p-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Recording Year</Label>
+                <Label className="text-sm text-muted-foreground">Recording Year</Label>
                 <Select
                   value={f.recordingYear ? String(f.recordingYear) : "none"}
                   onValueChange={(v) => setF({ ...f, recordingYear: v === "none" ? null : Number(v) })}
@@ -714,7 +714,7 @@ export default function TrackEditPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Country of Recording</Label>
+                <Label className="text-sm text-muted-foreground">Country of Recording</Label>
                 <Select value={f.countryOfRecording || "none"}
                   onValueChange={(v) => setF({ ...f, countryOfRecording: v === "none" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Select a Country of Recording" /></SelectTrigger>

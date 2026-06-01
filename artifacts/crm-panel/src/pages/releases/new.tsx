@@ -293,9 +293,9 @@ export default function CreateRelease() {
             {translations.map((t, i) => (
               <div key={i} className="grid grid-cols-[140px_1fr_160px_32px] gap-2 items-end bg-muted/10 border border-border/40 rounded-lg p-3">
                 <div className="space-y-1">
-                  <FieldLabel className="text-[10px] text-muted-foreground">Language</FieldLabel>
+                  <FieldLabel className="text-sm text-muted-foreground">Language</FieldLabel>
                   <Select value={t.language} onValueChange={v => updateTranslation(i, { language: v })}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       {LANGS.filter(l => l.value !== language).map(l => (
                         <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
@@ -304,12 +304,12 @@ export default function CreateRelease() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <FieldLabel className="text-[10px] text-muted-foreground">Title</FieldLabel>
-                  <Input className="h-8 text-xs" value={t.title} onChange={e => updateTranslation(i, { title: e.target.value })} />
+                  <FieldLabel className="text-sm text-muted-foreground">Title</FieldLabel>
+                  <Input className="h-9 text-sm" value={t.title} onChange={e => updateTranslation(i, { title: e.target.value })} />
                 </div>
                 <div className="space-y-1">
-                  <FieldLabel className="text-[10px] text-muted-foreground">Version</FieldLabel>
-                  <Input className="h-8 text-xs" value={t.version ?? ""} onChange={e => updateTranslation(i, { version: e.target.value })} placeholder="(optional)" />
+                  <FieldLabel className="text-sm text-muted-foreground">Version</FieldLabel>
+                  <Input className="h-9 text-sm" value={t.version ?? ""} onChange={e => updateTranslation(i, { version: e.target.value })} placeholder="(optional)" />
                 </div>
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 self-end" onClick={() => removeTranslation(i)}>
                   <Trash2 className="h-3.5 w-3.5" />
@@ -400,7 +400,7 @@ export default function CreateRelease() {
               </PopoverContent>
             </Popover>
             {artistOptions.length === 0 && (
-              <p className="text-xs text-muted-foreground">No artists found. Add an artist in the Artists section first.</p>
+              <p className="text-sm text-muted-foreground">No artists found. Add an artist in the Artists section first.</p>
             )}
             <label className="flex items-center gap-2.5 cursor-pointer text-sm">
               <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
