@@ -345,7 +345,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold tracking-tight">
             {releaseId ? `Редактирование релиза #${releaseId}` : "Создание релиза"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

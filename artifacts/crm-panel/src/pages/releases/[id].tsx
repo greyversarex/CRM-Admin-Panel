@@ -181,7 +181,7 @@ export default function ReleaseDetail() {
         />
       </Dialog>
 
-      <div className="max-w-5xl mx-auto flex flex-col gap-6 pb-8">
+      <div className="max-w-7xl mx-auto flex flex-col gap-6 pb-8">
 
         {/* Back */}
         <button
@@ -193,7 +193,7 @@ export default function ReleaseDetail() {
 
         {/* Title + subtitle */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{release.title}</h1>
+          <h1 className="text-4xl font-bold tracking-tight">{release.title}</h1>
           <p className="text-muted-foreground text-sm mt-1.5">
             Review your release for any issues before submitting to our review team for a final guidelines check.
           </p>

@@ -8,7 +8,7 @@ export default function EditRelease() {
   if (!Number.isFinite(id) || id <= 0) {
     return (
       <Layout>
-        <div className="max-w-6xl mx-auto p-6 text-sm text-muted-foreground">
+        <div className="max-w-7xl mx-auto p-6 text-sm text-muted-foreground">
           Неверный идентификатор релиза.
         </div>
       </Layout>
@@ -16,7 +16,7 @@ export default function EditRelease() {
   }
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <ReleaseWizard initialReleaseId={id} />
       </div>
     </Layout>

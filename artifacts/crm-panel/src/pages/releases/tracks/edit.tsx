@@ -323,7 +323,7 @@ export default function TrackEditPage() {
   if (isLoading || !f) {
     return (
       <Layout>
-        <div className="max-w-5xl mx-auto p-6 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="max-w-7xl mx-auto p-6 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Загружаем трек…
         </div>
       </Layout>
@@ -332,7 +332,7 @@ export default function TrackEditPage() {
   if (error || !track) {
     return (
       <Layout>
-        <div className="max-w-5xl mx-auto p-6 text-sm text-rose-300">
+        <div className="max-w-7xl mx-auto p-6 text-sm text-rose-300">
           Трек не найден или нет доступа.
         </div>
       </Layout>
@@ -377,7 +377,7 @@ export default function TrackEditPage() {
         }}
       />
 
-      <div className="max-w-5xl mx-auto pb-28">
+      <div className="max-w-7xl mx-auto pb-28">
 
         {/* ── Back + track index ───────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-4">
