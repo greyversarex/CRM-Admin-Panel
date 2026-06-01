@@ -168,9 +168,9 @@ function SpatialAudioUploader({
     try {
       const asset = await upload(file, { kind: "audio", trackId, attach: false });
       onChange(asset.objectPath);
-      toast({ title: "Dolby Atmos файл загружен", description: file.name });
+      toast({ title: "Dolby Atmos file uploaded", description: file.name });
     } catch (e: any) {
-      toast({ title: "Не удалось загрузить", description: e?.message ?? "Ошибка", variant: "destructive" });
+      toast({ title: "Upload failed", description: e?.message ?? "Error", variant: "destructive" });
     }
   };
   return (
@@ -188,7 +188,7 @@ function SpatialAudioUploader({
           </div>
           <div className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate">{value}</div>
           <Button type="button" variant="outline" size="sm" disabled={isUploading}
-            onClick={() => inputRef.current?.click()}>Заменить</Button>
+            onClick={() => inputRef.current?.click()}>Replace</Button>
           <Button type="button" variant="ghost" size="sm" className="text-rose-300"
             disabled={isUploading} onClick={() => onChange(null)}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ function SpatialAudioUploader({
         <Button type="button" variant="outline" size="sm" className="w-full justify-start"
           disabled={isUploading} onClick={() => inputRef.current?.click()}>
           <Headphones className="h-3.5 w-3.5 mr-1.5" />
-          {isUploading ? `Загрузка ${progress}%…` : "Загрузить Dolby Atmos (WAV/FLAC, ≤200 МБ)"}
+          {isUploading ? `Uploading ${progress}%…` : "Upload Dolby Atmos (WAV/FLAC, ≤200 MB)"}
         </Button>
       )}
       {isUploading && (
@@ -503,6 +503,60 @@ export default function TrackEditPage() {
                 placeholder="T-123.456.789-0"
                 className="font-mono"
               />
+            </div>
+          </div>
+
+          {/* ── 1b. Spatial Audio ────────────────────────────────────── */}
+          <div className="p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold">Spatial Audio ?</h3>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                +$24.99
+              </span>
+            </div>
+            <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">$24.99</span> per spatial audio track will be charged to your account balance upon release approval.
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 items-start">
+              {/* Left: spatial file */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Spatial Audio File (Dolby Atmos)</Label>
+                <SpatialAudioUploader
+                  value={f.spatialAudioUrl}
+                  trackId={track.id}
+                  onChange={(p) => setF({ ...f, spatialAudioUrl: p })}
+                />
+              </div>
+              {/* Right: spatial AI usage */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground leading-relaxed">
+                  What amount of generative AI tools were used in the creation of this spatial file? ?
+                </Label>
+                <RadioGroup
+                  value={f.spatialAiUsage || "none"}
+                  onValueChange={(v) => setF({ ...f, spatialAiUsage: v as FormState["spatialAiUsage"] })}
+                  className="flex gap-4"
+                >
+                  {([["none", "None"], ["some", "Some"], ["all", "All"]] as const).map(([v, label]) => (
+                    <div key={v} className="flex items-center gap-1.5">
+                      <RadioGroupItem value={v} id={`spatial-ai-${v}`} />
+                      <Label htmlFor={`spatial-ai-${v}`} className="text-sm font-normal cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            </div>
+
+            <div className="max-w-xs space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Spatial ISRC ? — Optional</Label>
+              <Input
+                value={f.spatialIsrc}
+                onChange={(e) => setF({ ...f, spatialIsrc: e.target.value })}
+                placeholder="TJCTM2500001"
+                className="font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground/60">We'll assign an ISRC if you don't have one.</p>
             </div>
           </div>
 

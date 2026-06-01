@@ -409,6 +409,9 @@ export default function ReleaseDetail() {
         {/* Timeline */}
         <TimelineCard release={release} isEditable={!!release.isEditable} onEditClick={() => setEditOpen(true)} />
 
+        {/* Territory Rights */}
+        <TerritoryRightsCard release={release} isEditable={!!release.isEditable} />
+
         {/* Bottom action bar */}
         <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -2617,7 +2620,7 @@ function ReleaseAvailabilityCard({ release, isEditable }: { release: ReleaseDeta
 }
 
 // ─── Timeline Card ───────────────────────────────────────────────────────────
-// Shows release date, territory rights, and selected distribution platforms.
+// Shows the release date in Symphonic style: "YYYY-MM-DD general release at 12:00 AM".
 function TimelineCard({
   release, isEditable, onEditClick,
 }: {
@@ -2625,23 +2628,12 @@ function TimelineCard({
   isEditable: boolean;
   onEditClick: () => void;
 }) {
-  const { data: selected = [] } = useGetReleaseDsps(release.id);
-
-  const dateLabel = (() => {
-    if (!release.releaseDate) return "TBD";
-    const d = new Date(release.releaseDate);
-    const base = d.toLocaleDateString("en-CA"); // YYYY-MM-DD
-    const diff = Date.now() - d.getTime();
-    const days = Math.round(diff / 86_400_000);
-    if (Math.abs(days) < 1) return base + " (today)";
-    if (days > 0) {
-      const months = Math.round(days / 30);
-      return base + (months >= 2 ? ` (about ${months} months ago)` : ` (${days} days ago)`);
-    }
-    const futureDays = Math.abs(days);
-    const futureMonths = Math.round(futureDays / 30);
-    return base + (futureMonths >= 2 ? ` (in about ${futureMonths} months)` : ` (in ${futureDays} days)`);
-  })();
+  // Timezone-safe: release date is a date-only value, extract YYYY-MM-DD from the
+  // raw string instead of `new Date(...).toLocaleDateString` (which would shift the
+  // day in some timezones because the string is parsed as UTC midnight).
+  const dateLabel = release.releaseDate
+    ? String(release.releaseDate).slice(0, 10)
+    : "XXXX-XX-XX";
 
   return (
     <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
@@ -2653,31 +2645,88 @@ function TimelineCard({
           </Button>
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-          <div>
-            <div className="text-[11px] text-muted-foreground mb-0.5">Release Date</div>
-            <div className="font-medium text-xs leading-relaxed">{dateLabel}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground mb-0.5">Territory Rights</div>
-            <div className="font-medium text-sm">
-              {(release.territories || ["WW"]).includes("WW") || (release.territories || []).length === 0
-                ? "World"
-                : (release.territories || []).join(", ")}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground mb-0.5">Distribution Platforms</div>
-            {selected.length > 0 ? (
-              <div className="text-xs text-foreground">
-                {selected.length === 1 ? selected[0] : `All — ${selected.slice(0, 4).join(", ")}${selected.length > 4 ? ` +${selected.length - 4}` : ""}`}
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">Not set</div>
-            )}
-          </div>
+      <CardContent>
+        <div className="text-sm">
+          <span className="font-medium">{dateLabel}</span>
+          <span className="text-muted-foreground"> general release at 12:00 AM</span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Territory Rights Card ─────────────────────────────────────────────────────
+// Separate block with a functional "World Wide release" toggle. Toggling on sets
+// territories to ["WW"]; toggling off clears them (user then adds specific
+// territories manually via «Edit» in Release Details), mirroring Symphonic.
+function TerritoryRightsCard({ release, isEditable }: { release: ReleaseDetail; isEditable: boolean }) {
+  const qc = useQueryClient();
+  const updateRelease = useUpdateRelease();
+  const territories = release.territories ?? ["WW"];
+  // Only an explicit "WW" entry counts as world-wide. An empty list means
+  // "no territories selected yet" (incomplete) and must NOT read back as ON,
+  // otherwise turning the switch OFF would silently revert to ON after refetch.
+  const isWorldWide = territories.includes("WW");
+
+  const toggle = async (on: boolean) => {
+    // Send the full set of fields that carry zod `.default()` on the server.
+    // PUT /releases/:id does `set(parsed.data)`, and absent defaulted fields
+    // (isCompilation, isVariousArtists, upcRequestPending, ...) would otherwise
+    // be reset to their defaults — clobbering unrelated release flags.
+    const data: CreateReleaseBody = {
+      title:             release.title,
+      releaseType:       release.releaseType as CreateReleaseBody["releaseType"],
+      artistId:          release.artistId,
+      labelId:           release.labelId ?? null,
+      coverUrl:          release.coverUrl ?? null,
+      language:          release.language ?? null,
+      genre:             release.genre ?? null,
+      releaseDate:       release.releaseDate ? String(release.releaseDate).slice(0, 10) : null,
+      upc:               release.upc ?? null,
+      pLine:             release.pLine ?? null,
+      cLine:             release.cLine ?? null,
+      isExplicit:        !!release.isExplicit,
+      isCompilation:     !!release.isCompilation,
+      isVariousArtists:  !!release.isVariousArtists,
+      upcRequestPending: !!release.upcRequestPending,
+      territories:       on ? ["WW"] : [],
+    } as CreateReleaseBody;
+    try {
+      await updateRelease.mutateAsync({ id: release.id, data });
+      toast({
+        title: "Territory updated",
+        description: on ? "World Wide release enabled." : "World Wide release disabled.",
+      });
+      await qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Could not update", description: (e as Error).message });
+    }
+  };
+
+  return (
+    <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Territory Rights</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <Switch
+            checked={isWorldWide}
+            disabled={!isEditable || updateRelease.isPending}
+            onCheckedChange={(v) => { void toggle(v); }}
+          />
+          <span className="text-sm font-medium">World Wide release</span>
+        </label>
+        {!isWorldWide && territories.length > 0 && (
+          <div className="text-xs text-muted-foreground">
+            Selected: <span className="font-mono">{territories.join(", ")}</span>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          This release will distribute to all current and future territories in the world.
+          To omit territories, de-select world wide. De-selecting world wide will require
+          territories to be added manually via «Edit» in Release Details.
+        </p>
       </CardContent>
     </Card>
   );

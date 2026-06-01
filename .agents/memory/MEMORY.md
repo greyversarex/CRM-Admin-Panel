@@ -1,0 +1,1 @@
+- [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
