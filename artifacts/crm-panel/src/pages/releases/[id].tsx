@@ -345,8 +345,8 @@ export default function ReleaseDetail() {
         {/* Create New Track */}
         {release.isEditable && (
           <Card id="card-tracks" className="bg-card/50 backdrop-blur border-border/50">
-            <CardContent className="p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
                 <button
                   type="button"
                   disabled={createTrack.isPending}
@@ -370,21 +370,21 @@ export default function ReleaseDetail() {
                       toast({ title: "Could not create track", description: e?.message ?? "Error", variant: "destructive" });
                     }
                   }}
-                  className="text-left rounded-lg border border-border/50 bg-background/30 p-5 hover:bg-accent/30 transition disabled:opacity-50"
+                  className="h-full text-left rounded-xl border border-border/50 bg-background/40 p-6 hover:bg-accent/30 transition disabled:opacity-50"
                   data-testid="card-create-track"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="h-12 w-12 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0">
-                      <Music2 className="h-6 w-6 text-primary" />
+                  <div className="flex items-start gap-5">
+                    <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-primary/30 flex items-center justify-center shrink-0">
+                      <Music2 className="h-8 w-8 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-sm text-primary">Create New Track</div>
-                      <p className="text-xs text-rose-300/80 mt-0.5">Need to create a new track for this release?</p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <div className="font-bold text-lg text-foreground">Create New Track</div>
+                      <p className="text-sm text-primary/90 mt-1">Need to create a new track for this release?</p>
+                      <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                         Create as many as you need, upload your audio, and fill out your track details.
                       </p>
-                      <div className="mt-3">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium">
+                      <div className="mt-4">
+                        <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium">
                           Create Track
                         </span>
                       </div>
@@ -2560,22 +2560,22 @@ function ReuseExistingTrackCard(props: {
       trigger={
         <button
           type="button"
-          className="text-left rounded-md border border-dashed border-indigo-400/40 bg-indigo-400/[0.04] p-4 hover-elevate transition w-full"
+          className="h-full text-left rounded-xl border border-dashed border-indigo-400/40 bg-indigo-400/[0.04] p-6 hover-elevate transition w-full"
           data-testid="card-reuse-track"
         >
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-md bg-indigo-400/15 border border-indigo-400/30 flex items-center justify-center shrink-0">
-              <FolderInput className="h-4 w-4 text-indigo-300" />
+          <div className="flex items-start gap-5">
+            <div className="h-16 w-16 rounded-xl bg-indigo-400/15 border border-indigo-400/30 flex items-center justify-center shrink-0">
+              <FolderInput className="h-8 w-8 text-indigo-300" />
             </div>
             <div className="flex-1">
-              <div className="font-semibold text-sm">Переиспользовать существующий трек</div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="font-bold text-lg text-foreground">Переиспользовать существующий трек</div>
+              <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                 Возьмите трек из ранее одобренного релиза — например, для сборника или перевыпуска.
                 Аудио и метаданные подтянутся автоматически.
               </p>
-              <div className="mt-3">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-border/50 text-xs">
-                  <Database className="h-3 w-3" /> Выбрать трек
+              <div className="mt-4">
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border/60 text-sm">
+                  <Database className="h-4 w-4" /> Выбрать трек
                 </span>
               </div>
             </div>
