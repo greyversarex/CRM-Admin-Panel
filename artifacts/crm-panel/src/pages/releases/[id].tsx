@@ -181,7 +181,7 @@ export default function ReleaseDetail() {
         />
       </Dialog>
 
-      <div className="max-w-2xl mx-auto flex flex-col gap-5 pb-8">
+      <div className="max-w-5xl mx-auto flex flex-col gap-6 pb-8">
 
         {/* Back */}
         <button
@@ -193,8 +193,8 @@ export default function ReleaseDetail() {
 
         {/* Title + subtitle */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{release.title}</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="text-3xl font-bold tracking-tight">{release.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1.5">
             Review your release for any issues before submitting to our review team for a final guidelines check.
           </p>
         </div>
@@ -261,7 +261,7 @@ export default function ReleaseDetail() {
         <Card id="card-release-details" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-base">Release Details</CardTitle>
+              <CardTitle className="text-lg">Release Details</CardTitle>
               <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 cursor-pointer"
                 onClick={() => jumpToIssue({ section: "release", field: "", message: "", severity: "error" }, { releaseId: id, isDraft: release.status === "draft", enableEditing: () => setMetaEditing(true), navigate: setLocation })}>
                 Show Issues
@@ -287,7 +287,7 @@ export default function ReleaseDetail() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-6">
+          <CardContent className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 p-6">
             {metaEditing ? (
               <EditDetailsForm
                 release={release}
@@ -300,7 +300,7 @@ export default function ReleaseDetail() {
                 <KV label="Release Version" value={(release as any).releaseVersion || (release as any).trackVersion || "—"} />
                 <KV label="Metadata" value={release.language || "English"} />
                 <KV label="Primary Artist" value={release.artistName} chip />
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2 border-t border-border/30">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 pt-3 border-t border-border/30">
                   <KV label="Genre" value={release.genre || "—"} mini />
                   <KV label="UPC" value={release.upc || "Pending"} mono mini />
                   <KV label="Subgenre" value="—" mini />
@@ -694,7 +694,7 @@ function KV({
   highlight?: boolean; chip?: boolean; mono?: boolean; cap?: boolean; mini?: boolean;
 }) {
   return (
-    <div className={mini ? "" : "grid grid-cols-[140px_1fr] items-baseline gap-3"}>
+    <div className={mini ? "" : "grid grid-cols-[160px_1fr] items-baseline gap-4"}>
       <div className={"text-xs text-muted-foreground " + (mini ? "block mb-0.5" : "")}>{label}</div>
       {chip ? (
         <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 w-fit">
@@ -702,7 +702,7 @@ function KV({
         </span>
       ) : (
         <div className={
-          "text-sm " +
+          (mini ? "text-sm " : "text-[15px] ") +
           (highlight ? "font-semibold text-foreground " : "text-foreground ") +
           (mono ? "font-mono text-xs " : "") +
           (cap ? "capitalize " : "")
@@ -821,7 +821,7 @@ function TrackRow({
       {/* Card header: Tracks · Show Issues | Delete | Edit */}
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
         <div className="flex items-center gap-2">
-          <CardTitle className="text-base">Tracks</CardTitle>
+          <CardTitle className="text-lg">Tracks</CardTitle>
           <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
             Show Issues
           </span>
@@ -852,7 +852,7 @@ function TrackRow({
 
       <CardContent className="space-y-4 pt-0">
         {/* Sub-heading */}
-        <div className="font-semibold text-sm">Track {index + 1}</div>
+        <div className="font-semibold text-base">Track {index + 1}</div>
 
         {/* Row 1: Track Title / Mix Version / Metadata Language */}
         <div className="grid grid-cols-3 gap-4">
