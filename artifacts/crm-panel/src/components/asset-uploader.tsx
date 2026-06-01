@@ -204,7 +204,6 @@ export function CoverUploader({
           </Button>
         )}
       </div>
-      <p className="text-[10px] text-muted-foreground/70">JPG/PNG, ≤25 МБ. Рекомендуется 3000×3000 px.</p>
     </div>
   );
 }

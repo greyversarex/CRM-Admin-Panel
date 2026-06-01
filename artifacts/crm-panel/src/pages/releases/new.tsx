@@ -17,11 +17,31 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Check, ChevronsUpDown, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          tabIndex={-1}
+          className="inline-flex items-center justify-center h-4 w-4 rounded-full text-muted-foreground hover:text-foreground shrink-0 focus:outline-none"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 type Translation = { language: string; title: string; version?: string };
 
 const RELEASE_TYPE_OPTIONS = [
@@ -175,6 +195,7 @@ export default function CreateRelease() {
   }
 
   return (
+    <TooltipProvider delayDuration={200}>
     <Layout>
       <div className="max-w-3xl mx-auto py-8 px-4 pb-24">
 
@@ -191,15 +212,21 @@ export default function CreateRelease() {
 
           {/* ── Cover Art ────────────────────────────────────────────────── */}
           <div>
-            <FieldLabel className="text-sm font-medium mb-3 block">Cover Art ?</FieldLabel>
+            <div className="flex items-center gap-1.5 mb-3">
+              <FieldLabel className="text-sm font-medium">Cover Art</FieldLabel>
+              <InfoTip text="Recommended size: 3000×3000 px (1000×1000 minimum). Accepted formats: .JPG / .JPEG / .PNG. Once uploaded you will see a preview of your cover art." />
+            </div>
             <div className="flex gap-6 items-start">
               <div className="shrink-0 w-52">
                 <CoverUploader value={coverUrl || null} onChange={p => setCoverUrl(p ?? "")} attach={false} />
               </div>
               <div className="flex-1 pt-1">
-                <p className="text-sm font-medium mb-3">
-                  What amount of generative AI tools were used in the creation of this cover art?
-                </p>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <p className="text-sm font-medium">
+                    What amount of generative AI tools were used in the creation of this cover art?
+                  </p>
+                  <InfoTip text="Indicate how much AI was used to generate or significantly alter your cover art. DSPs require this disclosure." />
+                </div>
                 <RadioGroup
                   value={coverAiUsage}
                   onValueChange={v => setCoverAiUsage(v as any)}
@@ -232,7 +259,10 @@ export default function CreateRelease() {
               />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel htmlFor="version" className="text-sm">Release Version (Optional)?</FieldLabel>
+              <div className="flex items-center gap-1.5">
+                <FieldLabel htmlFor="version" className="text-sm">Release Version <span className="text-muted-foreground font-normal">(Optional)</span></FieldLabel>
+                <InfoTip text="Use this field to indicate a specific version of the release, e.g. «Deluxe Edition», «Acoustic Version», «Radio Edit». Leave blank for the standard version." />
+              </div>
               <Input
                 id="version"
                 data-testid="input-version"
@@ -254,11 +284,11 @@ export default function CreateRelease() {
 
           {/* ── Translations ─────────────────────────────────────────────── */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Metadata translations (optional)</span>
+            <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={addTranslation}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add translation
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Translation <span className="text-muted-foreground font-normal ml-0.5">(Optional)</span>
               </Button>
+              <InfoTip text="Add the release title in another language (e.g. Russian, English). Helps DSPs display metadata correctly in different regions." />
             </div>
             {translations.map((t, i) => (
               <div key={i} className="grid grid-cols-[140px_1fr_160px_32px] gap-2 items-end bg-muted/10 border border-border/40 rounded-lg p-3">
@@ -290,7 +320,10 @@ export default function CreateRelease() {
 
           {/* ── Primary Artists ──────────────────────────────────────────── */}
           <div className="space-y-3">
-            <FieldLabel className="text-sm font-medium block">Primary Artists</FieldLabel>
+            <div className="flex items-center gap-1.5">
+              <FieldLabel className="text-sm font-medium">Primary Artists</FieldLabel>
+              <InfoTip text="The main performing artist(s) credited on this release. Select from your existing artists or create a new one. If there are 5 or more different artists, check «Various Artists»." />
+            </div>
             <Popover open={artistOpen} onOpenChange={setArtistOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -485,7 +518,10 @@ export default function CreateRelease() {
               </Select>
             </div>
             <div className="space-y-2">
-              <FieldLabel className="text-sm">Compilation</FieldLabel>
+              <div className="flex items-center gap-1.5">
+                <FieldLabel className="text-sm">Compilation</FieldLabel>
+                <InfoTip text="A compilation is a release that collects tracks from different artists or from different time periods of the same artist. Most standard releases (singles, albums, EPs) are NOT compilations." />
+              </div>
               <div className="space-y-1.5 pt-0.5">
                 <label className="flex items-center gap-2.5 cursor-pointer text-sm">
                   <Checkbox
@@ -555,5 +591,6 @@ export default function CreateRelease() {
         </DialogContent>
       </Dialog>
     </Layout>
+    </TooltipProvider>
   );
 }
