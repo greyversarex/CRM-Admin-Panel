@@ -40,6 +40,7 @@ import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
 } from "@/components/release-wizard/contributors-editor";
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "@/components/release-wizard/types";
+import { InfoTip } from "@/components/release-wizard/info-tip";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function fmtDuration(s: number | null | undefined): string {
@@ -110,10 +111,10 @@ function trackToForm(t: Track): FormState {
     spatialAudioUrl:    t.spatialAudioUrl ?? null,
     spatialIsrc:        t.spatialIsrc ?? "",
     spatialAiUsage:     (t.spatialAiUsage ?? "") as FormState["spatialAiUsage"],
-    displayArtists:     t.displayArtists ?? [],
-    writers:            t.writers ?? [],
-    performers:         t.performers ?? [],
-    production:         t.production ?? [],
+    displayArtists:     t.displayArtists?.length ? t.displayArtists : [{ name: "", role: "primary" }],
+    writers:            t.writers?.length ? t.writers : [{ name: "", role: "songwriter", share: 100, caeIpi: null }],
+    performers:         t.performers?.length ? t.performers : [{ name: "", role: "vocals" }],
+    production:         t.production?.length ? t.production : [{ name: "", role: "producer" }],
     metadataTranslations: t.metadataTranslations ?? [],
   };
 }
@@ -143,10 +144,10 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     spatialAudioUrl:    f.spatialAudioUrl,
     spatialIsrc:        N(f.spatialIsrc),
     spatialAiUsage:     f.spatialAiUsage === "" ? null : f.spatialAiUsage,
-    displayArtists:     f.displayArtists,
-    writers:            f.writers,
-    performers:         f.performers,
-    production:         f.production,
+    displayArtists:     f.displayArtists.filter((a) => a.name.trim()),
+    writers:            f.writers.filter((w) => w.name.trim()),
+    performers:         f.performers.filter((p) => p.name.trim()),
+    production:         f.production.filter((p) => p.name.trim()),
     metadataTranslations: f.metadataTranslations.filter(
       (m) => m.language.trim() && m.title.trim(),
     ),
@@ -431,7 +432,8 @@ export default function TrackEditPage() {
               {/* Right: AI usage */}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground leading-relaxed">
-                  What amount of generative AI tools were used in the creation of the stereo track? ?
+                  What amount of generative AI tools were used in the creation of the stereo track?{" "}
+                  <InfoTip text="Disclose how much generative AI was used to create or significantly alter the stereo audio. DSPs require this disclosure." />
                 </Label>
                 <RadioGroup
                   value={f.aiUsage}
@@ -496,7 +498,9 @@ export default function TrackEditPage() {
 
             {/* ISWC */}
             <div className="max-w-xs space-y-1.5">
-              <Label className="text-sm text-muted-foreground">ISWC ? — Optional</Label>
+              <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
+                ISWC <InfoTip text="International Standard Musical Work Code — identifies the underlying composition. Leave blank if you don't have one." /> — Optional
+              </Label>
               <Input
                 value={f.iswc}
                 onChange={(e) => setF({ ...f, iswc: e.target.value })}
@@ -509,7 +513,9 @@ export default function TrackEditPage() {
           {/* ── 1b. Spatial Audio ────────────────────────────────────── */}
           <div className="p-6 space-y-5">
             <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">Spatial Audio ?</h3>
+              <h3 className="text-lg font-semibold inline-flex items-center gap-1.5">
+                Spatial Audio <InfoTip text="Optional Dolby Atmos / spatial audio version of the track. A fee applies per spatial track upon release approval." />
+              </h3>
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
                 +$24.99
               </span>
@@ -531,7 +537,8 @@ export default function TrackEditPage() {
               {/* Right: spatial AI usage */}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground leading-relaxed">
-                  What amount of generative AI tools were used in the creation of this spatial audio? ?
+                  What amount of generative AI tools were used in the creation of this spatial audio?{" "}
+                  <InfoTip text="Disclose how much generative AI was used to create or significantly alter the spatial (Dolby Atmos) audio." />
                 </Label>
                 <RadioGroup
                   value={f.spatialAiUsage || "none"}
@@ -549,7 +556,9 @@ export default function TrackEditPage() {
             </div>
 
             <div className="max-w-xs space-y-1.5">
-              <Label className="text-sm text-muted-foreground">Spatial ISRC ? — Optional</Label>
+              <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
+                Spatial ISRC <InfoTip text="ISRC for the spatial audio version. We'll assign one automatically if you don't have it." /> — Optional
+              </Label>
               <Input
                 value={f.spatialIsrc}
                 onChange={(e) => setF({ ...f, spatialIsrc: e.target.value })}
@@ -565,7 +574,9 @@ export default function TrackEditPage() {
             <h3 className="text-lg font-semibold">Track Details</h3>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Song Name ?</Label>
+                <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
+                  Song Name <InfoTip text="The track title exactly as it should appear on DSPs. Don't include version info here — use the Version field." />
+                </Label>
                 <Input
                   value={f.title}
                   onChange={(e) => setF({ ...f, title: e.target.value })}
@@ -617,7 +628,9 @@ export default function TrackEditPage() {
           {/* ── 4. Contributors ──────────────────────────────────────── */}
           <div className="p-6 space-y-5">
             <div>
-              <h3 className="text-lg font-semibold">Contributors ?</h3>
+              <h3 className="text-lg font-semibold inline-flex items-center gap-1.5">
+                Contributors <InfoTip text="Everyone credited on the track. Apple Music requires at least one role per group: Writers, Performers, and Production & Engineering." />
+              </h3>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Apple Music requires that tracks delivered to Apple Music must have at least one role represented
                 per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
@@ -731,7 +744,9 @@ export default function TrackEditPage() {
           {/* ── 7. Audio Style + Explicit Status ─────────────────────── */}
           <div className="p-6 space-y-5">
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Audio Style ?</Label>
+              <Label className="text-sm font-semibold inline-flex items-center gap-1">
+                Audio Style <InfoTip text="Choose «Instrumental» if the track has no lyrics, or «Vocal» if it contains singing or spoken words." />
+              </Label>
               <RadioGroup
                 value={f.audioStyle}
                 onValueChange={(v) => setF({ ...f, audioStyle: v as FormState["audioStyle"] })}
@@ -749,7 +764,9 @@ export default function TrackEditPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Explicit Status ?</Label>
+              <Label className="text-sm font-semibold inline-flex items-center gap-1">
+                Explicit Status <InfoTip text="«Non Explicit» — no explicit content; «Explicit» — contains explicit language; «Censored» — an edited/clean version." />
+              </Label>
               <RadioGroup
                 value={f.explicitStatus}
                 onValueChange={(v) => setF({
