@@ -106,6 +106,9 @@ export default function ReleaseDetail() {
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
+  const [bulkCount, setBulkCount] = useState("1");
+  const [isBulkCreating, setIsBulkCreating] = useState(false);
   // Инлайн-режим редактирования метаданных карточки Release Details.
   // Включается кнопкой «Edit Release» для черновика (без диалога/смены статуса).
   const [metaEditing, setMetaEditing] = useState(false);
@@ -179,6 +182,80 @@ export default function ReleaseDetail() {
           currentStatus={release.status}
           onClose={() => { setEditOpen(false); invalidateAll(); }}
         />
+      </Dialog>
+
+      <Dialog open={bulkCreateOpen} onOpenChange={(o) => { if (!isBulkCreating) setBulkCreateOpen(o); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Tracks</DialogTitle>
+            <DialogDescription>
+              Create one or more empty tracks for this release. You can fill in the details afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <FieldLabel htmlFor="bulk-track-count" className="text-sm text-muted-foreground"># of tracks to add</FieldLabel>
+            <Input
+              id="bulk-track-count"
+              type="number"
+              min={1}
+              max={50}
+              value={bulkCount}
+              onChange={(e) => setBulkCount(e.target.value)}
+              disabled={isBulkCreating}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkCreateOpen(false)} disabled={isBulkCreating}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isBulkCreating}
+              onClick={async () => {
+                if (isBulkCreating) return;
+                const n = Math.max(1, Math.min(50, Math.floor(Number(bulkCount) || 1)));
+                const startNum = (release.tracks?.length ?? 0) + 1;
+                let created = 0;
+                setIsBulkCreating(true);
+                try {
+                  for (let k = 0; k < n; k++) {
+                    const num = startNum + k;
+                    await createTrack.mutateAsync({
+                      data: {
+                        title: `Track ${num}`,
+                        artistId: release.artistId,
+                        releaseId: id,
+                        trackNumber: num,
+                        language: release.language || "Tajik",
+                        genre: release.genre || "Pop",
+                        isExplicit: false,
+                      } as any,
+                    });
+                    created++;
+                  }
+                  toast({
+                    title: created === 1 ? "Track created" : `${created} tracks created`,
+                    description: "Click \"Edit\" to fill in the details.",
+                  });
+                  setBulkCreateOpen(false);
+                } catch (e: any) {
+                  toast({
+                    title: created > 0 ? `Created ${created} of ${n} tracks` : "Could not create tracks",
+                    description: e?.message ?? "Error",
+                    variant: "destructive",
+                  });
+                  if (created > 0) setBulkCreateOpen(false);
+                } finally {
+                  setIsBulkCreating(false);
+                  invalidateAll();
+                }
+              }}
+            >
+              {isBulkCreating && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Add Track(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       <div className="max-w-7xl mx-auto flex flex-col gap-6 pb-8">
@@ -350,25 +427,9 @@ export default function ReleaseDetail() {
                 <button
                   type="button"
                   disabled={createTrack.isPending}
-                  onClick={async () => {
-                    try {
-                      const nextNum = (release.tracks?.length ?? 0) + 1;
-                      await createTrack.mutateAsync({
-                        data: {
-                          title: `Track ${nextNum}`,
-                          artistId: release.artistId,
-                          releaseId: id,
-                          trackNumber: nextNum,
-                          language: release.language || "Tajik",
-                          genre: release.genre || "Pop",
-                          isExplicit: false,
-                        } as any,
-                      });
-                      toast({ title: "Track created", description: "Click \"Edit\" to fill in the details." });
-                      invalidateAll();
-                    } catch (e: any) {
-                      toast({ title: "Could not create track", description: e?.message ?? "Error", variant: "destructive" });
-                    }
+                  onClick={() => {
+                    setBulkCount("1");
+                    setBulkCreateOpen(true);
                   }}
                   className="h-full text-left rounded-xl border border-border/50 bg-background/40 p-6 hover:bg-accent/30 transition disabled:opacity-50"
                   data-testid="card-create-track"
