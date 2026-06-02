@@ -17,6 +17,7 @@ import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-upl
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "./types";
 import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
+  splitWriterSharesEvenly,
 } from "./contributors-editor";
 
 /** Создаёт заглушечный, но валидный ISRC «XX-AAA-YY-NNNNN». Сервер примет
@@ -85,7 +86,7 @@ export function TrackCard({
           lyrics: draft.lyrics ?? null,
           audioUrl: draft.audioUrl ?? null,
           displayArtists: draft.displayArtists,
-          writers: draft.writers,
+          writers: splitWriterSharesEvenly(draft.writers.filter((w) => w.name.trim())),
           performers: draft.performers,
           production: draft.production,
         },

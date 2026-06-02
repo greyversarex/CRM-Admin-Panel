@@ -38,6 +38,7 @@ import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-upl
 import { toast } from "@/hooks/use-toast";
 import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
+  splitWriterSharesEvenly,
 } from "@/components/release-wizard/contributors-editor";
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "@/components/release-wizard/types";
 import { InfoTip } from "@/components/release-wizard/info-tip";
@@ -145,7 +146,7 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     spatialIsrc:        N(f.spatialIsrc),
     spatialAiUsage:     f.spatialAiUsage === "" ? null : f.spatialAiUsage,
     displayArtists:     f.displayArtists.filter((a) => a.name.trim()),
-    writers:            f.writers.filter((w) => w.name.trim()),
+    writers:            splitWriterSharesEvenly(f.writers.filter((w) => w.name.trim())),
     performers:         f.performers.filter((p) => p.name.trim()),
     production:         f.production.filter((p) => p.name.trim()),
     metadataTranslations: f.metadataTranslations.filter(

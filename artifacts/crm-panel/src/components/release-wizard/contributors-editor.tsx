@@ -1,12 +1,24 @@
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { TrackDisplayArtist, TrackWriter, TrackPerformer, TrackProductionMember } from "@workspace/api-client-react";
 import {
   WRITER_ROLES, DISPLAY_ARTIST_ROLES, PERFORMER_ROLES, PRODUCTION_ROLES,
 } from "./types";
 import { ArtistNameCombobox } from "./artist-name-combobox";
+
+// Writer shares are hidden from the UI (mirrors Symphonic, where Writers only have
+// Artist Name + Role). They are split evenly across all writers behind the scenes so
+// backend DDEX / PRO validation (writer shares must total 100%) always passes — even
+// for legacy data. Use this on every add/remove and before saving.
+export function splitWriterSharesEvenly(rows: TrackWriter[]): TrackWriter[] {
+  if (rows.length === 0) return rows;
+  const each = Math.round((100 / rows.length) * 100) / 100;
+  const next = rows.map((w) => ({ ...w, share: each }));
+  const diff = 100 - next.reduce((s, w) => s + w.share, 0);
+  if (next[0]) next[0].share = Math.round((next[0].share + diff) * 100) / 100;
+  return next;
+}
 
 // ─── Display Artists ────────────────────────────────────────────────────────
 export function DisplayArtistsEditor({
@@ -47,31 +59,14 @@ export function WritersEditor({
 }: { value: TrackWriter[]; onChange: (v: TrackWriter[]) => void; hideTitle?: boolean }) {
   const update = (i: number, patch: Partial<TrackWriter>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
-  const totalShare = value.reduce((s, w) => s + (Number(w.share) || 0), 0);
-  const shareOk = Math.abs(totalShare - 100) < 0.01;
   return (
     <Editor
       title="Writers"
       hideTitle={hideTitle}
-      subtitle={
-        <span className={shareOk ? "text-emerald-500" : "text-amber-500 inline-flex items-center gap-1"}>
-          {!shareOk && <AlertTriangle className="h-3 w-3" />}
-          Share total: {totalShare}% (needs 100%)
-        </span>
-      }
       rows={value}
-      onAdd={() => {
-        // Split shares evenly when adding a new writer.
-        const next: TrackWriter[] = [...value, { name: "", role: "songwriter", share: 0, caeIpi: null }];
-        const each = Math.round((100 / next.length) * 100) / 100;
-        next.forEach((w) => (w.share = each));
-        // Rounding: push the remainder onto the first writer.
-        const diff = 100 - next.reduce((s, w) => s + w.share, 0);
-        if (next[0]) next[0].share = Math.round((next[0].share + diff) * 100) / 100;
-        onChange(next);
-      }}
-      onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="At least 1 writer. All writers' shares must total 100%."
+      onAdd={() => onChange(splitWriterSharesEvenly([...value, { name: "", role: "songwriter", share: 0, caeIpi: null }]))}
+      onRemove={(i) => onChange(splitWriterSharesEvenly(value.filter((_, idx) => idx !== i)))}
+      empty="At least 1 writer."
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
@@ -85,17 +80,6 @@ export function WritersEditor({
               {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input
-            type="number" min={0} max={100} step={0.01}
-            placeholder="%" value={row.share}
-            onChange={(e) => update(i, { share: Number(e.target.value) })}
-            className="bg-background/40 w-[80px]"
-          />
-          <Input
-            placeholder="CAE/IPI" value={row.caeIpi ?? ""}
-            onChange={(e) => update(i, { caeIpi: e.target.value || null })}
-            className="bg-background/40 w-[120px] font-mono text-xs"
-          />
         </>
       )}
     />
