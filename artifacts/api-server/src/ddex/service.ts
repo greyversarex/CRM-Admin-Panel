@@ -26,6 +26,7 @@ import {
   ddexAcknowledgementsTable,
   integrationsTable,
   auditLogTable,
+  releaseArtistsTable,
   type Release, type Track,
 } from "@workspace/db";
 import { and, eq, desc } from "drizzle-orm";
@@ -84,6 +85,33 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
     .where(eq(tracksTable.releaseId, releaseId))
     .orderBy(tracksTable.trackNumber);
 
+  // ── Артисты релиза из release_artists (feat. и дополнительные primary) ──
+  // Запрашиваем все роли, кроме primary (у нас уже есть mainArtist из artistId).
+  // Если таблица пустая — featuredArtists остаётся [].
+  const releaseArtistRows = await db
+    .select({
+      artistId: releaseArtistsTable.artistId,
+      role: releaseArtistsTable.role,
+      position: releaseArtistsTable.position,
+    })
+    .from(releaseArtistsTable)
+    .where(eq(releaseArtistsTable.releaseId, releaseId))
+    .orderBy(releaseArtistsTable.position);
+
+  const featuredArtists: ContributingArtist[] = [];
+  for (const row of releaseArtistRows) {
+    if (row.role === "primary") continue; // primary — это mainArtist, уже добавлен
+    const [fa] = await db.select().from(artistsTable).where(eq(artistsTable.id, row.artistId));
+    if (!fa) continue;
+    const ddexRole: ContributingArtist["role"] =
+      row.role === "featuring" || row.role === "with" ? "FeaturedArtist" : "FeaturedArtist";
+    featuredArtists.push({
+      partyRef: `P_ARTIST_${fa.id}`,
+      fullName: fa.name,
+      role: ddexRole,
+    });
+  }
+
   // Cover asset (kind=cover, releaseId=this).
   // ВАЖНО: assets-таблица использует kind="cover" (см. routes/assets.ts:188 mimePrefix
   // и schema). Раньше здесь ошибочно искался kind="image" — поэтому DDEX-валидатор
@@ -108,6 +136,7 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
     const [audioAsset] = await db.select().from(assetsTable)
       .where(and(eq(assetsTable.trackId, t.id), eq(assetsTable.kind, "audio")))
       .limit(1);
+
     const audioFile: ResourceFile | null = audioAsset
       ? {
           source: resolveAssetLocalPath(audioAsset.objectPath, audioAsset.storageKey) ?? audioAsset.objectPath,
@@ -115,29 +144,58 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
           mimeType: audioAsset.mimeType,
           sizeBytes: audioAsset.sizeBytes,
           sha1: audioAsset.sha256?.slice(0, 40) ?? undefined,
+          // Реальные технические характеристики из music-metadata (могут быть null
+          // для старых ассетов, загруженных до добавления колонок — builder даст fallback).
+          codec: audioAsset.codec ?? undefined,
+          sampleRateHz: audioAsset.sampleRateHz ?? undefined,
+          bitDepth: audioAsset.bitDepth ?? undefined,
+          channels: audioAsset.channels ?? undefined,
         }
       : null;
+
+    // ── Contributors трека ─────────────────────────────────────────────
+    // Используем displayArtists (jsonb) если они заполнены — там есть роли
+    // primary / featuring / with / remixer. Если пусто — fallback на главного
+    // артиста релиза (прежнее поведение, совместимость с ранними релизами).
+    const contributors: ContributingArtist[] = [];
+    const displayArtists = Array.isArray(t.displayArtists) ? t.displayArtists : [];
+
+    if (displayArtists.length > 0) {
+      for (let di = 0; di < displayArtists.length; di++) {
+        const da = displayArtists[di];
+        // Если artistId указан — используем стабильный partyRef P_ARTIST_{id},
+        // иначе генерируем уникальный по треку/позиции.
+        const pRef = da.artistId ? `P_ARTIST_${da.artistId}` : `P_DA_T${t.id}_${di}`;
+        const ddexRole: ContributingArtist["role"] =
+          da.role === "featuring" || da.role === "with" ? "FeaturedArtist" : "MainArtist";
+        contributors.push({ partyRef: pRef, fullName: da.name, role: ddexRole });
+      }
+    } else {
+      // Fallback: главный артист релиза
+      contributors.push({
+        partyRef: "P_MAIN_ARTIST",
+        fullName: artist?.name ?? "Unknown Artist",
+        role: "MainArtist",
+      });
+    }
 
     trackContexts.push({
       trackId: t.id,
       resourceRef: `A${t.trackNumber ?? trackContexts.length + 1}`,
       isrc: t.isrc ?? "",
       title: t.title,
+      trackVersion: t.trackVersion ?? null,
       durationSeconds: t.durationSeconds ?? 0,
       language: (t.language || release.language || "tg").toLowerCase(),
       isExplicit: t.isExplicit,
       trackNumber: t.trackNumber ?? trackContexts.length + 1,
+      genre: t.genre ?? null,
+      subgenre: t.subgenre ?? null,
+      metadataTranslations: Array.isArray(t.metadataTranslations) ? t.metadataTranslations : [],
       writers: Array.isArray(t.writers) ? t.writers : [],
       performers: Array.isArray(t.performers) ? t.performers : [],
       production: Array.isArray(t.production) ? t.production : [],
-      // На простом этапе — главный артист релиза как единственный contributor.
-      // Featured-роли для отдельных треков в текущей схеме не моделируются; добавится
-      // когда появится `track_artists` join-table.
-      contributors: [{
-        partyRef: "P_MAIN_ARTIST",
-        fullName: artist?.name ?? "Unknown Artist",
-        role: "MainArtist",
-      }],
+      contributors,
       audioFile,
     });
   }
@@ -150,21 +208,24 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
     releaseId: release.id,
     upc: release.upc ?? "",
     title: release.title,
+    releaseVersion: release.releaseVersion ?? null,
     releaseType: (release.releaseType as ReleaseContext["releaseType"]) ?? "single",
     profile,
     releaseDate: release.releaseDate ?? new Date().toISOString().slice(0, 10),
     genre: release.genre,
+    subgenre: release.subgenre ?? null,
     language: (release.language || "tg").toLowerCase(),
     isExplicit: release.isExplicit,
     territories: release.territories ?? ["WW"],
     pLine: release.pLine,
     cLine: release.cLine,
+    metadataTranslations: Array.isArray(release.metadataTranslations) ? release.metadataTranslations : [],
     mainArtist: {
       partyRef: "P_MAIN_ARTIST",
       fullName: artist?.name ?? "Unknown Artist",
       role: "MainArtist",
     },
-    featuredArtists: [], // будущее: parsing "feat." из title
+    featuredArtists,
     label: label
       ? { partyRef: "P_LABEL", name: label.name, partyId: null }
       : null,
@@ -455,6 +516,23 @@ export type IngestAckResult = {
   reason?: string;
 };
 
+// ── Удобные геттеры для UI ───────────────────────────────────────────
+
+export async function getMessageDetail(id: number) {
+  const [msg] = await db.select().from(ddexMessagesTable).where(eq(ddexMessagesTable.id, id));
+  if (!msg) return null;
+  const acks = await db.select().from(ddexAcknowledgementsTable)
+    .where(eq(ddexAcknowledgementsTable.messageId, id))
+    .orderBy(desc(ddexAcknowledgementsTable.receivedAt));
+  const batch = msg.batchId
+    ? (await db.select().from(ddexBatchesTable).where(eq(ddexBatchesTable.id, msg.batchId)))[0]
+    : null;
+  return { message: msg, batch, acknowledgements: acks };
+}
+
+/** Минимальный union-import для типов, чтобы lint/tsc не тёрли неиспользуемые. */
+export type _ServiceTypes = { Release: Release; Track: Track };
+
 export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" | "manual" = "webhook", partnerCodeHint?: string): Promise<IngestAckResult> {
   const parsed = parseAck(rawXml, source);
 
@@ -502,39 +580,26 @@ export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" 
       } else if (parsed.status === "rejected") {
         await tx.update(ddexMessagesTable).set({
           status: "rejected", ackedAt: new Date(), ackPayload: parsed.parsed,
-          rejectionReason: parsed.rejectionReason?.slice(0, 500) ?? "Partner rejected",
+          rejectionReason: parsed.rejectionReason?.slice(0, 500) ?? null,
         }).where(eq(ddexMessagesTable.id, matchedMessageId));
       }
     }
-    if (matchedBatchId) {
-      await tx.update(ddexBatchesTable).set({
-        status: parsed.status === "accepted" ? "acked" : (parsed.status === "rejected" ? "rejected" : "uploaded"),
-        ackReceivedAt: new Date(),
-      }).where(eq(ddexBatchesTable.id, matchedBatchId));
+    if (matchedBatchId && parsed.status === "accepted") {
+      await tx.update(ddexBatchesTable).set({ status: "acked" }).where(eq(ddexBatchesTable.id, matchedBatchId));
     }
     return a;
   });
 
+  logger.info({
+    ackId: ack.id, matchedMessageId, matchedBatchId, partnerCode, status: parsed.status,
+  }, "ddex ack ingested");
+
   return {
-    ok: true, ackId: ack.id,
-    matchedMessageId, matchedBatchId,
-    status: parsed.status, reason: parsed.rejectionReason,
+    ok: true,
+    ackId: ack.id,
+    matchedMessageId,
+    matchedBatchId,
+    status: parsed.status,
+    reason: parsed.rejectionReason,
   };
 }
-
-// ── Удобные геттеры для UI ───────────────────────────────────────────
-
-export async function getMessageDetail(id: number) {
-  const [msg] = await db.select().from(ddexMessagesTable).where(eq(ddexMessagesTable.id, id));
-  if (!msg) return null;
-  const acks = await db.select().from(ddexAcknowledgementsTable)
-    .where(eq(ddexAcknowledgementsTable.messageId, id))
-    .orderBy(desc(ddexAcknowledgementsTable.receivedAt));
-  const batch = msg.batchId
-    ? (await db.select().from(ddexBatchesTable).where(eq(ddexBatchesTable.id, msg.batchId)))[0]
-    : null;
-  return { message: msg, batch, acknowledgements: acks };
-}
-
-/** Минимальный union-import для типов, чтобы lint/tsc не тёрли неиспользуемые. */
-export type _ServiceTypes = { Release: Release; Track: Track };

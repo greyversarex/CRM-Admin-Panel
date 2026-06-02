@@ -26,6 +26,11 @@ export type ResourceFile = {
   mimeType: string;
   sizeBytes: number;
   sha1?: string;
+  /** Реальные технические характеристики, извлечённые при загрузке через music-metadata. */
+  codec?: string;
+  sampleRateHz?: number;
+  bitDepth?: number;
+  channels?: number;
 };
 
 /** Артист с ролью в контексте релиза. */
@@ -35,15 +40,28 @@ export type ContributingArtist = {
   role: "MainArtist" | "FeaturedArtist" | "Composer" | "Lyricist" | "Producer";
 };
 
+/** Перевод названия на один язык. */
+export type MetadataTranslation = {
+  language: string;        // ISO-639-1: "ru", "en", "ja", …
+  title: string;
+  version?: string | null;
+};
+
 export type TrackContext = {
   trackId: number;
   resourceRef: string;     // "A1", "A2", …
   isrc: string;
   title: string;
+  /** Версия трека ("Remix", "Acoustic", "Live", …). Кладётся в <SubTitle>. */
+  trackVersion?: string | null;
   durationSeconds: number;
   language: string;        // ISO-639-1: "tg" | "ru" | "en"
   isExplicit: boolean;
   trackNumber: number;
+  genre?: string | null;
+  subgenre?: string | null;
+  /** Переводы названия/версии трека на другие языки. */
+  metadataTranslations?: MetadataTranslation[];
   /** Структурированный список авторов/композиторов (writers jsonb на треке). */
   writers: Array<{ name: string; role: "composer" | "lyricist" | "songwriter" | "arranger"; share: number }>;
   /** Performers (для DDEX <Contributor> и Apple Music). */
@@ -58,17 +76,22 @@ export type ReleaseContext = {
   releaseId: number;
   upc: string;
   title: string;
+  /** Версия релиза ("Deluxe Edition", "Live", …). Кладётся в <SubTitle>. */
+  releaseVersion?: string | null;
   releaseType: "single" | "ep" | "album" | "compilation";
   /** AudioSingle/AudioAlbum/Video — берётся из releaseType + assets */
   profile: Profile;
   releaseDate: string;     // YYYY-MM-DD
   genre: string | null;
+  subgenre?: string | null;
   language: string;
   isExplicit: boolean;
   /** ISO-3166 alpha-2 codes ("WW" → Worldwide) */
   territories: string[];
   pLine: string | null;
   cLine: string | null;
+  /** Переводы названия/версии релиза на другие языки. */
+  metadataTranslations?: MetadataTranslation[];
   mainArtist: ContributingArtist;
   featuredArtists: ContributingArtist[];
   label: { partyRef: string; name: string; partyId: string | null } | null;
