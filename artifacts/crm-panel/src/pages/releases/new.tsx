@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
 
@@ -208,14 +209,17 @@ export default function CreateRelease() {
           </p>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6">
 
           {/* ── Cover Art ────────────────────────────────────────────────── */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-3">
-              <FieldLabel className="text-sm font-medium">Cover Art</FieldLabel>
-              <InfoTip text="Recommended size: 3000×3000 px (1000×1000 minimum). Accepted formats: .JPG / .JPEG / .PNG. Once uploaded you will see a preview of your cover art." />
-            </div>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg inline-flex items-center gap-1.5">
+                Cover Art
+                <InfoTip text="Recommended size: 3000×3000 px (1000×1000 minimum). Accepted formats: .JPG / .JPEG / .PNG. Once uploaded you will see a preview of your cover art." />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
             <div className="flex gap-6 items-start">
               <div className="shrink-0 w-52">
                 <CoverUploader value={coverUrl || null} onChange={p => setCoverUrl(p ?? "")} attach={false} />
@@ -244,10 +248,16 @@ export default function CreateRelease() {
                 </RadioGroup>
               </div>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* ── Release Title / Version / Language ───────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* ── Release Details ──────────────────────────────────────────── */}
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Release Details</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel htmlFor="title" className="text-sm">Release Title</FieldLabel>
               <Input
@@ -317,13 +327,18 @@ export default function CreateRelease() {
               </div>
             ))}
           </div>
+            </CardContent>
+          </Card>
 
           {/* ── Primary Artists ──────────────────────────────────────────── */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-1.5">
-              <FieldLabel className="text-sm font-medium">Primary Artists</FieldLabel>
-              <InfoTip text="The main performing artist(s) credited on this release. Select from your existing artists or create a new one. If there are 5 or more different artists, check «Various Artists»." />
-            </div>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg inline-flex items-center gap-1.5">
+                Primary Artists
+                <InfoTip text="The main performing artist(s) credited on this release. Select from your existing artists or create a new one. If there are 5 or more different artists, check «Various Artists»." />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-3">
             <Popover open={artistOpen} onOpenChange={setArtistOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -409,10 +424,16 @@ export default function CreateRelease() {
                 <span className="block text-[11px] text-muted-foreground">Select if 5+ artists.</span>
               </span>
             </label>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* ── UPC / Genre / Subgenres ──────────────────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* ── Metadata & Rights ────────────────────────────────────────── */}
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Metadata &amp; Rights</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">UPC</FieldLabel>
               <Input
@@ -540,6 +561,8 @@ export default function CreateRelease() {
               </div>
             </div>
           </div>
+            </CardContent>
+          </Card>
 
         </div>
       </div>

@@ -394,12 +394,15 @@ export default function TrackEditPage() {
           </span>
         </div>
 
-        {/* ── Single form container ────────────────────────────────────── */}
-        <div className="border border-border/50 rounded-lg bg-card/40 backdrop-blur divide-y divide-border/30">
+        {/* ── Sections as cards ────────────────────────────────────────── */}
+        <div className="space-y-6">
 
           {/* ── 1. Audio Details ─────────────────────────────────────── */}
-          <div className="p-6 space-y-5">
-            <h3 className="text-lg font-semibold">Audio Details</h3>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Audio Details</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-5">
 
             {/* Audio file row + AI radios */}
             <div className="grid grid-cols-2 gap-6 items-start">
@@ -509,18 +512,22 @@ export default function TrackEditPage() {
                 className="font-mono"
               />
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 1b. Spatial Audio ────────────────────────────────────── */}
-          <div className="p-6 space-y-5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold inline-flex items-center gap-1.5">
-                Spatial Audio <InfoTip text="Optional Dolby Atmos / spatial audio version of the track. A fee applies per spatial track upon release approval." />
-              </h3>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
-                +$24.99
-              </span>
-            </div>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5">
+                  Spatial Audio <InfoTip text="Optional Dolby Atmos / spatial audio version of the track. A fee applies per spatial track upon release approval." />
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  +$24.99
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-5">
             <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">$24.99</span> per spatial audio track will be charged to your account balance upon release approval.
             </div>
@@ -568,11 +575,15 @@ export default function TrackEditPage() {
               />
               <p className="text-[11px] text-muted-foreground/60">We'll assign an ISRC if you don't have one.</p>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 2. Track Details ─────────────────────────────────────── */}
-          <div className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Track Details</h3>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Track Details</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
@@ -604,18 +615,20 @@ export default function TrackEditPage() {
                 </Select>
               </div>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 3. Display Artists ───────────────────────────────────── */}
-          <div className="p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold">Display Artists</h3>
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Display Artists</CardTitle>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Artists that appear as the main performers or in search items for the song.
                 Each track requires a primary artist to be specified. Include any additional
                 display artists who appear on this track.
               </p>
-            </div>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
               <span>Artist Name</span><span>Role</span>
             </div>
@@ -624,14 +637,15 @@ export default function TrackEditPage() {
               value={f.displayArtists}
               onChange={(v) => setF({ ...f, displayArtists: v })}
             />
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 4. Contributors ──────────────────────────────────────── */}
-          <div className="p-6 space-y-5">
-            <div>
-              <h3 className="text-lg font-semibold inline-flex items-center gap-1.5">
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg inline-flex items-center gap-1.5">
                 Contributors <InfoTip text="Everyone credited on the track. Apple Music requires at least one role per group: Writers, Performers, and Production & Engineering." />
-              </h3>
+              </CardTitle>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Apple Music requires that tracks delivered to Apple Music must have at least one role represented
                 per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
@@ -641,7 +655,8 @@ export default function TrackEditPage() {
                 Writer contributors must be entered with their real first and last names
                 (ex: "Austin Post", not "Post Malone").
               </p>
-            </div>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-5">
 
             {/* Writers */}
             <div className="space-y-3">
@@ -679,10 +694,15 @@ export default function TrackEditPage() {
               </div>
               <ProductionEditor hideTitle value={f.production} onChange={(v) => setF({ ...f, production: v })} />
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 5. Genre + Subgenres ─────────────────────────────────── */}
-          <div className="p-6">
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Genre</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Genre</Label>
@@ -710,10 +730,15 @@ export default function TrackEditPage() {
                 </Select>
               </div>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 6. Recording Year + Country ──────────────────────────── */}
-          <div className="p-6">
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Recording</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Recording Year</Label>
@@ -740,10 +765,15 @@ export default function TrackEditPage() {
                 </Select>
               </div>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* ── 7. Audio Style + Explicit Status ─────────────────────── */}
-          <div className="p-6 space-y-5">
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Classification</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-5">
             <div className="space-y-2">
               <Label className="text-sm font-semibold inline-flex items-center gap-1">
                 Audio Style <InfoTip text="Choose «Instrumental» if the track has no lyrics, or «Vocal» if it contains singing or spoken words." />
@@ -791,7 +821,8 @@ export default function TrackEditPage() {
                 </div>
               </RadioGroup>
             </div>
-          </div>
+            </CardContent>
+          </Card>
 
         </div>
       </div>
