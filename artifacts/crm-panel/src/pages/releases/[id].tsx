@@ -818,10 +818,10 @@ function TrackRow({
 
   return (
     <Card id={`track-${t.id}`} className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      {/* Card header: Tracks · Show Issues | Delete | Edit */}
+      {/* Card header: Track N · Show Issues | Delete | Edit */}
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
         <div className="flex items-center gap-2">
-          <CardTitle className="text-lg">Tracks</CardTitle>
+          <CardTitle className="text-lg">Track {index + 1}</CardTitle>
           <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
             Show Issues
           </span>
@@ -851,9 +851,6 @@ function TrackRow({
       </CardHeader>
 
       <CardContent className="space-y-4 pt-0">
-        {/* Sub-heading */}
-        <div className="font-semibold text-base">Track {index + 1}</div>
-
         {/* Row 1: Track Title / Mix Version / Metadata Language */}
         <div className="grid grid-cols-3 gap-4">
           <TrackField label="Track Title" value={t.title || DASH} />
