@@ -1,0 +1,580 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ern:NewReleaseMessage MessageSchemaVersionId="ern/382" ReleaseProfileVersionId="CommonReleaseTypes/13/AudioAlbumMusicandSpeech" xmlns:ern="http://ddex.net/xml/ern/382" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://ddex.net/xml/ern/382 http://ddex.net/xml/ern/382/release-notification.xsd" xmlns:avs="http://ddex.net/xml/avs/avs">
+  <MessageHeader>
+    <MessageThreadId>FUGA_2376163054</MessageThreadId>
+    <MessageId>FUGA_2376163054</MessageId>
+    <MessageFileName>8718857546771.xml</MessageFileName>
+    <MessageSender>
+      <PartyId>PADPIDA20110330020</PartyId>
+      <PartyName>
+        <FullName>FUGA</FullName>
+      </PartyName>
+    </MessageSender>
+    <SentOnBehalfOf>
+      <PartyId>PADPIDA20110330020</PartyId>
+      <PartyName>
+        <FullName>FUGA TEST CP</FullName>
+      </PartyName>
+    </SentOnBehalfOf>
+    <MessageRecipient>
+      <PartyId>PADPIDA2016110503N</PartyId>
+      <PartyName>
+        <FullName>FUGA TEST DSP 20 (ACRCloud)</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>2020-05-07T10:41:04+02:00</MessageCreatedDateTime>
+    <MessageControlType>LiveMessage</MessageControlType>
+  </MessageHeader>
+  <UpdateIndicator>OriginalMessage</UpdateIndicator>
+  <ResourceList>
+    <SoundRecording>
+      <SoundRecordingType>MusicalWorkSoundRecording</SoundRecordingType>
+      <SoundRecordingId>
+        <ISRC>NLRD51967851</ISRC>
+        <ProprietaryId Namespace="PADPIDA20110330020">2355410102</ProprietaryId>
+      </SoundRecordingId>
+      <ResourceReference>A1</ResourceReference>
+      <ReferenceTitle>
+        <TitleText>Coen's Tunes</TitleText>
+        <SubTitle>version for track 1</SubTitle>
+      </ReferenceTitle>
+      <IsInstrumental>true</IsInstrumental>
+      <Duration>PT1M8S</Duration>
+      <SoundRecordingDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <Title TitleType="DisplayTitle">
+          <TitleText>Coen's Tunes</TitleText>
+          <SubTitle>version for track 1</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="fr" TitleType="TranslatedTitle">
+          <TitleText>Coen's mélodie</TitleText>
+          <SubTitle>version pour piste 1</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ja" TitleType="TranslatedTitle">
+          <TitleText>コーエンの曲</TitleText>
+          <SubTitle>コーエン</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ru" TitleType="TranslatedTitle">
+          <TitleText>Мелодии Коэна</TitleText>
+          <SubTitle>версия для трека 1</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>Coen</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ja">
+            <FullName>コーエン</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ru">
+            <FullName>коен</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2355414065</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <DisplayArtist SequenceNumber="2">
+          <PartyName>
+            <FullName>DJ FUGA</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2500643446</PartyId>
+          <ArtistRole>FeaturedArtist</ArtistRole>
+        </DisplayArtist>
+        <IndirectResourceContributor>
+          <PartyName>
+            <FullName>Copyright Control</FullName>
+          </PartyName>
+          <IndirectResourceContributorRole>MusicPublisher</IndirectResourceContributorRole>
+        </IndirectResourceContributor>
+        <IndirectResourceContributor>
+          <PartyName>
+            <FullName>Thyz</FullName>
+          </PartyName>
+          <IndirectResourceContributorRole>ComposerLyricist</IndirectResourceContributorRole>
+        </IndirectResourceContributor>
+        <DisplayArtistName LanguageAndScriptCode="en">The One and Only Amazing Coen</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="fr">Le seul et unique Coen incroyable</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ja">唯一無二の素晴らしいコーエン</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ru">Единственный Удивительный Коэн</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">FUGB</LabelName>
+        <LabelName LanguageAndScriptCode="bs">bosnian label</LabelName>
+        <LabelName LanguageAndScriptCode="ru">ФУГБ</LabelName>
+        <RightsController>
+          <PartyName>
+            <FullName>Coenie</FullName>
+          </PartyName>
+          <RightsControllerRole>RightsController</RightsControllerRole>
+          <RightShareUnknown>true</RightShareUnknown>
+        </RightsController>
+        <OriginalResourceReleaseDate LocationDescription="The Garden House">2020-02-01</OriginalResourceReleaseDate>
+        <PLine>
+          <Year>2020</Year>
+          <PLineText>Coen Inc.</PLineText>
+        </PLine>
+        <Genre>
+          <GenreText>Electronic</GenreText>
+          <SubGenre>Dark Techno</SubGenre>
+        </Genre>
+        <ParentalWarningType>NotExplicit</ParentalWarningType>
+        <TechnicalSoundRecordingDetails>
+          <TechnicalResourceDetailsReference>T1_0</TechnicalResourceDetailsReference>
+          <AudioCodecType>FLAC</AudioCodecType>
+          <NumberOfChannels>2</NumberOfChannels>
+          <SamplingRate UnitOfMeasure="kHz">44.1</SamplingRate>
+          <BitsPerSample>16</BitsPerSample>
+          <IsPreview>false</IsPreview>
+          <PreviewDetails>
+            <StartPoint>0</StartPoint>
+            <Duration>PT30S</Duration>
+            <ExpressionType>Instructive</ExpressionType>
+          </PreviewDetails>
+          <File>
+            <FileName>8718857546771_T1_0_SoundRecording_001_001.fp</FileName>
+            <FilePath>resources/</FilePath>
+            <HashSum>
+              <HashSum>997f4979ba66a63b2b626c82b58d95e0</HashSum>
+              <HashSumAlgorithmType>MD5</HashSumAlgorithmType>
+            </HashSum>
+          </File>
+        </TechnicalSoundRecordingDetails>
+      </SoundRecordingDetailsByTerritory>
+      <TerritoryOfCommissioning>Worldwide</TerritoryOfCommissioning>
+    </SoundRecording>
+    <SoundRecording>
+      <SoundRecordingType>MusicalWorkSoundRecording</SoundRecordingType>
+      <SoundRecordingId>
+        <ISRC>NLRD51967852</ISRC>
+        <ProprietaryId Namespace="PADPIDA20110330020">2355404099</ProprietaryId>
+      </SoundRecordingId>
+      <ResourceReference>A2</ResourceReference>
+      <ReferenceTitle>
+        <TitleText>Coen's Theme</TitleText>
+        <SubTitle>version for track 2</SubTitle>
+      </ReferenceTitle>
+      <IsInstrumental>true</IsInstrumental>
+      <Duration>PT1M9S</Duration>
+      <SoundRecordingDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <Title TitleType="DisplayTitle">
+          <TitleText>Coen's Theme</TitleText>
+          <SubTitle>version for track 2</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="fr" TitleType="TranslatedTitle">
+          <TitleText>Thème de Coen</TitleText>
+          <SubTitle>version pour piste 2</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ja" TitleType="TranslatedTitle">
+          <TitleText>コーエンのテーマ</TitleText>
+          <SubTitle>トラック2のバージョン</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ru" TitleType="TranslatedTitle">
+          <TitleText>Тема Коэна</TitleText>
+          <SubTitle>версия для трека 2</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>Coen</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ja">
+            <FullName>コーエン</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ru">
+            <FullName>коен</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2355414065</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <IndirectResourceContributor>
+          <PartyName>
+            <FullName>Thyz publishing</FullName>
+          </PartyName>
+          <IndirectResourceContributorRole>MusicPublisher</IndirectResourceContributorRole>
+        </IndirectResourceContributor>
+        <DisplayArtistName LanguageAndScriptCode="en">Coen</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ja">コーエン</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ru">коен</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">FUGB</LabelName>
+        <LabelName LanguageAndScriptCode="bs">bosnian label</LabelName>
+        <LabelName LanguageAndScriptCode="ru">ФУГБ</LabelName>
+        <RightsController>
+          <PartyName>
+            <FullName>Thyz</FullName>
+          </PartyName>
+          <RightsControllerRole>RightsController</RightsControllerRole>
+          <RightShareUnknown>true</RightShareUnknown>
+        </RightsController>
+        <OriginalResourceReleaseDate LocationDescription="Canal Street Studios, Amsterdam">2020-02-01</OriginalResourceReleaseDate>
+        <PLine>
+          <Year>2020</Year>
+          <PLineText>Coen Inc.</PLineText>
+        </PLine>
+        <Genre>
+          <GenreText>Electronic</GenreText>
+        </Genre>
+        <ParentalWarningType>NotExplicit</ParentalWarningType>
+        <TechnicalSoundRecordingDetails>
+          <TechnicalResourceDetailsReference>T2_0</TechnicalResourceDetailsReference>
+          <AudioCodecType>FLAC</AudioCodecType>
+          <NumberOfChannels>2</NumberOfChannels>
+          <SamplingRate UnitOfMeasure="kHz">44.1</SamplingRate>
+          <BitsPerSample>16</BitsPerSample>
+          <IsPreview>false</IsPreview>
+          <PreviewDetails>
+            <StartPoint>0</StartPoint>
+            <Duration>PT30S</Duration>
+            <ExpressionType>Instructive</ExpressionType>
+          </PreviewDetails>
+          <File>
+            <FileName>8718857546771_T2_0_SoundRecording_001_002.fp</FileName>
+            <FilePath>resources/</FilePath>
+            <HashSum>
+              <HashSum>749e84aeea9b23124f6373d78d39d92e</HashSum>
+              <HashSumAlgorithmType>MD5</HashSumAlgorithmType>
+            </HashSum>
+          </File>
+        </TechnicalSoundRecordingDetails>
+      </SoundRecordingDetailsByTerritory>
+      <TerritoryOfCommissioning>Worldwide</TerritoryOfCommissioning>
+    </SoundRecording>
+    <Image>
+      <ImageType>FrontCoverImage</ImageType>
+      <ImageId>
+        <ProprietaryId Namespace="PADPIDA20110330020">2355413292</ProprietaryId>
+      </ImageId>
+      <ResourceReference>A3</ResourceReference>
+      <ImageDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <TechnicalImageDetails>
+          <TechnicalResourceDetailsReference>T3</TechnicalResourceDetailsReference>
+          <ImageCodecType>PNG</ImageCodecType>
+          <File>
+            <FileName>8718857546771_T3_Image.png</FileName>
+            <FilePath>resources/</FilePath>
+            <HashSum>
+              <HashSum>54e86cd51956245ef814c607366f8326</HashSum>
+              <HashSumAlgorithmType>MD5</HashSumAlgorithmType>
+            </HashSum>
+          </File>
+        </TechnicalImageDetails>
+      </ImageDetailsByTerritory>
+    </Image>
+  </ResourceList>
+  <ReleaseList>
+    <Release IsMainRelease="true">
+      <ReleaseId>
+        <ICPN IsEan="true">8718857546771</ICPN>
+        <CatalogNumber Namespace="PADPIDA20110330020">Coen1</CatalogNumber>
+        <ProprietaryId Namespace="PADPIDA20110330020">2376142698</ProprietaryId>
+      </ReleaseId>
+      <ReleaseReference>R0</ReleaseReference>
+      <ReferenceTitle>
+        <TitleText>The Amazing Coen</TitleText>
+        <SubTitle>default version</SubTitle>
+      </ReferenceTitle>
+      <ReleaseResourceReferenceList>
+        <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A1</ReleaseResourceReference>
+        <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A2</ReleaseResourceReference>
+        <ReleaseResourceReference ReleaseResourceType="SecondaryResource">A3</ReleaseResourceReference>
+      </ReleaseResourceReferenceList>
+      <ReleaseType>Album</ReleaseType>
+      <ReleaseDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <DisplayArtistName LanguageAndScriptCode="en">Coen and DJ FUGA</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ja">コーエン</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ru">коен</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">FUGB</LabelName>
+        <LabelName LanguageAndScriptCode="bs">bosnian label</LabelName>
+        <LabelName LanguageAndScriptCode="ru">ФУГБ</LabelName>
+        <Title TitleType="FormalTitle">
+          <TitleText>The Amazing Coen</TitleText>
+          <SubTitle>default version</SubTitle>
+        </Title>
+        <Title TitleType="DisplayTitle">
+          <TitleText>The Amazing Coen</TitleText>
+          <SubTitle>default version</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="fr" TitleType="TranslatedTitle">
+          <TitleText>l'incroyable Coen</TitleText>
+          <SubTitle>version par défaut</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ja" TitleType="TranslatedTitle">
+          <TitleText>素晴らしいコーエン</TitleText>
+          <SubTitle>素晴らしいコ</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ru" TitleType="TranslatedTitle">
+          <TitleText>потрясающий коен</TitleText>
+          <SubTitle>версия по умолчанию</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>Coen</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ja">
+            <FullName>コーエン</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ru">
+            <FullName>коен</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2355414065</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <DisplayArtist SequenceNumber="2">
+          <PartyName>
+            <FullName>DJ FUGA</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2500643446</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <ParentalWarningType>NotExplicit</ParentalWarningType>
+        <ResourceGroup>
+          <ResourceGroup>
+            <Title>
+              <TitleText>Disc-1</TitleText>
+            </Title>
+            <SequenceNumber>1</SequenceNumber>
+            <ResourceGroupContentItem>
+              <SequenceNumber>1</SequenceNumber>
+              <ResourceType>SoundRecording</ResourceType>
+              <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A1</ReleaseResourceReference>
+              <IsInstantGratificationResource>false</IsInstantGratificationResource>
+              <IsPreOrderIncentiveResource>false</IsPreOrderIncentiveResource>
+            </ResourceGroupContentItem>
+            <ResourceGroupContentItem>
+              <SequenceNumber>2</SequenceNumber>
+              <ResourceType>SoundRecording</ResourceType>
+              <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A2</ReleaseResourceReference>
+              <IsInstantGratificationResource>false</IsInstantGratificationResource>
+              <IsPreOrderIncentiveResource>false</IsPreOrderIncentiveResource>
+            </ResourceGroupContentItem>
+          </ResourceGroup>
+          <ResourceGroupContentItem>
+            <ReleaseResourceReference ReleaseResourceType="SecondaryResource">A3</ReleaseResourceReference>
+          </ResourceGroupContentItem>
+        </ResourceGroup>
+        <Genre>
+          <GenreText>Electronic</GenreText>
+          <SubGenre>Free Style</SubGenre>
+        </Genre>
+        <ReleaseDate>2020-02-01</ReleaseDate>
+        <OriginalReleaseDate LocationDescription="Canal Street Studios, Amsterdam">2020-02-01</OriginalReleaseDate>
+      </ReleaseDetailsByTerritory>
+      <PLine>
+        <Year>2020</Year>
+        <PLineText>Coen Inc.</PLineText>
+      </PLine>
+      <CLine>
+        <Year>2020</Year>
+        <CLineText>Coen Inc.</CLineText>
+      </CLine>
+    </Release>
+    <Release>
+      <ReleaseId>
+        <ISRC>NLRD51967851</ISRC>
+      </ReleaseId>
+      <ReleaseReference>R1</ReleaseReference>
+      <ReferenceTitle>
+        <TitleText>Coen's Tunes</TitleText>
+        <SubTitle>version for track 1</SubTitle>
+      </ReferenceTitle>
+      <ReleaseResourceReferenceList>
+        <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A1</ReleaseResourceReference>
+      </ReleaseResourceReferenceList>
+      <ReleaseType>TrackRelease</ReleaseType>
+      <ReleaseDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <DisplayArtistName LanguageAndScriptCode="en">The One and Only Amazing Coen</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="fr">Le seul et unique Coen incroyable</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ja">唯一無二の素晴らしいコーエン</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ru">Единственный Удивительный Коэн</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">FUGB</LabelName>
+        <LabelName LanguageAndScriptCode="bs">bosnian label</LabelName>
+        <LabelName LanguageAndScriptCode="ru">ФУГБ</LabelName>
+        <Title TitleType="FormalTitle">
+          <TitleText>Coen's Tunes</TitleText>
+          <SubTitle>version for track 1</SubTitle>
+        </Title>
+        <Title TitleType="DisplayTitle">
+          <TitleText>Coen's Tunes</TitleText>
+          <SubTitle>version for track 1</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="fr" TitleType="TranslatedTitle">
+          <TitleText>Coen's mélodie</TitleText>
+          <SubTitle>version pour piste 1</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ja" TitleType="TranslatedTitle">
+          <TitleText>コーエンの曲</TitleText>
+          <SubTitle>コーエン</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ru" TitleType="TranslatedTitle">
+          <TitleText>Мелодии Коэна</TitleText>
+          <SubTitle>версия для трека 1</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>Coen</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ja">
+            <FullName>コーエン</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ru">
+            <FullName>коен</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2355414065</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <DisplayArtist SequenceNumber="2">
+          <PartyName>
+            <FullName>DJ FUGA</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2500643446</PartyId>
+          <ArtistRole>FeaturedArtist</ArtistRole>
+        </DisplayArtist>
+        <RelatedRelease>
+          <ReleaseId>
+            <ICPN IsEan="true">8718857546771</ICPN>
+          </ReleaseId>
+          <ReleaseRelationshipType>IsReleaseFromRelease</ReleaseRelationshipType>
+        </RelatedRelease>
+        <ParentalWarningType>NotExplicit</ParentalWarningType>
+        <ResourceGroup>
+          <ResourceGroupContentItem>
+            <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A1</ReleaseResourceReference>
+          </ResourceGroupContentItem>
+        </ResourceGroup>
+        <Genre>
+          <GenreText>Electronic</GenreText>
+          <SubGenre>Dark Techno</SubGenre>
+        </Genre>
+        <ReleaseDate>2020-02-01</ReleaseDate>
+        <OriginalReleaseDate LocationDescription="The Garden House">2020-02-01</OriginalReleaseDate>
+      </ReleaseDetailsByTerritory>
+      <PLine>
+        <Year>2020</Year>
+        <PLineText>Coen Inc.</PLineText>
+      </PLine>
+      <CLine>
+        <Year>2020</Year>
+        <CLineText>Coen Inc.</CLineText>
+      </CLine>
+    </Release>
+    <Release>
+      <ReleaseId>
+        <ISRC>NLRD51967852</ISRC>
+      </ReleaseId>
+      <ReleaseReference>R2</ReleaseReference>
+      <ReferenceTitle>
+        <TitleText>Coen's Theme</TitleText>
+        <SubTitle>version for track 2</SubTitle>
+      </ReferenceTitle>
+      <ReleaseResourceReferenceList>
+        <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A2</ReleaseResourceReference>
+      </ReleaseResourceReferenceList>
+      <ReleaseType>TrackRelease</ReleaseType>
+      <ReleaseDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <DisplayArtistName LanguageAndScriptCode="en">Coen</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ja">コーエン</DisplayArtistName>
+        <DisplayArtistName LanguageAndScriptCode="ru">коен</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">FUGB</LabelName>
+        <LabelName LanguageAndScriptCode="bs">bosnian label</LabelName>
+        <LabelName LanguageAndScriptCode="ru">ФУГБ</LabelName>
+        <Title TitleType="FormalTitle">
+          <TitleText>Coen's Theme</TitleText>
+          <SubTitle>version for track 2</SubTitle>
+        </Title>
+        <Title TitleType="DisplayTitle">
+          <TitleText>Coen's Theme</TitleText>
+          <SubTitle>version for track 2</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="fr" TitleType="TranslatedTitle">
+          <TitleText>Thème de Coen</TitleText>
+          <SubTitle>version pour piste 2</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ja" TitleType="TranslatedTitle">
+          <TitleText>コーエンのテーマ</TitleText>
+          <SubTitle>トラック2のバージョン</SubTitle>
+        </Title>
+        <Title LanguageAndScriptCode="ru" TitleType="TranslatedTitle">
+          <TitleText>Тема Коэна</TitleText>
+          <SubTitle>версия для трека 2</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>Coen</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ja">
+            <FullName>コーエン</FullName>
+          </PartyName>
+          <PartyName LanguageAndScriptCode="ru">
+            <FullName>коен</FullName>
+          </PartyName>
+          <PartyId Namespace="PADPIDA20110330020">2355414065</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <RelatedRelease>
+          <ReleaseId>
+            <ICPN IsEan="true">8718857546771</ICPN>
+          </ReleaseId>
+          <ReleaseRelationshipType>IsReleaseFromRelease</ReleaseRelationshipType>
+        </RelatedRelease>
+        <ParentalWarningType>NotExplicit</ParentalWarningType>
+        <ResourceGroup>
+          <ResourceGroupContentItem>
+            <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A2</ReleaseResourceReference>
+          </ResourceGroupContentItem>
+        </ResourceGroup>
+        <Genre>
+          <GenreText>Electronic</GenreText>
+        </Genre>
+        <ReleaseDate>2020-02-01</ReleaseDate>
+        <OriginalReleaseDate LocationDescription="Canal Street Studios, Amsterdam">2020-02-01</OriginalReleaseDate>
+      </ReleaseDetailsByTerritory>
+      <PLine>
+        <Year>2020</Year>
+        <PLineText>Coen Inc.</PLineText>
+      </PLine>
+      <CLine>
+        <Year>2020</Year>
+        <CLineText>Coen Inc.</CLineText>
+      </CLine>
+    </Release>
+  </ReleaseList>
+  <DealList>
+    <ReleaseDeal>
+      <DealReleaseReference>R1</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>RightsClaimModel</CommercialModelType>
+          <Usage>
+            <UseType>UserMakeAvailableLabelProvided</UseType>
+          </Usage>
+          <ExcludedTerritoryCode>BJ</ExcludedTerritoryCode>
+          <ValidityPeriod>
+            <StartDateTime>2020-02-01T03:00:00+00:00</StartDateTime>
+          </ValidityPeriod>
+          <RightsClaimPolicy>
+            <RightsClaimPolicyType>Monetize</RightsClaimPolicyType>
+          </RightsClaimPolicy>
+        </DealTerms>
+      </Deal>
+      <EffectiveDate>2020-05-07</EffectiveDate>
+    </ReleaseDeal>
+    <ReleaseDeal>
+      <DealReleaseReference>R2</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>RightsClaimModel</CommercialModelType>
+          <Usage>
+            <UseType>UserMakeAvailableLabelProvided</UseType>
+          </Usage>
+          <ExcludedTerritoryCode>BJ</ExcludedTerritoryCode>
+          <ValidityPeriod>
+            <StartDateTime>2020-02-01T03:00:00+00:00</StartDateTime>
+          </ValidityPeriod>
+          <RightsClaimPolicy>
+            <RightsClaimPolicyType>Monetize</RightsClaimPolicyType>
+          </RightsClaimPolicy>
+        </DealTerms>
+      </Deal>
+      <EffectiveDate>2020-05-07</EffectiveDate>
+    </ReleaseDeal>
+  </DealList>
+</ern:NewReleaseMessage>
