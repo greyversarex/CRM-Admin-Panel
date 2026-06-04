@@ -73,7 +73,7 @@ export function MultiArtistPicker({
             <SelectTrigger className="bg-background/40 w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {ARTIST_ROLES.map((r) => (
-                <SelectItem key={r.value} value={r.value}>{t.releaseWizard.artistRoles[r.value]}</SelectItem>
+                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

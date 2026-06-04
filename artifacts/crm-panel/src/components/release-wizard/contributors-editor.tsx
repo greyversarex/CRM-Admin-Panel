@@ -46,7 +46,7 @@ export function DisplayArtistsEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{t.releaseWizard.artistRoles[r.value]}</SelectItem>)}
+              {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -80,7 +80,7 @@ export function WritersEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{t.releaseWizard.writerRoles[r.value]}</SelectItem>)}
+              {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -114,7 +114,7 @@ export function PerformersEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{t.releaseWizard.performerRoles[r]}</SelectItem>)}
+              {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -148,7 +148,7 @@ export function ProductionEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[200px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{t.releaseWizard.productionRoles[r]}</SelectItem>)}
+              {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
           </Select>
         </>

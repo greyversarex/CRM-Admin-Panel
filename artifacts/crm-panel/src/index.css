@@ -151,44 +151,44 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .08);
 
-  --background: 0 0% 6%;
-  --foreground: 0 0% 96%;
-  --border: 0 0% 16%;
+  --background: 224 30% 9%;
+  --foreground: 213 31% 96%;
+  --border: 220 20% 18%;
 
-  --card: 0 0% 9%;
-  --card-foreground: 0 0% 96%;
-  --card-border: 0 0% 16%;
+  --card: 222 26% 13%;
+  --card-foreground: 213 31% 96%;
+  --card-border: 220 20% 19%;
 
-  --sidebar: 0 0% 5%;
-  --sidebar-foreground: 0 0% 96%;
-  --sidebar-border: 0 0% 14%;
-  --sidebar-primary: 0 0% 88%;
-  --sidebar-primary-foreground: 0 0% 8%;
-  --sidebar-accent: 0 0% 13%;
-  --sidebar-accent-foreground: 0 0% 96%;
-  --sidebar-ring: 0 0% 60%;
+  --sidebar: 224 34% 11%;
+  --sidebar-foreground: 213 31% 96%;
+  --sidebar-border: 220 20% 16%;
+  --sidebar-primary: 226 84% 67%;
+  --sidebar-primary-foreground: 213 31% 96%;
+  --sidebar-accent: 222 26% 15%;
+  --sidebar-accent-foreground: 213 31% 96%;
+  --sidebar-ring: 226 84% 67%;
 
-  --popover: 0 0% 9%;
-  --popover-foreground: 0 0% 96%;
-  --popover-border: 0 0% 16%;
+  --popover: 222 26% 13%;
+  --popover-foreground: 213 31% 96%;
+  --popover-border: 220 20% 19%;
 
-  --primary: 0 0% 92%;
-  --primary-foreground: 0 0% 8%;
+  --primary: 226 84% 67%;
+  --primary-foreground: 213 31% 96%;
 
-  --secondary: 0 0% 15%;
-  --secondary-foreground: 0 0% 96%;
+  --secondary: 220 20% 18%;
+  --secondary-foreground: 213 31% 96%;
 
-  --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 64%;
+  --muted: 220 22% 16%;
+  --muted-foreground: 215 20% 66%;
 
-  --accent: 0 0% 15%;
-  --accent-foreground: 0 0% 96%;
+  --accent: 222 26% 15%;
+  --accent-foreground: 213 31% 96%;
 
   --destructive: 0 72% 58%;
-  --destructive-foreground: 0 0% 96%;
+  --destructive-foreground: 213 31% 96%;
 
-  --input: 0 0% 14%;
-  --ring: 0 0% 70%;
+  --input: 220 22% 16%;
+  --ring: 226 84% 67%;
 
   --chart-1: 226 84% 67%;
   --chart-2: 158 64% 52%;
@@ -223,8 +223,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-image:
-      radial-gradient(ellipse 90% 50% at 50% -5%, hsl(0 0% 100% / 0.04) 0%, transparent 65%),
-      radial-gradient(ellipse 60% 30% at 90% 100%, hsl(0 0% 100% / 0.03) 0%, transparent 60%);
+      radial-gradient(ellipse 90% 50% at 50% -5%, hsl(226 84% 67% / 0.07) 0%, transparent 65%),
+      radial-gradient(ellipse 60% 30% at 90% 100%, hsl(271 80% 68% / 0.05) 0%, transparent 60%);
   }
 
   ::-webkit-scrollbar {
@@ -315,14 +315,14 @@
   .nav-item-active {
     background: linear-gradient(
       135deg,
-      hsl(0 0% 100% / 0.12) 0%,
-      hsl(0 0% 100% / 0.05) 100%
+      hsl(var(--primary) / 0.20) 0%,
+      hsl(271 80% 68% / 0.10) 100%
     );
-    border-color: hsl(0 0% 100% / 0.18);
+    border-color: hsl(var(--primary) / 0.28);
     box-shadow:
-      0 0 18px hsl(0 0% 0% / 0.30),
-      0 1px 0 hsl(0 0% 100% / 0.08) inset,
-      0 0 0 1px hsl(0 0% 100% / 0.05) inset;
+      0 0 18px hsl(var(--primary) / 0.12),
+      0 1px 0 hsl(var(--primary) / 0.10) inset,
+      0 0 0 1px hsl(var(--primary) / 0.06) inset;
   }
 
   /* Shimmer overlay on active */
@@ -378,11 +378,11 @@
   button[role="combobox"] {
     background: linear-gradient(
       180deg,
-      hsl(0 0% 16%) 0%,
-      hsl(0 0% 12%) 100%
+      hsl(222 32% 17%) 0%,
+      hsl(222 30% 13%) 100%
     ) !important;
     border-color: rgba(255, 255, 255, 0.10) !important;
-    color: hsl(0 0% 94%) !important;
+    color: hsl(213 31% 94%) !important;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.07),
       inset 0 -1px 0 rgba(0, 0, 0, 0.25),
@@ -394,14 +394,14 @@
   button[role="combobox"]:focus {
     background: linear-gradient(
       180deg,
-      hsl(0 0% 19%) 0%,
-      hsl(0 0% 14%) 100%
+      hsl(222 34% 20%) 0%,
+      hsl(222 32% 15%) 100%
     ) !important;
-    border-color: hsl(0 0% 100% / 0.35) !important;
+    border-color: hsl(var(--primary) / 0.7) !important;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.09),
       inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-      0 0 0 2px hsl(0 0% 100% / 0.14),
+      0 0 0 2px hsl(var(--primary) / 0.22),
       0 2px 6px rgba(0, 0, 0, 0.30) !important;
     outline: none !important;
   }
@@ -419,11 +419,11 @@
   [role="listbox"] {
     background: linear-gradient(
       180deg,
-      hsl(0 0% 12%) 0%,
-      hsl(0 0% 9%) 100%
+      hsl(222 32% 17%) 0%,
+      hsl(222 30% 13%) 100%
     ) !important;
     border-color: rgba(255, 255, 255, 0.10) !important;
-    color: hsl(0 0% 94%) !important;
+    color: hsl(213 31% 94%) !important;
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.50),
       0 2px 8px rgba(0, 0, 0, 0.35),
@@ -431,7 +431,7 @@
   }
 
   [role="option"] {
-    color: hsl(0 0% 94%) !important;
+    color: hsl(213 31% 94%) !important;
   }
 
   [role="option"]:focus,
@@ -505,10 +505,10 @@
     box-shadow:
       0 2px 4px rgba(0,0,0,0.55),
       0 8px 28px rgba(0,0,0,0.35),
-      0 0 0 1px hsl(0 0% 22%),
-      0 0 24px hsl(0 0% 0% / 0.45),
+      0 0 0 1px hsl(220 22% 22%),
+      0 0 24px hsl(var(--primary) / 0.08),
       inset 0 1px 0 rgba(255,255,255,0.065);
-    border-color: hsl(0 0% 24%);
+    border-color: hsl(220 26% 22%);
   }
 
   /* Don't apply hover lift to cards that contain full-width tables / no-lift */

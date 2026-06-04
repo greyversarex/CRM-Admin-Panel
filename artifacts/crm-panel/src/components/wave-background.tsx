@@ -50,9 +50,9 @@ export function WaveBackground() {
       <div className="absolute -top-48 -right-32 w-[800px] h-[800px] rounded-full"
         style={{ background: "radial-gradient(circle, hsl(var(--primary)/0.10) 0%, hsl(var(--primary)/0.03) 45%, transparent 70%)" }} />
       <div className="absolute top-1/3 -left-48 w-[680px] h-[680px] rounded-full"
-        style={{ background: "radial-gradient(circle, hsl(0 0% 100%/0.05) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(circle, hsl(271 80% 68%/0.08) 0%, transparent 65%)" }} />
       <div className="absolute -bottom-24 right-1/4 w-[560px] h-[560px] rounded-full"
-        style={{ background: "radial-gradient(circle, hsl(0 0% 100%/0.04) 0%, transparent 65%)" }} />
+        style={{ background: "radial-gradient(circle, hsl(196 80% 60%/0.06) 0%, transparent 65%)" }} />
       <div className="absolute top-1/4 left-1/3 w-[400px] h-[400px] rounded-full"
         style={{ background: "radial-gradient(circle, hsl(var(--primary)/0.04) 0%, transparent 60%)" }} />
 
@@ -99,9 +99,9 @@ export function WaveBackground() {
           );
           const lDef = l as typeof l & { cyan?: boolean };
           const stroke = lDef.cyan
-            ? "hsl(0 0% 75%)"
+            ? "hsl(196 80% 60%)"
             : lDef.violet
-              ? "hsl(0 0% 60%)"
+              ? "hsl(271 80% 68%)"
               : "hsl(var(--primary))";
           const useGlow = i <= 3;
 
@@ -123,9 +123,9 @@ export function WaveBackground() {
           const layer = LAYERS[li];
           const lDef = layer as typeof layer & { cyan?: boolean };
           const stroke = lDef.cyan
-            ? "hsl(0 0% 75%)"
+            ? "hsl(196 80% 60%)"
             : lDef.violet
-              ? "hsl(0 0% 60%)"
+              ? "hsl(271 80% 68%)"
               : "hsl(var(--primary))";
           return [0.12, 0.28, 0.45, 0.60, 0.77, 0.92].map((f) => {
             const x = f * TILE_W;
@@ -146,7 +146,7 @@ export function WaveBackground() {
             className="w-[3px] rounded-t-sm"
             style={{
               height: `${h}px`,
-              background: i % 3 === 2 ? "hsl(0 0% 60%)" : i % 3 === 1 ? "hsl(0 0% 75%)" : "hsl(var(--primary))",
+              background: i % 3 === 2 ? "hsl(271 80% 68%)" : i % 3 === 1 ? "hsl(196 80% 60%)" : "hsl(var(--primary))",
             }}
           />
         ))}

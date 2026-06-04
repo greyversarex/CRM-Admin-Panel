@@ -438,7 +438,6 @@ function StepIndicator({
   setStep: (s: StepKey) => void;
   releaseExists: boolean;
 }) {
-  const { t } = useLang();
   const idx = STEPS.findIndex((s) => s.key === current);
   return (
     <div className="flex items-center gap-1 overflow-x-auto py-1">
@@ -462,7 +461,7 @@ function StepIndicator({
                 ${active ? "bg-primary-foreground/20" : done ? "bg-emerald-500/30" : "bg-muted/60"}`}>
                 {done ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
               </span>
-              {t.releaseWizard.steps[s.key]}
+              {s.label}
             </button>
             {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/40" />}
           </div>
@@ -486,16 +485,15 @@ function WizardCoverUploader({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const { upload, isUploading, progress } = useAssetUpload();
-  const { t } = useLang();
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     try {
       const asset = await upload(file, { kind: "cover", attach: false });
       onChange(asset.objectPath);
-      toast({ title: t.releaseWizard.coverUploaded, description: file.name });
+      toast({ title: "Обложка загружена", description: file.name });
     } catch (err: any) {
-      toast({ title: t.releaseWizard.coverUploadFailed, description: err?.message ?? t.releaseWizard.error, variant: "destructive" });
+      toast({ title: "Не удалось загрузить обложку", description: err?.message ?? "Ошибка", variant: "destructive" });
     }
   };
 
@@ -513,7 +511,7 @@ function WizardCoverUploader({
       <div
         role="button"
         tabIndex={0}
-        aria-label={t.releaseWizard.uploadCoverAria}
+        aria-label="Загрузить обложку"
         className={[
           "relative rounded-lg overflow-hidden cursor-pointer transition-all select-none",
           "border-2 border-dashed",
@@ -535,9 +533,9 @@ function WizardCoverUploader({
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-3 text-center text-muted-foreground">
             <ImageIcon className="h-9 w-9 opacity-35 mb-1" />
-            <span className="text-xs leading-snug">{t.releaseWizard.dropImage}</span>
-            <span className="text-[10px] opacity-60">{t.releaseWizard.coverFormats}</span>
-            <span className="text-[10px] opacity-60">{t.releaseWizard.coverMaxSize}</span>
+            <span className="text-xs leading-snug">Click here or drag and drop an image</span>
+            <span className="text-[10px] opacity-60">Format: jpg, png, jpeg</span>
+            <span className="text-[10px] opacity-60">Maximum size: 25 MB</span>
           </div>
         )}
         {isUploading && (
@@ -563,7 +561,7 @@ function WizardCoverUploader({
         onClick={() => inputRef.current?.click()}
       >
         <Upload className="h-3.5 w-3.5 mr-1.5" />
-        {t.releaseWizard.uploadCoverArt}
+        Upload Cover Art
       </Button>
     </div>
   );
@@ -581,7 +579,6 @@ function Step1Details({
   user: any;
   artistsData: any; labelsData: any;
 }) {
-  const { t } = useLang();
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((p) => ({ ...p, [k]: v }));
   const [artistDialogOpen, setArtistDialogOpen] = useState(false);
   const [labelDialogOpen, setLabelDialogOpen]   = useState(false);
@@ -601,9 +598,10 @@ function Step1Details({
   return (
     <Card className="bg-card/50 backdrop-blur border-border/50">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{t.releaseWizard.step1Title}</CardTitle>
+        <CardTitle className="text-lg">Release details</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {t.releaseWizard.step1Subtitle}
+          We follow strict guidelines set forth by Apple Music, Spotify and more.
+          Upload artwork, choose the release type, add release information, and add your project artists.
         </p>
       </CardHeader>
 
@@ -612,7 +610,7 @@ function Step1Details({
         {/* ── Cover Art + AI Usage ─────────────────────────────────────── */}
         <div>
           <div className="flex items-center gap-1.5 mb-3">
-            <FieldLabel className="text-sm font-semibold">{t.releaseWizard.coverArt}</FieldLabel>
+            <FieldLabel className="text-sm font-semibold">Cover Art</FieldLabel>
             <span className="text-muted-foreground text-sm">?</span>
           </div>
           <div className="flex flex-col sm:flex-row gap-6 items-start">
@@ -622,7 +620,7 @@ function Step1Details({
             />
             <div className="flex-1 space-y-3 pt-1">
               <p className="text-sm text-muted-foreground leading-snug">
-                {t.releaseWizard.coverAiQuestion}
+                What amount of generative AI tools were used in the creation of this cover art?
               </p>
               <RadioGroup
                 value={form.coverAiUsage ?? "none"}
@@ -633,7 +631,7 @@ function Step1Details({
                   <div key={v} className="flex items-center gap-2">
                     <RadioGroupItem value={v} id={`ai-${v}`} />
                     <FieldLabel htmlFor={`ai-${v}`} className="text-sm capitalize cursor-pointer font-normal">
-                      {v === "none" ? t.releaseWizard.aiNone : v === "some" ? t.releaseWizard.aiSome : t.releaseWizard.aiAll}
+                      {v === "none" ? "None" : v === "some" ? "Some" : "All"}
                     </FieldLabel>
                   </div>
                 ))}
@@ -645,29 +643,29 @@ function Step1Details({
         {/* ── Release Title / Version / Language ───────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.releaseTitleRequired}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Release Title *</FieldLabel>
             <Input
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
-              placeholder={t.releaseWizard.releaseTitlePlaceholder}
+              placeholder="Кош Кабутар Мебудам"
               className="bg-background/40"
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.releaseVersionOptional}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Release Version (Optional)</FieldLabel>
             <Input
               value={form.releaseVersion}
               onChange={(e) => set("releaseVersion", e.target.value)}
-              placeholder={t.releaseWizard.versionPlaceholder}
+              placeholder="Deluxe, Live, Remix..."
               className="bg-background/40"
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.metadataLanguage}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Metadata Language</FieldLabel>
             <Select value={form.language} onValueChange={(v) => set("language", v)}>
               <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{t.releaseWizard.languages[l.value as keyof typeof t.releaseWizard.languages]}</SelectItem>)}
+                {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -676,11 +674,11 @@ function Step1Details({
         {/* ── Release Type ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.releaseTypeRequired}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Release Type *</FieldLabel>
             <Select value={form.releaseType} onValueChange={(v) => set("releaseType", v as Form["releaseType"])}>
               <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {RELEASE_TYPES.map((rt) => <SelectItem key={rt.value} value={rt.value}>{t.releaseWizard.releaseTypes[rt.value]}</SelectItem>)}
+                {RELEASE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -688,11 +686,11 @@ function Step1Details({
 
         {/* ── Primary Artists ──────────────────────────────────────────── */}
         <div className="space-y-2">
-          <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.primaryArtistsRequired}</FieldLabel>
+          <FieldLabel className="text-xs text-muted-foreground">Primary Artists *</FieldLabel>
           {isArtist ? (
             <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
-              <span className="flex-1">{myArtist?.name ?? t.releaseWizard.yourArtist}</span>
-              <Badge variant="outline" className="text-[10px]">{t.releaseWizard.primaryYou}</Badge>
+              <span className="flex-1">{myArtist?.name ?? "Ваш артист"}</span>
+              <Badge variant="outline" className="text-[10px]">Primary · Вы</Badge>
             </div>
           ) : (
             <>
@@ -700,7 +698,7 @@ function Step1Details({
               {(isAdminLike || isLabel) && (
                 <Button type="button" variant="ghost" size="sm" className="text-xs"
                   onClick={() => setArtistDialogOpen(true)}>
-                  <Plus className="h-3 w-3 mr-1" /> {t.releaseWizard.createNewArtist}
+                  <Plus className="h-3 w-3 mr-1" /> Создать нового артиста
                 </Button>
               )}
             </>
@@ -712,7 +710,7 @@ function Step1Details({
             />
             <span className="text-sm text-muted-foreground">
               Various Artists{" "}
-              <span className="text-xs opacity-60">{t.releaseWizard.selectIf5Artists}</span>
+              <span className="text-xs opacity-60">Select if 5+ artists</span>
             </span>
           </label>
         </div>
@@ -724,15 +722,15 @@ function Step1Details({
             <Input
               value={form.upc}
               onChange={(e) => set("upc", e.target.value)}
-              placeholder={t.releaseWizard.upcPlaceholder}
+              placeholder="Assigned on submission"
               className="bg-background/40 font-mono"
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.genreLabel}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Genre</FieldLabel>
             <Select value={form.genre} onValueChange={(v) => { set("genre", v); set("subgenre", ""); }}>
               <SelectTrigger className="bg-background/40 h-10">
-                <SelectValue placeholder={t.releaseWizard.pleaseSelect} />
+                <SelectValue placeholder="Please select" />
               </SelectTrigger>
               <SelectContent>
                 {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
@@ -740,10 +738,10 @@ function Step1Details({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.subgenre}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Subgenre</FieldLabel>
             <Select value={form.subgenre} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
               <SelectTrigger className="bg-background/40 h-10">
-                <SelectValue placeholder={t.releaseWizard.pleaseSelect} />
+                <SelectValue placeholder="Please select" />
               </SelectTrigger>
               <SelectContent>
                 {subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -757,25 +755,25 @@ function Step1Details({
 
           {/* Label */}
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.labelName}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Label Name</FieldLabel>
             {isLabel ? (
               <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
-                <span className="flex-1">{myLabel?.name ?? t.releaseWizard.yourLabel}</span>
-                <Badge variant="outline" className="text-[10px]">{t.releaseWizard.yourLabel}</Badge>
+                <span className="flex-1">{myLabel?.name ?? "Ваш лейбл"}</span>
+                <Badge variant="outline" className="text-[10px]">Ваш лейбл</Badge>
               </div>
             ) : isArtist ? (
               <div className="bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm text-muted-foreground">
-                {t.releaseWizard.independent}
+                Независимый
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Select value={form.labelId ? String(form.labelId) : "none"}
                   onValueChange={(v) => set("labelId", v === "none" ? null : Number(v))}>
                   <SelectTrigger className="bg-background/40">
-                    <SelectValue placeholder={t.releaseWizard.pleaseSelect} />
+                    <SelectValue placeholder="Please select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">{t.releaseWizard.independent}</SelectItem>
+                    <SelectItem value="none">Независимый</SelectItem>
                     {labelsData?.data?.map((l: any) => (
                       <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
                     ))}
@@ -783,7 +781,7 @@ function Step1Details({
                 </Select>
                 {isAdminLike && (
                   <Button type="button" variant="outline" size="icon" className="bg-background/40 shrink-0"
-                    onClick={() => setLabelDialogOpen(true)} title={t.releaseWizard.createNewLabel}>
+                    onClick={() => setLabelDialogOpen(true)} title="Создать новый лейбл">
                     <Plus className="h-4 w-4" />
                   </Button>
                 )}
@@ -833,31 +831,31 @@ function Step1Details({
         {/* ── Catalogue / Compilation ──────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.catalogue}</FieldLabel>
-            <p className="text-[11px] text-muted-foreground/70">{t.releaseWizard.catalogueHint}</p>
+            <FieldLabel className="text-xs text-muted-foreground">Catalogue</FieldLabel>
+            <p className="text-[11px] text-muted-foreground/70">Your internal identifier for this release</p>
             <Input
               value={form.catalogNumber}
               disabled
-              placeholder={t.releaseWizard.autoGenerated}
+              placeholder="Сгенерируется автоматически"
               className="bg-background/40 font-mono"
             />
           </div>
           <div className="space-y-2">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.compilation}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Compilation</FieldLabel>
             <div className="space-y-2 pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
                   checked={form.isCompilation}
                   onCheckedChange={(v) => set("isCompilation", !!v)}
                 />
-                <span className="text-sm">{t.releaseWizard.isCompilationYes}</span>
+                <span className="text-sm">Yes, this is a compilation</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
                   checked={!form.isCompilation}
                   onCheckedChange={(v) => set("isCompilation", !v)}
                 />
-                <span className="text-sm">{t.releaseWizard.standardRelease}</span>
+                <span className="text-sm">Yes, this is a standard release</span>
               </label>
             </div>
           </div>
@@ -888,7 +886,6 @@ function Step2Tracks({
   upload: ReturnType<typeof useAssetUpload>["upload"];
   invalidate: () => void;
 }) {
-  const { t } = useLang();
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isBulkUploading, setBulkUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -899,7 +896,7 @@ function Step2Tracks({
     let nextNumber = (tracks.length || 0) + 1;
     try {
       for (const file of Array.from(files)) {
-        const titleFromName = file.name.replace(/\.[^.]+$/, "").trim() || t.releaseWizard.untitled;
+        const titleFromName = file.name.replace(/\.[^.]+$/, "").trim() || "Без названия";
         // 1. Создаём пустой трек.
         const track = await createTrack.mutateAsync({
           data: {
@@ -922,9 +919,9 @@ function Step2Tracks({
         nextNumber += 1;
       }
       invalidate();
-      toast({ title: t.releaseWizard.uploadComplete, description: t.releaseWizard.tracksAdded.replace("{count}", String(files.length)) });
+      toast({ title: "Загрузка завершена", description: `Добавлено треков: ${files.length}` });
     } catch (e: any) {
-      toast({ title: t.releaseWizard.bulkUploadError, description: e?.message ?? "", variant: "destructive" });
+      toast({ title: "Ошибка пакетной загрузки", description: e?.message ?? "", variant: "destructive" });
     } finally {
       setBulkUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -936,10 +933,10 @@ function Step2Tracks({
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div>
           <CardTitle className="text-lg flex items-center gap-2">
-            <ListMusic className="h-5 w-5" /> {t.releaseWizard.releaseTracks.replace("{count}", String(tracks.length))}
+            <ListMusic className="h-5 w-5" /> Треки релиза ({tracks.length})
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            {t.releaseWizard.tracksHint}
+            Загрузите .wav-файлы — название трека возьмётся из имени файла, и по клику на трек откроются Audio Details.
           </p>
         </div>
         <div className="flex gap-2">
@@ -949,24 +946,24 @@ function Step2Tracks({
           />
           <Button onClick={() => inputRef.current?.click()} disabled={isBulkUploading}>
             {isBulkUploading
-              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {t.releaseWizard.uploading}</>
-              : <><Upload className="h-4 w-4 mr-1" /> {t.releaseWizard.uploadTracks}</>}
+              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Загрузка…</>
+              : <><Upload className="h-4 w-4 mr-1" /> Загрузить треки (.wav)</>}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {tracks.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            {t.releaseWizard.noTracksYet}
+            Треков пока нет. Нажмите «Загрузить треки» — каждый .wav превратится в отдельный трек.
           </div>
         )}
-        {tracks.map((tr) => (
+        {tracks.map((t) => (
           <TrackCard
-            key={tr.id}
-            track={tr}
+            key={t.id}
+            track={t}
             releaseId={releaseId}
-            expanded={expandedId === tr.id}
-            onExpandToggle={() => setExpandedId((p) => p === tr.id ? null : tr.id)}
+            expanded={expandedId === t.id}
+            onExpandToggle={() => setExpandedId((p) => p === t.id ? null : t.id)}
           />
         ))}
       </CardContent>
@@ -983,7 +980,6 @@ function Step3Delivery({
   territories: string[]; setTerritories: (t: string[]) => void;
   form: Form; setForm: React.Dispatch<React.SetStateAction<Form>>;
 }) {
-  const { t } = useLang();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Режим: World (одна запись "WW") vs Custom (список ISO-кодов).
@@ -996,18 +992,18 @@ function Step3Delivery({
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <Globe className="h-5 w-5" /> {t.releaseWizard.dspTitle}
+            <Globe className="h-5 w-5" /> Площадки распространения (DSP)
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            {t.releaseWizard.dspSubtitle}
+            Выберите, на какие сервисы релиз будет отправлен после одобрения модератором.
           </p>
         </CardHeader>
         <CardContent>
           {dsps.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-border/50 rounded-md text-muted-foreground">
               <Settings2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">{t.releaseWizard.noDspsSelected}</p>
-              <Button className="mt-3" onClick={() => setPickerOpen(true)}>{t.releaseWizard.selectDsps}</Button>
+              <p className="text-sm">Площадки пока не выбраны.</p>
+              <Button className="mt-3" onClick={() => setPickerOpen(true)}>Выбрать площадки</Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1017,7 +1013,7 @@ function Step3Delivery({
                 ))}
               </div>
               <Button variant="outline" onClick={() => setPickerOpen(true)}>
-                <Settings2 className="h-4 w-4 mr-1" /> {t.releaseWizard.changeSelection.replace("{count}", String(dsps.length))}
+                <Settings2 className="h-4 w-4 mr-1" /> Изменить выбор ({dsps.length})
               </Button>
             </div>
           )}
@@ -1027,20 +1023,20 @@ function Step3Delivery({
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <MapPin className="h-5 w-5" /> {t.releaseWizard.territories}
+            <MapPin className="h-5 w-5" /> Территории
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Button variant={territoryMode === "world" ? "default" : "outline"} onClick={() => setTerritories(["WW"])}>
-              {t.releaseWizard.worldwide}
+              Весь мир
             </Button>
             <Button variant={territoryMode === "custom" ? "default" : "outline"}
               onClick={() => setTerritories(customTerritories.length > 0 ? customTerritories : ["TJ"])}>
-              {t.releaseWizard.selectCountries}
+              Выбрать страны
             </Button>
           </div>
-          <p className="text-[11px] text-muted-foreground">{t.releaseWizard.autoSavedOnNext}</p>
+          <p className="text-[11px] text-muted-foreground">Сохраняется автоматически при переходе «Далее».</p>
           {territoryMode === "custom" && (
             <div className="grid grid-cols-3 gap-2 pt-2">
               {COUNTRIES.map((c) => {
@@ -1051,7 +1047,7 @@ function Step3Delivery({
                       const next = v ? [...customTerritories, c.code] : customTerritories.filter((x) => x !== c.code);
                       setTerritories(next.length > 0 ? next : ["WW"]);
                     }} />
-                    <span className="text-xs flex-1">{t.releaseWizard.countries[c.code as keyof typeof t.releaseWizard.countries]}</span>
+                    <span className="text-xs flex-1">{c.name}</span>
                     <span className="text-[10px] text-muted-foreground font-mono">{c.code}</span>
                   </label>
                 );
@@ -1064,16 +1060,16 @@ function Step3Delivery({
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <Calendar className="h-5 w-5" /> {t.releaseWizard.releaseDateTime}
+            <Calendar className="h-5 w-5" /> Дата и время выхода
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.date}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Дата</FieldLabel>
             <Input type="date" value={form.releaseDate} onChange={(e) => setForm((p) => ({ ...p, releaseDate: e.target.value }))} className="bg-background/40" />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.timeUtc}</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Время (UTC)</FieldLabel>
             <Input type="time" value={form.releaseTime} onChange={(e) => setForm((p) => ({ ...p, releaseTime: e.target.value }))} className="bg-background/40" />
           </div>
         </CardContent>
@@ -1113,7 +1109,6 @@ function Step4Submission({
   submitting: boolean;
   onGoToStep: (s: StepKey) => void;
 }) {
-  const { t } = useLang();
   const errors = validation?.issues.filter((i) => i.severity === "error") ?? [];
   const warnings = validation?.issues.filter((i) => i.severity === "warning") ?? [];
   const canSubmit = validation?.ok ?? false;
@@ -1134,46 +1129,46 @@ function Step4Submission({
           <div className="flex-1">
             <p className="font-medium">
               {errors.length === 0
-                ? t.releaseWizard.readyToSubmit
-                : t.releaseWizard.errorsFound.replace("{count}", String(errors.length))}
+                ? "Релиз готов к отправке"
+                : `Найдено ${errors.length} ошибок — исправьте перед отправкой`}
             </p>
             {warnings.length > 0 && (
-              <p className="text-xs text-amber-400 mt-1">{t.releaseWizard.warningsOptional.replace("{count}", String(warnings.length))}</p>
+              <p className="text-xs text-amber-400 mt-1">+ {warnings.length} предупреждений (необязательны).</p>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={onRevalidate} disabled={isValidating}>
-            {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : t.releaseWizard.revalidate}
+            {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Проверить снова"}
           </Button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <SectionCard
-          title={t.releaseWizard.sectionRelease} icon={Settings2}
+          title="Информация о релизе" icon={Settings2}
           issues={(validation?.issues ?? []).filter((i) => i.section === "release" || i.section === "contributors")}
           onFix={() => onGoToStep("details")}
         >
           <p className="text-sm font-medium">{release?.title}</p>
           <p className="text-xs text-muted-foreground">
-            {release?.releaseType} · {release?.genre ?? "—"} · {release?.releaseDate ?? t.releaseWizard.dateNotSet}
+            {release?.releaseType} · {release?.genre ?? "—"} · {release?.releaseDate ?? "дата не задана"}
           </p>
           <div className="text-xs">
-            {t.releaseWizard.artistsLabel}: {artists.map((a) => `${a.name} (${a.role})`).join(", ") || "—"}
+            Артисты: {artists.map((a) => `${a.name} (${a.role})`).join(", ") || "—"}
           </div>
         </SectionCard>
 
         <SectionCard
-          title={t.releaseWizard.sectionTracks.replace("{count}", String(tracks.length))} icon={ListMusic}
+          title={`Треки (${tracks.length})`} icon={ListMusic}
           issues={(validation?.issues ?? []).filter((i) => i.section === "tracks")}
           onFix={() => onGoToStep("tracks")}
         >
           {tracks.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">{t.releaseWizard.noTracks}</p>
+            <p className="text-xs text-muted-foreground italic">Треков нет.</p>
           ) : (
             <ul className="text-xs space-y-0.5 max-h-40 overflow-auto">
-              {tracks.map((tr) => (
-                <li key={tr.id} className="truncate">
-                  #{tr.trackNumber ?? "?"} {tr.title} {tr.audioUrl ? "" : <span className="text-amber-400">{t.releaseWizard.noAudio}</span>}
+              {tracks.map((t) => (
+                <li key={t.id} className="truncate">
+                  #{t.trackNumber ?? "?"} {t.title} {t.audioUrl ? "" : <span className="text-amber-400">(без аудио)</span>}
                 </li>
               ))}
             </ul>
@@ -1181,15 +1176,15 @@ function Step4Submission({
         </SectionCard>
 
         <SectionCard
-          title={t.releaseWizard.sectionDelivery} icon={Globe}
+          title="Доставка" icon={Globe}
           issues={(validation?.issues ?? []).filter((i) => i.section === "delivery")}
           onFix={() => onGoToStep("delivery")}
         >
           <div className="text-xs">
-            DSP: {dsps.length === 0 ? <span className="text-amber-400">{t.releaseWizard.notSelected}</span> : dsps.join(", ")}
+            DSP: {dsps.length === 0 ? <span className="text-amber-400">не выбраны</span> : dsps.join(", ")}
           </div>
           <div className="text-xs text-muted-foreground">
-            {t.releaseWizard.territoriesLabel}: {(release?.territories ?? []).join(", ") || "—"}
+            Территории: {(release?.territories ?? []).join(", ") || "—"}
           </div>
         </SectionCard>
       </div>
@@ -1197,17 +1192,17 @@ function Step4Submission({
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Send className="h-4 w-4" /> {t.releaseWizard.submission}
+            <Send className="h-4 w-4" /> Отправка
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4">
           <div className="text-sm text-muted-foreground">
-            {t.releaseWizard.submissionNote}
+            После отправки релиз попадёт в очередь модерации. Дальнейшие правки требуют возврата в черновик.
           </div>
           <Button size="lg" onClick={onSubmit} disabled={!canSubmit || submitting}>
             {submitting
-              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t.releaseWizard.submitting}</>
-              : <><Send className="h-4 w-4 mr-2" /> {t.releaseWizard.submitForReview}</>}
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Отправка…</>
+              : <><Send className="h-4 w-4 mr-2" /> Отправить на модерацию</>}
           </Button>
         </CardContent>
       </Card>
@@ -1224,7 +1219,6 @@ function SectionCard({
   children: React.ReactNode;
   onFix: () => void;
 }) {
-  const { t } = useLang();
   const errs = issues.filter((i) => i.severity === "error");
   const warns = issues.filter((i) => i.severity === "warning");
   const [showIssues, setShowIssues] = useState(false);
@@ -1235,9 +1229,9 @@ function SectionCard({
           <Icon className="h-4 w-4 text-muted-foreground" /> {title}
         </CardTitle>
         {errs.length > 0 ? (
-          <Badge variant="destructive" className="text-[10px]">{t.releaseWizard.errorsBadge.replace("{count}", String(errs.length))}</Badge>
+          <Badge variant="destructive" className="text-[10px]">{errs.length} ошибок</Badge>
         ) : warns.length > 0 ? (
-          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">{t.releaseWizard.warningsBadge.replace("{count}", String(warns.length))}</Badge>
+          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">{warns.length} предупр.</Badge>
         ) : (
           <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-400">OK</Badge>
         )}
@@ -1248,7 +1242,7 @@ function SectionCard({
           <>
             <Button variant="ghost" size="sm" className="text-xs h-7 px-2"
               onClick={() => setShowIssues((p) => !p)}>
-              {showIssues ? t.releaseWizard.hideIssues : t.releaseWizard.showIssues}
+              {showIssues ? "Скрыть проблемы" : "Показать проблемы"}
             </Button>
             {showIssues && (
               <ul className="text-[11px] space-y-1">
@@ -1265,7 +1259,7 @@ function SectionCard({
               </ul>
             )}
             <Button variant="outline" size="sm" className="text-xs h-7" onClick={onFix}>
-              {t.releaseWizard.goAndFix}
+              Перейти и исправить
             </Button>
           </>
         )}
