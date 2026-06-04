@@ -1,8 +1,13 @@
-// Плеер с отрисовкой волны для прослушивания загруженного аудио.
-// Использует wavesurfer.js: тянет файл через /api/storage proxy (с cookie),
-// рисует волну и даёт play/pause + перемотку кликом по дорожке.
+// Плеер для прослушивания загруженного аудио прямо в карточке трека.
+//
+// Раньше здесь использовался wavesurfer.js, который ПОЛНОСТЬЮ скачивал файл
+// (44 МБ .wav ≈ 45 секунд) и только потом декодировал волну и включал кнопку
+// play. Из-за этого плеер выглядел «зависшим» на спиннере.
+//
+// Теперь используется нативный <audio>: он стримит файл по диапазонам
+// (Range-запросы поддержаны на сервере), поэтому воспроизведение стартует почти
+// мгновенно и работает для файлов любого размера.
 import { useEffect, useRef, useState } from "react";
-import WaveSurfer from "wavesurfer.js";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Loader2, AlertTriangle } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
@@ -21,51 +26,46 @@ export function WaveformPlayer({
   objectPath: string;
   filename?: string | null;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WaveSurfer | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isReady, setIsReady] = useState(false);
+  const [canPlay, setCanPlay] = useState(false);
   const [error, setError] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [seeking, setSeeking] = useState(false);
 
+  // Пересоздаём состояние при смене файла.
   useEffect(() => {
-    if (!containerRef.current) return;
-    setIsReady(false);
+    setCanPlay(false);
     setError(false);
     setIsPlaying(false);
     setCurrent(0);
     setDuration(0);
-
-    const ws = WaveSurfer.create({
-      container: containerRef.current,
-      height: 64,
-      waveColor: "#4b5563",
-      progressColor: "#6366f1",
-      cursorColor: "#a5b4fc",
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
-      normalize: true,
-      url: assetHref(objectPath),
-    });
-    wsRef.current = ws;
-
-    ws.on("ready", () => {
-      setIsReady(true);
-      setDuration(ws.getDuration());
-    });
-    ws.on("timeupdate", (t: number) => setCurrent(t));
-    ws.on("play", () => setIsPlaying(true));
-    ws.on("pause", () => setIsPlaying(false));
-    ws.on("finish", () => setIsPlaying(false));
-    ws.on("error", () => setError(true));
-
-    return () => {
-      try { ws.destroy(); } catch { /* noop */ }
-      wsRef.current = null;
-    };
+    setSeeking(false);
   }, [objectPath]);
+
+  const togglePlay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) {
+      a.play().catch((err: unknown) => {
+        // AbortError возникает при быстрой смене источника — это не ошибка загрузки.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(true);
+      });
+    } else {
+      a.pause();
+    }
+  };
+
+  const onSeek = (value: number) => {
+    const a = audioRef.current;
+    if (!a || !isFinite(value)) return;
+    a.currentTime = value;
+    setCurrent(value);
+  };
+
+  const progress = duration > 0 ? (current / duration) * 100 : 0;
 
   return (
     <div className="rounded-md border border-border/50 bg-background/40 p-3">
@@ -75,21 +75,40 @@ export function WaveformPlayer({
           size="icon"
           variant="outline"
           className="shrink-0 h-10 w-10 rounded-full"
-          disabled={!isReady || error}
-          onClick={() => wsRef.current?.playPause()}
+          disabled={!canPlay || error}
+          onClick={togglePlay}
+          aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
         >
-          {!isReady && !error
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : isPlaying
-              ? <Pause className="h-4 w-4" />
-              : <Play className="h-4 w-4 ml-0.5" />}
+          {!canPlay && !error ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4 ml-0.5" />
+          )}
         </Button>
 
         <div className="flex-1 min-w-0">
           {filename && (
-            <div className="text-xs text-muted-foreground truncate mb-1">{filename}</div>
+            <div className="text-xs text-muted-foreground truncate mb-1.5">{filename}</div>
           )}
-          <div ref={containerRef} className="w-full" />
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={current}
+            disabled={!canPlay || error}
+            onPointerDown={() => setSeeking(true)}
+            onPointerUp={() => setSeeking(false)}
+            onPointerCancel={() => setSeeking(false)}
+            onChange={(e) => onSeek(Number(e.target.value))}
+            className="audio-seek w-full"
+            style={{
+              background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)`,
+            }}
+            aria-label="Перемотка"
+          />
         </div>
 
         <div className="shrink-0 text-[11px] font-mono text-muted-foreground tabular-nums w-[88px] text-right">
@@ -102,6 +121,26 @@ export function WaveformPlayer({
           <AlertTriangle className="h-3.5 w-3.5" /> Не удалось загрузить аудио для предпрослушивания.
         </div>
       )}
+
+      <audio
+        ref={audioRef}
+        src={assetHref(objectPath)}
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration || 0);
+          setCanPlay(true);
+        }}
+        onCanPlay={() => setCanPlay(true)}
+        onTimeUpdate={(e) => {
+          if (!seeking) setCurrent(e.currentTarget.currentTime);
+        }}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onError={() => setError(true)}
+        className="hidden"
+      />
     </div>
   );
 }

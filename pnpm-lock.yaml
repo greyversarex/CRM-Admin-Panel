@@ -318,9 +318,6 @@ importers:
       react-simple-maps:
         specifier: ^3.0.0
         version: 3.0.0(prop-types@15.8.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      wavesurfer.js:
-        specifier: ^7.12.7
-        version: 7.12.7
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -3843,9 +3840,6 @@ packages:
       yaml:
         optional: true
 
-  wavesurfer.js@7.12.7:
-    resolution: {integrity: sha512-TIe7hB6OCZysNOZ2cn2NR8Qpko22POWel6rauNcqOammFoH65NYQUM35unNLLMIlUMVYvjJ6w/TTl/G/m+w0nA==}
-
   web-push@3.6.7:
     resolution: {integrity: sha512-OpiIUe8cuGjrj3mMBFWY+e4MMIkW3SVT+7vEIjvD9kejGUypv8GPDf84JdPWskK8zMRIJ6xYGm+Kxr8YkPyA0A==}
     engines: {node: '>= 16'}
@@ -7106,8 +7100,6 @@ snapshots:
       lightningcss: 1.31.1
       tsx: 4.21.0
       yaml: 2.8.2
-
-  wavesurfer.js@7.12.7: {}
 
   web-push@3.6.7:
     dependencies:

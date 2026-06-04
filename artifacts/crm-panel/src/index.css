@@ -367,6 +367,42 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
+  /* ─── Audio preview seek bar ─── */
+  .audio-seek {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 9999px;
+    cursor: pointer;
+    outline: none;
+  }
+  .audio-seek:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+  .audio-seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 13px;
+    width: 13px;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4);
+    transition: transform 120ms ease;
+  }
+  .audio-seek:hover::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+  .audio-seek::-moz-range-thumb {
+    height: 13px;
+    width: 13px;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4);
+  }
+
   /* ─── Nav icon container ─── */
   .nav-icon-wrap {
     transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
