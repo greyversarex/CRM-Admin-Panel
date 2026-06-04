@@ -11,6 +11,7 @@ import {
   DeleteAssetParams,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { getAudioPeaks } from "../lib/audioPeaks";
 import { getDataScope } from "../lib/auth";
 import { releaseEditableReason } from "./releases";
 
@@ -551,6 +552,42 @@ router.get("/storage/objects/uploads/:objectId", async (req, res): Promise<void>
     else res.end();
   });
   stream.pipe(res);
+});
+
+// ─── Форма волны (waveform) для аудио-плеера ─────────────────────────────
+// Возвращает компактный массив пиков, посчитанный на сервере (кэшируется на
+// диске рядом с файлом). Если формат нельзя декодировать (m4a/aac) — отдаём
+// peaks: [], и плеер показывается без волны, но звук играет.
+router.get("/storage/objects/uploads/:objectId/peaks", async (req, res): Promise<void> => {
+  const objectPath = `/objects/uploads/${req.params.objectId}`;
+
+  const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.objectPath, objectPath));
+  if (!asset) { res.status(404).json({ error: "Not found" }); return; }
+  if (asset.kind !== "audio") { res.status(400).json({ error: "Not an audio asset" }); return; }
+  if (!(await canAccessAsset(req, asset))) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const samples = Math.floor(Number(req.query.samples)) || 800;
+
+  let file;
+  try {
+    file = await storage.getObjectEntityFile(objectPath);
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) { res.status(404).json({ error: "Underlying file missing" }); return; }
+    throw err;
+  }
+
+  try {
+    const result = await getAudioPeaks(file, samples);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    if (!result) {
+      res.json({ peaks: [], duration: null, samples: 0 });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    req.log?.warn({ err }, "audio peaks failed");
+    res.json({ peaks: [], duration: null, samples: 0 });
+  }
 });
 
 export default router;
