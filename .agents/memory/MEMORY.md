@@ -1,5 +1,5 @@
 - [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
 - [Stereo audio upload validation](audio-upload-validation.md) — /assets/confirm stereo checks gated on audioProfile; keep audio MIME gate lenient (accept empty/octet-stream).
 - [i18n conventions](i18n-conventions.md) — crm-panel: en is source of truth (ru must mirror or typecheck fails); beware `t` shadow in `.map`; localize module-const labels by key.
-- [Audio preview player](audio-preview-player.md) — track preview must stream via native <audio>+Range, not wavesurfer (which full-downloads 44MB before play).
+- [Audio preview player](audio-preview-player.md) — playback via native <audio>+Range (instant); waveform via server-computed peaks JSON drawn on canvas; no wavesurfer.
 - [Publishing works data-isolation](publishing-scope-all-endpoints.md) — work scope derived via track→release.labelId OR track.artist's label; enforce on every endpoint, not just list.

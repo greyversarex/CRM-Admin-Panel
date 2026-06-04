@@ -577,12 +577,12 @@ router.get("/storage/objects/uploads/:objectId/peaks", async (req, res): Promise
   }
 
   try {
-    const result = await getAudioPeaks(file, samples);
+    const result = await getAudioPeaks(file, samples, {
+      durationSeconds: asset.durationSeconds,
+      sampleRateHz: asset.sampleRateHz,
+      channels: asset.channels,
+    });
     res.setHeader("Cache-Control", "private, max-age=86400");
-    if (!result) {
-      res.json({ peaks: [], duration: null, samples: 0 });
-      return;
-    }
     res.json(result);
   } catch (err) {
     req.log?.warn({ err }, "audio peaks failed");
