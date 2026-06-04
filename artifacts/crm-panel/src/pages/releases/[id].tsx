@@ -103,6 +103,7 @@ export default function ReleaseDetail() {
   const createTrack = useCreateTrack();
 
   const [editOpen, setEditOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -183,6 +184,14 @@ export default function ReleaseDetail() {
           onClose={() => { setEditOpen(false); invalidateAll(); }}
         />
       </Dialog>
+      {timelineOpen && (
+        <Dialog open={timelineOpen} onOpenChange={setTimelineOpen}>
+          <ReleaseTimelineDialog
+            release={release}
+            onClose={() => { setTimelineOpen(false); invalidateAll(); }}
+          />
+        </Dialog>
+      )}
 
       <Dialog open={bulkCreateOpen} onOpenChange={(o) => { if (!isBulkCreating) setBulkCreateOpen(o); }}>
         <DialogContent className="sm:max-w-sm">
@@ -468,7 +477,7 @@ export default function ReleaseDetail() {
         <ReleaseAvailabilityCard release={release} isEditable={!!release.isEditable} />
 
         {/* Timeline */}
-        <TimelineCard release={release} isEditable={!!release.isEditable} onEditClick={() => setEditOpen(true)} />
+        <TimelineCard release={release} isEditable={!!release.isEditable} onEditClick={() => setTimelineOpen(true)} />
 
         {/* Territory Rights */}
         <TerritoryRightsCard release={release} isEditable={!!release.isEditable} />
@@ -1062,6 +1071,115 @@ function EditReleaseDialog({
             Перевести в редактирование
           </Button>
         )}
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+// ─── Release Timeline dialog ──────────────────────────────────────────────────
+// Открывается кнопкой «Edit» в карточке Timeline. По образцу раздела
+// «Release Timeline» в Symphonic: дата релиза + расширенные настройки (время,
+// UTC). Сохраняет через PUT /releases/:id. ВАЖНО: бэк делает set(parsed.data),
+// и поля с zod .default() (isExplicit/isCompilation/isVariousArtists/
+// upcRequestPending/territories) сбрасываются, если их не переслать. Поэтому
+// отправляем полный набор, меняя только дату/время (как в TerritoryRightsCard).
+function ReleaseTimelineDialog({
+  release, onClose,
+}: { release: ReleaseDetail; onClose: () => void }) {
+  const updateRelease = useUpdateRelease();
+  const [date, setDate] = useState(
+    release.releaseDate ? String(release.releaseDate).slice(0, 10) : "",
+  );
+  const initialTime = normalizeHHMM(release.releaseTime) ?? "00:00";
+  const [time, setTime] = useState(initialTime);
+  const [showAdvanced, setShowAdvanced] = useState(initialTime !== "00:00");
+
+  const onSave = async () => {
+    const data: CreateReleaseBody = {
+      title:             release.title,
+      releaseType:       release.releaseType as CreateReleaseBody["releaseType"],
+      artistId:          release.artistId,
+      labelId:           release.labelId ?? null,
+      coverUrl:          release.coverUrl ?? null,
+      language:          release.language ?? null,
+      genre:             release.genre ?? null,
+      releaseDate:       date || null,
+      releaseTime:       time || null,
+      upc:               release.upc ?? null,
+      pLine:             release.pLine ?? null,
+      cLine:             release.cLine ?? null,
+      isExplicit:        !!release.isExplicit,
+      isCompilation:     !!release.isCompilation,
+      isVariousArtists:  !!release.isVariousArtists,
+      upcRequestPending: !!release.upcRequestPending,
+      territories:       release.territories && release.territories.length > 0 ? release.territories : ["WW"],
+    } as CreateReleaseBody;
+    try {
+      await updateRelease.mutateAsync({ id: release.id, data });
+      toast({ title: "Таймлайн обновлён", description: "Дата и время релиза сохранены." });
+      onClose();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось сохранить", description: (e as Error).message });
+    }
+  };
+
+  return (
+    <DialogContent className="bg-card border-border max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Таймлайн релиза</DialogTitle>
+        <DialogDescription>
+          Запланируйте, когда релиз выйдет на площадках. Рекомендуем ставить дату
+          на 4–6 недель вперёд — это даёт время на проверку модерацией и запуск
+          маркетинговых инструментов.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-4 py-1">
+        <FormField label="Дата релиза">
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-background/40"
+          />
+          <p className="text-[11px] text-muted-foreground/80 mt-1">
+            Общая дата выхода на всех площадках.
+          </p>
+        </FormField>
+
+        <div className="rounded-md border border-border/50 bg-background/30">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium hover:bg-background/40 transition-colors rounded-md"
+          >
+            <span>Расширенные настройки</span>
+            <ChevronLeft className={`h-4 w-4 transition-transform ${showAdvanced ? "-rotate-90" : "rotate-180"}`} />
+          </button>
+          {showAdvanced && (
+            <div className="px-3 pb-3 pt-1">
+              <FormField label="Время релиза (UTC)">
+                <Input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="bg-background/40 w-40"
+                />
+                <p className="text-[11px] text-muted-foreground/80 mt-1">
+                  По умолчанию 00:00 (UTC). Площадки публикуют релиз в местном
+                  времени по этому ориентиру.
+                </p>
+              </FormField>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onClose} disabled={updateRelease.isPending}>Отмена</Button>
+        <Button onClick={onSave} disabled={updateRelease.isPending}>
+          {updateRelease.isPending ? "Сохраняем…" : "Сохранить"}
+        </Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -2429,6 +2547,7 @@ function TimelineCard({
   const dateLabel = release.releaseDate
     ? String(release.releaseDate).slice(0, 10)
     : "XXXX-XX-XX";
+  const timeLabel = formatReleaseTime(release.releaseTime);
 
   return (
     <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
@@ -2443,11 +2562,32 @@ function TimelineCard({
       <CardContent>
         <div className="text-sm">
           <span className="font-medium">{dateLabel}</span>
-          <span className="text-muted-foreground"> general release at 12:00 AM</span>
+          <span className="text-muted-foreground"> general release at {timeLabel} (UTC)</span>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+// Принимает "HH:MM" или legacy "HH:MM:SS" (UTC) → нормализует к "HH:MM" с
+// ведущим нулём часа. Невалидное/пустое → null.
+function normalizeHHMM(t?: string | null): string | null {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec((t ?? "").trim());
+  if (!m) return null;
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+// Нормализованное "HH:MM" (UTC, 24ч) → "h:MM AM/PM" в стиле Symphonic. Пустое → 12:00 AM.
+function formatReleaseTime(t?: string | null): string {
+  const hhmm = normalizeHHMM(t);
+  if (!hhmm) return "12:00 AM";
+  const h = parseInt(hhmm.slice(0, 2), 10);
+  const min = hhmm.slice(3, 5);
+  const period = h < 12 ? "AM" : "PM";
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return `${h12}:${min} ${period}`;
 }
 
 // ─── Territory Rights Card ─────────────────────────────────────────────────────
