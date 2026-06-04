@@ -16,9 +16,7 @@ export default function EditRelease() {
   }
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto">
-        <ReleaseWizard initialReleaseId={id} />
-      </div>
+      <ReleaseWizard initialReleaseId={id} />
     </Layout>
   );
 }

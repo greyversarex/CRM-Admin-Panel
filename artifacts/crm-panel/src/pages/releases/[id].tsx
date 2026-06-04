@@ -464,45 +464,56 @@ export default function ReleaseDetail() {
           </Card>
         )}
 
-        {/* Scheduled (DSP Availability) */}
-        <ReleaseAvailabilityCard release={release} isEditable={!!release.isEditable} />
+        {/* ── Release Availability (Timeline + Territory + Stores) ─────────── */}
+        <ReleaseAvailabilitySummaryCard
+          release={release}
+          isEditable={!!release.isEditable}
+          onEdit={() => setLocation(`/releases/${id}/availability`)}
+        />
 
-        {/* Timeline */}
-        <TimelineCard release={release} isEditable={!!release.isEditable} onEditClick={() => setLocation(`/releases/${id}/availability`)} />
+        {/* ── SplitShare Setup (OPTIONAL) ──────────────────────────────────── */}
+        <SplitShareSetupSummaryCard
+          release={release}
+          onEdit={() => setLocation(`/releases/${id}/splitshare`)}
+        />
 
-        {/* Territory Rights */}
-        <TerritoryRightsCard release={release} isEditable={!!release.isEditable} />
-
-        {/* Bottom action bar */}
-        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
+        {/* ── Terms + submit / actions ─────────────────────────────────────── */}
+        <div className="space-y-3 pt-1">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Отправляя релиз, вы подтверждаете, что все мастеры, обложки и метаданные принадлежат
+            вам или лицензированы для распространения на выбранных площадках, и соглашаетесь с
+            условиями цифровой дистрибуции, Условиями использования и Политикой конфиденциальности.
+          </p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
+                <Button
+                  variant="outline"
+                  className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+                  onClick={() => setDeliverOpen(true)}
+                >
+                  <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
+                </Button>
+              )}
+              {release.allowedTransitions.includes("takedown_requested") && (
+                <Button
+                  variant="outline"
+                  className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                  onClick={() => setTakedownOpen(true)}
+                >
+                  <XCircle className="mr-2 h-4 w-4" /> Take Down
+                </Button>
+              )}
+            </div>
+            {release.canSubmit && (
               <Button
-                variant="outline"
-                className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
-                onClick={() => setDeliverOpen(true)}
+                className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95 px-6"
+                onClick={() => setSubmitOpen(true)}
               >
-                <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
-              </Button>
-            )}
-            {release.allowedTransitions.includes("takedown_requested") && (
-              <Button
-                variant="outline"
-                className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
-                onClick={() => setTakedownOpen(true)}
-              >
-                <XCircle className="mr-2 h-4 w-4" /> Take Down
+                <ShieldCheck className="mr-2 h-4 w-4" /> Submit Release
               </Button>
             )}
           </div>
-          {release.canSubmit && (
-            <Button
-              className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95 px-6"
-              onClick={() => setSubmitOpen(true)}
-            >
-              <ShieldCheck className="mr-2 h-4 w-4" /> Submit Release
-            </Button>
-          )}
         </div>
 
       </div>
@@ -2350,104 +2361,106 @@ function MultiEditTracksDialog({
   );
 }
 
-// ─── Release Availability (real) ────────────────────────────────────────
-// Заменяет старую заглушку. Реально загружает выбранные DSP через
-// useGetReleaseDsps, открывает DspPickerDialog и сохраняет через
-// useUpdateReleaseDsps. Территории показываются read-only с подсказкой,
-// что они правятся в «Деталях релиза» (там уже есть поле).
-function ReleaseAvailabilityCard({ release, isEditable }: { release: ReleaseDetail; isEditable: boolean }) {
-  const qc = useQueryClient();
-  const { data: selected = [], refetch } = useGetReleaseDsps(release.id);
-  const update = useUpdateReleaseDsps();
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const save = async (codes: string[]) => {
-    try {
-      await update.mutateAsync({ id: release.id, data: { dsps: codes } });
-      toast({ title: "DSPs saved", description: `${codes.length} platforms selected.` });
-      await Promise.all([
-        refetch(),
-        qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) }),
-      ]);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Could not save", description: (e as Error).message });
-    }
-  };
-
-  return (
-    <Card id="card-availability" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base">Scheduled</CardTitle>
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-            Show Issues
-          </span>
-        </div>
-        {isEditable && (
-          <Button variant="outline" size="sm" className="bg-card text-xs" onClick={() => setPickerOpen(true)}>
-            <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {selected.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {selected.map((d) => <DspPill key={d} name={d} />)}
-          </div>
-        ) : (
-          <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded p-4 text-center">
-            No platforms selected.{isEditable && " Click «Edit» to choose DSPs for distribution."}
-          </div>
-        )}
-        <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-2 border-t border-border/40">
-          By submitting your release, you confirm that all masters, artwork, and metadata belong to you
-          or are licensed for distribution on the selected platforms.
-        </p>
-        <DspPickerDialog
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-          value={selected}
-          onChange={(codes) => { void save(codes); }}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Timeline Card ───────────────────────────────────────────────────────────
-// Shows the release date in Symphonic style: "YYYY-MM-DD general release at 12:00 AM".
-function TimelineCard({
-  release, isEditable, onEditClick,
+// ─── Release Availability (summary: Timeline + Territory + Stores) ───────────
+// Symphonic-style сводка. Все правки (дата, территории, площадки) — на отдельной
+// странице /releases/:id/availability (одна кнопка Edit). «Показать проблемы»
+// раскрывает локальный список валидационных замечаний по доступности релиза.
+function ReleaseAvailabilitySummaryCard({
+  release, isEditable, onEdit,
 }: {
   release: ReleaseDetail;
   isEditable: boolean;
-  onEditClick: () => void;
+  onEdit: () => void;
 }) {
-  // Timezone-safe: release date is a date-only value, extract YYYY-MM-DD from the
-  // raw string instead of `new Date(...).toLocaleDateString` (which would shift the
-  // day in some timezones because the string is parsed as UTC midnight).
-  const dateLabel = release.releaseDate
-    ? String(release.releaseDate).slice(0, 10)
-    : "XXXX-XX-XX";
+  const { data: serverDsps = [] } = useGetReleaseDsps(release.id);
+  const [showIssues, setShowIssues] = useState(false);
+
+  const dateLabel = release.releaseDate ? String(release.releaseDate).slice(0, 10) : "XXXX-XX-XX";
   const timeLabel = formatReleaseTime(release.releaseTime);
+  const territories = release.territories ?? [];
+  const isWorldWide = territories.includes("WW");
+  const territoryLabel = isWorldWide
+    ? "World Wide (весь мир)"
+    : territories.length > 0
+      ? territories.join(", ")
+      : "Не выбрано";
+  const storeCount = serverDsps.length;
+
+  const issues: string[] = [];
+  if (!release.releaseDate) {
+    issues.push("Не указана дата выхода релиза.");
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rd = new Date(`${String(release.releaseDate).slice(0, 10)}T00:00:00`);
+    if (rd < today) issues.push("Дата выхода релиза находится в прошлом.");
+  }
+  if (!isWorldWide && territories.length === 0) issues.push("Не выбраны территории распространения.");
+  if (storeCount === 0) issues.push("Не выбраны площадки (магазины) для дистрибуции.");
 
   return (
-    <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-        <CardTitle className="text-base">Timeline</CardTitle>
-        {isEditable && (
-          <Button variant="outline" size="sm" className="bg-card text-xs" onClick={onEditClick}>
-            <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
-          </Button>
+    <section id="card-availability" className="space-y-3 scroll-mt-4">
+      <div className="flex items-center gap-2.5">
+        <h2 className="text-lg font-bold">Release Availability</h2>
+        {issues.length > 0 && (
+          <>
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            <Button
+              variant={showIssues ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowIssues((v) => !v)}
+            >
+              {showIssues ? "Скрыть проблемы" : `Показать проблемы (${issues.length})`}
+            </Button>
+          </>
         )}
-      </CardHeader>
-      <CardContent>
-        <div className="text-sm">
-          <span className="font-medium">{dateLabel}</span>
-          <span className="text-muted-foreground"> general release at {timeLabel} (UTC)</span>
+      </div>
+
+      {showIssues && issues.length > 0 && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5">
+          {issues.map((m, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>{m}</span>
+            </div>
+          ))}
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <Card className="bg-card/50 backdrop-blur border-border/50">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold">Timeline</h3>
+              <div className="text-sm">
+                <span className="font-medium">{dateLabel}</span>
+                <span className="text-muted-foreground"> general release at {timeLabel} (UTC)</span>
+              </div>
+            </div>
+            {isEditable && (
+              <Button variant="outline" size="sm" className="bg-card text-xs shrink-0" onClick={onEdit}>
+                <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-1 border-t border-border/30 pt-4">
+            <h3 className="text-lg font-bold">Territory Rights</h3>
+            <div className="text-sm text-muted-foreground">{territoryLabel}</div>
+          </div>
+
+          <div className="space-y-1 border-t border-border/30 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stores</h3>
+            <div className="text-sm text-muted-foreground">
+              {storeCount > 0
+                ? `${storeCount} ${storeCount === 1 ? "площадка выбрана" : "площадок выбрано"}`
+                : "Площадки не выбраны"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
@@ -2472,89 +2485,16 @@ function formatReleaseTime(t?: string | null): string {
   return `${h12}:${min} ${period}`;
 }
 
-// ─── Territory Rights Card ─────────────────────────────────────────────────────
-// Separate block with a functional "World Wide release" toggle. Toggling on sets
-// territories to ["WW"]; toggling off clears them (user then adds specific
-// territories manually via «Edit» in Release Details), mirroring Symphonic.
-function TerritoryRightsCard({ release, isEditable }: { release: ReleaseDetail; isEditable: boolean }) {
-  const qc = useQueryClient();
-  const updateRelease = useUpdateRelease();
-  const territories = release.territories ?? ["WW"];
-  // Only an explicit "WW" entry counts as world-wide. An empty list means
-  // "no territories selected yet" (incomplete) and must NOT read back as ON,
-  // otherwise turning the switch OFF would silently revert to ON after refetch.
-  const isWorldWide = territories.includes("WW");
-
-  const toggle = async (on: boolean) => {
-    // Send the full set of fields that carry zod `.default()` on the server.
-    // PUT /releases/:id does `set(parsed.data)`, and absent defaulted fields
-    // (isCompilation, isVariousArtists, upcRequestPending, ...) would otherwise
-    // be reset to their defaults — clobbering unrelated release flags.
-    const data: CreateReleaseBody = {
-      title:             release.title,
-      releaseType:       release.releaseType as CreateReleaseBody["releaseType"],
-      artistId:          release.artistId,
-      labelId:           release.labelId ?? null,
-      coverUrl:          release.coverUrl ?? null,
-      language:          release.language ?? null,
-      genre:             release.genre ?? null,
-      releaseDate:       release.releaseDate ? String(release.releaseDate).slice(0, 10) : null,
-      upc:               release.upc ?? null,
-      pLine:             release.pLine ?? null,
-      cLine:             release.cLine ?? null,
-      isExplicit:        !!release.isExplicit,
-      isCompilation:     !!release.isCompilation,
-      isVariousArtists:  !!release.isVariousArtists,
-      upcRequestPending: !!release.upcRequestPending,
-      territories:       on ? ["WW"] : [],
-    } as CreateReleaseBody;
-    try {
-      await updateRelease.mutateAsync({ id: release.id, data });
-      toast({
-        title: "Territory updated",
-        description: on ? "World Wide release enabled." : "World Wide release disabled.",
-      });
-      await qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Could not update", description: (e as Error).message });
-    }
-  };
-
-  return (
-    <Card className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Territory Rights</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2.5">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <Switch
-            checked={isWorldWide}
-            disabled={!isEditable || updateRelease.isPending}
-            onCheckedChange={(v) => { void toggle(v); }}
-          />
-          <span className="text-sm font-medium">World Wide release</span>
-        </label>
-        {!isWorldWide && territories.length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            Selected: <span className="font-mono">{territories.join(", ")}</span>
-          </div>
-        )}
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          This release will distribute to all current and future territories in the world.
-          To omit territories, de-select world wide. De-selecting world wide will require
-          territories to be added manually via «Edit» in Release Details.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── SplitShare (real per-track view) ───────────────────────────────────
-// Заменяет заглушку. Загружает все splits релиза одним запросом и показывает
-// строку на каждый трек со статусом сплита. Создание/редактирование — только
-// admin/manager через прямую ссылку на /splits (где уже есть полный редактор).
-function SplitShareCard({ release }: { release: ReleaseDetail }) {
-  const { data: splits } = useListSplits({ release_id: release.id, limit: 100 });
+// ─── SplitShare Setup (summary, OPTIONAL) ────────────────────────────────────
+// Symphonic-style сводка по сплитам релиза. Полное назначение треков на сплит —
+// на отдельной странице /releases/:id/splitshare (кнопка Edit).
+function SplitShareSetupSummaryCard({
+  release, onEdit,
+}: {
+  release: ReleaseDetail;
+  onEdit: () => void;
+}) {
+  const { data: splits } = useListSplits({ release_id: release.id, limit: 200 });
   const tracks = release.tracks ?? [];
   const byTrack = useMemo(() => {
     const m = new Map<number, Split>();
@@ -2564,68 +2504,76 @@ function SplitShareCard({ release }: { release: ReleaseDetail }) {
     return m;
   }, [splits]);
 
-  const splitStatus = (s: Split | undefined) => {
-    if (!s) return { label: "Не настроено", tone: "amber" as const };
-    const ps = s.participants ?? [];
-    const total = ps.reduce((a, p) => a + (p.percentage || 0), 0);
-    if (Math.abs(total - 100) > 0.01) return { label: `Сумма ${total}% ≠ 100`, tone: "rose" as const };
-    const states = ps.map((p) => (p as any).acceptanceStatus ?? "pending");
-    if (states.every((s) => s === "accepted")) return { label: "Подписано всеми", tone: "emerald" as const };
-    if (states.some((s) => s === "rejected"))   return { label: "Отклонено", tone: "rose" as const };
-    if (states.every((s) => s === "pending"))   return { label: "Ожидает подписи", tone: "amber" as const };
-    return { label: "Частично подписано", tone: "amber" as const };
-  };
+  const assignedCount = tracks.filter((t) => byTrack.has(t.id)).length;
+  const unassignedCount = tracks.length - assignedCount;
+
+  const shareholders = useMemo(() => {
+    const names = new Set<string>();
+    for (const s of splits?.data ?? []) {
+      for (const p of s.participants ?? []) {
+        if (p.entityName) names.add(p.entityName);
+      }
+    }
+    return names;
+  }, [splits]);
+
+  const splitStatus =
+    tracks.length === 0
+      ? "—"
+      : assignedCount === 0
+        ? "Не назначено"
+        : assignedCount === tracks.length
+          ? "Назначено"
+          : `${assignedCount}/${tracks.length} назначено`;
 
   return (
-    <Card id="card-splitshare" className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Share2 className="h-4 w-4" /> SplitShare — распределение доходов
-        </CardTitle>
-        <Link href="/splits">
-          <Button variant="outline" size="sm" className="bg-card text-xs">
-            Все сплиты
-          </Button>
-        </Link>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {tracks.length === 0 ? (
-          <div className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border/40 rounded">
-            Сначала добавьте треки — сплиты настраиваются на каждом треке отдельно.
+    <section id="card-splitshare" className="space-y-3 scroll-mt-4">
+      <h2 className="text-lg font-bold">
+        SplitShare Setup{" "}
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">— Опционально</span>
+      </h2>
+      <Card className="bg-card/50 backdrop-blur border-border/50">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-start gap-4">
+            <span className="h-10 w-10 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <Share2 className="h-5 w-5 text-emerald-400" />
+            </span>
+            <p className="flex-1 text-sm text-muted-foreground leading-relaxed">
+              SplitShare автоматически рассчитывает доли роялти для ваших соавторов и переводит
+              выплаты на их счета. Назначьте трекам сплит, чтобы доход делился автоматически.
+            </p>
+            <Button variant="outline" size="sm" className="bg-card text-xs shrink-0" onClick={onEdit}>
+              <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
+            </Button>
           </div>
-        ) : (
-          tracks.map((t) => {
-            const s = byTrack.get(t.id);
-            const st = splitStatus(s);
-            const toneClass =
-              st.tone === "emerald" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" :
-              st.tone === "rose"    ? "bg-rose-500/15 text-rose-300 border-rose-500/30" :
-                                      "bg-amber-500/15 text-amber-300 border-amber-500/30";
-            return (
-              <div key={t.id} className="flex items-center gap-3 p-2 rounded-md border border-border/50 bg-background/40">
-                <span className="text-xs font-mono w-7 text-muted-foreground text-center">{t.trackNumber ?? "—"}</span>
-                <span className="text-sm truncate flex-1">{t.title}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${toneClass}`}>{st.label}</span>
-                {s && (
-                  <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                    {s.participants.length} {s.participants.length === 1 ? "участник" : "участников"}
-                  </span>
-                )}
-                <Link href={s ? `/splits?id=${s.id}` : `/splits?release_id=${release.id}&track_id=${t.id}`}>
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                    {s ? "Открыть" : "Создать"}
-                  </Button>
-                </Link>
-              </div>
-            );
-          })
-        )}
-        <p className="text-[11px] text-muted-foreground/70 pt-2 border-t border-border/40">
-          Сумма долей на каждом треке должна равняться 100 %. Полный редактор сплитов
-          (создание, изменение, отправка соавторам на подпись) — в разделе «Сплиты».
-        </p>
-      </CardContent>
-    </Card>
+
+          {tracks.length > 0 && unassignedCount > 0 && (
+            <p className="border-t border-border/30 pt-3 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {unassignedCount} / {tracks.length} {tracks.length === 1 ? "трек" : "треков"} не назначены на сплит.
+              </span>{" "}
+              Треки без сплита будут добавлены в сплит при одобрении релиза. Рекомендуем назначить
+              сплиты в течение 45 дней после выхода релиза.
+            </p>
+          )}
+
+          <div className="grid grid-cols-3 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Сплит</div>
+              <div className="text-sm font-semibold">{splitStatus}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Участники</div>
+              <div className="text-sm font-semibold">{shareholders.size > 0 ? shareholders.size : "—"}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Кол-во треков</div>
+              <div className="text-sm font-semibold">{tracks.length}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
