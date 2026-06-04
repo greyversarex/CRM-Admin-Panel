@@ -155,9 +155,9 @@
   --foreground: 213 31% 96%;
   --border: 220 20% 18%;
 
-  --card: 222 26% 13%;
+  --card: 225 44% 4%;
   --card-foreground: 213 31% 96%;
-  --card-border: 220 20% 19%;
+  --card-border: 226 28% 17%;
 
   --sidebar: 224 34% 11%;
   --sidebar-foreground: 213 31% 96%;
@@ -478,15 +478,15 @@
     background-image:
       linear-gradient(
         155deg,
-        rgba(255,255,255,0.035) 0%,
-        rgba(255,255,255,0.010) 45%,
-        rgba(0,0,0,0.03) 100%
+        rgba(255,255,255,0.055) 0%,
+        rgba(255,255,255,0.014) 42%,
+        rgba(0,0,0,0.22) 100%
       );
     box-shadow:
-      0 1px 2px rgba(0,0,0,0.55),
-      0 4px 16px rgba(0,0,0,0.30),
-      inset 0 1px 0 rgba(255,255,255,0.055),
-      inset 0 0 0 1px rgba(255,255,255,0.02);
+      0 1px 2px rgba(0,0,0,0.65),
+      0 10px 30px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.07),
+      inset 0 0 0 1px rgba(255,255,255,0.025);
   }
 
   /* Hover: card lifts 1px, border brightens, faint primary bloom */
