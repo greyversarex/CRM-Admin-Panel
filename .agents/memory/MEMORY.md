@@ -1,2 +1,3 @@
 - [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
 - [Stereo audio upload validation](audio-upload-validation.md) — /assets/confirm stereo checks gated on audioProfile; keep audio MIME gate lenient (accept empty/octet-stream).
+- [i18n conventions](i18n-conventions.md) — crm-panel: en is source of truth (ru must mirror or typecheck fails); beware `t` shadow in `.map`; localize module-const labels by key.
