@@ -346,7 +346,7 @@ export function SidebarNav() {
       </div>
 
       {/* Nav groups */}
-      <div className="flex-1 overflow-y-auto py-3 space-y-0.5" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
+      <div className="flex-1 overflow-y-auto py-3 space-y-1" style={{ padding: collapsed ? "12px 8px" : "12px 10px" }}>
         {navGroups.map((group) => {
           // 1. Manager: проверяем permission всей группы.
           if (user?.role === "manager" && group.managerKey && perms[group.managerKey] === false) {
@@ -463,7 +463,7 @@ export function SidebarNav() {
               </div>
             )}
 
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {visibleItems.map((item) => {
                 const Icon = item.icon;
                 // Поддержка ссылок вида "/catalog?tab=releases": активность учитывает
