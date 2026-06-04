@@ -1560,6 +1560,18 @@ export const ConfirmAssetBodyKind = {
   document: "document",
 } as const;
 
+/**
+ * For kind=audio only. When "stereo", the server enforces stereo delivery specs (WAV/AIFF/FLAC, sample rate >= 44100, 16/24-bit, 2 channels) and rejects files that do not comply. "spatial" skips these checks (Dolby Atmos / multichannel). Omit for legacy uploads.
+ */
+export type ConfirmAssetBodyAudioProfile =
+  | (typeof ConfirmAssetBodyAudioProfile)[keyof typeof ConfirmAssetBodyAudioProfile]
+  | null;
+
+export const ConfirmAssetBodyAudioProfile = {
+  stereo: "stereo",
+  spatial: "spatial",
+} as const;
+
 export interface ConfirmAssetBody {
   storageKey: string;
   objectPath: string;
@@ -1578,6 +1590,8 @@ export interface ConfirmAssetBody {
   trackId?: number | null;
   /** If true, also writes the resulting URL to release.coverUrl / track.audioUrl. */
   attach?: boolean;
+  /** For kind=audio only. When "stereo", the server enforces stereo delivery specs (WAV/AIFF/FLAC, sample rate >= 44100, 16/24-bit, 2 channels) and rejects files that do not comply. "spatial" skips these checks (Dolby Atmos / multichannel). Omit for legacy uploads. */
+  audioProfile?: ConfirmAssetBodyAudioProfile;
 }
 
 export interface Notification {

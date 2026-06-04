@@ -10,7 +10,9 @@ import {
   useUpdateTrack,
   useGetRelease,
   useListTracks,
+  useListAssets,
   type Track,
+  type Asset,
   type TrackDisplayArtist,
   type TrackWriter,
   type TrackPerformer,
@@ -34,7 +36,8 @@ import {
   ArrowLeft, Save, Music2, Headphones, FileAudio, Users, UserPlus,
   AlertTriangle, Plus, Trash2, Languages, Loader2, Wand2,
 } from "lucide-react";
-import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
+import { useAssetUpload } from "@/components/asset-uploader";
+import { WaveformPlayer } from "@/components/waveform-player";
 import { toast } from "@/hooks/use-toast";
 import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
@@ -275,8 +278,14 @@ export default function TrackEditPage() {
   const nextTrack = allTracks[trackIndex + 1] ?? null;
 
   const updateTrack = useUpdateTrack();
-  const audioInputRef = useRef<HTMLInputElement>(null);
-  const { upload: uploadAudio, isUploading: isAudioUploading, progress: audioProgress } = useAssetUpload();
+
+  // Пул стерео-аудио релиза — все файлы, загруженные на странице Upload Stereo
+  // Audio. Из него трек выбирает свой файл через выпадающий список.
+  const { data: audioAssetsData } = useListAssets(
+    { release_id: releaseId, kind: "audio" },
+    { query: { enabled: releaseId > 0 } } as never,
+  );
+  const audioPool: Asset[] = (audioAssetsData as any) ?? [];
 
   const [f, setF] = useState<FormState | null>(null);
   useEffect(() => {
@@ -341,44 +350,48 @@ export default function TrackEditPage() {
     );
   }
 
-  const isBusy = updateTrack.isPending || isAudioUploading;
+  const isBusy = updateTrack.isPending;
 
   const YEARS = Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => new Date().getFullYear() - i);
 
-  const audioFileName = f.audioUrl
-    ? f.audioUrl.split("/").pop() ?? f.audioUrl
-    : null;
+  // Выбранный сейчас файл и варианты для выпадающего списка. Если текущий
+  // audioUrl трека не из пула релиза (legacy-загрузка на сам трек) — добавляем
+  // его отдельной опцией, чтобы он не «пропал» из списка.
+  const selectedAsset = audioPool.find((a) => a.objectPath === f.audioUrl) ?? null;
+  const audioFileName = selectedAsset?.filename
+    ?? (f.audioUrl ? f.audioUrl.split("/").pop() ?? f.audioUrl : null);
+
+  const fmtUploaded = (iso: string) => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : d.toLocaleString();
+  };
+
+  type AudioOption = { value: string; label: string; sub: string };
+  const audioOptions: AudioOption[] = audioPool.map((a) => ({
+    value: a.objectPath,
+    label: a.filename,
+    sub: `загружен ${fmtUploaded(a.createdAt)}`,
+  }));
+  if (f.audioUrl && !audioOptions.some((o) => o.value === f.audioUrl)) {
+    audioOptions.unshift({
+      value: f.audioUrl,
+      label: audioFileName ?? f.audioUrl,
+      sub: "текущий файл трека",
+    });
+  }
+
+  const onSelectAudio = (val: string) => {
+    if (val === "__none__") { setF({ ...f, audioUrl: null }); return; }
+    const a = audioPool.find((x) => x.objectPath === val) ?? null;
+    setF({
+      ...f,
+      audioUrl: val,
+      durationSeconds: a?.durationSeconds ?? f.durationSeconds,
+    });
+  };
 
   return (
     <Layout>
-      {/* Hidden audio file input */}
-      <input
-        ref={audioInputRef}
-        type="file"
-        accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mpeg,audio/mp4,audio/aac"
-        className="hidden"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (!file) return;
-          try {
-            const asset = await uploadAudio(file, { kind: "audio", trackId: track.id, attach: false });
-            const url = URL.createObjectURL(file);
-            const audioEl = new Audio(url);
-            const dur = await new Promise<number | null>((res) => {
-              audioEl.onloadedmetadata = () => res(isFinite(audioEl.duration) ? Math.round(audioEl.duration) : null);
-              audioEl.onerror = () => res(null);
-              setTimeout(() => res(null), 5000);
-            });
-            URL.revokeObjectURL(url);
-            setF({ ...f, audioUrl: asset.objectPath, durationSeconds: dur ?? f.durationSeconds });
-            toast({ title: "Audio uploaded", description: file.name });
-          } catch (e: any) {
-            toast({ title: "Upload failed", description: e?.message ?? "Error", variant: "destructive" });
-          }
-        }}
-      />
-
       <div className="max-w-7xl mx-auto pb-28">
 
         {/* ── Back + track index ───────────────────────────────────────── */}
@@ -410,26 +423,39 @@ export default function TrackEditPage() {
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">Audio File</Label>
                 <div className="flex gap-2">
-                  <div className="flex-1 h-9 border border-border/60 rounded-md px-3 flex items-center text-sm text-muted-foreground/70 overflow-hidden">
-                    <span className="truncate">{audioFileName ?? "Select Audio File"}</span>
-                  </div>
+                  <Select
+                    value={f.audioUrl ?? "__none__"}
+                    onValueChange={onSelectAudio}
+                  >
+                    <SelectTrigger className="flex-1 min-w-0">
+                      <SelectValue placeholder="Select Audio File" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Select None</SelectItem>
+                      {audioOptions.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          <span className="flex flex-col">
+                            <span className="truncate">{o.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{o.sub}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     className="shrink-0"
-                    disabled={isAudioUploading}
-                    onClick={() => audioInputRef.current?.click()}
+                    onClick={() => setLocation(`/releases/${releaseId}/tracks/${track.id}/audio-upload`)}
                   >
-                    {isAudioUploading
-                      ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{audioProgress}%</>
-                      : "Upload Audio"}
+                    Upload Audio
                   </Button>
                 </div>
-                {isAudioUploading && (
-                  <div className="h-1 bg-muted rounded overflow-hidden">
-                    <div className="h-full bg-primary transition-all" style={{ width: `${audioProgress}%` }} />
-                  </div>
+                {audioOptions.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Для этого релиза ещё не загружено аудио. Нажмите «Upload Audio».
+                  </p>
                 )}
               </div>
 
@@ -454,12 +480,14 @@ export default function TrackEditPage() {
               </div>
             </div>
 
-            {/* Status line */}
-            <p className="text-sm text-muted-foreground/60">
-              {audioFileName
-                ? <><FileAudio className="inline h-3 w-3 mr-1" />{audioFileName}</>
-                : "No audio file linked"}
-            </p>
+            {/* Waveform player / status */}
+            {f.audioUrl ? (
+              <WaveformPlayer objectPath={f.audioUrl} filename={audioFileName} />
+            ) : (
+              <p className="text-sm text-muted-foreground/60">
+                <FileAudio className="inline h-3 w-3 mr-1" /> No audio file linked
+              </p>
+            )}
 
             {/* ISRC + Clip Start + Preview Start */}
             <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">

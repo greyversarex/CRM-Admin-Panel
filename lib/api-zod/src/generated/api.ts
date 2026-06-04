@@ -4133,6 +4133,12 @@ export const ConfirmAssetUploadBody = zod.object({
     .describe(
       "If true, also writes the resulting URL to release.coverUrl \/ track.audioUrl.",
     ),
+  audioProfile: zod
+    .enum(["stereo", "spatial"])
+    .nullish()
+    .describe(
+      'For kind=audio only. When \"stereo\", the server enforces stereo delivery specs (WAV\/AIFF\/FLAC, sample rate >= 44100, 16\/24-bit, 2 channels) and rejects files that do not comply. \"spatial\" skips these checks (Dolby Atmos \/ multichannel). Omit for legacy uploads.',
+    ),
 });
 
 /**

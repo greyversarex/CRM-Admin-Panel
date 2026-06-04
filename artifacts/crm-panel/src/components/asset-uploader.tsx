@@ -37,6 +37,8 @@ interface UseAssetUploadResult {
     releaseId?: number | null;
     trackId?: number | null;
     attach?: boolean;
+    audioProfile?: "stereo" | "spatial";
+    onProgress?: (percent: number) => void;
   }) => Promise<Asset>;
   isUploading: boolean;
   progress: number;
@@ -48,7 +50,7 @@ export function useAssetUpload(): UseAssetUploadResult {
   const [progress, setProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  async function upload(file: File, opts: { kind: AssetKind; releaseId?: number | null; trackId?: number | null; attach?: boolean }): Promise<Asset> {
+  async function upload(file: File, opts: { kind: AssetKind; releaseId?: number | null; trackId?: number | null; attach?: boolean; audioProfile?: "stereo" | "spatial"; onProgress?: (percent: number) => void }): Promise<Asset> {
     setIsUploading(true);
     setProgress(0);
     try {
@@ -73,7 +75,11 @@ export function useAssetUpload(): UseAssetUploadResult {
         xhr.open("PUT", presigned.uploadURL);
         xhr.setRequestHeader("Content-Type", mime);
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setProgress(pct);
+            opts.onProgress?.(pct);
+          }
         };
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) resolve();
@@ -93,6 +99,7 @@ export function useAssetUpload(): UseAssetUploadResult {
           releaseId: opts.releaseId ?? null,
           trackId: opts.trackId ?? null,
           attach: opts.attach !== false,
+          ...(opts.audioProfile ? { audioProfile: opts.audioProfile } : {}),
         },
       });
       return asset;

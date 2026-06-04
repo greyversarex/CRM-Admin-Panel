@@ -48,6 +48,33 @@ const MAX_BYTES: Record<string, number> = {
   document:  25 * 1024 * 1024,
 };
 
+// ─── Stereo delivery spec validation ──────────────────────────────────────
+// Symphonic-style: only lossless WAV/AIFF/FLAC, sample rate >= 44100 Hz,
+// 16- or 24-bit, exactly 2 channels (stereo). Returns a human-readable reason
+// when the file is not acceptable, or null when it passes.
+const STEREO_CONTAINERS = ["WAVE", "WAV", "AIFF", "AIFC", "FLAC"];
+function validateStereoSpecs(specs: {
+  container: string | null;
+  sampleRateHz: number | null;
+  bitDepth: number | null;
+  channels: number | null;
+}): string | null {
+  const cont = (specs.container ?? "").toUpperCase();
+  if (!STEREO_CONTAINERS.some((c) => cont.includes(c))) {
+    return "Invalid file type. Only WAV, AIFF, or FLAC files are accepted.";
+  }
+  if (!specs.sampleRateHz || specs.sampleRateHz < 44100) {
+    return "Audio Code 8: Audio file's sample rate must be 44100 Hz or greater.";
+  }
+  if (specs.bitDepth !== 16 && specs.bitDepth !== 24) {
+    return "Audio Code 9: Audio file must be 16-bit or 24-bit.";
+  }
+  if (specs.channels !== 2) {
+    return "Audio Code 10: Audio file must be stereo (2 channels).";
+  }
+  return null;
+}
+
 // Validate that the caller can read/write a given release row.
 async function assertReleaseInScope(req: any, releaseId: number): Promise<{ artistId: number; labelId: number | null } | null> {
   const [r] = await db.select({ artistId: releasesTable.artistId, labelId: releasesTable.labelId })
@@ -187,7 +214,12 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
   // is the source of truth, but we still want a coarse early reject).
   const mimePrefix: Record<string, string> = { audio: "audio/", cover: "image/", image: "image/" };
   const required = mimePrefix[body.kind];
-  if (required && !body.mimeType.toLowerCase().startsWith(required)) {
+  // Some browsers/OS combinations report an empty or generic MIME type for valid
+  // WAV/AIFF/FLAC files. We accept those for audio and rely on the server-side
+  // container/spec validation below (validateStereoSpecs) to reject bad content.
+  const mime = (body.mimeType || "").toLowerCase();
+  const isGenericMime = mime === "" || mime === "application/octet-stream";
+  if (required && !mime.startsWith(required) && !isGenericMime) {
     res.status(400).json({ error: `MIME ${body.mimeType} does not match kind=${body.kind}` });
     return;
   }
@@ -272,6 +304,7 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
   let channels: number | null = null;
   let codec: string | null = null;
   let bitrateKbps: number | null = null;
+  let container: string | null = null;
   if (body.kind === "audio") {
     try {
       const stream = file.createReadStream();
@@ -285,11 +318,25 @@ router.post("/assets/confirm", async (req, res): Promise<void> => {
       sampleRateHz = f.sampleRate ?? null;
       bitDepth = f.bitsPerSample ?? null;
       channels = f.numberOfChannels ?? null;
+      container = f.container ?? null;
       codec = f.codec ?? f.container ?? null;
       bitrateKbps = f.bitrate ? Math.round(f.bitrate / 1000) : null;
       stream.destroy();
     } catch (err) {
       req.log?.warn({ err }, "music-metadata failed");
+    }
+  }
+
+  // Stereo delivery validation. Применяется только когда клиент явно просит
+  // профиль "stereo" (новая страница Upload Stereo Audio). Профиль "spatial"
+  // (Dolby Atmos / многоканальное) и legacy-загрузки эти проверки пропускают,
+  // чтобы не отклонять корректные не-стерео файлы.
+  if (body.kind === "audio" && body.audioProfile === "stereo") {
+    const reason = validateStereoSpecs({ container, sampleRateHz, bitDepth, channels });
+    if (reason) {
+      await storage.deleteByObjectPath(body.objectPath).catch(() => {});
+      res.status(422).json({ error: reason });
+      return;
     }
   }
 

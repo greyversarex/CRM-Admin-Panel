@@ -1,1 +1,2 @@
 - [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
+- [Stereo audio upload validation](audio-upload-validation.md) — /assets/confirm stereo checks gated on audioProfile; keep audio MIME gate lenient (accept empty/octet-stream).

@@ -5,6 +5,7 @@
  * Music Distribution CRM API
  * OpenAPI spec version: 0.1.0
  */
+import type { ConfirmAssetBodyAudioProfile } from "./confirmAssetBodyAudioProfile";
 import type { ConfirmAssetBodyKind } from "./confirmAssetBodyKind";
 
 export interface ConfirmAssetBody {
@@ -25,4 +26,6 @@ export interface ConfirmAssetBody {
   trackId?: number | null;
   /** If true, also writes the resulting URL to release.coverUrl / track.audioUrl. */
   attach?: boolean;
+  /** For kind=audio only. When "stereo", the server enforces stereo delivery specs (WAV/AIFF/FLAC, sample rate >= 44100, 16/24-bit, 2 channels) and rejects files that do not comply. "spatial" skips these checks (Dolby Atmos / multichannel). Omit for legacy uploads. */
+  audioProfile?: ConfirmAssetBodyAudioProfile;
 }

@@ -17,6 +17,7 @@ export * from "./assetWithDownload";
 export * from "./balance";
 export * from "./balanceEntityType";
 export * from "./confirmAssetBody";
+export * from "./confirmAssetBodyAudioProfile";
 export * from "./confirmAssetBodyKind";
 export * from "./contact";
 export * from "./contactType";
