@@ -199,7 +199,7 @@ export function TrackCard({
               </Field>
               <Field label={t.releaseWizard.trackVersionLabel}>
                 <Input value={draft.trackVersion ?? ""} onChange={(e) => set("trackVersion", e.target.value || null)}
-                  placeholder="Acoustic, Remix..." className="bg-background/40" />
+                  placeholder={t.releaseWizard.trackVersionPlaceholder} className="bg-background/40" />
               </Field>
               <Field label={t.releaseWizard.recordingYear}>
                 <Input type="number" min={1900} max={new Date().getFullYear()}
@@ -227,13 +227,13 @@ export function TrackCard({
             <Field label={t.createRelease.metadataLanguage}>
               <Select value={draft.language ?? ""} onValueChange={(v) => set("language", v)}>
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-                <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{t.releaseWizard.languages[l.value as keyof typeof t.releaseWizard.languages]}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
             <Field label={t.releaseWizard.countryOfRecording}>
               <Select value={draft.countryOfRecording ?? ""} onValueChange={(v) => set("countryOfRecording", v)}>
                 <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{t.releaseWizard.countries[c.code as keyof typeof t.releaseWizard.countries]}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
             <Field label={t.releaseWizard.audioStyleLabel}>
@@ -263,7 +263,7 @@ export function TrackCard({
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="non_explicit">{t.releaseWizard.nonExplicit}</SelectItem>
-                  <SelectItem value="explicit">Explicit</SelectItem>
+                  <SelectItem value="explicit">{t.releaseWizard.explicit}</SelectItem>
                   <SelectItem value="censored">{t.releaseWizard.censored}</SelectItem>
                 </SelectContent>
               </Select>
@@ -272,7 +272,7 @@ export function TrackCard({
               <Field label={t.releaseWizard.vocalLanguage}>
                 <Select value={draft.vocalLanguage ?? ""} onValueChange={(v) => set("vocalLanguage", v)}>
                   <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{t.releaseWizard.languages[l.value as keyof typeof t.releaseWizard.languages]}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
             )}
