@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -45,17 +46,14 @@ function InfoTip({ text }: { text: string }) {
 }
 type Translation = { language: string; title: string; version?: string };
 
-const RELEASE_TYPE_OPTIONS = [
-  { value: "single",      label: "Single"      },
-  { value: "album",       label: "Album"       },
-  { value: "ep",          label: "EP"          },
-  { value: "compilation", label: "Compilation" },
-] as const;
+const RELEASE_TYPE_VALUES = ["single", "album", "ep", "compilation"] as const;
 
 export default function CreateRelease() {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useLang();
+  const L = t.createRelease;
 
   const [releaseType, setReleaseType] = useState<"single" | "album" | "ep" | "compilation">("single");
   const [coverUrl, setCoverUrl]         = useState("");
@@ -113,13 +111,13 @@ export default function CreateRelease() {
           qc.invalidateQueries({ queryKey: getListReleasesQueryKey() }),
           qc.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() }),
         ]);
-        toast({ title: "Черновик создан", description: `Релиз «${rel.title}» открыт для редактирования.` });
+        toast({ title: L.draftCreatedTitle, description: L.draftCreatedDesc.replace("{title}", rel.title) });
         setLocation(`/releases/${rel.id}`);
       },
       onError: (e: any) => {
         toast({
-          title: "Не удалось создать релиз",
-          description: (e as any)?.response?.data?.error ?? (e as any)?.message ?? "Неизвестная ошибка",
+          title: L.createFailedTitle,
+          description: (e as any)?.response?.data?.error ?? (e as any)?.message ?? L.unknownError,
           variant: "destructive",
         });
       },
@@ -138,7 +136,7 @@ export default function CreateRelease() {
     setTranslations(p => [...p, { language: "", title: "", version: "" }]);
   }
   function updateTranslation(idx: number, patch: Partial<Translation>) {
-    setTranslations(p => p.map((t, i) => i === idx ? { ...t, ...patch } : t));
+    setTranslations(p => p.map((tr, i) => i === idx ? { ...tr, ...patch } : tr));
   }
   function removeTranslation(idx: number) {
     setTranslations(p => p.filter((_, i) => i !== idx));
@@ -159,17 +157,17 @@ export default function CreateRelease() {
       setArtistId(created.id);
       setAddArtistDialogOpen(false);
       setQuickArtistName("");
-      toast({ title: "Artist created", description: `«${created.name}» added and selected` });
+      toast({ title: L.artistCreatedTitle, description: L.artistCreatedDesc.replace("{name}", created.name) });
     } catch (e) {
-      toast({ title: "Failed to create artist", description: (e as Error).message, variant: "destructive" });
+      toast({ title: L.artistCreateFailedTitle, description: (e as Error).message, variant: "destructive" });
     }
   }
 
   function handleCreate() {
     if (!artistId) return;
     const cleanedTranslations = translations
-      .filter(t => t.language.trim() && t.title.trim())
-      .map(t => ({ language: t.language.trim(), title: t.title.trim(), version: t.version?.trim() || null }));
+      .filter(tr => tr.language.trim() && tr.title.trim())
+      .map(tr => ({ language: tr.language.trim(), title: tr.title.trim(), version: tr.version?.trim() || null }));
 
     createMut.mutate({
       data: {
@@ -202,10 +200,9 @@ export default function CreateRelease() {
 
         {/* ── Page header ──────────────────────────────────────────────── */}
         <div className="mb-6">
-          <h1 className="text-3xl font-semibold">Release details</h1>
+          <h1 className="text-3xl font-semibold">{L.title}</h1>
           <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            We follow strict guidelines as set forth by Apple Music, Spotify and more.
-            Upload artwork, enter the title, choose the release type, and add your project artists.
+            {L.subtitle}
           </p>
         </div>
 
@@ -215,8 +212,8 @@ export default function CreateRelease() {
           <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg inline-flex items-center gap-1.5">
-                Cover Art
-                <InfoTip text="Recommended size: 3000×3000 px (1000×1000 minimum). Accepted formats: .JPG / .JPEG / .PNG. Once uploaded you will see a preview of your cover art." />
+                {L.coverArt}
+                <InfoTip text={L.coverArtTip} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0">
@@ -227,9 +224,9 @@ export default function CreateRelease() {
               <div className="flex-1 pt-1">
                 <div className="flex items-center gap-1.5 mb-3">
                   <p className="text-sm font-medium">
-                    What amount of generative AI tools were used in the creation of this cover art?
+                    {L.aiQuestion}
                   </p>
-                  <InfoTip text="Indicate how much AI was used to generate or significantly alter your cover art. DSPs require this disclosure." />
+                  <InfoTip text={L.aiTip} />
                 </div>
                 <RadioGroup
                   value={coverAiUsage}
@@ -237,13 +234,13 @@ export default function CreateRelease() {
                   className="flex gap-6"
                 >
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <RadioGroupItem value="none" /> None
+                    <RadioGroupItem value="none" /> {L.aiNone}
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <RadioGroupItem value="some" /> Some
+                    <RadioGroupItem value="some" /> {L.aiSome}
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <RadioGroupItem value="all" /> All
+                    <RadioGroupItem value="all" /> {L.aiAll}
                   </label>
                 </RadioGroup>
               </div>
@@ -254,12 +251,12 @@ export default function CreateRelease() {
           {/* ── Release Details ──────────────────────────────────────────── */}
           <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Release Details</CardTitle>
+              <CardTitle className="text-lg">{L.releaseDetails}</CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <FieldLabel htmlFor="title" className="text-sm">Release Title</FieldLabel>
+              <FieldLabel htmlFor="title" className="text-sm">{L.releaseTitle}</FieldLabel>
               <Input
                 id="title"
                 data-testid="input-title"
@@ -270,8 +267,8 @@ export default function CreateRelease() {
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <FieldLabel htmlFor="version" className="text-sm">Release Version <span className="text-muted-foreground font-normal">(Optional)</span></FieldLabel>
-                <InfoTip text="Use this field to indicate a specific version of the release, e.g. «Deluxe Edition», «Acoustic Version», «Radio Edit». Leave blank for the standard version." />
+                <FieldLabel htmlFor="version" className="text-sm">{L.releaseVersion} <span className="text-muted-foreground font-normal">{L.optional}</span></FieldLabel>
+                <InfoTip text={L.versionTip} />
               </div>
               <Input
                 id="version"
@@ -282,7 +279,7 @@ export default function CreateRelease() {
               />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Metadata Language</FieldLabel>
+              <FieldLabel className="text-sm">{L.metadataLanguage}</FieldLabel>
               <Select value={language} onValueChange={setLanguage}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -296,15 +293,15 @@ export default function CreateRelease() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={addTranslation}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Translation <span className="text-muted-foreground font-normal ml-0.5">(Optional)</span>
+                <Plus className="h-3.5 w-3.5 mr-1" /> {L.addTranslation} <span className="text-muted-foreground font-normal ml-0.5">{L.optional}</span>
               </Button>
-              <InfoTip text="Add the release title in another language (e.g. Russian, English). Helps DSPs display metadata correctly in different regions." />
+              <InfoTip text={L.translationTip} />
             </div>
-            {translations.map((t, i) => (
+            {translations.map((tr, i) => (
               <div key={i} className="grid grid-cols-[140px_1fr_160px_32px] gap-2 items-end bg-muted/10 border border-border/40 rounded-lg p-3">
                 <div className="space-y-1">
-                  <FieldLabel className="text-sm text-muted-foreground">Language</FieldLabel>
-                  <Select value={t.language} onValueChange={v => updateTranslation(i, { language: v })}>
+                  <FieldLabel className="text-sm text-muted-foreground">{L.langLabel}</FieldLabel>
+                  <Select value={tr.language} onValueChange={v => updateTranslation(i, { language: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       {LANGS.filter(l => l.value !== language).map(l => (
@@ -314,12 +311,12 @@ export default function CreateRelease() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <FieldLabel className="text-sm text-muted-foreground">Title</FieldLabel>
-                  <Input className="h-9 text-sm" value={t.title} onChange={e => updateTranslation(i, { title: e.target.value })} />
+                  <FieldLabel className="text-sm text-muted-foreground">{L.titleLabel}</FieldLabel>
+                  <Input className="h-9 text-sm" value={tr.title} onChange={e => updateTranslation(i, { title: e.target.value })} />
                 </div>
                 <div className="space-y-1">
-                  <FieldLabel className="text-sm text-muted-foreground">Version</FieldLabel>
-                  <Input className="h-9 text-sm" value={t.version ?? ""} onChange={e => updateTranslation(i, { version: e.target.value })} placeholder="(optional)" />
+                  <FieldLabel className="text-sm text-muted-foreground">{L.versionLabel}</FieldLabel>
+                  <Input className="h-9 text-sm" value={tr.version ?? ""} onChange={e => updateTranslation(i, { version: e.target.value })} placeholder={L.optionalPlaceholder} />
                 </div>
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 self-end" onClick={() => removeTranslation(i)}>
                   <Trash2 className="h-3.5 w-3.5" />
@@ -334,8 +331,8 @@ export default function CreateRelease() {
           <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg inline-flex items-center gap-1.5">
-                Primary Artists
-                <InfoTip text="The main performing artist(s) credited on this release. Select from your existing artists or create a new one. If there are 5 or more different artists, check «Various Artists»." />
+                {L.primaryArtists}
+                <InfoTip text={L.primaryArtistsTip} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
@@ -351,8 +348,8 @@ export default function CreateRelease() {
                 >
                   <span className={artistId ? "" : "text-foreground/40"}>
                     {artistId
-                      ? (artistOptions.find(a => a.id === artistId)?.name ?? "Select artist")
-                      : "Select artist"}
+                      ? (artistOptions.find(a => a.id === artistId)?.name ?? L.selectArtist)
+                      : L.selectArtist}
                   </span>
                   <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
                 </Button>
@@ -364,13 +361,13 @@ export default function CreateRelease() {
               >
                 <Command shouldFilter={false}>
                   <CommandInput
-                    placeholder="Search artist..."
+                    placeholder={L.searchArtist}
                     value={artistSearch}
                     onValueChange={setArtistSearch}
                   />
                   <CommandList className="max-h-[210px]">
                     <CommandEmpty className="py-4 text-sm text-center text-muted-foreground">
-                      No artists found.
+                      {L.noArtistsFound}
                     </CommandEmpty>
                     <CommandGroup>
                       {artistOptions
@@ -406,7 +403,7 @@ export default function CreateRelease() {
                           }}
                         >
                           <UserPlus className="h-4 w-4 mr-2" />
-                          Add new artist
+                          {L.addNewArtist}
                         </Button>
                       </div>
                     </>
@@ -415,13 +412,13 @@ export default function CreateRelease() {
               </PopoverContent>
             </Popover>
             {artistOptions.length === 0 && (
-              <p className="text-sm text-muted-foreground">No artists found. Add an artist in the Artists section first.</p>
+              <p className="text-sm text-muted-foreground">{L.noArtistsHint}</p>
             )}
             <label className="flex items-center gap-2.5 cursor-pointer text-sm">
               <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
               <span>
-                Various Artists
-                <span className="block text-[11px] text-muted-foreground">Select if 5+ artists.</span>
+                {L.variousArtists}
+                <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
               </span>
             </label>
             </CardContent>
@@ -430,32 +427,32 @@ export default function CreateRelease() {
           {/* ── Metadata & Rights ────────────────────────────────────────── */}
           <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Metadata &amp; Rights</CardTitle>
+              <CardTitle className="text-lg">{L.metadataRights}</CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">UPC</FieldLabel>
+              <FieldLabel className="text-sm">{L.upc}</FieldLabel>
               <Input
                 value=""
                 readOnly
-                placeholder="Assigned on submission"
+                placeholder={L.assignedOnSubmission}
                 className="bg-muted/20 cursor-not-allowed text-muted-foreground"
               />
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Genre</FieldLabel>
+              <FieldLabel className="text-sm">{L.genre}</FieldLabel>
               <Select value={genre} onValueChange={setGenre}>
-                <SelectTrigger><SelectValue placeholder="Please select" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
                 <SelectContent>
                   {GENRES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Subgenres</FieldLabel>
+              <FieldLabel className="text-sm">{L.subgenres}</FieldLabel>
               <Select value={subgenre} onValueChange={setSubgenre} disabled={subgenresFor.length === 0}>
-                <SelectTrigger><SelectValue placeholder="Please select" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
                 <SelectContent>
                   {subgenresFor.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
@@ -466,7 +463,7 @@ export default function CreateRelease() {
           {/* ── Label / CLine / PLine ────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Label Name</FieldLabel>
+              <FieldLabel className="text-sm">{L.labelName}</FieldLabel>
               <Select
                 value={labelId ? String(labelId) : "none"}
                 onValueChange={v => setLabelId(v === "none" ? null : Number(v))}
@@ -474,13 +471,13 @@ export default function CreateRelease() {
               >
                 <SelectTrigger data-testid="select-label"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Please select</SelectItem>
+                  <SelectItem value="none">{L.pleaseSelect}</SelectItem>
                   {labels.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">© C Line</FieldLabel>
+              <FieldLabel className="text-sm">{L.cLine}</FieldLabel>
               <div className="flex gap-2">
                 <Select
                   value={String(cLineYear || CURRENT_YEAR)}
@@ -493,11 +490,11 @@ export default function CreateRelease() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input value={cLine} onChange={e => setCLine(e.target.value)} placeholder="C Line" />
+                <Input value={cLine} onChange={e => setCLine(e.target.value)} placeholder={L.cLinePlaceholder} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">℗ P Line</FieldLabel>
+              <FieldLabel className="text-sm">{L.pLine}</FieldLabel>
               <div className="flex gap-2">
                 <Select
                   value={String(pLineYear || CURRENT_YEAR)}
@@ -510,7 +507,7 @@ export default function CreateRelease() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input value={pLine} onChange={e => setPLine(e.target.value)} placeholder="P Line" />
+                <Input value={pLine} onChange={e => setPLine(e.target.value)} placeholder={L.pLinePlaceholder} />
               </div>
             </div>
           </div>
@@ -518,30 +515,30 @@ export default function CreateRelease() {
           {/* ── Catalog# / Release Type / Compilation ────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Catalog#</FieldLabel>
+              <FieldLabel className="text-sm">{L.catalogNumber}</FieldLabel>
               <Input
                 value=""
                 readOnly
-                placeholder="Auto-assigned"
+                placeholder={L.autoAssigned}
                 className="bg-muted/20 cursor-not-allowed text-muted-foreground font-mono"
               />
-              <p className="text-[11px] text-muted-foreground">Your internal identifier for this release.</p>
+              <p className="text-[11px] text-muted-foreground">{L.catalogHint}</p>
             </div>
             <div className="space-y-1.5">
-              <FieldLabel className="text-sm">Release Type</FieldLabel>
+              <FieldLabel className="text-sm">{L.releaseType}</FieldLabel>
               <Select value={releaseType} onValueChange={v => setReleaseType(v as any)}>
                 <SelectTrigger data-testid="select-release-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {RELEASE_TYPE_OPTIONS.map(rt => (
-                    <SelectItem key={rt.value} value={rt.value}>{rt.label}</SelectItem>
+                  {RELEASE_TYPE_VALUES.map(rt => (
+                    <SelectItem key={rt} value={rt}>{L.releaseTypes[rt]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
-                <FieldLabel className="text-sm">Compilation</FieldLabel>
-                <InfoTip text="A compilation is a release that collects tracks from different artists or from different time periods of the same artist. Most standard releases (singles, albums, EPs) are NOT compilations." />
+                <FieldLabel className="text-sm">{L.compilation}</FieldLabel>
+                <InfoTip text={L.compilationTip} />
               </div>
               <div className="space-y-1.5 pt-0.5">
                 <label className="flex items-center gap-2.5 cursor-pointer text-sm">
@@ -549,14 +546,14 @@ export default function CreateRelease() {
                     checked={isCompilation === true}
                     onCheckedChange={v => setIsCompilation(v ? true : false)}
                   />
-                  Yes, this is a compilation
+                  {L.compilationYes}
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer text-sm">
                   <Checkbox
                     checked={isCompilation === false}
                     onCheckedChange={v => setIsCompilation(v ? false : null)}
                   />
-                  No, this is a standard release
+                  {L.compilationNo}
                 </label>
               </div>
             </div>
@@ -570,11 +567,11 @@ export default function CreateRelease() {
       {/* ── Sticky bottom bar ────────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-3 flex items-center justify-between">
         <Button variant="outline" onClick={() => setLocation("/releases")}>
-          Cancel
+          {L.cancel}
         </Button>
         <Button onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
           {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save
+          {L.save}
         </Button>
       </div>
 
@@ -585,9 +582,9 @@ export default function CreateRelease() {
       >
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Create Artist</DialogTitle>
+            <DialogTitle>{L.createArtist}</DialogTitle>
             <DialogDescription>
-              Type your artist's name accurately (how it should be stylized).
+              {L.createArtistDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
@@ -596,19 +593,19 @@ export default function CreateRelease() {
               value={quickArtistName}
               onChange={e => setQuickArtistName(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && quickArtistName.trim()) handleQuickCreateArtist(); }}
-              placeholder="Artist name…"
+              placeholder={L.artistNamePlaceholder}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
-              Cancel
+              {L.cancel}
             </Button>
             <Button
               onClick={handleQuickCreateArtist}
               disabled={!quickArtistName.trim() || createArtistMut.isPending}
             >
               {createArtistMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Artist
+              {L.createArtist}
             </Button>
           </DialogFooter>
         </DialogContent>

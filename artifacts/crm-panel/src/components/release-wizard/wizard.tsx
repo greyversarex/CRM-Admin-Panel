@@ -37,6 +37,7 @@ import { RELEASE_TYPES, GENRES, SUBGENRES, LANGS, COUNTRIES, STEPS, type StepKey
 import { MultiArtistPicker } from "./multi-artist-picker";
 import { DspPickerDialog } from "./dsp-picker";
 import { TrackCard } from "./track-card";
+import { useLang } from "@/lib/i18n";
 
 // ─── Form state ─────────────────────────────────────────────────────────────
 type Form = {
@@ -77,6 +78,7 @@ const EMPTY: Form = {
 
 // ─── Wizard component ──────────────────────────────────────────────────────
 export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: number | null }) {
+  const { t } = useLang();
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -180,7 +182,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
   // ── STEP 1 SAVE: create or update + sync artists list ──
   const saveStep1 = async (): Promise<number | null> => {
     if (!form.title.trim() || !form.artistId) {
-      toast({ title: "Заполните обязательные поля", description: "Название и Primary артист.", variant: "destructive" });
+      toast({ title: t.releaseWizard.fillRequiredTitle, description: t.releaseWizard.fillRequiredDesc, variant: "destructive" });
       return null;
     }
     const payload: any = {
@@ -226,10 +228,10 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
         });
       }
       invalidateAll(id);
-      toast({ title: "Релиз сохранён" });
+      toast({ title: t.releaseWizard.releaseSaved });
       return id;
     } catch (e: any) {
-      toast({ title: "Не удалось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.saveFailed, description: e?.message ?? "", variant: "destructive" });
       return null;
     }
   };
@@ -269,7 +271,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
       invalidateAll(releaseId);
       return true;
     } catch (e: any) {
-      toast({ title: "Не удалось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.saveFailed, description: e?.message ?? "", variant: "destructive" });
       return false;
     }
   };
@@ -288,7 +290,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
       const r = await validate.mutateAsync({ id: releaseId });
       setValidationResult(r);
     } catch (e: any) {
-      toast({ title: "Ошибка валидации", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.validationError, description: e?.message ?? "", variant: "destructive" });
     }
   };
   useEffect(() => { if (step === "submission" && releaseId) runValidation(); }, [step, releaseId]);
@@ -298,10 +300,10 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
     try {
       await submitForReview.mutateAsync({ id: releaseId });
       invalidateAll(releaseId);
-      toast({ title: "Отправлено на модерацию", description: "Мы оповестим по результату." });
+      toast({ title: t.releaseWizard.submittedTitle, description: t.releaseWizard.submittedDesc });
       setLocation(`/releases/${releaseId}`);
     } catch (e: any) {
-      toast({ title: "Не удалось отправить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.submitFailed, description: e?.message ?? "", variant: "destructive" });
     }
   };
 
@@ -339,17 +341,17 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
         onClick={() => setLocation(releaseId ? `/releases/${releaseId}` : "/releases")}
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground self-start px-2 py-1 rounded hover:bg-accent/40"
       >
-        <ChevronLeft className="h-3.5 w-3.5" /> {releaseId ? "К карточке релиза" : "Назад к релизам"}
+        <ChevronLeft className="h-3.5 w-3.5" /> {releaseId ? t.releaseWizard.backToRelease : t.releaseWizard.backToReleases}
       </button>
 
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            {releaseId ? `Редактирование релиза #${releaseId}` : "Создание релиза"}
+            {releaseId ? t.releaseWizard.editReleaseTitle.replace("{id}", String(releaseId)) : t.releaseWizard.createReleaseTitle}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {form.title || "Без названия"}
+            {form.title || t.releaseWizard.untitled}
             {form.catalogNumber && <span className="ml-2 font-mono text-xs">[{form.catalogNumber}]</span>}
           </p>
         </div>
@@ -414,13 +416,13 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
       {/* NAV BUTTONS */}
       <div className="flex justify-between gap-2 sticky bottom-0 bg-background/80 backdrop-blur py-3 -mx-4 px-4 border-t border-border/40">
         <Button variant="outline" onClick={goBack} disabled={stepIndex === 0}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Назад
+          <ChevronLeft className="h-4 w-4 mr-1" /> {t.releaseWizard.back}
         </Button>
         {step !== "submission" ? (
           <Button onClick={goNext} disabled={createRelease.isPending || updateRelease.isPending || updateDsps.isPending}>
             {(createRelease.isPending || updateRelease.isPending || updateDsps.isPending)
-              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Сохранение…</>
-              : <>Далее <ChevronRight className="h-4 w-4 ml-1" /></>}
+              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {t.releaseWizard.saving}</>
+              : <>{t.releaseWizard.next} <ChevronRight className="h-4 w-4 ml-1" /></>}
           </Button>
         ) : null}
       </div>

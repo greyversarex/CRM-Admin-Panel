@@ -19,6 +19,7 @@ import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
   splitWriterSharesEvenly,
 } from "./contributors-editor";
+import { useLang } from "@/lib/i18n";
 
 /** Создаёт заглушечный, но валидный ISRC «XX-AAA-YY-NNNNN». Сервер примет
  *  любой 12-символьный код. Полноценная регистрация в Soundscan у нас вне
@@ -37,6 +38,7 @@ export function TrackCard({
   expanded: boolean;
   onExpandToggle: () => void;
 }) {
+  const { t } = useLang();
   const qc = useQueryClient();
   const updateTrack = useUpdateTrack();
   const deleteTrack = useDeleteTrack();
@@ -53,9 +55,9 @@ export function TrackCard({
       setDraft((p) => ({ ...p, audioUrl: asset.objectPath, durationSeconds: asset.durationSeconds ?? p.durationSeconds }));
       qc.invalidateQueries({ queryKey: getListTracksQueryKey({ release_id: releaseId }) });
       qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(releaseId) });
-      toast({ title: "Аудио загружено", description: file.name });
+      toast({ title: t.releaseWizard.audioUploaded, description: file.name });
     } catch (e: any) {
-      toast({ title: "Не удалось загрузить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.uploadFailed, description: e?.message ?? "", variant: "destructive" });
     }
   };
 
@@ -93,21 +95,21 @@ export function TrackCard({
       });
       qc.invalidateQueries({ queryKey: getListTracksQueryKey({ release_id: releaseId }) });
       qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(releaseId) });
-      toast({ title: "Трек сохранён" });
+      toast({ title: t.releaseWizard.trackSaved });
     } catch (e: any) {
-      toast({ title: "Не удалось сохранить", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.saveFailed, description: e?.message ?? "", variant: "destructive" });
     }
   };
 
   const remove = async () => {
-    if (!confirm(`Удалить трек «${track.title}»?`)) return;
+    if (!confirm(t.releaseWizard.confirmDeleteTrack.replace("{title}", track.title))) return;
     try {
       await deleteTrack.mutateAsync({ id: track.id });
       qc.invalidateQueries({ queryKey: getListTracksQueryKey({ release_id: releaseId }) });
       qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(releaseId) });
-      toast({ title: "Трек удалён" });
+      toast({ title: t.releaseWizard.trackDeleted });
     } catch (e: any) {
-      toast({ title: "Ошибка", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.releaseWizard.error, description: e?.message ?? "", variant: "destructive" });
     }
   };
 
@@ -122,7 +124,7 @@ export function TrackCard({
         <Input
           value={draft.title}
           onChange={(e) => set("title", e.target.value)}
-          placeholder="Название трека"
+          placeholder={t.releaseWizard.trackTitlePlaceholder}
           className="bg-background/40 flex-1 min-w-0"
         />
         {draft.audioUrl ? (
@@ -143,16 +145,16 @@ export function TrackCard({
               onClick={() => inlineUploadRef.current?.click()}
             >
               {isInlineUploading
-                ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Загрузка…</>
-                : <><Upload className="h-3.5 w-3.5 mr-1" /> Загрузить трек</>}
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> {t.releaseWizard.uploading}</>
+                : <><Upload className="h-3.5 w-3.5 mr-1" /> {t.releaseWizard.uploadTrack}</>}
             </Button>
           </>
         )}
         <Button size="sm" variant="outline" onClick={onExpandToggle}>
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          <span className="ml-1">{expanded ? "Свернуть" : "Audio Details"}</span>
+          <span className="ml-1">{expanded ? t.releaseWizard.collapse : t.releaseWizard.audioDetails}</span>
         </Button>
-        <Button size="icon" variant="ghost" onClick={remove} title="Удалить трек">
+        <Button size="icon" variant="ghost" onClick={remove} title={t.releaseWizard.deleteTrack}>
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -162,7 +164,7 @@ export function TrackCard({
           {/* Audio + ISRC + Clip ───────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <FieldLabel className="text-xs text-muted-foreground">Аудио (.wav рекомендуется)</FieldLabel>
+              <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.audioWav}</FieldLabel>
               <AudioUploader
                 value={draft.audioUrl ?? null}
                 durationSeconds={draft.durationSeconds ?? null}
@@ -177,29 +179,29 @@ export function TrackCard({
                 <div className="flex gap-1.5">
                   <Input value={draft.isrc ?? ""} onChange={(e) => set("isrc", e.target.value)}
                     placeholder="TJCTM2500001" className="bg-background/40 font-mono" />
-                  <Button type="button" variant="outline" size="icon" title="Сгенерировать ISRC"
+                  <Button type="button" variant="outline" size="icon" title={t.releaseWizard.generateIsrcTitle}
                     onClick={() => set("isrc", generateIsrc())}><Wand2 className="h-4 w-4" /></Button>
                 </div>
               </Field>
-              <Field label="ISWC (для composition rights)">
+              <Field label={t.releaseWizard.iswcLabel}>
                 <Input value={draft.iswc ?? ""} onChange={(e) => set("iswc", e.target.value)}
                   placeholder="T-123.456.789-0" className="bg-background/40 font-mono" />
               </Field>
-              <Field label="Track #">
+              <Field label={t.releaseWizard.trackNumberLabel}>
                 <Input type="number" min={1} value={draft.trackNumber ?? 1}
                   onChange={(e) => set("trackNumber", Number(e.target.value) || null)}
                   className="bg-background/40" />
               </Field>
-              <Field label="Clip start (сек)">
+              <Field label={t.releaseWizard.clipStart}>
                 <Input type="number" min={0} value={draft.clipStartSeconds}
                   onChange={(e) => set("clipStartSeconds", Number(e.target.value) || 0)}
                   className="bg-background/40" />
               </Field>
-              <Field label="Track version">
+              <Field label={t.releaseWizard.trackVersionLabel}>
                 <Input value={draft.trackVersion ?? ""} onChange={(e) => set("trackVersion", e.target.value || null)}
                   placeholder="Acoustic, Remix..." className="bg-background/40" />
               </Field>
-              <Field label="Год записи">
+              <Field label={t.releaseWizard.recordingYear}>
                 <Input type="number" min={1900} max={new Date().getFullYear()}
                   value={draft.recordingYear ?? ""}
                   onChange={(e) => set("recordingYear", e.target.value ? Number(e.target.value) : null)}
@@ -210,64 +212,64 @@ export function TrackCard({
 
           {/* Жанр / Язык / Country / AI / Audio Style / Explicit */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <Field label="Жанр">
+            <Field label={t.createRelease.genre}>
               <Select value={draft.genre ?? ""} onValueChange={(v) => set("genre", v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="Выберите..." /></SelectTrigger>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder={t.releaseWizard.selectPlaceholder} /></SelectTrigger>
                 <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Сабжанр">
+            <Field label={t.releaseWizard.subgenre}>
               <Select value={draft.subgenre ?? ""} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
                 <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>{subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Язык метаданных">
+            <Field label={t.createRelease.metadataLanguage}>
               <Select value={draft.language ?? ""} onValueChange={(v) => set("language", v)}>
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Страна записи">
+            <Field label={t.releaseWizard.countryOfRecording}>
               <Select value={draft.countryOfRecording ?? ""} onValueChange={(v) => set("countryOfRecording", v)}>
                 <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Audio Style">
+            <Field label={t.releaseWizard.audioStyleLabel}>
               <Select value={draft.audioStyle} onValueChange={(v) => set("audioStyle", v as Track["audioStyle"])}>
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vocal">Вокал</SelectItem>
-                  <SelectItem value="instrumental">Инструментал</SelectItem>
+                  <SelectItem value="vocal">{t.releaseWizard.vocal}</SelectItem>
+                  <SelectItem value="instrumental">{t.releaseWizard.instrumental}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Использование AI *">
+            <Field label={t.releaseWizard.aiUsageLabel}>
               <Select value={draft.aiUsage} onValueChange={(v) => set("aiUsage", v as Track["aiUsage"])}>
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Не используется</SelectItem>
-                  <SelectItem value="some">Частично (вокал/гитара)</SelectItem>
-                  <SelectItem value="all">Полностью сгенерировано AI</SelectItem>
+                  <SelectItem value="none">{t.releaseWizard.aiNotUsed}</SelectItem>
+                  <SelectItem value="some">{t.releaseWizard.aiPartial}</SelectItem>
+                  <SelectItem value="all">{t.releaseWizard.aiFull}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Explicit статус">
+            <Field label={t.releaseWizard.explicitStatusLabel}>
               <Select value={draft.explicitStatus} onValueChange={(v) => {
                 set("explicitStatus", v as Track["explicitStatus"]);
                 set("isExplicit", v === "explicit");
               }}>
                 <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="non_explicit">Не Explicit</SelectItem>
+                  <SelectItem value="non_explicit">{t.releaseWizard.nonExplicit}</SelectItem>
                   <SelectItem value="explicit">Explicit</SelectItem>
-                  <SelectItem value="censored">Cенз. версия</SelectItem>
+                  <SelectItem value="censored">{t.releaseWizard.censored}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
             {draft.audioStyle === "vocal" && (
-              <Field label="Язык вокала">
+              <Field label={t.releaseWizard.vocalLanguage}>
                 <Select value={draft.vocalLanguage ?? ""} onValueChange={(v) => set("vocalLanguage", v)}>
                   <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
@@ -277,11 +279,11 @@ export function TrackCard({
           </div>
 
           {/* Lyrics */}
-          <Field label="Текст песни (lyrics)">
+          <Field label={t.releaseWizard.lyricsLabel}>
             <Textarea
               value={draft.lyrics ?? ""}
               onChange={(e) => set("lyrics", e.target.value || null)}
-              placeholder="Текст по строкам..."
+              placeholder={t.releaseWizard.lyricsPlaceholder}
               rows={5}
               className="bg-background/40 font-mono text-sm"
             />
@@ -297,9 +299,9 @@ export function TrackCard({
 
           {/* Save bar */}
           <div className="flex justify-end gap-2 pt-2 border-t border-border/40 sticky bottom-0 bg-card/80 backdrop-blur">
-            <Button variant="outline" size="sm" onClick={() => setDraft(track)} disabled={!dirty}>Сбросить</Button>
+            <Button variant="outline" size="sm" onClick={() => setDraft(track)} disabled={!dirty}>{t.releaseWizard.reset}</Button>
             <Button size="sm" onClick={save} disabled={!dirty || updateTrack.isPending}>
-              <Save className="h-4 w-4 mr-1" /> Сохранить трек
+              <Save className="h-4 w-4 mr-1" /> {t.releaseWizard.saveTrack}
             </Button>
           </div>
         </div>

@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { ChevronsUpDown, Check, Plus } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Combobox for a contributor's name field.
@@ -14,12 +15,14 @@ import { ChevronsUpDown, Check, Plus } from "lucide-react";
  * (writers/performers are not always roster artists).
  */
 export function ArtistNameCombobox({
-  value, onChange, placeholder = "Select or type a name",
+  value, onChange, placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
+  const { t } = useLang();
+  const ph = placeholder ?? t.releaseWizard.selectOrTypeName;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { data } = useListArtists({ limit: 200 });
@@ -48,7 +51,7 @@ export function ArtistNameCombobox({
           className="bg-background/40 flex-1 min-w-0 justify-between font-normal h-9 px-3"
         >
           <span className={value ? "truncate" : "text-foreground/40 truncate"}>
-            {value || placeholder}
+            {value || ph}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </Button>
@@ -60,13 +63,13 @@ export function ArtistNameCombobox({
       >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search or type a name..."
+            placeholder={t.releaseWizard.searchOrType}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList className="max-h-[210px]">
             <CommandEmpty className="py-3 text-sm text-center text-muted-foreground">
-              No artists found.
+              {t.createRelease.noArtistsFound}
             </CommandEmpty>
             {filtered.length > 0 && (
               <CommandGroup>
@@ -86,7 +89,7 @@ export function ArtistNameCombobox({
               </CommandGroup>
             )}
             {typed && !exact && (
-              <CommandGroup heading="Custom">
+              <CommandGroup heading={t.releaseWizard.custom}>
                 <CommandItem
                   value={`use-${typed}`}
                   onSelect={() => {
@@ -94,7 +97,7 @@ export function ArtistNameCombobox({
                     setOpen(false);
                   }}
                 >
-                  <Plus className="mr-2 h-4 w-4" /> Use “{typed}”
+                  <Plus className="mr-2 h-4 w-4" /> {t.releaseWizard.useTyped.replace("{name}", typed)}
                 </CommandItem>
               </CommandGroup>
             )}

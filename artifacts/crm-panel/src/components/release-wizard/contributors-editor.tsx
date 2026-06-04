@@ -6,6 +6,7 @@ import {
   WRITER_ROLES, DISPLAY_ARTIST_ROLES, PERFORMER_ROLES, PRODUCTION_ROLES,
 } from "./types";
 import { ArtistNameCombobox } from "./artist-name-combobox";
+import { useLang } from "@/lib/i18n";
 
 // Writer shares are hidden from the UI (mirrors Symphonic, where Writers only have
 // Artist Name + Role). They are split evenly across all writers behind the scenes so
@@ -24,22 +25,23 @@ export function splitWriterSharesEvenly(rows: TrackWriter[]): TrackWriter[] {
 export function DisplayArtistsEditor({
   value, onChange, hideTitle,
 }: { value: TrackDisplayArtist[]; onChange: (v: TrackDisplayArtist[]) => void; hideTitle?: boolean }) {
+  const { t } = useLang();
   const update = (i: number, patch: Partial<TrackDisplayArtist>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Display Artists"
+      title={t.releaseWizard.displayArtistsTitle}
       hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "primary" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="At least 1 — shown on DSPs under the track title."
+      empty={t.releaseWizard.displayArtistsEmpty}
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
             value={row.name}
             onChange={(name) => update(i, { name })}
-            placeholder="Select or type an artist"
+            placeholder={t.releaseWizard.selectOrTypeArtist}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
@@ -57,22 +59,23 @@ export function DisplayArtistsEditor({
 export function WritersEditor({
   value, onChange, hideTitle,
 }: { value: TrackWriter[]; onChange: (v: TrackWriter[]) => void; hideTitle?: boolean }) {
+  const { t } = useLang();
   const update = (i: number, patch: Partial<TrackWriter>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Writers"
+      title={t.releaseWizard.writersTitle}
       hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange(splitWriterSharesEvenly([...value, { name: "", role: "songwriter", share: 0, caeIpi: null }]))}
       onRemove={(i) => onChange(splitWriterSharesEvenly(value.filter((_, idx) => idx !== i)))}
-      empty="At least 1 writer."
+      empty={t.releaseWizard.writersEmpty}
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
             value={row.name}
             onChange={(name) => update(i, { name })}
-            placeholder="Select or type a writer"
+            placeholder={t.releaseWizard.selectOrTypeWriter}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
             <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
@@ -90,22 +93,23 @@ export function WritersEditor({
 export function PerformersEditor({
   value, onChange, hideTitle,
 }: { value: TrackPerformer[]; onChange: (v: TrackPerformer[]) => void; hideTitle?: boolean }) {
+  const { t } = useLang();
   const update = (i: number, patch: Partial<TrackPerformer>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Performers"
+      title={t.releaseWizard.performersTitle}
       hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "vocals" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Optional. Musicians, instruments, backing vocals."
+      empty={t.releaseWizard.performersEmpty}
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
             value={row.name}
             onChange={(name) => update(i, { name })}
-            placeholder="Select or type a performer"
+            placeholder={t.releaseWizard.selectOrTypePerformer}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[180px]"><SelectValue /></SelectTrigger>
@@ -123,22 +127,23 @@ export function PerformersEditor({
 export function ProductionEditor({
   value, onChange, hideTitle,
 }: { value: TrackProductionMember[]; onChange: (v: TrackProductionMember[]) => void; hideTitle?: boolean }) {
+  const { t } = useLang();
   const update = (i: number, patch: Partial<TrackProductionMember>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <Editor
-      title="Production"
+      title={t.releaseWizard.productionTitle}
       hideTitle={hideTitle}
       rows={value}
       onAdd={() => onChange([...value, { name: "", role: "producer" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
-      empty="Optional. Producer, sound engineer, mixing/mastering engineer."
+      empty={t.releaseWizard.productionEmpty}
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
             value={row.name}
             onChange={(name) => update(i, { name })}
-            placeholder="Select or type a name"
+            placeholder={t.releaseWizard.selectOrTypeName}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="bg-background/40 w-[200px]"><SelectValue /></SelectTrigger>
@@ -165,6 +170,7 @@ function Editor<T>({
   empty: string;
   hideTitle?: boolean;
 }) {
+  const { t } = useLang();
   return (
     <div className="space-y-2">
       {(!hideTitle || subtitle) && (
@@ -178,14 +184,14 @@ function Editor<T>({
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-2 bg-background/30 border border-border/40 rounded-md p-1.5">
             {renderRow(row, i)}
-            <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(i)} title="Remove">
+            <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(i)} title={t.releaseWizard.remove}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         ))}
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-        <Plus className="h-4 w-4 mr-1" /> Add Artist
+        <Plus className="h-4 w-4 mr-1" /> {t.releaseWizard.addEntry}
       </Button>
     </div>
   );

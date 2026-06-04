@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus, GripVertical } from "lucide-react";
 import { ARTIST_ROLES } from "./types";
+import { useLang } from "@/lib/i18n";
 
 /**
  * Multi-primary artist editor для уровня релиза. Используется на шаге 1.
@@ -16,6 +17,7 @@ export function MultiArtistPicker({
   /** Если задан (label-роль) — фильтруем артистов по labelId. */
   labelId?: number | null;
 }) {
+  const { t } = useLang();
   const { data: artistsData } = useListArtists({ limit: 200 });
   const allArtists = artistsData?.data ?? [];
   const visible = labelId != null ? allArtists.filter((a: any) => a.labelId === labelId) : allArtists;
@@ -45,7 +47,7 @@ export function MultiArtistPicker({
   return (
     <div className="space-y-2">
       {value.length === 0 && (
-        <div className="text-xs text-muted-foreground italic">Артисты пока не добавлены.</div>
+        <div className="text-xs text-muted-foreground italic">{t.releaseWizard.noArtistsAdded}</div>
       )}
       {value.map((row, idx) => (
         <div key={`${row.artistId}-${idx}`} className="flex items-center gap-2 bg-background/40 border border-border/50 rounded-md p-2">
@@ -79,7 +81,7 @@ export function MultiArtistPicker({
             type="button" variant="ghost" size="icon"
             disabled={value.length <= 1}
             onClick={() => removeRow(idx)}
-            title="Удалить"
+            title={t.releaseWizard.remove}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -90,7 +92,7 @@ export function MultiArtistPicker({
         onClick={addRow}
         disabled={visible.length === 0 || value.length >= visible.length}
       >
-        <Plus className="h-4 w-4 mr-1" /> Добавить артиста
+        <Plus className="h-4 w-4 mr-1" /> {t.releaseWizard.addArtist}
       </Button>
     </div>
   );

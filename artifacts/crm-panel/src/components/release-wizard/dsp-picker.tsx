@@ -6,16 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search, LayoutGrid, List, HelpCircle } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
+import { useLang } from "@/lib/i18n";
 
-// English category display names + display order — стиль Symphonic «Partner Selection».
-// Источник категорий — серверный dsp_catalog (поле category).
-const CATEGORY_DISPLAY: Record<string, string> = {
-  streaming: "Streaming & Download",
-  download:  "Download Stores",
-  social:    "UGC / Rights Management",
-  video:     "Video",
-  regional:  "Regional",
-};
 const CATEGORY_ORDER = ["streaming", "download", "social", "video", "regional"];
 
 /** Partner Selection — выбор DSP-площадок (Symphonic-style). */
@@ -27,6 +19,7 @@ export function DspPickerDialog({
   value: string[];
   onChange: (codes: string[]) => void;
 }) {
+  const { t } = useLang();
   const { data: catalog = [] } = useListDspCatalog();
   const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
@@ -103,18 +96,18 @@ export function DspPickerDialog({
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="text-lg">Partner Selection</DialogTitle>
+            <DialogTitle className="text-lg">{t.releaseWizard.partnerSelection}</DialogTitle>
             <div className="flex items-center gap-0.5 rounded-md border border-border/50 p-0.5">
               <button
                 type="button" onClick={() => setView("list")}
-                title="List view"
+                title={t.releaseWizard.listView}
                 className={`p-1.5 rounded transition ${view === "list" ? "bg-accent" : "hover:bg-accent/50"}`}
               >
                 <List className="h-4 w-4" />
               </button>
               <button
                 type="button" onClick={() => setView("grid")}
-                title="Grid view"
+                title={t.releaseWizard.gridView}
                 className={`p-1.5 rounded transition ${view === "grid" ? "bg-accent" : "hover:bg-accent/50"}`}
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -128,9 +121,9 @@ export function DspPickerDialog({
           >
             <Checkbox checked={allSelected} className="pointer-events-none" />
             {allSelected ? (
-              <span><span className="font-semibold text-primary">All</span> partners selected</span>
+              <span><span className="font-semibold text-primary">{t.releaseWizard.allLabel}</span> {t.releaseWizard.partnersSelectedLabel}</span>
             ) : (
-              <span><span className="font-semibold text-primary">{selectedCount}</span> partners selected</span>
+              <span><span className="font-semibold text-primary">{selectedCount}</span> {t.releaseWizard.partnersSelectedLabel}</span>
             )}
           </button>
         </DialogHeader>
@@ -140,7 +133,7 @@ export function DspPickerDialog({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search partners..." className="pl-9 bg-background/40"
+              placeholder={t.releaseWizard.searchPartners} className="pl-9 bg-background/40"
               value={query} onChange={(e) => setQuery(e.target.value)}
             />
           </div>
@@ -152,7 +145,7 @@ export function DspPickerDialog({
           {unavailable.length > 0 && (
             <div>
               <h4 className="text-sm font-semibold mb-2.5">
-                Unavailable <span className="text-muted-foreground font-normal">{unavailable.length}</span>
+                {t.releaseWizard.unavailable} <span className="text-muted-foreground font-normal">{unavailable.length}</span>
               </h4>
               <div className={gridCls}>
                 {unavailable.map((d) => (
@@ -168,10 +161,10 @@ export function DspPickerDialog({
             const allOn = codes.length > 0 && codes.every((c) => draft.includes(c));
             return (
               <div key={cat}>
-                <h4 className="text-sm font-semibold mb-2">{CATEGORY_DISPLAY[cat] ?? cat}</h4>
+                <h4 className="text-sm font-semibold mb-2">{t.releaseWizard.dspCategories[cat as keyof typeof t.releaseWizard.dspCategories] ?? cat}</h4>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2.5 cursor-pointer w-fit">
                   <Checkbox checked={allOn} onCheckedChange={() => toggleAll(codes)} />
-                  Select All Partners
+                  {t.releaseWizard.selectAllPartners}
                 </label>
                 <div className={gridCls}>
                   {items.map((d) => (
@@ -183,14 +176,14 @@ export function DspPickerDialog({
           })}
 
           {grouped.length === 0 && unavailable.length === 0 && (
-            <div className="text-center text-sm text-muted-foreground py-8">No partners found.</div>
+            <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
           )}
         </div>
 
         {/* Footer */}
         <DialogFooter className="px-6 py-4 border-t border-border/40">
-          <Button variant="outline" onClick={cancel}>Cancel</Button>
-          <Button onClick={apply}>Save</Button>
+          <Button variant="outline" onClick={cancel}>{t.createRelease.cancel}</Button>
+          <Button onClick={apply}>{t.createRelease.save}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -205,12 +198,13 @@ function DspRow({
   disabled?: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useLang();
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onToggle}
       disabled={disabled}
-      title={disabled ? "This partner is not yet connected for delivery. Contact your administrator to enable it." : undefined}
+      title={disabled ? t.releaseWizard.partnerNotConnected : undefined}
       className={`flex items-center gap-2.5 p-2.5 rounded-md border text-left transition w-full
         ${disabled
           ? "bg-muted/20 border-border/30 opacity-60 cursor-not-allowed"
