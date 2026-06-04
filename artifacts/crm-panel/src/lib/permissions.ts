@@ -23,6 +23,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/releases/bulk":     ["admin", "manager"],
   "/releases/transfer": ["admin", "manager", "label", "artist"],
   "/releases/transfer/new": ["admin", "manager", "label", "artist"],
+  "/releases/:id/availability": ["admin", "manager", "label", "artist"],
   "/releases/calendar":  ["admin", "manager", "label"],
   "/releases/takedown":  ["admin", "manager", "label", "artist"],
   "/artists":        ["admin", "manager", "label", "artist"],

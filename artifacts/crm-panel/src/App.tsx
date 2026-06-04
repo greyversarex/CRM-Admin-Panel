@@ -21,6 +21,7 @@ import EditRelease from "@/pages/releases/edit";
 import TrackEditPage from "@/pages/releases/tracks/edit";
 import AudioUploadPage from "@/pages/releases/tracks/audio-upload";
 import BulkUploadReleases from "@/pages/releases/bulk";
+import ReleaseAvailability from "@/pages/releases/availability";
 import TransferTrack from "@/pages/releases/transfer";
 import NewImport from "@/pages/releases/transfer/new";
 import Artists from "@/pages/artists";
@@ -118,6 +119,7 @@ function Router() {
       <ProtectedRoute path="/releases/bulk"             component={BulkUploadReleases} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
+      <ProtectedRoute path="/releases/:id/availability"     component={ReleaseAvailability} />
       <ProtectedRoute path="/releases/:id/edit"              component={EditRelease} />
       <ProtectedRoute path="/releases/:id/tracks/:tid/audio-upload" component={AudioUploadPage} />
       <ProtectedRoute path="/releases/:id/tracks/:tid/edit"  component={TrackEditPage} />
