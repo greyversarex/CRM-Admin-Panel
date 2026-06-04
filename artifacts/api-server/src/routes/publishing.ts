@@ -29,6 +29,30 @@ function validateWriters(writers: { name: string; share: number; caeIpi?: string
   return null;
 }
 
+// Проверяет, доступно ли произведение пользователю с ограниченным доступом.
+// Произведение привязано к scope через track→release.labelId ИЛИ track.artistId
+// в ростере лейбла (та же логика, что и в списке выше). Admin/manager видят всё.
+// Fail-closed: если track не задан или scope не label — доступа нет.
+async function trackInScope(
+  scope: ReturnType<typeof getDataScope>,
+  trackId: number | null,
+): Promise<boolean> {
+  if (scope.fullAccess) return true;
+  if (scope.role !== "label" || scope.labelId == null) return false;
+  if (trackId == null) return false;
+  const [row] = await db
+    .select({
+      releaseLabelId: releasesTable.labelId,
+      artistLabelId: artistsTable.labelId,
+    })
+    .from(tracksTable)
+    .leftJoin(releasesTable, eq(releasesTable.id, tracksTable.releaseId))
+    .leftJoin(artistsTable, eq(artistsTable.id, tracksTable.artistId))
+    .where(eq(tracksTable.id, trackId));
+  if (!row) return false;
+  return row.releaseLabelId === scope.labelId || row.artistLabelId === scope.labelId;
+}
+
 function formatWork(w: typeof publishingWorksTable.$inferSelect) {
   return {
     ...w,
@@ -146,6 +170,16 @@ router.post("/publishing/works", async (req, res): Promise<void> => {
     return;
   }
 
+  // Scope: лейбл может создавать произведения только для своих треков.
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    const allowed = await trackInScope(scope, parsed.data.trackId ?? null);
+    if (!allowed) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+  }
+
   const [work] = await db.insert(publishingWorksTable).values({
     ...parsed.data,
     writers: parsed.data.writers as any,
@@ -162,6 +196,13 @@ router.get("/publishing/works/:id", async (req, res): Promise<void> => {
 
   const [work] = await db.select().from(publishingWorksTable).where(eq(publishingWorksTable.id, params.data.id));
   if (!work) {
+    res.status(404).json({ error: "Publishing work not found" });
+    return;
+  }
+
+  // Scope: не раскрываем существование чужих произведений — отдаём 404.
+  const scope = getDataScope(req);
+  if (!(await trackInScope(scope, work.trackId))) {
     res.status(404).json({ error: "Publishing work not found" });
     return;
   }
@@ -185,6 +226,26 @@ router.put("/publishing/works/:id", async (req, res): Promise<void> => {
   if (writersError) {
     res.status(400).json({ error: writersError });
     return;
+  }
+
+  // Scope: проверяем доступ к существующему произведению до обновления, чтобы
+  // лейбл не мог редактировать чужое. Также не даём «увести» произведение на
+  // чужой трек, подменив trackId.
+  const [existing] = await db.select().from(publishingWorksTable).where(eq(publishingWorksTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Publishing work not found" });
+    return;
+  }
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    if (!(await trackInScope(scope, existing.trackId))) {
+      res.status(404).json({ error: "Publishing work not found" });
+      return;
+    }
+    if (parsed.data.trackId !== undefined && !(await trackInScope(scope, parsed.data.trackId ?? null))) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
   }
 
   const [work] = await db.update(publishingWorksTable)

@@ -164,6 +164,136 @@ export async function lookupIsrc(isrc: string): Promise<MbIsrcLookupResult> {
  * имеет в названии или артисте подстроку, совпадающую с нашими (case-insensitive).
  * Если ни одна запись не совпала — считаем конфликтом.
  */
+/**
+ * Один трек релиза, как его отдаёт MusicBrainz (упрощённый).
+ */
+export type MbReleaseTrack = {
+  title: string;
+  trackNumber: number;
+  isrc: string | null;
+};
+
+/**
+ * Полные метаданные релиза, найденного по штрихкоду (UPC/EAN/barcode).
+ */
+export type MbReleaseByBarcode = {
+  mbid: string;
+  title: string;
+  artistName: string;
+  label: string | null;
+  releaseDate: string | null;
+  tracks: MbReleaseTrack[];
+};
+
+export type MbBarcodeLookupResult =
+  | { kind: "found"; barcode: string; release: MbReleaseByBarcode }
+  | { kind: "not_found"; barcode: string }
+  | { kind: "error"; barcode: string; message: string };
+
+/**
+ * Ищет релиз в MusicBrainz по штрихкоду (UPC/EAN). Возвращает первый
+ * совпавший релиз вместе со списком треков (с ISRC, если они известны).
+ *
+ * Делает 2 запроса:
+ *   1) GET /release?query=barcode:<upc> — находим release MBID.
+ *   2) GET /release/<mbid>?inc=recordings+artist-credits+labels+isrcs —
+ *      забираем треклист, артиста и лейбл.
+ */
+export async function lookupReleaseByBarcode(barcode: string): Promise<MbBarcodeLookupResult> {
+  const normalized = barcode.replace(/[-\s]/g, "");
+  if (!/^\d{8,14}$/.test(normalized)) {
+    return { kind: "error", barcode, message: "invalid_barcode_format" };
+  }
+
+  // Шаг 1: поиск релиза по штрихкоду
+  const searchUrl = `${MB_BASE_URL}/release?query=barcode:${normalized}&fmt=json&limit=5`;
+  let searchResp: Response;
+  try {
+    searchResp = await rateLimitedFetch(searchUrl);
+  } catch (e) {
+    return { kind: "error", barcode: normalized, message: `network: ${(e as Error).message}` };
+  }
+  if (!searchResp.ok) {
+    const body = await searchResp.text().catch(() => "");
+    return { kind: "error", barcode: normalized, message: `MusicBrainz HTTP ${searchResp.status}: ${body.slice(0, 200)}` };
+  }
+  let searchJson: { releases?: Array<{ id?: string; score?: number }> };
+  try {
+    searchJson = (await searchResp.json()) as typeof searchJson;
+  } catch (e) {
+    return { kind: "error", barcode: normalized, message: `bad_json: ${(e as Error).message}` };
+  }
+  const candidates = (searchJson.releases ?? []).filter((r) => r.id);
+  if (candidates.length === 0) {
+    return { kind: "not_found", barcode: normalized };
+  }
+  const mbid = candidates[0].id!;
+
+  // Шаг 2: полные метаданные релиза с треклистом
+  const detailUrl = `${MB_BASE_URL}/release/${mbid}?inc=recordings+artist-credits+labels+isrcs&fmt=json`;
+  let detailResp: Response;
+  try {
+    detailResp = await rateLimitedFetch(detailUrl);
+  } catch (e) {
+    return { kind: "error", barcode: normalized, message: `network: ${(e as Error).message}` };
+  }
+  if (!detailResp.ok) {
+    const body = await detailResp.text().catch(() => "");
+    return { kind: "error", barcode: normalized, message: `MusicBrainz HTTP ${detailResp.status}: ${body.slice(0, 200)}` };
+  }
+
+  let detail: {
+    id?: string;
+    title?: string;
+    date?: string;
+    "artist-credit"?: Array<{ name?: string; artist?: { name?: string } }>;
+    "label-info"?: Array<{ label?: { name?: string } }>;
+    media?: Array<{
+      tracks?: Array<{
+        title?: string;
+        position?: number;
+        number?: string;
+        recording?: { title?: string; isrcs?: string[] };
+      }>;
+    }>;
+  };
+  try {
+    detail = (await detailResp.json()) as typeof detail;
+  } catch (e) {
+    return { kind: "error", barcode: normalized, message: `bad_json: ${(e as Error).message}` };
+  }
+
+  const artistName = (detail["artist-credit"] ?? [])
+    .map((c) => c.name ?? c.artist?.name ?? "")
+    .filter(Boolean)
+    .join(", ") || "Unknown artist";
+  const label = detail["label-info"]?.[0]?.label?.name ?? null;
+
+  const tracks: MbReleaseTrack[] = [];
+  let pos = 0;
+  for (const medium of detail.media ?? []) {
+    for (const tr of medium.tracks ?? []) {
+      pos += 1;
+      const title = tr.title || tr.recording?.title || `Track ${pos}`;
+      const isrc = tr.recording?.isrcs?.[0] ?? null;
+      tracks.push({ title, trackNumber: tr.position ?? pos, isrc });
+    }
+  }
+
+  return {
+    kind: "found",
+    barcode: normalized,
+    release: {
+      mbid: detail.id ?? mbid,
+      title: detail.title ?? "Untitled",
+      artistName,
+      label,
+      releaseDate: detail.date ?? null,
+      tracks,
+    },
+  };
+}
+
 export function detectIsrcConflict(
   ourTitle: string,
   ourArtist: string,

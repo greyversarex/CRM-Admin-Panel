@@ -10,12 +10,14 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import {
   useCreateTransferImport,
+  useImportReleaseByUpc,
   spotifySearchReleases,
   useListLabels,
   getListTransferImportsQueryKey,
 } from "@workspace/api-client-react";
 import type { SpotifySearchResult } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
@@ -24,7 +26,10 @@ export default function NewImport() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const createImport = useCreateTransferImport();
+  const importByUpc = useImportReleaseByUpc();
   const { data: labels } = useListLabels({ limit: 100 });
+  const { user } = useAuth();
+  const canImportUpc = user?.role === "admin" || user?.role === "manager";
   const { t } = useLang();
   const tt = t.transfer;
 
@@ -37,11 +42,49 @@ export default function NewImport() {
   const labelName = labelId !== "none" ? labels?.data.find((l) => String(l.id) === labelId)?.name ?? null : null;
   const labelMismatch = !!labelName && result && result.releases.some((r) => r.label && r.label !== labelName);
 
+  // Чистый UPC/EAN — это 8–14 цифр (можно с дефисами/пробелами). По нему
+  // импортируем один релиз напрямую, без поиска исполнителя в Spotify.
+  // Доступно только admin/manager — для остальных ролей вход в каталог по UPC
+  // закрыт (см. серверный requireRole), поэтому численный ввод трактуем как
+  // обычный поисковый запрос.
+  const trimmedInput = link.trim();
+  const compactInput = trimmedInput.replace(/[-\s]/g, "");
+  const isUpcInput = canImportUpc && /^\d{8,14}$/.test(compactInput);
+
+  const handleImportUpc = async () => {
+    try {
+      const created = await importByUpc.mutateAsync({ data: { upc: compactInput, source: "spotify" } });
+      queryClient.invalidateQueries({ queryKey: getListTransferImportsQueryKey() });
+      toast({
+        title: tt.toast_upc_imported,
+        description: tt.toast_upc_imported_desc.replace("{title}", created.title),
+      });
+      setLocation(`/releases/${created.id}`);
+    } catch (e: any) {
+      const code = String(e?.response?.data?.error ?? "");
+      const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_import_failed_desc;
+      if (code === "already_exists") {
+        toast({ title: tt.toast_upc_exists, description: tt.toast_upc_exists_desc, variant: "destructive" });
+      } else if (code === "not_found") {
+        toast({ title: tt.toast_upc_not_found, description: tt.toast_upc_not_found_desc, variant: "destructive" });
+      } else if (code === "spotify_not_configured") {
+        toast({ title: tt.toast_import_failed, description: tt.spotify_not_configured, variant: "destructive" });
+      } else {
+        toast({ title: tt.toast_import_failed, description: msg, variant: "destructive" });
+      }
+    }
+  };
+
   const handleSearch = async () => {
-    if (!link.trim()) return;
+    if (!trimmedInput) return;
+    // Если ввели UPC — импортируем релиз напрямую.
+    if (isUpcInput) {
+      await handleImportUpc();
+      return;
+    }
     setSearching(true);
     try {
-      const r = await spotifySearchReleases({ query: link.trim() });
+      const r = await spotifySearchReleases({ query: trimmedInput });
       setResult(r);
       setSelected(new Set(r.releases.slice(0, 2).map((rel) => rel.upc)));
     } catch (e: any) {
@@ -135,8 +178,8 @@ export default function NewImport() {
                 className="bg-background/40 font-mono text-xs"
                 data-testid="input-spotify-link"
               />
-              <Button onClick={handleSearch} disabled={!link.trim() || searching} variant="outline" className="bg-background/40" data-testid="button-search">
-                {searching ? tt.searching : tt.find_artist}
+              <Button onClick={handleSearch} disabled={!trimmedInput || searching || importByUpc.isPending} variant="outline" className="bg-background/40" data-testid="button-search">
+                {importByUpc.isPending ? tt.importing_upc : searching ? tt.searching : isUpcInput ? tt.import_upc_btn : tt.find_artist}
               </Button>
             </div>
           </CardContent>

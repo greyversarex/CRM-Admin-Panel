@@ -14,6 +14,7 @@ import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/not
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { assessAndPersist, LABEL_STRIKE_BLOCK_THRESHOLD } from "../services/risk-engine";
+import { lookupReleaseByBarcode } from "../services/musicbrainz";
 
 const router = Router();
 
@@ -1093,19 +1094,209 @@ router.post("/releases/:id/deliver", requireRole("admin", "manager"), async (req
   });
 });
 
-// Импорт релиза по UPC из внешних DSP-каталогов.
-// Сейчас функциональность не реализована: для честного импорта нужен подключённый
-// API одного из источников (Spotify catalog API, Apple Music API, MusicBrainz).
-// Пока возвращаем 501 чтобы НЕ создавать в БД фантомных «Imported Release (UPC: …)»
-// записей. Импорт каталога из Spotify через OAuth-аккаунт реализован отдельно
-// в /api/transfer-imports (см. routes/transfer-imports.ts).
-router.post("/releases/import-upc", requireRole("admin", "manager"), async (_req, res): Promise<void> => {
-  res.status(501).json({
-    error: "not_implemented",
-    message:
-      "Импорт по UPC ещё не подключён. Чтобы импортировать каталог, используйте раздел " +
-      "«Перенос каталога» (Transfer) — он уже работает через подключённый Spotify API.",
+// Нормализованные метаданные одного релиза, извлечённые из внешнего источника
+// (Spotify или MusicBrainz). Источники имеют разный формат — приводим к одному.
+interface ImportedReleaseData {
+  upc: string;
+  title: string;
+  artist: string;
+  label: string | null;
+  coverUrl: string | null;
+  releaseDate: string | null;
+  tracks: { title: string; trackNumber: number; isrc: string | null }[];
+  source: "spotify" | "musicbrainz";
+}
+
+// Поиск релиза в Spotify по UPC: search?q=upc:<upc>&type=album → /albums/<id>.
+// Возвращает null, если по UPC ничего не найдено (тогда пробуем другой источник).
+async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise<ImportedReleaseData | null> {
+  const sr = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(`upc:${upc}`)}&type=album&limit=1`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (!sr.ok) throw new SpotifyUpstreamError(`search ${sr.status}`);
+  const sj = await sr.json() as { albums?: { items: { id: string }[] } };
+  const albumId = sj.albums?.items?.[0]?.id;
+  if (!albumId) return null;
+
+  const ar = await fetch(`https://api.spotify.com/v1/albums/${albumId}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!ar.ok) throw new SpotifyUpstreamError(`album ${ar.status}`);
+  const aj = await ar.json() as {
+    name: string;
+    label?: string;
+    release_date?: string;
+    external_ids?: { upc?: string };
+    images?: { url: string }[];
+    artists?: { name: string }[];
+    tracks?: { items?: { name: string; track_number: number; external_ids?: { isrc?: string } }[] };
+  };
+
+  const tracks = (aj.tracks?.items ?? []).map((tr, idx) => ({
+    title: tr.name,
+    trackNumber: tr.track_number ?? idx + 1,
+    isrc: tr.external_ids?.isrc ?? null,
+  }));
+
+  return {
+    upc: aj.external_ids?.upc ?? upc,
+    title: aj.name,
+    artist: aj.artists?.[0]?.name ?? "Unknown artist",
+    label: aj.label ?? null,
+    coverUrl: aj.images?.[0]?.url ?? null,
+    releaseDate: aj.release_date ?? null,
+    tracks: tracks.length > 0 ? tracks : [{ title: aj.name, trackNumber: 1, isrc: null }],
+    source: "spotify",
+  };
+}
+
+// Поиск релиза в MusicBrainz по штрихкоду (публичный API, без авторизации).
+async function fetchReleaseFromMusicBrainzByUpc(upc: string): Promise<ImportedReleaseData | null> {
+  const result = await lookupReleaseByBarcode(upc);
+  if (result.kind === "error") throw new Error(result.message);
+  if (result.kind === "not_found") return null;
+  const r = result.release;
+  return {
+    upc,
+    title: r.title,
+    artist: r.artistName,
+    label: r.label,
+    coverUrl: null,
+    releaseDate: r.releaseDate,
+    tracks: r.tracks.length > 0
+      ? r.tracks.map((t) => ({ title: t.title, trackNumber: t.trackNumber, isrc: t.isrc }))
+      : [{ title: r.title, trackNumber: 1, isrc: null }],
+    source: "musicbrainz",
+  };
+}
+
+// Импорт релиза по UPC из внешних каталогов (Spotify / MusicBrainz). Создаёт
+// в БД реальные записи artist/label/release/tracks в одной транзакции. Источник
+// "apple" не поддерживается (требует Apple Music API partner-токена) и
+// прозрачно деградирует на MusicBrainz.
+router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const upcRaw = typeof req.body?.upc === "string" ? req.body.upc.trim() : "";
+  const sourceRaw = typeof req.body?.source === "string" ? req.body.source : undefined;
+  const upc = upcRaw.replace(/[-\s]/g, "");
+  if (!/^\d{8,14}$/.test(upc)) {
+    res.status(400).json({ error: "invalid_upc", message: "Укажите корректный UPC/EAN (8–14 цифр)." });
+    return;
+  }
+  const source: "spotify" | "apple" | "musicbrainz" =
+    sourceRaw === "apple" || sourceRaw === "musicbrainz" ? sourceRaw : "spotify";
+
+  // Idempotency: не создаём дубль, если релиз с таким UPC уже есть.
+  const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
+    .from(releasesTable).where(eq(releasesTable.upc, upc)).limit(1);
+  if (existing) {
+    res.status(409).json({ error: "already_exists", message: `Релиз с UPC ${upc} уже существует в каталоге.`, releaseId: existing.id });
+    return;
+  }
+
+  // Извлекаем метаданные из выбранного источника. "apple" не поддерживается
+  // напрямую — используем MusicBrainz как открытую альтернативу.
+  let data: ImportedReleaseData | null = null;
+  try {
+    if (source === "spotify") {
+      const cfg = await loadSpotifyConfig();
+      let token: string;
+      try {
+        token = await getSpotifyToken(cfg);
+      } catch (e: any) {
+        if (e instanceof SpotifyNotConfiguredError) {
+          // Spotify не настроен — пробуем MusicBrainz, не требующий ключей.
+          data = await fetchReleaseFromMusicBrainzByUpc(upc);
+        } else {
+          throw e;
+        }
+        token = "";
+      }
+      if (token) {
+        data = await fetchReleaseFromSpotifyByUpc(token, upc);
+        // Если в Spotify не нашлось — добираем из MusicBrainz.
+        if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
+      }
+    } else {
+      // musicbrainz / apple → MusicBrainz
+      data = await fetchReleaseFromMusicBrainzByUpc(upc);
+    }
+  } catch (e: any) {
+    if (e instanceof SpotifyUpstreamError) {
+      res.status(502).json({ error: "spotify_upstream_error", message: `Spotify недоступен или отклонил запрос: ${e.message}` });
+      return;
+    }
+    res.status(502).json({ error: "lookup_failed", message: `Не удалось получить данные по UPC: ${e?.message ?? "unknown"}` });
+    return;
+  }
+
+  if (!data) {
+    res.status(404).json({ error: "not_found", message: `Релиз с UPC ${upc} не найден ни в одном из доступных каталогов.` });
+    return;
+  }
+
+  // Создаём artist / label / release / tracks в одной транзакции.
+  type PendingAudit = Parameters<typeof auditMutation>[1];
+  const pendingAudits: PendingAudit[] = [];
+  const found = data;
+  let createdRelease: typeof releasesTable.$inferSelect;
+  try {
+    createdRelease = await db.transaction(async (tx) => {
+      const labelId = found.label?.trim()
+        ? await findOrCreateLabel(tx, found.label).then((r) => {
+            if (r.created && r.row) pendingAudits.push({ action: "create", entityType: "label", entityId: r.id, before: null, after: r.row });
+            return r.id;
+          })
+        : null;
+
+      const artist = await findOrCreateArtist(tx, found.artist, labelId);
+      if (artist.created && artist.row) pendingAudits.push({ action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist.row });
+
+      const releaseType = found.tracks.length > 1 ? "album" : "single";
+      const [release] = await tx.insert(releasesTable).values({
+        title: found.title,
+        releaseType,
+        status: "draft",
+        upc: found.upc || upc,
+        artistId: artist.id,
+        labelId,
+        coverUrl: found.coverUrl,
+        releaseDate: found.releaseDate,
+        statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : "MusicBrainz"}`,
+      }).returning();
+      pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
+
+      const trackRows = found.tracks.slice(0, 100).map((t, idx) => ({
+        title: t.title,
+        releaseId: release.id,
+        artistId: artist.id,
+        trackNumber: t.trackNumber ?? idx + 1,
+        isrc: t.isrc,
+      }));
+      const inserted = await tx.insert(tracksTable).values(trackRows).returning({ id: tracksTable.id });
+      for (const tr of inserted) {
+        pendingAudits.push({ action: "create", entityType: "track", entityId: tr.id, before: null, after: { releaseId: release.id } });
+      }
+
+      // Авто-нумерация каталога, как в обычном POST /releases.
+      if (!release.catalogNumber || !release.catalogNumber.trim()) {
+        const [updated] = await tx.update(releasesTable)
+          .set({ catalogNumber: `CAT${release.id}` })
+          .where(eq(releasesTable.id, release.id))
+          .returning();
+        if (updated) return updated;
+      }
+      return release;
+    });
+  } catch (e: any) {
+    if (isUniqueViolation(e)) {
+      res.status(409).json({ error: "already_exists", message: `Релиз с UPC ${upc} уже существует в каталоге.` });
+      return;
+    }
+    res.status(500).json({ error: "import_failed", message: e?.message ?? "Не удалось сохранить релиз." });
+    return;
+  }
+
+  for (const a of pendingAudits) void auditMutation(req, a);
+
+  res.status(201).json(createdRelease);
 });
 
 export default router;
