@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, splitsTable, releasesTable, tracksTable } from "@workspace/db";
 import { count, eq, desc, and, sql, inArray } from "drizzle-orm";
 import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, DeleteSplitParams } from "@workspace/api-zod";
-import { requireAuth, requireRole, getDataScope } from "../lib/auth";
+import { requireAuth, getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { notifyAdmins } from "../services/notifications";
 
@@ -29,6 +29,52 @@ async function enrichSplit(s: typeof splitsTable.$inferSelect) {
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Может ли текущий scope изменять сплиты указанного релиза?
+ * - admin/manager (fullAccess) → да, для любого релиза.
+ * - артист → только для своих релизов (release.artistId === scope.artistId).
+ * - лейбл → только для своих релизов (release.labelId === scope.labelId).
+ */
+async function canMutateReleaseSplits(
+  scope: ReturnType<typeof getDataScope>,
+  releaseId: number | null | undefined,
+): Promise<boolean> {
+  if (scope.fullAccess) return true;
+  if (!releaseId) return false;
+  const [release] = await db
+    .select({ artistId: releasesTable.artistId, labelId: releasesTable.labelId })
+    .from(releasesTable)
+    .where(eq(releasesTable.id, releaseId));
+  if (!release) return false;
+  if (scope.artistId && release.artistId === scope.artistId) return true;
+  if (scope.labelId && release.labelId === scope.labelId) return true;
+  return false;
+}
+
+/**
+ * Определяет «эффективный» релиз сплита и проверяет целостность связи трек↔релиз.
+ * Сплит может ссылаться на releaseId и/или trackId. Если задан trackId, релиз
+ * берётся из самого трека (источник истины) и, если releaseId тоже задан, должен
+ * совпадать — иначе это попытка привязать чужой трек к своему релизу.
+ */
+async function resolveSplitTargetRelease(
+  releaseId: number | null | undefined,
+  trackId: number | null | undefined,
+): Promise<{ ok: true; releaseId: number | null } | { ok: false; status: number; error: string }> {
+  if (trackId) {
+    const [track] = await db
+      .select({ releaseId: tracksTable.releaseId })
+      .from(tracksTable)
+      .where(eq(tracksTable.id, trackId));
+    if (!track) return { ok: false, status: 404, error: "Track not found" };
+    if (releaseId && track.releaseId !== releaseId) {
+      return { ok: false, status: 400, error: "Track does not belong to the given release" };
+    }
+    return { ok: true, releaseId: track.releaseId ?? releaseId ?? null };
+  }
+  return { ok: true, releaseId: releaseId ?? null };
 }
 
 /** Resolve release IDs visible to the current scope (artist/label). */
@@ -96,11 +142,22 @@ router.get("/splits", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
-// POST /splits — admin/manager only
-router.post("/splits", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+// POST /splits — admin/manager (любой релиз) или владелец релиза (артист/лейбл)
+router.post("/splits", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateSplitBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const scope = getDataScope(req);
+  const target = await resolveSplitTargetRelease(parsed.data.releaseId, parsed.data.trackId);
+  if (!target.ok) {
+    res.status(target.status).json({ error: target.error });
+    return;
+  }
+  if (!(await canMutateReleaseSplits(scope, target.releaseId))) {
+    res.status(403).json({ error: "Forbidden: можно назначать сплиты только на своих релизах" });
     return;
   }
 
@@ -133,27 +190,21 @@ router.get("/splits/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Scope check for non-admin/manager
+  // Scope check for non-admin/manager: можно смотреть только сплиты своих релизов.
+  // Используем ту же проверку владения, что и для мутаций — она отклоняет сплиты без
+  // релиза, чужие релизы и роли без привязки (artistId/labelId == null).
   const scope = getDataScope(req);
-  if (!scope.fullAccess && split.releaseId) {
-    const [release] = await db.select({ artistId: releasesTable.artistId, labelId: releasesTable.labelId })
-      .from(releasesTable).where(eq(releasesTable.id, split.releaseId));
-    if (release) {
-      const artistOk = !scope.artistId || release.artistId === scope.artistId;
-      const labelOk = !scope.labelId || release.labelId === scope.labelId;
-      if (!artistOk || !labelOk) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
-    }
+  if (!scope.fullAccess && !(await canMutateReleaseSplits(scope, split.releaseId))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
   }
 
   const enriched = await enrichSplit(split);
   res.json(enriched);
 });
 
-// PUT /splits/:id — admin/manager only
-router.put("/splits/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+// PUT /splits/:id — admin/manager (любой) или владелец релиза (артист/лейбл)
+router.put("/splits/:id", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateSplitParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -175,6 +226,27 @@ router.put("/splits/:id", requireRole("admin", "manager"), async (req, res): Pro
   const [existing] = await db.select().from(splitsTable).where(eq(splitsTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Split not found" }); return; }
 
+  const scope = getDataScope(req);
+  // 1) Пользователь должен владеть текущим релизом сплита.
+  if (!(await canMutateReleaseSplits(scope, existing.releaseId))) {
+    res.status(403).json({ error: "Forbidden: можно изменять сплиты только на своих релизах" });
+    return;
+  }
+  // 2) И не имеет права «переносить» сплит на чужой релиз/трек: проверяем целостность
+  //    связи трек↔релиз и владение эффективным (новым) релизом.
+  const target = await resolveSplitTargetRelease(
+    parsed.data.releaseId ?? existing.releaseId,
+    parsed.data.trackId ?? existing.trackId,
+  );
+  if (!target.ok) {
+    res.status(target.status).json({ error: target.error });
+    return;
+  }
+  if (!(await canMutateReleaseSplits(scope, target.releaseId))) {
+    res.status(403).json({ error: "Forbidden: нельзя переносить сплит на чужой релиз" });
+    return;
+  }
+
   const [split] = await db.update(splitsTable)
     .set({ ...parsed.data, participants: parsed.data.participants as any })
     .where(eq(splitsTable.id, params.data.id))
@@ -189,11 +261,23 @@ router.put("/splits/:id", requireRole("admin", "manager"), async (req, res): Pro
   res.json(enriched);
 });
 
-// DELETE /splits/:id — admin/manager only
-router.delete("/splits/:id", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+// DELETE /splits/:id — admin/manager (любой) или владелец релиза (артист/лейбл)
+router.delete("/splits/:id", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteSplitParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [existing] = await db.select().from(splitsTable).where(eq(splitsTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Split not found" });
+    return;
+  }
+
+  const scope = getDataScope(req);
+  if (!(await canMutateReleaseSplits(scope, existing.releaseId))) {
+    res.status(403).json({ error: "Forbidden: можно удалять сплиты только на своих релизах" });
     return;
   }
 

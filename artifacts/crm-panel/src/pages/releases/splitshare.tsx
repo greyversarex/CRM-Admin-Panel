@@ -244,7 +244,13 @@ function AssignSplitDialog({
 function SplitShareEditor({ release }: { release: ReleaseDetail }) {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const canAssign = user?.role === "admin" || user?.role === "manager";
+  // Назначать сплиты могут admin/manager (любой релиз) либо владелец релиза:
+  // лейбл — для своих релизов, артист — для своих.
+  const canAssign =
+    user?.role === "admin" ||
+    user?.role === "manager" ||
+    (user?.role === "label" && user?.labelId != null && release.labelId === user.labelId) ||
+    (user?.role === "artist" && user?.artistId != null && release.artistId === user.artistId);
 
   const { data: splits } = useListSplits({ release_id: release.id, limit: 200 });
   const byTrack = useMemo(() => {
