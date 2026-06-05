@@ -1381,6 +1381,7 @@ export const DeliveryTarget = {
   boomplay: "boomplay",
   ok_music: "ok_music",
   ddex_main: "ddex_main",
+  acrcloud_ddex: "acrcloud_ddex",
 } as const;
 
 export interface Delivery {

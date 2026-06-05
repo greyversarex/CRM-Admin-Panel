@@ -36,7 +36,7 @@ export type TransportContext = {
 };
 
 export interface ITransport {
-  readonly name: "local-fs" | "sftp" | "https";
+  readonly name: "local-fs" | "sftp" | "https" | "s3";
   /**
    * Тестовое подключение (для UI «Проверить»).
    * @returns ok=true если транспорт доступен.

@@ -45,6 +45,7 @@ export const INTEGRATION_CATALOG: Array<{
 
   // ── DDEX delivery ──
   { code: "ddex_main",  name: "DDEX SFTP (универсальный)",     category: "delivery", authType: "sftp" },
+  { code: "acrcloud_ddex", name: "ACRCloud (DDEX доставка в S3)", category: "delivery", authType: "api_key" },
   { code: "ddex_party", name: "DDEX Party ID",                 category: "delivery", authType: "none" },
 
   // ── Analytics ──

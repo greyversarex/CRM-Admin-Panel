@@ -74,6 +74,7 @@ const DELIVER_TARGETS: Array<{ code: DeliveryTarget; label: string }> = [
   { code: "tidal",         label: "Tidal" },
   { code: "boomplay",      label: "Boomplay" },
   { code: "ok_music",      label: "OK Music" },
+  { code: "acrcloud_ddex", label: "ACRCloud (защита прав)" },
 ];
 
 // Управление видимостью кнопок теперь полностью основано на флагах, которые

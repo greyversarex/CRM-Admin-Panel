@@ -1,0 +1,36 @@
+/**
+ * Универсальный DDEX S3-коннектор.
+ *
+ * Для партнёров, которые принимают DDEX-поставки через S3-бакет (а не SFTP).
+ * В частности — ACRCloud (direct partnership): бакет партнёра, регион us-east-1,
+ * префикс TajikMusic/. Реальная отгрузка релиза идёт через
+ * ddex/transports/s3.ts (вызывается delivery-worker'ом). Здесь — только
+ * проверка соединения (testConnection) для мастера настройки интеграции.
+ *
+ * Config: transport=s3, bucket, region, prefix (+ partyIdSender/Recipient)
+ * Credentials (AES-GCM): access_key_id, secret_access_key
+ */
+
+import type { IConnector, ConnectorContext, ConnectorResult } from "./base";
+import { s3Transport } from "../ddex/transports/s3";
+
+export function createDdexS3Connector(code: string): IConnector {
+  return {
+    code,
+    authType: "api_key",
+
+    async testConnection(ctx: ConnectorContext): Promise<ConnectorResult> {
+      const transport = (ctx.config.transport as string | undefined) ?? "s3";
+      if (transport === "local-fs") {
+        return { ok: true, message: "Транспорт local-fs — файлы пишутся в локальную директорию api-server (.ddex-out). Соединение не требуется." };
+      }
+      // Конфиг приходит как Record<string, unknown> — приводим к строкам для транспорта.
+      const cfg: Record<string, string> = {};
+      for (const [k, v] of Object.entries(ctx.config)) {
+        if (v != null) cfg[k] = String(v);
+      }
+      const r = await s3Transport.test({ config: cfg, credentials: ctx.credentials });
+      return { ok: r.ok, message: r.message };
+    },
+  };
+}

@@ -3889,7 +3889,8 @@ components:
       type: string
       # Соответствует кодам в connectors/registry.ts (плюс 4 ещё не реализованных)
       enum: [spotify, apple_music, youtube_music, yandex_music, vk_music, tiktok,
-             deezer, amazon_music, vevo, zvuk, tidal, boomplay, ok_music, ddex_main]
+             deezer, amazon_music, vevo, zvuk, tidal, boomplay, ok_music, ddex_main,
+             acrcloud_ddex]
 
     Delivery:
       type: object

@@ -24,7 +24,7 @@ export interface ConfigurableIntegration {
   credentialFields?: { fieldKey: string; masked: string }[];
 }
 
-type Transport = "local-fs" | "sftp";
+type Transport = "local-fs" | "sftp" | "s3";
 type AuthMode = "password" | "private_key";
 
 type AckFileResult = {
@@ -121,11 +121,20 @@ export function IntegrationConfigDialog({
   const [partyIdSender, setPartyIdSender] = useState(FALLBACK_DEFAULTS.partyIdSender);
   const [partyIdRecipient, setPartyIdRecipient] = useState("");
 
+  // ── S3-транспорт (config: bucket/region/prefix) ────────────────────────
+  const [bucket, setBucket] = useState("");
+  const [region, setRegion] = useState("");
+  const [prefix, setPrefix] = useState("");
+
   // ── credentials (AES-GCM на бэке, никогда не возвращаются обратно) ─────
   const [authMode, setAuthMode] = useState<AuthMode>("password");
   const [password, setPassword] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [passphrase, setPassphrase] = useState("");
+  // S3-ключи (тоже credentials, шифруются)
+  const [accessKeyId, setAccessKeyId] = useState("");
+  const [secretAccessKey, setSecretAccessKey] = useState("");
+  const [sessionToken, setSessionToken] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; unverified?: boolean } | null>(null);
@@ -146,12 +155,18 @@ export function IntegrationConfigDialog({
     setOutboxPath(cfg.outboxPath ?? "");
     setPartyIdSender(cfg.partyIdSender ?? FALLBACK_DEFAULTS.partyIdSender);
     setPartyIdRecipient(cfg.partyIdRecipient ?? "");
+    setBucket(cfg.bucket ?? "");
+    setRegion(cfg.region ?? "");
+    setPrefix(cfg.prefix ?? "");
 
     const fieldKeys = (integration.credentialFields ?? []).map((f) => f.fieldKey);
     setAuthMode(fieldKeys.includes("private_key") ? "private_key" : "password");
     setPassword("");
     setPrivateKey("");
     setPassphrase("");
+    setAccessKeyId("");
+    setSecretAccessKey("");
+    setSessionToken("");
     setTestResult(null);
     setPollResult(null);
   }, [open, integration]);
@@ -166,6 +181,19 @@ export function IntegrationConfigDialog({
         transport: "local-fs",
         host: null, port: null, username: null,
         remotePath: null, outboxPath: null,
+        bucket: null, region: null, prefix: null,
+        partyIdSender: partyIdSender.trim() || null,
+        partyIdRecipient: partyIdRecipient.trim() || null,
+      };
+    }
+    if (transport === "s3") {
+      return {
+        transport: "s3",
+        bucket: bucket.trim(),
+        region: region.trim(),
+        prefix: prefix.trim() || null,
+        host: null, port: null, username: null,
+        remotePath: null, outboxPath: null,
         partyIdSender: partyIdSender.trim() || null,
         partyIdRecipient: partyIdRecipient.trim() || null,
       };
@@ -177,12 +205,20 @@ export function IntegrationConfigDialog({
       username: username.trim(),
       remotePath: remotePath.trim() || "/incoming",
       outboxPath: outboxPath.trim() || null,
+      bucket: null, region: null, prefix: null,
       partyIdSender: partyIdSender.trim() || null,
       partyIdRecipient: partyIdRecipient.trim() || null,
     };
   };
 
   const buildCredentialsPayload = (): Record<string, string> | null => {
+    if (transport === "s3") {
+      const out: Record<string, string> = {};
+      if (accessKeyId.trim()) out.access_key_id = accessKeyId.trim();
+      if (secretAccessKey) out.secret_access_key = secretAccessKey;
+      if (sessionToken.trim()) out.session_token = sessionToken.trim();
+      return out;
+    }
     if (transport !== "sftp") return null;
     if (authMode === "password") {
       if (!password) return {};
@@ -200,6 +236,19 @@ export function IntegrationConfigDialog({
       const userTyped = (authMode === "password" ? password : privateKey).length > 0;
       if (!haveSavedCreds && !userTyped) {
         return authMode === "password" ? "Введите password" : "Вставьте приватный ключ";
+      }
+    }
+    if (transport === "s3") {
+      if (!bucket.trim()) return "Заполните имя бакета (bucket)";
+      if (!region.trim()) return "Заполните регион (region), например us-east-1";
+      const haveSavedCreds = (integration.credentialFields ?? []).length > 0;
+      const userTyped = accessKeyId.trim().length > 0 || secretAccessKey.length > 0;
+      if (!haveSavedCreds && !userTyped) {
+        return "Введите Access Key ID и Secret Access Key";
+      }
+      // Если вводят ключи — нужны оба сразу (нельзя обновить только один).
+      if ((accessKeyId.trim().length > 0) !== (secretAccessKey.length > 0)) {
+        return "Укажите оба ключа: Access Key ID и Secret Access Key";
       }
     }
     return null;
@@ -286,6 +335,7 @@ export function IntegrationConfigDialog({
               <SelectContent>
                 <SelectItem value="local-fs">local-fs — локальная директория (dev/test)</SelectItem>
                 <SelectItem value="sftp">sftp — реальная отгрузка партнёру</SelectItem>
+                <SelectItem value="s3">s3 — отгрузка в S3-бакет партнёра (ACRCloud)</SelectItem>
               </SelectContent>
             </Select>
             {transport === "local-fs" && (
@@ -304,6 +354,56 @@ export function IntegrationConfigDialog({
               <Input id="party-rec" value={partyIdRecipient} onChange={(e) => setPartyIdRecipient(e.target.value)} placeholder="PADPIDA-…" />
             </div>
           </div>
+
+          {transport === "s3" && (
+            <>
+              <div className="border-t border-border/50 pt-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">S3 — бакет партнёра</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Полные WAV-файлы + DDEX ERN-4.3 XML загружаются в бакет партнёра. Для ACRCloud: регион <code>us-east-1</code>, префикс <code>TajikMusic</code>.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="s3-bucket">Bucket (имя бакета)</Label>
+                  <Input id="s3-bucket" value={bucket} onChange={(e) => setBucket(e.target.value)} placeholder="acrcloud-partners" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s3-region">Region</Label>
+                  <Input id="s3-region" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="us-east-1" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-prefix">
+                  Prefix <span className="text-[10px] text-muted-foreground">(папка внутри бакета, опционально)</span>
+                </Label>
+                <Input id="s3-prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="TajikMusic" />
+              </div>
+
+              <div className="border-t border-border/50 pt-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <KeyRound className="h-3.5 w-3.5" /> Ключи доступа S3
+                  {savedCredsCount > 0 && (
+                    <Badge variant="outline" className="text-[10px] font-mono uppercase">
+                      сохранено: {integration.credentialFields?.map((f) => f.fieldKey).join(", ")}
+                    </Badge>
+                  )}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-access-key">Access Key ID {savedCredsCount > 0 && <span className="text-[10px] text-muted-foreground">(оставьте пустым, чтобы не менять)</span>}</Label>
+                <Input id="s3-access-key" autoComplete="off" value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} placeholder="AKIA…" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-secret-key">Secret Access Key {savedCredsCount > 0 && <span className="text-[10px] text-muted-foreground">(оставьте пустым, чтобы не менять)</span>}</Label>
+                <Input id="s3-secret-key" type="password" autoComplete="new-password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} placeholder="••••••••" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-session-token">Session Token <span className="text-[10px] text-muted-foreground">(нужен только для временных ключей; обычно оставьте пустым)</span></Label>
+                <Input id="s3-session-token" type="password" autoComplete="new-password" value={sessionToken} onChange={(e) => setSessionToken(e.target.value)} placeholder="••••••••" />
+              </div>
+            </>
+          )}
 
           {isSftp && (
             <>

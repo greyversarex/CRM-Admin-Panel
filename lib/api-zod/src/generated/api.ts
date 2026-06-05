@@ -3803,6 +3803,7 @@ export const ListDeliveriesQueryParams = zod.object({
       "boomplay",
       "ok_music",
       "ddex_main",
+      "acrcloud_ddex",
     ])
     .optional(),
   release_id: zod.coerce.number().optional(),
@@ -3843,6 +3844,7 @@ export const ListDeliveriesResponse = zod.object({
         "boomplay",
         "ok_music",
         "ddex_main",
+        "acrcloud_ddex",
       ]),
       status: zod.enum([
         "queued",
@@ -3898,6 +3900,7 @@ export const GetDeliveryResponse = zod.object({
     "boomplay",
     "ok_music",
     "ddex_main",
+    "acrcloud_ddex",
   ]),
   status: zod.enum([
     "queued",
@@ -3945,6 +3948,7 @@ export const RetryDeliveryResponse = zod.object({
     "boomplay",
     "ok_music",
     "ddex_main",
+    "acrcloud_ddex",
   ]),
   status: zod.enum([
     "queued",
@@ -4047,6 +4051,7 @@ export const DeliverReleaseBody = zod.object({
         "boomplay",
         "ok_music",
         "ddex_main",
+        "acrcloud_ddex",
       ]),
     )
     .min(1),

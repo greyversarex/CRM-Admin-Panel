@@ -10,6 +10,7 @@ import type { IConnector } from "./base";
 import { spotifyConnector } from "./spotify";
 import { acrcloudConnector } from "./acrcloud";
 import { createDdexSftpConnector } from "./ddex-sftp";
+import { createDdexS3Connector } from "./ddex-s3";
 import {
   resendConnector,
   sendgridConnector,
@@ -82,6 +83,10 @@ register(awsS3Connector);
   "yandex_music_sftp",
   "tiktok_sftp",
 ].forEach((code) => register(createDdexSftpConnector(code)));
+
+// ── DDEX-S3 коннекторы для доставки контента в S3-бакет партнёра ──
+// ACRCloud (direct partnership): полные WAV + ERN-4.3 XML в бакет партнёра.
+register(createDdexS3Connector("acrcloud_ddex"));
 
 export function getConnector(code: string): IConnector | undefined {
   return REGISTRY.get(code);
