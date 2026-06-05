@@ -105,7 +105,7 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       t += 0.016;
 
       // Clear with slight trail
-      ctx.fillStyle = "rgba(7,8,18,0.88)";
+      ctx.fillStyle = "rgba(4,5,12,0.91)";
       ctx.fillRect(0, 0, W, H);
 
       // ── 1. Background ambient glows ──
@@ -412,7 +412,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[hsl(222,47%,4%)] flex items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-[hsl(222,50%,2%)] flex items-center justify-center relative overflow-hidden">
       {/* Real-time canvas music visualizer */}
       <MusicCanvas />
 
