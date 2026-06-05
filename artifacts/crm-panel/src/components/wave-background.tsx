@@ -23,19 +23,19 @@ const H = 700;
 
 const LAYERS = [
   // Giant slow primary wave — lower half
-  { amp: 90,  period: 780,  cy: 510, phase: 0.0,  dur: 52,  violet: false, op: 0.22,  sw: 2.4 },
+  { amp: 90,  period: 780,  cy: 510, phase: 0.0,  dur: 52,  violet: false, op: 0.38,  sw: 2.4 },
   // Medium wave — lower third
-  { amp: 55,  period: 460,  cy: 575, phase: 1.1,  dur: 36,  violet: false, op: 0.16,  sw: 1.6 },
+  { amp: 55,  period: 460,  cy: 575, phase: 1.1,  dur: 36,  violet: false, op: 0.28,  sw: 1.6 },
   // Flowing violet wave — bottom
-  { amp: 32,  period: 310,  cy: 625, phase: 2.4,  dur: 24,  violet: true,  op: 0.15,  sw: 1.3 },
+  { amp: 32,  period: 310,  cy: 625, phase: 2.4,  dur: 24,  violet: true,  op: 0.26,  sw: 1.3 },
   // Majestic slow violet wave — mid page
-  { amp: 100, period: 1050, cy: 370, phase: 3.3,  dur: 72,  violet: true,  op: 0.11,  sw: 2.8 },
+  { amp: 100, period: 1050, cy: 370, phase: 3.3,  dur: 72,  violet: true,  op: 0.20,  sw: 2.8 },
   // Graceful high primary wave — upper portion
-  { amp: 40,  period: 600,  cy: 240, phase: 0.9,  dur: 58,  violet: false, op: 0.09,  sw: 1.4 },
+  { amp: 40,  period: 600,  cy: 240, phase: 0.9,  dur: 58,  violet: false, op: 0.17,  sw: 1.4 },
   // Ripple — bottom
-  { amp: 22,  period: 230,  cy: 655, phase: 1.7,  dur: 19,  violet: false, op: 0.12,  sw: 1.0 },
+  { amp: 22,  period: 230,  cy: 655, phase: 1.7,  dur: 19,  violet: false, op: 0.22,  sw: 1.0 },
   // Subtle cyan accent wave — mid-upper
-  { amp: 28,  period: 520,  cy: 300, phase: 5.1,  dur: 44,  violet: false, op: 0.07,  sw: 1.0, cyan: true },
+  { amp: 28,  period: 520,  cy: 300, phase: 5.1,  dur: 44,  violet: false, op: 0.14,  sw: 1.0, cyan: true },
 ];
 
 export function WaveBackground() {

@@ -193,11 +193,11 @@ function useMusicCanvas(canvasRef: React.RefObject<HTMLCanvasElement>) {
       // ── 4. Wave layers — more sensuous ──
       const beat = 0.5 + 0.5 * Math.sin(t * 4.2) * Math.sin(t * 2.7);
       const waveLayers = [
-        { amp: H * 0.09, freq: 0.010, phase: 0,    speed: 0.45, cy: H * 0.28, lw: 2.2, color1: "226,84%,67%", color2: "271,80%,68%", alpha: 0.70, glow: 18 },
-        { amp: H * 0.08, freq: 0.013, phase: 1.1,  speed: 0.65, cy: H * 0.50, lw: 2.8, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 0.88, glow: 22 },
-        { amp: H * 0.07, freq: 0.009, phase: 2.2,  speed: 0.30, cy: H * 0.70, lw: 1.8, color1: "271,80%,68%", color2: "226,84%,67%", alpha: 0.60, glow: 14 },
-        { amp: H * 0.05, freq: 0.018, phase: 3.5,  speed: 0.85, cy: H * 0.42, lw: 1.2, color1: "196,85%,62%", color2: "271,80%,68%", alpha: 0.42, glow: 8 },
-        { amp: H * 0.04, freq: 0.022, phase: 0.8,  speed: 1.1,  cy: H * 0.60, lw: 0.9, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 0.28, glow: 5 },
+        { amp: H * 0.09, freq: 0.010, phase: 0,    speed: 0.45, cy: H * 0.28, lw: 2.2, color1: "226,84%,67%", color2: "271,80%,68%", alpha: 0.90, glow: 22 },
+        { amp: H * 0.08, freq: 0.013, phase: 1.1,  speed: 0.65, cy: H * 0.50, lw: 2.8, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 1.00, glow: 28 },
+        { amp: H * 0.07, freq: 0.009, phase: 2.2,  speed: 0.30, cy: H * 0.70, lw: 1.8, color1: "271,80%,68%", color2: "226,84%,67%", alpha: 0.78, glow: 18 },
+        { amp: H * 0.05, freq: 0.018, phase: 3.5,  speed: 0.85, cy: H * 0.42, lw: 1.2, color1: "196,85%,62%", color2: "271,80%,68%", alpha: 0.58, glow: 10 },
+        { amp: H * 0.04, freq: 0.022, phase: 0.8,  speed: 1.1,  cy: H * 0.60, lw: 0.9, color1: "226,84%,67%", color2: "196,85%,62%", alpha: 0.42, glow: 7 },
       ];
 
       waveLayers.forEach((wl, idx) => {
