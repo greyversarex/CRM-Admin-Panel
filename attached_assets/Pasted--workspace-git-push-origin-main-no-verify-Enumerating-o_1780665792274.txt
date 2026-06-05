@@ -1,0 +1,44 @@
+~/workspace$ git push origin main --no-verify
+Enumerating objects: 264, done.
+Counting objects: 100% (264/264), done.
+Delta compression using up to 4 threads
+Compressing objects: 100% (208/208), done.
+Writing objects: 100% (208/208), 2.80 MiB | 6.30 MiB/s, done.
+Total 208 (delta 140), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (140/140), completed with 40 local objects.
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: 
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote: 
+remote:     - Push cannot contain secrets
+remote: 
+remote:     
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:     
+remote:     
+remote:       —— Amazon AWS Access Key ID ——————————————————————————
+remote:        locations:
+remote:          - commit: 56a9defac7a8dc05905146c8cf7853b334ac7d52
+remote:            path: attached_assets/Pasted-Hi-Tony-We-need-to-ask-our-developer-a-few-questions-We_1780663702852.txt:76
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/greyversarex/CRM-Admin-Panel/security/secret-scanning/unblock-secret/3EieN5MiT66BPVlcryC5G1gfUCA
+remote:     
+remote:     
+remote:       —— Amazon AWS Secret Access Key ——————————————————————
+remote:        locations:
+remote:          - commit: 56a9defac7a8dc05905146c8cf7853b334ac7d52
+remote:            path: attached_assets/Pasted-Hi-Tony-We-need-to-ask-our-developer-a-few-questions-We_1780663702852.txt:77
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/greyversarex/CRM-Admin-Panel/security/secret-scanning/unblock-secret/3EieN5EvJH114I3CvMHQgUDYQSK
+remote:     
+remote: 
+remote: 
+To https://github.com/greyversarex/CRM-Admin-Panel
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/greyversarex/CRM-Admin-Panel'
+~/workspace$ 
