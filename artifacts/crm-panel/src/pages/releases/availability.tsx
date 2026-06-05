@@ -18,7 +18,7 @@ import {
   type ReleaseDetail, type CreateReleaseBody,
 } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -129,7 +129,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       <button
         type="button"
         onClick={backToRelease}
@@ -139,31 +139,29 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       </button>
 
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Доступность релиза</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-3xl font-bold">Доступность релиза</h1>
+        <p className="text-base text-muted-foreground">
           Спланируйте, когда, где и как выйдет релиз «{release.title}». Рекомендуем
           ставить дату на 4–6 недель вперёд, чтобы:
         </p>
-        <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
+        <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
           <li>команда модерации успела проверить и одобрить релиз;</li>
           <li>вы могли воспользоваться маркетинговыми инструментами.</li>
         </ul>
       </header>
 
       {/* ── 1. Release Timeline ──────────────────────────────────────────── */}
-      <Card className="bg-card/50 backdrop-blur border-border/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Таймлайн релиза</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+        <CardContent className="p-6 space-y-5">
+          <h3 className="text-lg font-semibold">Таймлайн релиза</h3>
           <FormField label="Дата релиза">
             <Input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="bg-background/40 max-w-xs"
+              className="bg-background/40 max-w-xs h-11 text-base"
             />
-            <p className="text-[11px] text-muted-foreground/80 mt-1">
+            <p className="text-xs text-muted-foreground/80 mt-1.5">
               Общая дата выхода на всех площадках.
             </p>
           </FormField>
@@ -178,15 +176,15 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
             </button>
             {showAdvanced && (
-              <div className="mt-3">
+              <div className="mt-4">
                 <FormField label="Время релиза (UTC)">
                   <Input
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="bg-background/40 w-40"
+                    className="bg-background/40 w-44 h-11 text-base"
                   />
-                  <p className="text-[11px] text-muted-foreground/80 mt-1">
+                  <p className="text-xs text-muted-foreground/80 mt-1.5">
                     По умолчанию 00:00 (UTC). Площадки публикуют релиз по этому ориентиру.
                   </p>
                 </FormField>
@@ -197,23 +195,21 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       </Card>
 
       {/* ── 2. Territory Rights ──────────────────────────────────────────── */}
-      <Card className="bg-card/50 backdrop-blur border-border/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Права на территории</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2.5">
+      <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+        <CardContent className="p-6 space-y-4">
+          <h3 className="text-lg font-semibold">Права на территории</h3>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch checked={worldWide} onCheckedChange={setWorldWide} disabled={saving} />
             <span className="text-sm font-medium">Весь мир (World Wide release)</span>
           </label>
           {!worldWide && specificTerritories.length > 0 && (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               Выбрано: <span className="font-mono">{specificTerritories.join(", ")}</span>
             </div>
           )}
           {!worldWide && specificTerritories.length === 0 && (
-            <div className="flex items-start gap-2 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-2.5 py-2 leading-relaxed">
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2.5 leading-relaxed">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
                 «Весь мир» выключен, конкретные территории не выбраны. При
                 сохранении у релиза не останется ни одной территории — он не уйдёт
@@ -222,7 +218,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               </span>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Релиз будет доступен во всех текущих и будущих территориях мира. Чтобы
             исключить территории, отключите «Весь мир» — тогда нужные территории
             добавляются вручную через «Редактировать» в деталях релиза.
@@ -231,14 +227,14 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       </Card>
 
       {/* ── 3. Partner Selection ─────────────────────────────────────────── */}
-      <Card className="bg-card/50 backdrop-blur border-border/50">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-          <CardTitle className="text-lg">Выбор площадок</CardTitle>
-          <Button variant="outline" size="sm" className="bg-card text-xs" onClick={() => setPickerOpen(true)}>
-            <Pencil className="h-3.5 w-3.5 mr-1" /> Показать площадки
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-row items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">Выбор площадок</h3>
+            <Button variant="outline" size="sm" className="bg-card" onClick={() => setPickerOpen(true)}>
+              <Pencil className="h-4 w-4 mr-1.5" /> Показать площадки
+            </Button>
+          </div>
           {dsps.length > 0 ? (
             <>
               <div className="text-sm">
@@ -250,7 +246,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               </div>
             </>
           ) : (
-            <div className="text-xs text-muted-foreground border border-dashed border-border/40 rounded p-4 text-center">
+            <div className="text-sm text-muted-foreground border border-dashed border-border/40 rounded-md p-5 text-center">
               Площадки не выбраны. Нажмите «Показать площадки», чтобы выбрать DSP для дистрибуции.
             </div>
           )}
@@ -264,8 +260,8 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       </Card>
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button variant="outline" onClick={backToRelease} disabled={saving}>Отмена</Button>
-        <Button onClick={onSave} disabled={saving}>
+        <Button variant="outline" size="lg" onClick={backToRelease} disabled={saving}>Отмена</Button>
+        <Button size="lg" onClick={onSave} disabled={saving}>
           {saving ? "Сохраняем…" : (<><Save className="h-4 w-4 mr-1.5" /> Сохранить</>)}
         </Button>
       </div>
@@ -284,7 +280,7 @@ export default function ReleaseAvailability() {
   if (!Number.isFinite(id) || id <= 0) {
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto p-6 text-sm text-muted-foreground">
+        <div className="max-w-7xl mx-auto p-6 text-sm text-muted-foreground">
           Неверный идентификатор релиза.
         </div>
       </Layout>
@@ -294,11 +290,11 @@ export default function ReleaseAvailability() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
+        <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-44 w-full" />
+          <Skeleton className="h-44 w-full" />
+          <Skeleton className="h-44 w-full" />
         </div>
       </Layout>
     );
