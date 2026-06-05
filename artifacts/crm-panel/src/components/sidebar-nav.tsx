@@ -392,7 +392,7 @@ export function SidebarNav() {
                   </span>
                   <span className={cn(
                     "flex-1 truncate text-[13px] text-left transition-colors duration-200",
-                    hasActiveChild ? "text-white font-semibold" : "text-white/65 font-medium group-hover:text-white/95"
+                    hasActiveChild ? "text-white font-semibold" : "text-white/80 font-medium group-hover:text-white"
                   )}>
                     {groupTitle}
                   </span>
@@ -421,11 +421,11 @@ export function SidebarNav() {
                             <Icon className={cn("h-[13px] w-[13px] mr-2 shrink-0",
                               isActive
                                 ? cn(item.iconColor ?? "text-primary", "opacity-100")
-                                : cn(item.iconColor ?? "text-white/45", "opacity-65 group-hover:opacity-95")
+                                : cn(item.iconColor ?? "text-white/60", "opacity-80 group-hover:opacity-100")
                             )} strokeWidth={1.9} />
                             <span className={cn(
                               "flex-1 truncate text-[12.5px] transition-colors duration-200",
-                              isActive ? "text-white font-semibold" : "text-white/60 group-hover:text-white/90"
+                              isActive ? "text-white font-semibold" : "text-white/78 group-hover:text-white"
                             )}>
                               {labelText}
                             </span>
@@ -458,7 +458,7 @@ export function SidebarNav() {
           <div key={group.titleKey} className={cn(!collapsed && "mb-2")}>
             {collapsed && <div className="h-px bg-white/[0.07] mb-2 mx-1" />}
             {showTitle && (
-              <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/35 select-none">
+              <div className="px-2.5 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/50 select-none">
                 {groupTitle}
               </div>
             )}
@@ -502,7 +502,7 @@ export function SidebarNav() {
                           ? cn(item.iconColor ?? "text-primary", "opacity-100 drop-shadow-[0_0_8px_currentColor]")
                           : item.iconColor
                             ? cn(item.iconColor, "opacity-55 group-hover:opacity-90")
-                            : "text-white/40 group-hover:text-white/75"
+                            : "text-white/58 group-hover:text-white/90"
                       )}
                       strokeWidth={1.9}
                     />
@@ -528,7 +528,7 @@ export function SidebarNav() {
                               "flex-1 truncate text-[13px] transition-colors duration-200",
                               isActive
                                 ? "text-white font-semibold"
-                                : "text-white/65 font-medium group-hover:text-white/95"
+                                : "text-white/80 font-medium group-hover:text-white"
                             )}
                           >
                             {labelText}
