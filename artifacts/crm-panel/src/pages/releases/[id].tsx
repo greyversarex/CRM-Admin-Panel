@@ -441,16 +441,12 @@ export default function ReleaseDetail() {
               >
                 <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Reorder Tracks
               </Button>
-              {release.isEditable && (
-                <BulkAudioUploadButton
-                  releaseId={id}
-                  artistId={release.artistId}
-                  defaultLanguage={release.language || "English"}
-                  defaultGenre={release.genre || "Pop"}
-                  startTrackNumber={(release.tracks?.length ?? 0) + 1}
-                  onUploaded={invalidateAll}
-                />
-              )}
+              <Button
+                variant="outline" size="sm" className="bg-card text-xs h-8"
+                onClick={() => setLocation(`/releases/${id}/audio-upload`)}
+              >
+                <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Audio
+              </Button>
             </div>
           )}
         </div>
