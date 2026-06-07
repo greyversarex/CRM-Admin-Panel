@@ -54,8 +54,25 @@ async function applyToAll(
 ): Promise<{ ok: number; fail: number; firstErr: string }> {
   let ok = 0; let fail = 0; let firstErr = "";
   for (const t of tracks) {
+    const patch = patchFn(t);
+    // Skip if nothing to change (e.g. artist already present on track)
+    if (Object.keys(patch).length === 0) { ok++; continue; }
     try {
-      await updateFn({ id: t.id, data: { artistId: t.artistId, title: t.title, ...patchFn(t) } as any });
+      // Always include fields that have Zod defaults to prevent them clobbering
+      // existing data when only one field is being changed (partial-update safety).
+      await updateFn({
+        id: t.id,
+        data: {
+          artistId: t.artistId,
+          title: t.title,
+          isExplicit:     (t as any).isExplicit      ?? false,
+          explicitStatus: (t as any).explicitStatus  ?? "non_explicit",
+          aiUsage:        (t as any).aiUsage         ?? "none",
+          clipStartSeconds: (t as any).clipStartSeconds ?? 0,
+          audioStyle:     (t as any).audioStyle      ?? "vocal",
+          ...patch,
+        } as any,
+      });
       ok++;
     } catch (e) { fail++; if (!firstErr) firstErr = (e as Error).message; }
   }
@@ -405,8 +422,7 @@ function NewValueExplicit({ tracks, updateFn, onApplied }: NewValueProps) {
   return (
     <div className="space-y-4">
       <RadioGroup value={value} onValueChange={(v) => setValue(v as any)} className="space-y-2.5">
-        {[["non_explicit", "Non-Explicit"], ["explicit", "Explicit"], ["censored", "Censored"]] as const}
-          {([["non_explicit", "Non-Explicit"], ["explicit", "Explicit"], ["censored", "Censored"]] as const).map(([v, label]) => (
+        {([["non_explicit", "Non-Explicit"], ["explicit", "Explicit"], ["censored", "Censored"]] as const).map(([v, label]) => (
           <div key={v} className="flex items-center gap-2.5">
             <RadioGroupItem value={v} id={`explicit-${v}`} />
             <Label htmlFor={`explicit-${v}`} className="font-normal cursor-pointer">{label}</Label>
