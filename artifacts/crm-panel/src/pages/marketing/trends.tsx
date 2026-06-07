@@ -31,7 +31,7 @@ async function api<T>(path: string): Promise<T> {
 
 function fmt(n: number) { return new Intl.NumberFormat("ru-RU").format(n); }
 
-export default function MarketingTrendsPage() {
+export function MarketingTrendsPanel() {
   const { toast } = useToast();
   const { t } = useLang();
   const [rows, setRows] = useState<TikTokRow[]>([]);
@@ -47,7 +47,7 @@ export default function MarketingTrendsPage() {
   }, [toast]);
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
@@ -118,6 +118,14 @@ export default function MarketingTrendsPage() {
           </CardContent>
         </Card>
       </div>
+    </>
+  );
+}
+
+export default function MarketingTrendsPage() {
+  return (
+    <Layout>
+      <MarketingTrendsPanel />
     </Layout>
   );
 }

@@ -39,7 +39,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export default function PromoAssets() {
+export function PromoAssetsPanel() {
   const { toast } = useToast();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function PromoAssets() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -164,6 +164,14 @@ export default function PromoAssets() {
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+export default function PromoAssets() {
+  return (
+    <Layout>
+      <PromoAssetsPanel />
     </Layout>
   );
 }

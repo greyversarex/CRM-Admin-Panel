@@ -42,7 +42,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export default function PresaveCampaigns() {
+export function PresavePanel() {
   const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +90,7 @@ export default function PresaveCampaigns() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
@@ -240,6 +240,14 @@ export default function PresaveCampaigns() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export default function PresaveCampaigns() {
+  return (
+    <Layout>
+      <PresavePanel />
     </Layout>
   );
 }

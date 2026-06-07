@@ -53,7 +53,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export default function PlaylistsPage() {
+export function PlaylistsPanel() {
   const { user } = useAuth();
   const { toast } = useToast();
   const canEdit = user?.role === "admin" || user?.role === "manager" || user?.role === "label";
@@ -110,7 +110,7 @@ export default function PlaylistsPage() {
   }
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
@@ -254,6 +254,14 @@ export default function PlaylistsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export default function PlaylistsPage() {
+  return (
+    <Layout>
+      <PlaylistsPanel />
     </Layout>
   );
 }

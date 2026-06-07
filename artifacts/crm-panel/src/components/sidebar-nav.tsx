@@ -184,10 +184,7 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "smart_links",  href: "/marketing/links",     icon: Link2,      iconColor: "text-pink-400" },
-      { nameKey: "playlists",    href: "/marketing/playlists", icon: Music2,     iconColor: "text-pink-400" },
-      { nameKey: "trends",       href: "/marketing/trends",    icon: BarChart3,  iconColor: "text-pink-400" },
-      { nameKey: "promo_assets", href: "/marketing/assets",    icon: ImagePlay,  iconColor: "text-pink-400" },
+      { nameKey: "marketing_group", href: "/marketing", icon: MegaphoneIcon, iconColor: "text-pink-400" },
     ],
   },
   {
@@ -230,9 +227,7 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "marketing_group",
     items: [
-      { nameKey: "presave",      href: "/marketing/presave", icon: Megaphone, iconColor: "text-pink-400" },
-      { nameKey: "smart_links",  href: "/marketing/links",   icon: Link2,     iconColor: "text-pink-400" },
-      { nameKey: "promo_assets", href: "/marketing/assets",  icon: ImagePlay, iconColor: "text-pink-400" },
+      { nameKey: "marketing_group", href: "/marketing", icon: MegaphoneIcon, iconColor: "text-pink-400" },
     ],
   },
   {
@@ -295,7 +290,8 @@ export function SidebarNav() {
   }, [collapsed]);
 
   // Раскрывающиеся группы: одна кнопка-«раздел» → клик раскрывает подпункты.
-  const COLLAPSIBLE_GROUPS = new Set(["marketing_group"]);
+  // Маркетинг теперь — одна ссылка (/marketing) с табами внутри, без выпадающих подпунктов.
+  const COLLAPSIBLE_GROUPS = new Set<string>([]);
   const GROUP_ICONS: Record<string, React.ElementType> = {
     marketing_group: MegaphoneIcon,
   };
@@ -449,6 +445,7 @@ export function SidebarNav() {
             "finance_group",
             "analytics_group",
             "crm_group",
+            "marketing_group",
           ]);
           const showTitle =
             !collapsed &&
@@ -478,7 +475,10 @@ export function SidebarNav() {
                 } else if (itemPath === "/") {
                   isActive = location === "/";
                 } else if (location === itemPath) {
-                  isActive = !currentSearch;
+                  // Хаб-ссылки (например /marketing, /catalog) подсвечиваем,
+                  // даже когда активен таб через ?tab=… В сайдбаре нет пунктов
+                  // с query-частью в href, поэтому двойной подсветки не будет.
+                  isActive = true;
                 } else {
                   isActive = location.startsWith(itemPath + "/");
                 }

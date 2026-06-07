@@ -35,7 +35,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export default function SmartLinks() {
+export function SmartLinksPanel() {
   const { toast } = useToast();
   const [links, setLinks] = useState<SmartLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ export default function SmartLinks() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
@@ -207,6 +207,14 @@ export default function SmartLinks() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export default function SmartLinks() {
+  return (
+    <Layout>
+      <SmartLinksPanel />
     </Layout>
   );
 }

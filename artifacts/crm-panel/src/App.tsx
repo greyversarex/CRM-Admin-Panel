@@ -53,6 +53,7 @@ import CatalogDuplicates from "@/pages/catalog/duplicates";
 import CatalogCodes from "@/pages/catalog/codes";
 import CatalogBulkEdit from "@/pages/catalog/bulk-edit";
 import Automation from "@/pages/automation";
+import MarketingHub from "@/pages/marketing";
 import PresaveCampaigns from "@/pages/marketing/presave";
 import SmartLinks from "@/pages/marketing/links";
 import PromoAssets from "@/pages/marketing/assets";
@@ -157,6 +158,7 @@ function Router() {
       <ProtectedRoute path="/catalog/codes"      component={CatalogCodes} />
       <ProtectedRoute path="/catalog/bulk-edit"  component={CatalogBulkEdit} />
       <ProtectedRoute path="/automation"         component={Automation} />
+      <ProtectedRoute path="/marketing"           component={MarketingHub} />
       <ProtectedRoute path="/marketing/presave"   component={PresaveCampaigns} />
       <ProtectedRoute path="/marketing/links"     component={SmartLinks} />
       <ProtectedRoute path="/marketing/assets"    component={PromoAssets} />
