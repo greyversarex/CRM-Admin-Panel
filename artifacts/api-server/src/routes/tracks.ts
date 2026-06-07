@@ -5,6 +5,11 @@ import { CreateTrackBody, UpdateTrackBody, GetTrackParams, UpdateTrackParams, De
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
+import { ObjectStorageService } from "../lib/objectStorage";
+import OpenAI from "openai";
+import { createReadStream } from "node:fs";
+
+const storage = new ObjectStorageService();
 
 const router = Router();
 
@@ -224,6 +229,57 @@ router.delete("/tracks/:id", async (req, res): Promise<void> => {
   void auditMutation(req, { action: "delete", entityType: "track", entityId: track.id, before: existing, after: null });
 
   res.sendStatus(204);
+});
+
+// ─── Transcribe lyrics via OpenAI Whisper ───────────────────────────────────
+router.post("/tracks/:id/transcribe-lyrics", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid track id" }); return; }
+
+  const [track] = await db.select().from(tracksTable).where(eq(tracksTable.id, id));
+  if (!track) { res.status(404).json({ error: "Track not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (!(await trackInScope(scope, track))) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (!track.audioUrl) {
+    res.status(422).json({ error: "No audio file linked to this track." });
+    return;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    res.status(503).json({ error: "OPENAI_API_KEY is not configured. Add it to the server secrets and restart." });
+    return;
+  }
+
+  let file;
+  try {
+    file = await storage.getObjectEntityFile(track.audioUrl);
+  } catch {
+    res.status(404).json({ error: "Audio file not found in storage." });
+    return;
+  }
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    res.status(404).json({ error: "Audio file not found on disk." });
+    return;
+  }
+
+  const openai = new OpenAI({ apiKey });
+
+  const stream = createReadStream(file.fullPath());
+  const filename = track.audioUrl.split("/").pop() ?? "audio.mp3";
+
+  const transcription = await openai.audio.transcriptions.create({
+    model: "whisper-1",
+    file: await OpenAI.toFile(stream, filename),
+    language: track.vocalLanguage ? track.vocalLanguage.slice(0, 2).toLowerCase() : undefined,
+    response_format: "text",
+  });
+
+  res.json({ text: typeof transcription === "string" ? transcription : (transcription as any).text ?? "" });
 });
 
 export default router;

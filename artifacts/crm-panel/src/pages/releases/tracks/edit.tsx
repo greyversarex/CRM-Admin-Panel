@@ -351,6 +351,7 @@ export default function TrackEditPage() {
   }
 
   const isBusy = updateTrack.isPending;
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const YEARS = Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => new Date().getFullYear() - i);
 
@@ -866,14 +867,37 @@ export default function TrackEditPage() {
                     <Button
                       type="button"
                       size="sm"
-                      disabled={!f.audioUrl}
-                      onClick={() => {
-                        if (!f.audioUrl) return;
-                        toast({ title: "Transcription", description: "AI transcription requires an external service. Please enter lyrics manually." });
+                      disabled={!f.audioUrl || isTranscribing}
+                      onClick={async () => {
+                        if (!f.audioUrl || isTranscribing) return;
+                        setIsTranscribing(true);
+                        try {
+                          const res = await fetch(`/api/tracks/${trackId}/transcribe-lyrics`, {
+                            method: "POST",
+                            credentials: "include",
+                          });
+                          const data = await res.json() as { text?: string; error?: string };
+                          if (!res.ok) {
+                            toast({
+                              title: "Ошибка транскрипции",
+                              description: data.error ?? "Неизвестная ошибка",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setF((prev) => ({ ...prev!, lyrics: data.text ?? "" }));
+                          toast({ title: "Готово", description: "Текст песни успешно распознан." });
+                        } catch {
+                          toast({ title: "Ошибка", description: "Не удалось связаться с сервером.", variant: "destructive" });
+                        } finally {
+                          setIsTranscribing(false);
+                        }
                       }}
                     >
-                      <Wand2 className="h-4 w-4 mr-1.5" />
-                      Transcribe Lyrics with AI
+                      {isTranscribing
+                        ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        : <Wand2 className="h-4 w-4 mr-1.5" />}
+                      {isTranscribing ? "Распознаём…" : "Transcribe Lyrics with AI"}
                     </Button>
                     {!f.audioUrl && (
                       <p className="text-sm text-red-400">

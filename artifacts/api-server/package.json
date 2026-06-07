@@ -30,6 +30,7 @@
     "music-metadata": "^11.12.3",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
+    "openai": "^6.42.0",
     "pino": "^9",
     "pino-http": "^10",
     "ssh2-sftp-client": "^12.1.1",
