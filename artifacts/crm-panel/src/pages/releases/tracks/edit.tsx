@@ -657,9 +657,6 @@ export default function TrackEditPage() {
                 display artists who appear on this track.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
-              <span>Artist Name</span><span>Role</span>
-            </div>
             <DisplayArtistsEditor
               hideTitle
               value={f.displayArtists}
@@ -689,9 +686,6 @@ export default function TrackEditPage() {
             {/* Writers */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Writers</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
-                <span>Artist Name</span><span>Role</span>
-              </div>
               <WritersEditor hideTitle value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
             </div>
 
@@ -703,9 +697,6 @@ export default function TrackEditPage() {
                 <h4 className="text-sm font-semibold">Performers <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
                 <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
-                <span>Artist Name</span><span>Role</span>
-              </div>
               <PerformersEditor hideTitle value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
             </div>
 
@@ -716,9 +707,6 @@ export default function TrackEditPage() {
               <div>
                 <h4 className="text-sm font-semibold">Production &amp; Engineering <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
                 <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground px-0.5">
-                <span>Artist Name</span><span>Role</span>
               </div>
               <ProductionEditor hideTitle value={f.production} onChange={(v) => setF({ ...f, production: v })} />
             </div>

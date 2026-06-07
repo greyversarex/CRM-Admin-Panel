@@ -36,6 +36,8 @@ export function DisplayArtistsEditor({
       onAdd={() => onChange([...value, { name: "", role: "primary" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.displayArtistsEmpty}
+      addLabel="Add Artist"
+      roleWidth="w-36"
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
@@ -44,7 +46,7 @@ export function DisplayArtistsEditor({
             placeholder={t.releaseWizard.selectOrTypeArtist}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
-            <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-36 shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -70,6 +72,8 @@ export function WritersEditor({
       onAdd={() => onChange(splitWriterSharesEvenly([...value, { name: "", role: "songwriter", share: 0, caeIpi: null }]))}
       onRemove={(i) => onChange(splitWriterSharesEvenly(value.filter((_, idx) => idx !== i)))}
       empty={t.releaseWizard.writersEmpty}
+      addLabel="Add Artist"
+      roleWidth="w-36"
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
@@ -78,7 +82,7 @@ export function WritersEditor({
             placeholder={t.releaseWizard.selectOrTypeWriter}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
-            <SelectTrigger className="bg-background/40 w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-36 shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -104,6 +108,8 @@ export function PerformersEditor({
       onAdd={() => onChange([...value, { name: "", role: "vocals" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.performersEmpty}
+      addLabel="Add Artist"
+      roleWidth="w-44"
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
@@ -112,7 +118,7 @@ export function PerformersEditor({
             placeholder={t.releaseWizard.selectOrTypePerformer}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-44 shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -138,6 +144,8 @@ export function ProductionEditor({
       onAdd={() => onChange([...value, { name: "", role: "producer" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.productionEmpty}
+      addLabel="Add Artist"
+      roleWidth="w-48"
       renderRow={(row, i) => (
         <>
           <ArtistNameCombobox
@@ -146,7 +154,7 @@ export function ProductionEditor({
             placeholder={t.releaseWizard.selectOrTypeName}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-[200px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-48 shrink-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -158,8 +166,9 @@ export function ProductionEditor({
 }
 
 // ─── Generic add/remove list ────────────────────────────────────────────────
+// Renders column headers aligned with the actual inputs + compact rows.
 function Editor<T>({
-  title, subtitle, rows, renderRow, onAdd, onRemove, empty, hideTitle,
+  title, subtitle, rows, renderRow, onAdd, onRemove, empty, hideTitle, addLabel, roleWidth,
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -169,6 +178,8 @@ function Editor<T>({
   onRemove: (i: number) => void;
   empty: string;
   hideTitle?: boolean;
+  addLabel?: string;
+  roleWidth?: string; // tailwind width class for the role column header, e.g. "w-36"
 }) {
   const { t } = useLang();
   return (
@@ -179,19 +190,36 @@ function Editor<T>({
           {subtitle && <span className="text-[11px]">{subtitle}</span>}
         </div>
       )}
+
+      {/* Column headers — aligned with Artist Name (flex-1) | Role (fixed) | icon (36px) */}
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="flex-1 text-xs text-muted-foreground/70">Artist Name</span>
+        <span className={`${roleWidth ?? "w-36"} shrink-0 text-xs text-muted-foreground/70`}>Role</span>
+        <span className="w-9 shrink-0" />
+      </div>
+
       {rows.length === 0 && <p className="text-sm text-muted-foreground italic">{empty}</p>}
+
       <div className="space-y-1.5">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-center gap-2 bg-background/30 border border-border/40 rounded-md p-1.5">
+          <div key={i} className="flex items-center gap-2">
             {renderRow(row, i)}
-            <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(i)} title={t.releaseWizard.remove}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
+              onClick={() => onRemove(i)}
+              title={t.releaseWizard.remove}
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         ))}
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-        <Plus className="h-4 w-4 mr-1" /> {t.releaseWizard.addEntry}
+
+      <Button type="button" variant="outline" size="sm" onClick={onAdd} className="mt-1">
+        <Plus className="h-4 w-4 mr-1" /> {addLabel ?? t.releaseWizard.addEntry}
       </Button>
     </div>
   );
