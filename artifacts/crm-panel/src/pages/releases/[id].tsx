@@ -410,6 +410,51 @@ export default function ReleaseDetail() {
           </CardContent>
         </Card>
 
+        {/* Tracks section header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold">Tracks</h2>
+            <span className="h-5 min-w-[22px] px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center">
+              {(release.tracks ?? []).length}
+            </span>
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 cursor-pointer"
+              onClick={() => jumpToIssue(
+                { section: "tracks", field: "", message: "", severity: "error" },
+                { releaseId: id, isDraft: release.status === "draft", enableEditing: () => setMetaEditing(true), navigate: setLocation },
+              )}
+            >
+              Show Issues
+            </span>
+          </div>
+          {(release.tracks ?? []).length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline" size="sm" className="bg-card text-xs h-8"
+                onClick={() => setLocation(`/releases/${id}/multi-track-edit`)}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Multi Track Edit
+              </Button>
+              <Button
+                variant="outline" size="sm" className="bg-card text-xs h-8"
+                onClick={() => setLocation(`/releases/${id}/reorder-tracks`)}
+              >
+                <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Reorder Tracks
+              </Button>
+              {release.isEditable && (
+                <BulkAudioUploadButton
+                  releaseId={id}
+                  artistId={release.artistId}
+                  defaultLanguage={release.language || "English"}
+                  defaultGenre={release.genre || "Pop"}
+                  startTrackNumber={(release.tracks?.length ?? 0) + 1}
+                  onUploaded={invalidateAll}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Tracks — individual card per track */}
         {(release.tracks ?? []).map((t, i) => (
           <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />

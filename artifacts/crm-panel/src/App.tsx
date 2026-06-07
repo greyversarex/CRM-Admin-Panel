@@ -23,6 +23,8 @@ import AudioUploadPage from "@/pages/releases/tracks/audio-upload";
 import BulkUploadReleases from "@/pages/releases/bulk";
 import ReleaseAvailability from "@/pages/releases/availability";
 import ReleaseSplitShare from "@/pages/releases/splitshare";
+import MultiTrackEdit from "@/pages/releases/multi-track-edit";
+import ReorderTracks from "@/pages/releases/reorder-tracks";
 import TransferTrack from "@/pages/releases/transfer";
 import NewImport from "@/pages/releases/transfer/new";
 import Artists from "@/pages/artists";
@@ -120,12 +122,14 @@ function Router() {
       <ProtectedRoute path="/releases/bulk"             component={BulkUploadReleases} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
-      <ProtectedRoute path="/releases/:id/availability"     component={ReleaseAvailability} />
-      <ProtectedRoute path="/releases/:id/splitshare"       component={ReleaseSplitShare} />
-      <ProtectedRoute path="/releases/:id/edit"              component={EditRelease} />
+      <ProtectedRoute path="/releases/:id/availability"          component={ReleaseAvailability} />
+      <ProtectedRoute path="/releases/:id/splitshare"           component={ReleaseSplitShare} />
+      <ProtectedRoute path="/releases/:id/edit"                 component={EditRelease} />
+      <ProtectedRoute path="/releases/:id/multi-track-edit"     component={MultiTrackEdit} />
+      <ProtectedRoute path="/releases/:id/reorder-tracks"       component={ReorderTracks} />
       <ProtectedRoute path="/releases/:id/tracks/:tid/audio-upload" component={AudioUploadPage} />
-      <ProtectedRoute path="/releases/:id/tracks/:tid/edit"  component={TrackEditPage} />
-      <ProtectedRoute path="/releases/:id"                   component={ReleaseDetail} />
+      <ProtectedRoute path="/releases/:id/tracks/:tid/edit"     component={TrackEditPage} />
+      <ProtectedRoute path="/releases/:id"                      component={ReleaseDetail} />
       <ProtectedRoute path="/artists"        component={Artists} />
       <ProtectedRoute path="/labels"         component={Labels} />
       <ProtectedRoute path="/users"          component={Users} />
