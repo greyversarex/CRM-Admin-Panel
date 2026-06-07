@@ -430,19 +430,22 @@ export default function ReleaseDetail() {
           {(release.tracks ?? []).length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                variant="outline" size="sm" className="bg-card text-xs h-8"
+                variant="outline" size="sm"
+                className="bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 hover:border-primary/60 text-xs h-8 font-medium"
                 onClick={() => setLocation(`/releases/${id}/multi-track-edit`)}
               >
                 <Pencil className="h-3.5 w-3.5 mr-1.5" /> Multi Track Edit
               </Button>
               <Button
-                variant="outline" size="sm" className="bg-card text-xs h-8"
+                variant="outline" size="sm"
+                className="bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 hover:border-primary/60 text-xs h-8 font-medium"
                 onClick={() => setLocation(`/releases/${id}/reorder-tracks`)}
               >
                 <ListChecks className="h-3.5 w-3.5 mr-1.5" /> Reorder Tracks
               </Button>
               <Button
-                variant="outline" size="sm" className="bg-card text-xs h-8"
+                variant="outline" size="sm"
+                className="bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 hover:border-primary/60 text-xs h-8 font-medium"
                 onClick={() => setLocation(`/releases/${id}/audio-upload`)}
               >
                 <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Audio
