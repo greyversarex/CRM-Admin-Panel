@@ -288,6 +288,7 @@ export default function TrackEditPage() {
   const audioPool: Asset[] = (audioAssetsData as any) ?? [];
 
   const [f, setF] = useState<FormState | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   useEffect(() => {
     if (track) setF(trackToForm(track));
   }, [track?.id, track?.updatedAt]);
@@ -351,7 +352,6 @@ export default function TrackEditPage() {
   }
 
   const isBusy = updateTrack.isPending;
-  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const YEARS = Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => new Date().getFullYear() - i);
 
