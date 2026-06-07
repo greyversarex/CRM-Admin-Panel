@@ -784,53 +784,121 @@ export default function TrackEditPage() {
             {/* Classification */}
             <div className="space-y-5">
             <h3 className="text-lg font-semibold">Classification</h3>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold inline-flex items-center gap-1">
-                Audio Style <InfoTip text="Choose «Instrumental» if the track has no lyrics, or «Vocal» if it contains singing or spoken words." />
-              </Label>
-              <RadioGroup
-                value={f.audioStyle}
-                onValueChange={(v) => setF({ ...f, audioStyle: v as FormState["audioStyle"] })}
-                className="flex gap-6"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="instrumental" id="style-instrumental" />
-                  <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">Instrumental</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="vocal" id="style-vocal" />
-                  <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">Vocal</Label>
-                </div>
-              </RadioGroup>
+
+            {/* Audio Style + Explicit Status side by side */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold inline-flex items-center gap-1">
+                  Audio Style <InfoTip text="Choose «Instrumental» if the track has no lyrics, or «Vocal» if it contains singing or spoken words." />
+                </Label>
+                <RadioGroup
+                  value={f.audioStyle}
+                  onValueChange={(v) => setF({ ...f, audioStyle: v as FormState["audioStyle"] })}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="instrumental" id="style-instrumental" />
+                    <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">Instrumental</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="vocal" id="style-vocal" />
+                    <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">Vocal</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold inline-flex items-center gap-1">
+                  Explicit Status <InfoTip text="«Non Explicit» — no explicit content; «Explicit» — contains explicit language; «Censored» — an edited/clean version." />
+                </Label>
+                <RadioGroup
+                  value={f.explicitStatus}
+                  onValueChange={(v) => setF({
+                    ...f,
+                    explicitStatus: v as FormState["explicitStatus"],
+                    isExplicit: v === "explicit",
+                  })}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="non_explicit" id="exp-clean" />
+                    <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">Non Explicit</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="explicit" id="exp-explicit" />
+                    <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">Explicit</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="censored" id="exp-censored" />
+                    <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">Censored</Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold inline-flex items-center gap-1">
-                Explicit Status <InfoTip text="«Non Explicit» — no explicit content; «Explicit» — contains explicit language; «Censored» — an edited/clean version." />
-              </Label>
-              <RadioGroup
-                value={f.explicitStatus}
-                onValueChange={(v) => setF({
-                  ...f,
-                  explicitStatus: v as FormState["explicitStatus"],
-                  isExplicit: v === "explicit",
-                })}
-                className="flex gap-6"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="non_explicit" id="exp-clean" />
-                  <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">Non Explicit</Label>
+            {/* Vocal Language + Lyrics — shown only when audioStyle is "vocal" */}
+            {f.audioStyle === "vocal" && (
+              <div className="space-y-5 pt-1">
+                <p className="text-sm text-muted-foreground">
+                  We strongly encourage you to provide lyrics so fans have a better DSP experience.
+                </p>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Vocal Language</Label>
+                  <Select
+                    value={f.vocalLanguage || ""}
+                    onValueChange={(v) => setF({ ...f, vocalLanguage: v })}
+                  >
+                    <SelectTrigger className="w-72 bg-background/40">
+                      <SelectValue placeholder="Select a Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGS.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="explicit" id="exp-explicit" />
-                  <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">Explicit</Label>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">Lyrics</Label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!f.audioUrl}
+                      onClick={() => {
+                        if (!f.audioUrl) return;
+                        toast({ title: "Transcription", description: "AI transcription requires an external service. Please enter lyrics manually." });
+                      }}
+                    >
+                      <Wand2 className="h-4 w-4 mr-1.5" />
+                      Transcribe Lyrics with AI
+                    </Button>
+                    {!f.audioUrl && (
+                      <p className="text-sm text-red-400">
+                        You must link an audio file to the track in order to transcribe lyrics.
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Please list lyrics in standard lyrical format,{" "}
+                    <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer" className="text-primary underline">more info here</a>.{" "}
+                    Learn about lyrics distribution{" "}
+                    <a href="https://support.apple.com/en-us/101564" target="_blank" rel="noopener noreferrer" className="text-primary underline">here</a>.{" "}
+                    Don't annotate section headers [Intro, Verse, Chorus, Hook, etc.]
+                    Repeated lines &amp; choruses must be transcribed. (Don't denote "Chorus 2x")
+                  </p>
+                  <Textarea
+                    value={f.lyrics}
+                    onChange={(e) => setF({ ...f, lyrics: e.target.value })}
+                    rows={10}
+                    className="font-mono text-sm bg-background/40 resize-y"
+                    placeholder="Enter lyrics here…"
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="censored" id="exp-censored" />
-                  <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">Censored</Label>
-                </div>
-              </RadioGroup>
-            </div>
+              </div>
+            )}
             </div>
             </CardContent>
           </Card>
@@ -844,11 +912,11 @@ export default function TrackEditPage() {
           Cancel
         </Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={save} disabled={isBusy}>
-            {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+          <Button onClick={save} disabled={isBusy}>
+            {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
             Save
           </Button>
-          <Button onClick={saveAndGoNext} disabled={isBusy}>
+          <Button variant="secondary" onClick={saveAndGoNext} disabled={isBusy}>
             {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
             {nextTrack ? "Save & Next Track" : "Save & Finish"}
           </Button>
