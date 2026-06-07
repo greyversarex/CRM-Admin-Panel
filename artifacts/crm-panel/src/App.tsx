@@ -24,6 +24,7 @@ import BulkUploadReleases from "@/pages/releases/bulk";
 import ReleaseAvailability from "@/pages/releases/availability";
 import ReleaseSplitShare from "@/pages/releases/splitshare";
 import MultiTrackEdit from "@/pages/releases/multi-track-edit";
+import MultiTrackEditCategory from "@/pages/releases/multi-track-edit-category";
 import ReorderTracks from "@/pages/releases/reorder-tracks";
 import ReleaseAudioUpload from "@/pages/releases/audio-upload";
 import TransferTrack from "@/pages/releases/transfer";
@@ -126,6 +127,7 @@ function Router() {
       <ProtectedRoute path="/releases/:id/availability"          component={ReleaseAvailability} />
       <ProtectedRoute path="/releases/:id/splitshare"           component={ReleaseSplitShare} />
       <ProtectedRoute path="/releases/:id/edit"                 component={EditRelease} />
+      <ProtectedRoute path="/releases/:id/multi-track-edit/:category" component={MultiTrackEditCategory} />
       <ProtectedRoute path="/releases/:id/multi-track-edit"     component={MultiTrackEdit} />
       <ProtectedRoute path="/releases/:id/reorder-tracks"       component={ReorderTracks} />
       <ProtectedRoute path="/releases/:id/audio-upload"         component={ReleaseAudioUpload} />
