@@ -446,7 +446,6 @@ export default function TrackEditPage() {
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
                     className="shrink-0"
                     onClick={() => setLocation(`/releases/${releaseId}/tracks/${track.id}/audio-upload`)}
                   >
@@ -501,7 +500,7 @@ export default function TrackEditPage() {
                     placeholder="TJCTM2500001"
                     className="font-mono min-w-0"
                   />
-                  <Button type="button" variant="outline" size="sm" className="shrink-0"
+                  <Button type="button" size="sm" className="shrink-0"
                     onClick={() => setF({ ...f, isrc: generateIsrc() })}>
                     Generate ISRC
                   </Button>
