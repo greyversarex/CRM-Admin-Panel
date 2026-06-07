@@ -388,6 +388,7 @@ export default function ReleaseDetail() {
                   <KV label="Tracks" value={String(release.totalTracks)} mini />
                   <KV label="CLINE" value={release.cLine || "—"} mini />
                   <KV label="Explicit Content" value={release.isExplicit ? "Yes" : "No"} mini />
+                  <div />
                   <KV label="PLINE" value={release.pLine || "—"} mini />
                 </div>
                 {Array.isArray((release as any).metadataTranslations) && (release as any).metadataTranslations.length > 0 && (
