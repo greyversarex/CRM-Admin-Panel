@@ -48,7 +48,7 @@ export function ArtistNameCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="bg-background/40 flex-1 min-w-0 justify-between font-normal h-9 px-3"
+          className="bg-background/40 w-full min-w-0 justify-between font-normal h-9 px-3"
         >
           <span className={value ? "truncate" : "text-foreground/40 truncate"}>
             {value || ph}

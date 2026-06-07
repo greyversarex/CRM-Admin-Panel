@@ -46,7 +46,7 @@ export function DisplayArtistsEditor({
             placeholder={t.releaseWizard.selectOrTypeArtist}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
-            <SelectTrigger className="bg-background/40 w-36 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -82,7 +82,7 @@ export function WritersEditor({
             placeholder={t.releaseWizard.selectOrTypeWriter}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
-            <SelectTrigger className="bg-background/40 w-36 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -118,7 +118,7 @@ export function PerformersEditor({
             placeholder={t.releaseWizard.selectOrTypePerformer}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-44 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -154,7 +154,7 @@ export function ProductionEditor({
             placeholder={t.releaseWizard.selectOrTypeName}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-48 shrink-0"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -191,24 +191,24 @@ function Editor<T>({
         </div>
       )}
 
-      {/* Column headers — aligned with Artist Name (flex-1) | Role (fixed) | icon (36px) */}
-      <div className="flex items-center gap-2 px-0.5">
-        <span className="flex-1 text-xs text-muted-foreground/70">Artist Name</span>
-        <span className={`${roleWidth ?? "w-36"} shrink-0 text-xs text-muted-foreground/70`}>Role</span>
-        <span className="w-9 shrink-0" />
+      {/* Column headers aligned with grid columns below */}
+      <div className="grid grid-cols-[3fr_2fr_36px] gap-2 px-0.5">
+        <span className="text-xs text-muted-foreground/70">Artist Name</span>
+        <span className="text-xs text-muted-foreground/70">Role</span>
+        <span />
       </div>
 
       {rows.length === 0 && <p className="text-sm text-muted-foreground italic">{empty}</p>}
 
       <div className="space-y-1.5">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="grid grid-cols-[3fr_2fr_36px] gap-2 items-center">
             {renderRow(row, i)}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
+              className="h-9 w-9 text-muted-foreground hover:text-destructive"
               onClick={() => onRemove(i)}
               title={t.releaseWizard.remove}
             >
