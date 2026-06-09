@@ -210,7 +210,10 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
       if (Math.abs(total - 100) > 0.01)
         issues.push({ section: "tracks", field: `track:${t.id}:writers`, message: `${prefix}: сумма долей авторов = ${total}% (должна быть 100%).`, severity: "error" });
     }
-    if (t.audioStyle === "vocal" && !t.vocalLanguage)
+    // Язык вокала: достаточно указанного «языка вокала» ЛИБО языка метаданных трека.
+    // Доставка в DSP (DDEX) всё равно использует язык метаданных (t.language || release.language),
+    // поэтому требовать отдельно заполненный vocalLanguage — ложная блокировка.
+    if (t.audioStyle === "vocal" && !t.vocalLanguage && !t.language)
       issues.push({ section: "tracks", field: `track:${t.id}:vocalLanguage`, message: `${prefix}: вокальный трек — укажите язык вокала.`, severity: "error" });
     if (t.audioStyle === "vocal" && !t.lyrics)
       issues.push({ section: "tracks", field: `track:${t.id}:lyrics`, message: `${prefix}: вокальный трек — приложите текст (повышает шансы попасть в редакторские плейлисты).`, severity: "warning" });
