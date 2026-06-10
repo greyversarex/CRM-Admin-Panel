@@ -98,15 +98,52 @@ router.put("/releases/:id/artists", async (req, res): Promise<void> => {
   if (items.length === 0) { res.status(400).json({ error: "Must have at least one artist" }); return; }
   if (!items.some((a) => a.role === "primary")) { res.status(400).json({ error: "Must have at least one primary artist" }); return; }
 
-  // Проверяем что все artist_id существуют (дешевле сделать одним запросом).
+  // Проверяем что все artist_id существуют (одним запросом) и одновременно
+  // забираем их labelId для проверки scope ниже.
   const ids = Array.from(new Set(items.map((a) => a.artistId)));
-  const existing = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.id, ids[0]));
-  // Простая проверка по первому — Drizzle inArray уже использовался выше; но для безопасности проверяем каждого:
+  const artistRows = await db
+    .select({ id: artistsTable.id, labelId: artistsTable.labelId })
+    .from(artistsTable)
+    .where(inArray(artistsTable.id, ids));
+  const byId = new Map(artistRows.map((a) => [a.id, a]));
   for (const id of ids) {
-    const [a] = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.id, id));
-    if (!a) { res.status(400).json({ error: `Artist ${id} not found` }); return; }
+    if (!byId.has(id)) { res.status(400).json({ error: `Artist ${id} not found` }); return; }
   }
-  void existing;
+
+  // releasesTable.artistId будет синхронизирован с первым primary — этот артист
+  // фактически определяет "владельца" релиза, поэтому именно его проверяем строже.
+  const firstPrimary = items.find((a) => a.role === "primary") ?? items[0];
+
+  // ── Авторизация назначаемых артистов ──────────────────────────────────────
+  // Без этой проверки artist/label пользователь мог бы подставить чужой artistId
+  // (в т.ч. передать релиз другому артисту через первый primary). loadReleaseInScope
+  // проверяет только доступ к самому релизу, но не к артистам из тела запроса.
+  if (!scope.fullAccess) {
+    if (scope.role === "artist") {
+      if (scope.artistId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+      // Запрещаем "увод" релиза: первый primary обязан остаться самим вызывающим артистом.
+      if (firstPrimary.artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // Соисполнители (featuring/with/remixer) допускаются только из того же лейбла,
+      // что и сам артист (или это он сам). Для независимого артиста (labelId = null)
+      // — только он сам.
+      const ownLabelId = byId.get(scope.artistId)?.labelId ?? null;
+      for (const id of ids) {
+        if (id === scope.artistId) continue;
+        const lbl = byId.get(id)?.labelId ?? null;
+        if (ownLabelId == null || lbl !== ownLabelId) {
+          res.status(403).json({ error: "Artist outside your scope" }); return;
+        }
+      }
+    } else if (scope.role === "label") {
+      if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+      // Все назначаемые артисты обязаны принадлежать лейблу вызывающего.
+      for (const id of ids) {
+        if ((byId.get(id)?.labelId ?? null) !== scope.labelId) {
+          res.status(403).json({ error: "Artist does not belong to your label" }); return;
+        }
+      }
+    }
+  }
 
   await db.transaction(async (tx) => {
     await tx.delete(releaseArtistsTable).where(eq(releaseArtistsTable.releaseId, release.id));

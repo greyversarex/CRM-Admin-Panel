@@ -3,10 +3,11 @@ import {
   useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
   useDeliverRelease, useSubmitReleaseForReview,
   useUpdateTrack, useGetReleaseDsps, useUpdateReleaseDsps, useListSplits,
+  useGetReleaseArtists, useUpdateReleaseArtists,
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
-  getListDeliveriesQueryKey, getGetReleaseDspsQueryKey,
+  getListDeliveriesQueryKey, getGetReleaseDspsQueryKey, getGetReleaseArtistsQueryKey,
   type Track, type DeliveryTarget,
-  type ReleaseDetail, type CreateReleaseBody, type Split,
+  type ReleaseDetail, type CreateReleaseBody, type Split, type ReleaseArtistRef,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useParams, useLocation, Link } from "wouter";
@@ -26,6 +27,7 @@ import { CoverUploader, AudioUploader, assetHref, useAssetUpload } from "@/compo
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
+import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -90,6 +92,13 @@ const TAKEDOWN_REASONS = [
   "Wrong audio file", "Replacement release", "Artist request",
 ];
 
+const RELEASE_ARTIST_ROLE_LABELS: Record<string, string> = {
+  primary: "Основной",
+  featuring: "Приглашённый",
+  with: "С участием",
+  remixer: "Ремиксер",
+};
+
 export default function ReleaseDetail() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -102,6 +111,9 @@ export default function ReleaseDetail() {
   });
   const queryClient = useQueryClient();
   const createTrack = useCreateTrack();
+  const { data: releaseArtists } = useGetReleaseArtists(id, {
+    query: { enabled: Number.isFinite(id) && id > 0 } as never,
+  });
 
   const [editOpen, setEditOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
@@ -123,6 +135,7 @@ export default function ReleaseDetail() {
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetReleaseQueryKey(id) });
+    queryClient.invalidateQueries({ queryKey: getGetReleaseArtistsQueryKey(id) });
     queryClient.invalidateQueries({ queryKey: getListReleasesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
@@ -377,7 +390,24 @@ export default function ReleaseDetail() {
                 <KV label="Releases Title" value={release.title} highlight />
                 <KV label="Release Version" value={(release as any).releaseVersion || (release as any).trackVersion || "—"} />
                 <KV label="Metadata" value={release.language || "English"} />
-                <KV label="Primary Artist" value={release.artistName} chip />
+                {releaseArtists && releaseArtists.length > 0 ? (
+                  <div className="grid grid-cols-[160px_1fr] items-baseline gap-4">
+                    <div className="text-sm text-muted-foreground">Артисты</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {releaseArtists.map((a) => (
+                        <span
+                          key={`${a.artistId}-${a.position}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
+                        >
+                          {a.name}
+                          <span className="text-[10px] text-primary/60 font-normal">{RELEASE_ARTIST_ROLE_LABELS[a.role] ?? a.role}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <KV label="Primary Artist" value={release.artistName} chip />
+                )}
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 pt-3 border-t border-border/30">
                   <KV label="Genre" value={release.genre || "—"} mini />
                   <KV label="UPC" value={release.upc || "Pending"} mono mini />
@@ -577,6 +607,21 @@ function EditDetailsForm({
   onSaved: () => void;
 }) {
   const updateRelease = useUpdateRelease();
+  const updateArtists = useUpdateReleaseArtists();
+  const { data: serverArtists } = useGetReleaseArtists(release.id);
+  // Локальный список артистов релиза. Синхронизируем один раз, когда придёт
+  // ответ сервера, пока пользователь его не правил.
+  const [artists, setArtists] = useState<ReleaseArtistRef[]>([]);
+  const artistsTouched = useRef(false);
+  useEffect(() => {
+    if (artistsTouched.current || !serverArtists) return;
+    setArtists(
+      serverArtists.length > 0
+        ? serverArtists.map((a, i) => ({ artistId: a.artistId, name: a.name, role: a.role, position: i }))
+        : [{ artistId: release.artistId, name: release.artistName ?? "", role: "primary", position: 0 }],
+    );
+  }, [serverArtists, release.artistId, release.artistName]);
+
   const [form, setForm] = useState({
     title:        release.title ?? "",
     language:     release.language ?? "Tajik",
@@ -599,6 +644,19 @@ function EditDetailsForm({
       toast({ variant: "destructive", title: "Название обязательно", description: "Поле «Название релиза» не может быть пустым." });
       return;
     }
+    if (artists.length === 0) {
+      toast({ variant: "destructive", title: "Нужен артист", description: "Добавьте хотя бы одного артиста." });
+      return;
+    }
+    if (!artists.some((a) => a.role === "primary")) {
+      toast({ variant: "destructive", title: "Нужен основной артист", description: "Назначьте хотя бы одного артиста основным (Primary)." });
+      return;
+    }
+    const dupIds = artists.map((a) => a.artistId);
+    if (new Set(dupIds).size !== dupIds.length) {
+      toast({ variant: "destructive", title: "Повтор артиста", description: "Один и тот же артист добавлен несколько раз. Уберите дубликаты." });
+      return;
+    }
     const territories = form.territories
       .split(",").map((s: string) => s.trim().toUpperCase()).filter(Boolean);
     // UpdateReleaseBody на бэке требует title/releaseType/artistId; labelId/coverUrl — nullable.
@@ -608,10 +666,13 @@ function EditDetailsForm({
     const translations = form.translations
       .map((t) => ({ language: (t.language || "").trim(), title: (t.title || "").trim(), version: (t.version || "").trim() || null }))
       .filter((t) => t.language && t.title);
+    // Первый primary становится «легаси» artistId релиза (бэк всё равно
+    // синхронизирует, но отправляем согласованно).
+    const firstPrimary = artists.find((a) => a.role === "primary") ?? artists[0];
     const data: CreateReleaseBody = {
       title:       form.title.trim(),
       releaseType: form.releaseType as CreateReleaseBody["releaseType"],
-      artistId:    release.artistId,
+      artistId:    firstPrimary.artistId,
       labelId:     release.labelId ?? null,
       coverUrl:    release.coverUrl ?? null,
       language:    form.language || null,
@@ -626,6 +687,14 @@ function EditDetailsForm({
       metadataTranslations: translations,
     } as CreateReleaseBody;
     try {
+      // Список артистов сохраняем ПЕРВЫМ: этот эндпоинт в одной транзакции
+      // и заменяет join-таблицу, и синхронизирует releases.artist_id с первым
+      // primary. Если он упадёт — метаданные ещё не тронуты (нет частичного
+      // рассинхрона). Только после успеха обновляем остальные метаданные.
+      await updateArtists.mutateAsync({
+        id: release.id,
+        data: { artists: artists.map((a) => ({ artistId: a.artistId, role: a.role })) },
+      });
       await updateRelease.mutateAsync({ id: release.id, data });
       toast({ title: "Изменения сохранены", description: "Метаданные релиза обновлены." });
       onSaved();
@@ -638,6 +707,17 @@ function EditDetailsForm({
     <div className="space-y-4">
       <FormField label="Название релиза *">
         <Input value={form.title} onChange={(e) => set("title", e.target.value)} className="bg-background/40" />
+      </FormField>
+
+      <FormField label="Артисты релиза">
+        <MultiArtistPicker
+          value={artists}
+          onChange={(next) => { artistsTouched.current = true; setArtists(next); }}
+        />
+        <p className="text-[11px] text-muted-foreground/80 mt-1">
+          Можно добавить несколько артистов и задать роль каждому (основной,
+          приглашённый, с участием, ремиксер). Основных артистов может быть несколько.
+        </p>
       </FormField>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
