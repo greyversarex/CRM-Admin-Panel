@@ -71,6 +71,10 @@ const corsOptions: CorsOptions = {
   origin(origin, cb) {
     // No Origin header → not a CORS request (curl, server-to-server, same-origin GET).
     if (!origin) return cb(null, true);
+    // В разработке домен превью Replit (и iframe на Canvas) меняется и заранее
+    // неизвестен, а Vite-прокси пробрасывает Origin браузера на API. Поэтому в dev
+    // разрешаем любой Origin. В продакшене список строго ограничен WEB_ORIGINS.
+    if (!isProduction) return cb(null, true);
     if (effectiveAllowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error(`Origin ${origin} not allowed by CORS policy`));
   },
