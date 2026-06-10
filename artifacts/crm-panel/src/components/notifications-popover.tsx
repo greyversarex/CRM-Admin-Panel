@@ -19,6 +19,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useLang } from "@/lib/i18n";
+import { useNotificationStream } from "@/hooks/use-notification-stream";
 
 const TYPE_ICONS: Record<string, string> = {
   release_approved: "✅",
@@ -34,16 +36,16 @@ const TYPE_ICONS: Record<string, string> = {
   general: "📣",
 };
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, nt: ReturnType<typeof useLang>["t"]["notifications"]): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return "только что";
+  if (s < 60) return nt.just_now;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} мин. назад`;
+  if (m < 60) return `${m} ${nt.min_ago}`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} ч. назад`;
+  if (h < 24) return `${h} ${nt.hours_ago}`;
   const d = Math.floor(h / 24);
-  return `${d} д. назад`;
+  return `${d} ${nt.days_ago}`;
 }
 
 export function NotificationsPopover() {
@@ -51,9 +53,15 @@ export function NotificationsPopover() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { t } = useLang();
+  const nt = t.notifications;
 
+  // Real-time SSE push: invalidates query cache the moment a notification arrives.
+  useNotificationStream();
+
+  // Polling is kept as fallback (60 s) — SSE handles real-time updates.
   const { data: countData } = useGetUnreadNotificationCount({
-    query: { queryKey: getGetUnreadNotificationCountQueryKey(), refetchInterval: 30_000 },
+    query: { queryKey: getGetUnreadNotificationCountQueryKey(), refetchInterval: 60_000 },
   } as never);
 
   const unreadCount: number = (countData as any)?.count ?? 0;
@@ -78,7 +86,7 @@ export function NotificationsPopover() {
     queryClient.invalidateQueries({ queryKey: getGetUnreadNotificationCountQueryKey() });
   };
 
-  // When popover opens, refetch + start faster polling. Stop on close.
+  // When popover opens, refetch immediately + start faster polling. Stop on close.
   useEffect(() => {
     if (open) {
       invalidate();
@@ -131,10 +139,10 @@ export function NotificationsPopover() {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <div className="text-sm font-semibold">
-            Уведомления
+            {nt.title}
             {unreadCount > 0 && (
               <Badge className="ml-2 text-[10px] h-4 bg-primary/15 text-primary border-primary/30">
-                {unreadCount} новых
+                {unreadCount} {nt.new_suffix}
               </Badge>
             )}
           </div>
@@ -147,7 +155,7 @@ export function NotificationsPopover() {
               disabled={markAll.isPending}
             >
               <CheckCheck className="h-3.5 w-3.5 mr-1" />
-              Прочитать все
+              {nt.mark_all_read}
             </Button>
           )}
         </div>
@@ -162,7 +170,7 @@ export function NotificationsPopover() {
           ) : notifications.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
-              Нет уведомлений
+              {nt.empty}
             </div>
           ) : (
             <div className="divide-y divide-border/40">
@@ -193,7 +201,9 @@ export function NotificationsPopover() {
                     {n.body && (
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                     )}
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      {timeAgo(n.createdAt, nt)}
+                    </p>
                   </div>
                   {!n.readAt && (
                     <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
@@ -207,7 +217,7 @@ export function NotificationsPopover() {
         {notifications.length > 0 && (
           <div className="border-t border-border/50 px-4 py-2 text-center">
             <p className="text-[10px] text-muted-foreground/60">
-              Показаны последние {notifications.length} уведомлений
+              {nt.showing_last_prefix} {notifications.length} {nt.showing_last_suffix}
             </p>
           </div>
         )}

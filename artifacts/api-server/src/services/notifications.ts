@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { notificationsTable, type InsertNotification } from "@workspace/db/schema";
+import { sseRegistry } from "./sse-registry";
 
 export type CreateNotificationInput = {
   userId: number;
@@ -15,6 +16,9 @@ export type CreateNotificationInput = {
  * Fire-and-forget notification creation.
  * Always call with `void` so individual notification failures never block
  * the primary request.
+ *
+ * After persisting to DB, emits a real-time SSE push to any open browser
+ * tabs of that user so the bell badge and popover update instantly.
  */
 export async function createNotification(input: CreateNotificationInput): Promise<void> {
   const row: InsertNotification = {
@@ -27,6 +31,8 @@ export async function createNotification(input: CreateNotificationInput): Promis
     link: input.link ?? null,
   };
   await db.insert(notificationsTable).values(row);
+  // Push real-time event to all open browser tabs of this user.
+  sseRegistry.emit(input.userId, "notification", { type: input.type });
 }
 
 /**
@@ -54,6 +60,8 @@ export async function notifyByArtistId(
     link: input.link ?? null,
   }));
   await db.insert(notificationsTable).values(rows);
+  // Push SSE to each affected user.
+  sseRegistry.emitToUsers(users.map((u) => u.id), "notification", { type: input.type });
 }
 
 /**
@@ -80,6 +88,8 @@ export async function notifyByLabelId(
     link: input.link ?? null,
   }));
   await db.insert(notificationsTable).values(rows);
+  // Push SSE to each affected user.
+  sseRegistry.emitToUsers(users.map((u) => u.id), "notification", { type: input.type });
 }
 
 /**
@@ -125,4 +135,6 @@ export async function notifyAdmins(
     link: input.link ?? null,
   }));
   await db.insert(notificationsTable).values(rows);
+  // Push SSE to all admins/managers.
+  sseRegistry.emitToUsers(admins.map((u) => u.id), "notification", { type: input.type });
 }
