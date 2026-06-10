@@ -247,6 +247,16 @@ export const GetArtistResponse = zod
               .string()
               .nullish()
               .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+            originalReleaseDate: zod
+              .string()
+              .nullish()
+              .describe(
+                "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+              ),
+            preorderDate: zod
+              .string()
+              .nullish()
+              .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
             language: zod.string().nullish(),
             isExplicit: zod.boolean(),
             isCompilation: zod.boolean(),
@@ -733,6 +743,16 @@ export const ListReleasesResponse = zod.object({
         .string()
         .nullish()
         .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+      originalReleaseDate: zod
+        .string()
+        .nullish()
+        .describe(
+          "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+        ),
+      preorderDate: zod
+        .string()
+        .nullish()
+        .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
       language: zod.string().nullish(),
       isExplicit: zod.boolean(),
       isCompilation: zod.boolean(),
@@ -863,6 +883,8 @@ export const CreateReleaseBody = zod.object({
   subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
   releaseTime: zod.string().nullish(),
+  originalReleaseDate: zod.string().nullish(),
+  preorderDate: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(createReleaseBodyIsExplicitDefault),
   isCompilation: zod.boolean().default(createReleaseBodyIsCompilationDefault),
@@ -957,6 +979,16 @@ export const GetReleaseResponse = zod
       .string()
       .nullish()
       .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+    originalReleaseDate: zod
+      .string()
+      .nullish()
+      .describe(
+        "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+      ),
+    preorderDate: zod
+      .string()
+      .nullish()
+      .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
     language: zod.string().nullish(),
     isExplicit: zod.boolean(),
     isCompilation: zod.boolean(),
@@ -1193,6 +1225,8 @@ export const UpdateReleaseBody = zod.object({
   subgenre: zod.string().nullish(),
   releaseDate: zod.string().nullish(),
   releaseTime: zod.string().nullish(),
+  originalReleaseDate: zod.string().nullish(),
+  preorderDate: zod.string().nullish(),
   language: zod.string().nullish(),
   isExplicit: zod.boolean().default(updateReleaseBodyIsExplicitDefault),
   isCompilation: zod.boolean().default(updateReleaseBodyIsCompilationDefault),
@@ -1274,6 +1308,16 @@ export const UpdateReleaseResponse = zod.object({
     .string()
     .nullish()
     .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+  originalReleaseDate: zod
+    .string()
+    .nullish()
+    .describe(
+      "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+    ),
+  preorderDate: zod
+    .string()
+    .nullish()
+    .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
   isCompilation: zod.boolean(),
@@ -1477,7 +1521,7 @@ export const ListDspCatalogResponseItem = zod.object({
   name: zod.string(),
   logoUrl: zod.string().nullish(),
   ddexPartyId: zod.string().nullish(),
-  category: zod.enum(["streaming", "download", "social", "video", "regional"]),
+  category: zod.enum(["streaming_download", "ugc_rights"]),
   isActive: zod.boolean(),
   position: zod.number(),
 });
@@ -1542,6 +1586,16 @@ export const SubmitReleaseForReviewResponse = zod.object({
     .string()
     .nullish()
     .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+  originalReleaseDate: zod
+    .string()
+    .nullish()
+    .describe(
+      "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+    ),
+  preorderDate: zod
+    .string()
+    .nullish()
+    .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
   isCompilation: zod.boolean(),
@@ -1715,6 +1769,16 @@ export const UpdateReleaseStatusResponse = zod.object({
     .string()
     .nullish()
     .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+  originalReleaseDate: zod
+    .string()
+    .nullish()
+    .describe(
+      "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+    ),
+  preorderDate: zod
+    .string()
+    .nullish()
+    .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
   isCompilation: zod.boolean(),
@@ -1877,6 +1941,16 @@ export const ImportReleaseByUpcResponse = zod.object({
     .string()
     .nullish()
     .describe("Время выхода (HH:MM, UTC), для DSP timeline."),
+  originalReleaseDate: zod
+    .string()
+    .nullish()
+    .describe(
+      "Оригинальная дата первого выхода (перевыпуски\/каталог), YYYY-MM-DD.",
+    ),
+  preorderDate: zod
+    .string()
+    .nullish()
+    .describe("Дата старта предзаказа \/ pre-save, YYYY-MM-DD."),
   language: zod.string().nullish(),
   isExplicit: zod.boolean(),
   isCompilation: zod.boolean(),

@@ -23,10 +23,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label as FieldLabel } from "@/components/ui/label";
-import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
+import { DspPickerInline } from "@/components/release-wizard/dsp-picker";
+import { COUNTRIES, countryName } from "@/lib/countries";
+import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronDown, AlertTriangle, Pencil, Save } from "lucide-react";
+import { ChevronLeft, ChevronDown, AlertTriangle, Pencil, Save, Search, X } from "lucide-react";
 
 function normalizeHHMM(t?: string | null): string | null {
   const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec((t ?? "").trim());
@@ -44,14 +47,85 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function DspPill({ name }: { name: string }) {
-  const initials = name.split(" ").map((p) => p[0]).join("").slice(0, 2);
+function TerritoryPicker({
+  selected, onChange, query, onQueryChange, lang, disabled,
+}: {
+  selected: string[];
+  onChange: (codes: string[]) => void;
+  query: string;
+  onQueryChange: (q: string) => void;
+  lang: "ru" | "en";
+  disabled?: boolean;
+}) {
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? COUNTRIES.filter(
+        (c) =>
+          c.ru.toLowerCase().includes(q) ||
+          c.en.toLowerCase().includes(q) ||
+          c.code.toLowerCase().includes(q),
+      )
+    : COUNTRIES;
+
+  const toggle = (code: string) =>
+    onChange(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
+
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border border-border/50 bg-background/40 text-xs">
-      <div className="h-5 w-5 rounded-full bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center text-[9px] font-bold text-white">
-        {initials}
+    <div className="space-y-3">
+      {selected.length === 0 ? (
+        <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2.5 leading-relaxed">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            «Весь мир» выключен и ни одна территория не выбрана. При сохранении
+            релиз не уйдёт на площадки — выберите хотя бы одну страну ниже.
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((code) => (
+            <button
+              key={code}
+              type="button"
+              disabled={disabled}
+              onClick={() => toggle(code)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-xs"
+            >
+              {countryName(code, lang)}
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Поиск страны…"
+          className="pl-9 bg-background/40"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          disabled={disabled}
+        />
       </div>
-      {name}
+      <div className="max-h-64 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1">
+        {filtered.map((c) => (
+          <label
+            key={c.code}
+            className="flex items-center gap-2 p-2 rounded-md border border-border/40 bg-background/30 hover:bg-accent/40 cursor-pointer text-sm"
+          >
+            <Checkbox
+              checked={selected.includes(c.code)}
+              onCheckedChange={() => toggle(c.code)}
+              disabled={disabled}
+            />
+            <span className="truncate">{lang === "ru" ? c.ru : c.en}</span>
+          </label>
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-full text-center text-xs text-muted-foreground py-4">
+            Страны не найдены.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -59,6 +133,7 @@ function DspPill({ name }: { name: string }) {
 function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
+  const { lang } = useLang();
   const updateRelease = useUpdateRelease();
   const updateDsps = useUpdateReleaseDsps();
   const { data: serverDsps = [] } = useGetReleaseDsps(release.id);
@@ -71,18 +146,29 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   );
   const initialTime = normalizeHHMM(release.releaseTime) ?? "00:00";
   const [time, setTime] = useState(initialTime);
-  const [showAdvanced, setShowAdvanced] = useState(initialTime !== "00:00");
+  const [origDate, setOrigDate] = useState(
+    release.originalReleaseDate ? String(release.originalReleaseDate).slice(0, 10) : "",
+  );
+  const [preorderDate, setPreorderDate] = useState(
+    release.preorderDate ? String(release.preorderDate).slice(0, 10) : "",
+  );
+  const [showAdvanced, setShowAdvanced] = useState(
+    initialTime !== "00:00" || !!origDate || !!preorderDate,
+  );
 
   // ── Territory Rights
   const territories = release.territories ?? ["WW"];
-  const specificTerritories = territories.filter((t) => t !== "WW");
   const [worldWide, setWorldWide] = useState(territories.includes("WW"));
+  const [selectedTerritories, setSelectedTerritories] = useState<string[]>(
+    territories.filter((t) => t !== "WW"),
+  );
+  const [territoryQuery, setTerritoryQuery] = useState("");
 
   // ── Partner Selection. serverDsps приходит асинхронно — синхронизируем
   // локальный выбор один раз по приходу, пока пользователь его не трогал.
   const [dsps, setDsps] = useState<string[]>([]);
   const dspTouched = useRef(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [showPartners, setShowPartners] = useState(false);
   useEffect(() => {
     if (!dspTouched.current) setDsps(serverDsps);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,6 +187,8 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       genre:             release.genre ?? null,
       releaseDate:       date || null,
       releaseTime:       time || null,
+      originalReleaseDate: origDate || null,
+      preorderDate:      preorderDate || null,
       upc:               release.upc ?? null,
       pLine:             release.pLine ?? null,
       cLine:             release.cLine ?? null,
@@ -108,9 +196,8 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       isCompilation:     !!release.isCompilation,
       isVariousArtists:  !!release.isVariousArtists,
       upcRequestPending: !!release.upcRequestPending,
-      // Весь мир → ["WW"]; иначе сохраняем ранее выбранные конкретные территории
-      // (они правятся в «Деталях релиза»), не затирая их.
-      territories:       worldWide ? ["WW"] : specificTerritories,
+      // Весь мир → ["WW"]; иначе сохраняем выбранные конкретные территории.
+      territories:       worldWide ? ["WW"] : selectedTerritories,
     } as CreateReleaseBody;
     try {
       await updateRelease.mutateAsync({ id: release.id, data });
@@ -176,7 +263,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
             </button>
             {showAdvanced && (
-              <div className="mt-4">
+              <div className="mt-4 space-y-5">
                 <FormField label="Время релиза (UTC)">
                   <Input
                     type="time"
@@ -186,6 +273,31 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
                   />
                   <p className="text-xs text-muted-foreground/80 mt-1.5">
                     По умолчанию 00:00 (UTC). Площадки публикуют релиз по этому ориентиру.
+                  </p>
+                </FormField>
+                <FormField label="Оригинальная дата выхода">
+                  <Input
+                    type="date"
+                    value={origDate}
+                    onChange={(e) => setOrigDate(e.target.value)}
+                    className="bg-background/40 max-w-xs h-11 text-base"
+                  />
+                  <p className="text-xs text-muted-foreground/80 mt-1.5">
+                    Заполняйте только для перевыпусков и старого каталога — дата
+                    первого выхода трека. Площадки используют её, чтобы не считать
+                    релиз новым.
+                  </p>
+                </FormField>
+                <FormField label="Дата предзаказа / pre-save">
+                  <Input
+                    type="date"
+                    value={preorderDate}
+                    onChange={(e) => setPreorderDate(e.target.value)}
+                    className="bg-background/40 max-w-xs h-11 text-base"
+                  />
+                  <p className="text-xs text-muted-foreground/80 mt-1.5">
+                    Дата, с которой релиз можно сохранить заранее (pre-save). Должна
+                    быть раньше даты релиза.
                   </p>
                 </FormField>
               </div>
@@ -202,27 +314,21 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
             <Switch checked={worldWide} onCheckedChange={setWorldWide} disabled={saving} />
             <span className="text-sm font-medium">Весь мир (World Wide release)</span>
           </label>
-          {!worldWide && specificTerritories.length > 0 && (
-            <div className="text-sm text-muted-foreground">
-              Выбрано: <span className="font-mono">{specificTerritories.join(", ")}</span>
-            </div>
+          {worldWide ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Релиз будет доступен во всех текущих и будущих территориях мира. Чтобы
+              выбрать территории вручную, отключите «Весь мир».
+            </p>
+          ) : (
+            <TerritoryPicker
+              selected={selectedTerritories}
+              onChange={setSelectedTerritories}
+              query={territoryQuery}
+              onQueryChange={setTerritoryQuery}
+              lang={lang}
+              disabled={saving}
+            />
           )}
-          {!worldWide && specificTerritories.length === 0 && (
-            <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2.5 leading-relaxed">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                «Весь мир» выключен, конкретные территории не выбраны. При
-                сохранении у релиза не останется ни одной территории — он не уйдёт
-                на площадки, пока вы не добавите территории вручную через
-                «Редактировать» в деталях релиза.
-              </span>
-            </div>
-          )}
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Релиз будет доступен во всех текущих и будущих территориях мира. Чтобы
-            исключить территории, отключите «Весь мир» — тогда нужные территории
-            добавляются вручную через «Редактировать» в деталях релиза.
-          </p>
         </CardContent>
       </Card>
 
@@ -230,32 +336,32 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-row items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold">Выбор площадок</h3>
-            <Button variant="outline" size="sm" className="bg-card" onClick={() => setPickerOpen(true)}>
-              <Pencil className="h-4 w-4 mr-1.5" /> Показать площадки
-            </Button>
-          </div>
-          {dsps.length > 0 ? (
-            <>
-              <div className="text-sm">
+            <div>
+              <h3 className="text-lg font-semibold">Выбор площадок</h3>
+              <div className="text-sm text-muted-foreground mt-0.5">
                 <span className="font-semibold text-primary">{dsps.length}</span>{" "}
                 {dsps.length === 1 ? "площадка выбрана" : "площадок выбрано"}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {dsps.map((d) => <DspPill key={d} name={d} />)}
-              </div>
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground border border-dashed border-border/40 rounded-md p-5 text-center">
-              Площадки не выбраны. Нажмите «Показать площадки», чтобы выбрать DSP для дистрибуции.
             </div>
+            <Button variant="outline" size="sm" className="bg-card" onClick={() => setShowPartners((v) => !v)}>
+              <Pencil className="h-4 w-4 mr-1.5" />
+              {showPartners ? "Скрыть площадки" : "Показать площадки"}
+            </Button>
+          </div>
+          {showPartners ? (
+            <div className="pt-2 border-t border-border/40">
+              <DspPickerInline
+                value={dsps}
+                onChange={(codes) => { dspTouched.current = true; setDsps(codes); }}
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Нажмите «Показать площадки», чтобы выбрать DSP и магазины для
+              дистрибуции этого релиза. Доступны только подключённые к доставке
+              площадки.
+            </p>
           )}
-          <DspPickerDialog
-            open={pickerOpen}
-            onOpenChange={setPickerOpen}
-            value={dsps}
-            onChange={(codes) => { dspTouched.current = true; setDsps(codes); }}
-          />
         </CardContent>
       </Card>
 

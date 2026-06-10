@@ -10,9 +10,6 @@ export type DspCatalogItemCategory =
   (typeof DspCatalogItemCategory)[keyof typeof DspCatalogItemCategory];
 
 export const DspCatalogItemCategory = {
-  streaming: "streaming",
-  download: "download",
-  social: "social",
-  video: "video",
-  regional: "regional",
+  streaming_download: "streaming_download",
+  ugc_rights: "ugc_rights",
 } as const;

@@ -37,6 +37,10 @@ export interface Release {
   releaseDate?: string | null;
   /** Время выхода (HH:MM, UTC), для DSP timeline. */
   releaseTime?: string | null;
+  /** Оригинальная дата первого выхода (перевыпуски/каталог), YYYY-MM-DD. */
+  originalReleaseDate?: string | null;
+  /** Дата старта предзаказа / pre-save, YYYY-MM-DD. */
+  preorderDate?: string | null;
   language?: string | null;
   isExplicit: boolean;
   isCompilation: boolean;

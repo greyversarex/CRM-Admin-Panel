@@ -2381,6 +2381,14 @@ components:
           type: string
           nullable: true
           description: Время выхода (HH:MM, UTC), для DSP timeline.
+        originalReleaseDate:
+          type: string
+          nullable: true
+          description: Оригинальная дата первого выхода (перевыпуски/каталог), YYYY-MM-DD.
+        preorderDate:
+          type: string
+          nullable: true
+          description: Дата старта предзаказа / pre-save, YYYY-MM-DD.
         language:
           type: string
           nullable: true
@@ -2531,6 +2539,12 @@ components:
           type: string
           nullable: true
         releaseTime:
+          type: string
+          nullable: true
+        originalReleaseDate:
+          type: string
+          nullable: true
+        preorderDate:
           type: string
           nullable: true
         language:
@@ -2784,7 +2798,7 @@ components:
         ddexPartyId: { type: string, nullable: true }
         category:
           type: string
-          enum: [streaming, download, social, video, regional]
+          enum: [streaming_download, ugc_rights]
         isActive: { type: boolean }
         position: { type: integer }
       required: [code, name, category, isActive, position]

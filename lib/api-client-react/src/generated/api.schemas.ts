@@ -201,6 +201,10 @@ export interface Release {
   releaseDate?: string | null;
   /** Время выхода (HH:MM, UTC), для DSP timeline. */
   releaseTime?: string | null;
+  /** Оригинальная дата первого выхода (перевыпуски/каталог), YYYY-MM-DD. */
+  originalReleaseDate?: string | null;
+  /** Дата старта предзаказа / pre-save, YYYY-MM-DD. */
+  preorderDate?: string | null;
   language?: string | null;
   isExplicit: boolean;
   isCompilation: boolean;
@@ -539,6 +543,8 @@ export interface CreateReleaseBody {
   subgenre?: string | null;
   releaseDate?: string | null;
   releaseTime?: string | null;
+  originalReleaseDate?: string | null;
+  preorderDate?: string | null;
   language?: string | null;
   isExplicit?: boolean;
   isCompilation?: boolean;
@@ -687,11 +693,8 @@ export type DspCatalogItemCategory =
   (typeof DspCatalogItemCategory)[keyof typeof DspCatalogItemCategory];
 
 export const DspCatalogItemCategory = {
-  streaming: "streaming",
-  download: "download",
-  social: "social",
-  video: "video",
-  regional: "regional",
+  streaming_download: "streaming_download",
+  ugc_rights: "ugc_rights",
 } as const;
 
 export interface DspCatalogItem {

@@ -22,6 +22,8 @@ export interface CreateReleaseBody {
   subgenre?: string | null;
   releaseDate?: string | null;
   releaseTime?: string | null;
+  originalReleaseDate?: string | null;
+  preorderDate?: string | null;
   language?: string | null;
   isExplicit?: boolean;
   isCompilation?: boolean;

@@ -31,18 +31,20 @@ async function loadReleaseInScope(req: any, idRaw: unknown): Promise<{ status: n
 }
 
 // ─── DSP catalog ────────────────────────────────────────────────────────────
-const CATEGORY_BY_CODE: Record<string, "streaming" | "download" | "social" | "video" | "regional"> = {
-  spotify: "streaming", apple_music: "streaming", amazon_music: "streaming",
-  deezer: "streaming", tidal: "streaming", pandora: "streaming",
-  napster: "streaming", soundcloud: "streaming", iheartradio: "streaming",
-  youtube_music: "streaming", youtube_content: "video",
-  tiktok: "social", meta: "social", cap_cut: "social", shazam: "social", mixcloud: "social",
-  beatport: "download",
-  yandex_music: "regional", vk_music: "regional", zvuk: "regional",
-  jiosaavn: "regional", gaana: "regional", resso: "regional",
-  kkbox: "regional", netease: "regional", tencent: "regional",
-  alibaba: "regional", anghami: "regional", boom_play: "regional",
-  audiomack: "regional",
+const CATEGORY_BY_CODE: Record<string, "streaming_download" | "ugc_rights"> = {
+  // Streaming and Download — музыкальные стриминги и магазины (вкл. региональные).
+  spotify: "streaming_download", apple_music: "streaming_download", amazon_music: "streaming_download",
+  deezer: "streaming_download", tidal: "streaming_download", pandora: "streaming_download",
+  napster: "streaming_download", soundcloud: "streaming_download", iheartradio: "streaming_download",
+  youtube_music: "streaming_download", beatport: "streaming_download",
+  yandex_music: "streaming_download", vk_music: "streaming_download", zvuk: "streaming_download",
+  jiosaavn: "streaming_download", gaana: "streaming_download", resso: "streaming_download",
+  kkbox: "streaming_download", netease: "streaming_download", tencent: "streaming_download",
+  alibaba: "streaming_download", anghami: "streaming_download", boom_play: "streaming_download",
+  audiomack: "streaming_download",
+  // UGC / Rights Management — соцсети, видео и идентификация контента.
+  tiktok: "ugc_rights", meta: "ugc_rights", cap_cut: "ugc_rights",
+  shazam: "ugc_rights", mixcloud: "ugc_rights", youtube_content: "ugc_rights",
 };
 
 router.get("/dsp-catalog", async (_req, res): Promise<void> => {
@@ -54,7 +56,7 @@ router.get("/dsp-catalog", async (_req, res): Promise<void> => {
     name: d.name,
     logoUrl: d.logoUrl,
     ddexPartyId: d.ddexPartyId,
-    category: CATEGORY_BY_CODE[d.code] ?? "streaming",
+    category: CATEGORY_BY_CODE[d.code] ?? "streaming_download",
     isActive: d.isActive,
     position: d.sortOrder,
   })));

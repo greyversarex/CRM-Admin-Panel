@@ -41,6 +41,10 @@ export const releasesTable = pgTable("releases", {
   releaseDate: text("release_date"),
   /** HH:MM в UTC. Используется в Delivery Options Timeline. */
   releaseTime: text("release_time"),
+  /** Оригинальная дата первого выхода (для перевыпусков/каталога). YYYY-MM-DD. */
+  originalReleaseDate: text("original_release_date"),
+  /** Дата старта предзаказа / pre-save. YYYY-MM-DD. */
+  preorderDate: text("preorder_date"),
   language: text("language"),
   isExplicit: boolean("is_explicit").notNull().default(false),
   /** Сборник нескольких артистов (Compilation Yes/No). */

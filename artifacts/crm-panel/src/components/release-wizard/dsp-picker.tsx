@@ -4,37 +4,59 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, LayoutGrid, List, HelpCircle } from "lucide-react";
+import { Search, LayoutGrid, List, HelpCircle, Globe } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { useLang } from "@/lib/i18n";
 
-const CATEGORY_ORDER = ["streaming", "download", "social", "video", "regional"];
+const CATEGORY_ORDER = ["streaming_download", "ugc_rights"];
 
-/** Partner Selection — выбор DSP-площадок (Symphonic-style). */
-export function DspPickerDialog({
-  open, onOpenChange, value, onChange,
+// Географическое покрытие площадок (реальные регионы присутствия). Используется
+// в режиме «Карта покрытия». Первый регион считается основным для группировки.
+type CoverageRegion =
+  | "worldwide" | "russia_cis" | "europe" | "north_america"
+  | "india" | "china" | "asia" | "mena" | "africa";
+
+const REGION_ORDER: CoverageRegion[] = [
+  "worldwide", "russia_cis", "europe", "north_america",
+  "india", "china", "asia", "mena", "africa",
+];
+
+const COVERAGE: Record<string, CoverageRegion[]> = {
+  spotify: ["worldwide"], apple_music: ["worldwide"], amazon_music: ["worldwide"],
+  youtube_music: ["worldwide"], youtube_content: ["worldwide"], deezer: ["worldwide"],
+  tidal: ["worldwide"], soundcloud: ["worldwide"], tiktok: ["worldwide"],
+  meta: ["worldwide"], mixcloud: ["worldwide"], shazam: ["worldwide"],
+  cap_cut: ["worldwide"], audiomack: ["worldwide"], beatport: ["worldwide"],
+  pandora: ["north_america"], napster: ["north_america", "europe"], iheartradio: ["north_america"],
+  yandex_music: ["russia_cis"], vk_music: ["russia_cis"], zvuk: ["russia_cis"],
+  jiosaavn: ["india"], gaana: ["india"], resso: ["india", "asia"],
+  kkbox: ["asia"], netease: ["china"], tencent: ["china"], alibaba: ["china"],
+  anghami: ["mena"], boom_play: ["africa"],
+};
+
+function primaryRegion(code: string): CoverageRegion {
+  return COVERAGE[code]?.[0] ?? "worldwide";
+}
+
+/**
+ * Inline-контент выбора DSP-площадок (Symphonic-style). Контролируемый:
+ * value — выбранные коды, onChange вызывается сразу при изменении.
+ * Используется и на странице «Доступность релиза» (встроенно), и внутри
+ * модалки DspPickerDialog (мастер создания релиза).
+ */
+export function DspPickerInline({
+  value, onChange,
 }: {
-  open: boolean;
-  onOpenChange: (b: boolean) => void;
   value: string[];
   onChange: (codes: string[]) => void;
 }) {
   const { t } = useLang();
   const { data: catalog = [] } = useListDspCatalog();
-  const [draft, setDraft] = useState<string[]>(value);
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"grid" | "list">("grid");
-
-  // При каждом открытии синхронизируем draft со свежим value (родитель мог
-  // обновить выбор после сохранения и refetch).
-  useEffect(() => {
-    if (open) setDraft(value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, value.join(",")]);
+  const [view, setView] = useState<"grid" | "list" | "map">("grid");
 
   // Доставляемые площадки — те, у кого настроен DDEX-транспорт (ddexPartyId).
-  // Остальные показываем в секции Unavailable: их нельзя выбрать, доставка
-  // ещё не подключена.
+  // Остальные показываем в секции Unavailable: их нельзя выбрать.
   const isDeliverable = (d: DspCatalogItem) => !!d.ddexPartyId;
 
   const filtered = useMemo(() => {
@@ -45,10 +67,11 @@ export function DspPickerDialog({
   }, [catalog, query]);
 
   const unavailable = useMemo(() => filtered.filter((d) => !isDeliverable(d)), [filtered]);
+  const deliverable = useMemo(() => filtered.filter(isDeliverable), [filtered]);
 
   const grouped = useMemo(() => {
     const m = new Map<string, DspCatalogItem[]>();
-    for (const d of filtered.filter(isDeliverable)) {
+    for (const d of deliverable) {
       if (!m.has(d.category)) m.set(d.category, []);
       m.get(d.category)!.push(d);
     }
@@ -57,130 +80,168 @@ export function DspPickerDialog({
       const ib = CATEGORY_ORDER.indexOf(b[0]);
       return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
     });
-  }, [filtered]);
+  }, [deliverable]);
+
+  const groupedByRegion = useMemo(() => {
+    const m = new Map<CoverageRegion, DspCatalogItem[]>();
+    for (const d of deliverable) {
+      const r = primaryRegion(d.code);
+      if (!m.has(r)) m.set(r, []);
+      m.get(r)!.push(d);
+    }
+    return REGION_ORDER.filter((r) => m.has(r)).map((r) => [r, m.get(r)!] as const);
+  }, [deliverable]);
 
   const allDeliverableCodes = useMemo(
     () => catalog.filter(isDeliverable).map((d) => d.code),
     [catalog],
   );
   const allSelected =
-    allDeliverableCodes.length > 0 && allDeliverableCodes.every((c) => draft.includes(c));
-  const selectedCount = draft.length;
+    allDeliverableCodes.length > 0 && allDeliverableCodes.every((c) => value.includes(c));
+  const selectedCount = value.length;
 
   const toggle = (code: string) =>
-    setDraft((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+    onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
 
   const toggleAll = (codes: string[]) => {
-    const allOn = codes.every((c) => draft.includes(c));
-    setDraft((prev) =>
-      allOn ? prev.filter((c) => !codes.includes(c)) : Array.from(new Set([...prev, ...codes])),
-    );
+    const allOn = codes.every((c) => value.includes(c));
+    onChange(allOn ? value.filter((c) => !codes.includes(c)) : Array.from(new Set([...value, ...codes])));
   };
 
   const toggleEverything = () => {
-    setDraft((prev) =>
-      allSelected
-        ? prev.filter((c) => !allDeliverableCodes.includes(c))
-        : Array.from(new Set([...prev, ...allDeliverableCodes])),
-    );
+    onChange(allSelected
+      ? value.filter((c) => !allDeliverableCodes.includes(c))
+      : Array.from(new Set([...value, ...allDeliverableCodes])));
   };
+
+  const gridCls = view === "list" ? "space-y-2" : "grid grid-cols-2 sm:grid-cols-3 gap-2";
+
+  const sections =
+    view === "map"
+      ? groupedByRegion.map(([region, items]) => ({
+          key: region,
+          title: t.releaseWizard.dspCoverageRegions[region as keyof typeof t.releaseWizard.dspCoverageRegions] ?? region,
+          items,
+        }))
+      : grouped.map(([cat, items]) => ({
+          key: cat,
+          title: t.releaseWizard.dspCategories[cat as keyof typeof t.releaseWizard.dspCategories] ?? cat,
+          items,
+        }));
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar: view toggle + "All / N selected" */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <button
+          type="button" onClick={toggleEverything}
+          className="inline-flex items-center gap-2 text-sm"
+        >
+          <Checkbox checked={allSelected} className="pointer-events-none" />
+          {allSelected ? (
+            <span><span className="font-semibold text-primary">{t.releaseWizard.allLabel}</span> {t.releaseWizard.partnersSelectedLabel}</span>
+          ) : (
+            <span><span className="font-semibold text-primary">{selectedCount}</span> {t.releaseWizard.partnersSelectedLabel}</span>
+          )}
+        </button>
+        <div className="flex items-center gap-0.5 rounded-md border border-border/50 p-0.5">
+          <button
+            type="button" onClick={() => setView("list")} title={t.releaseWizard.listView}
+            className={`p-1.5 rounded transition ${view === "list" ? "bg-accent" : "hover:bg-accent/50"}`}
+          ><List className="h-4 w-4" /></button>
+          <button
+            type="button" onClick={() => setView("grid")} title={t.releaseWizard.gridView}
+            className={`p-1.5 rounded transition ${view === "grid" ? "bg-accent" : "hover:bg-accent/50"}`}
+          ><LayoutGrid className="h-4 w-4" /></button>
+          <button
+            type="button" onClick={() => setView("map")} title={t.releaseWizard.mapView}
+            className={`p-1.5 rounded transition ${view === "map" ? "bg-accent" : "hover:bg-accent/50"}`}
+          ><Globe className="h-4 w-4" /></button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder={t.releaseWizard.searchPartners} className="pl-9 bg-background/40"
+          value={query} onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Body */}
+      <div className="space-y-6">
+        {/* Unavailable (not connected for delivery) */}
+        {unavailable.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold mb-2.5">
+              {t.releaseWizard.unavailable} <span className="text-muted-foreground font-normal">{unavailable.length}</span>
+            </h4>
+            <div className={gridCls}>
+              {unavailable.map((d) => (
+                <DspRow key={d.code} dsp={d} checked={false} disabled onToggle={() => {}} view={view} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Category / region sections */}
+        {sections.map((s) => {
+          const codes = s.items.map((i) => i.code);
+          const allOn = codes.length > 0 && codes.every((c) => value.includes(c));
+          return (
+            <div key={s.key}>
+              <h4 className="text-sm font-semibold mb-2">{s.title}</h4>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2.5 cursor-pointer w-fit">
+                <Checkbox checked={allOn} onCheckedChange={() => toggleAll(codes)} />
+                {t.releaseWizard.selectAllPartners}
+              </label>
+              <div className={gridCls}>
+                {s.items.map((d) => (
+                  <DspRow key={d.code} dsp={d} checked={value.includes(d.code)} onToggle={() => toggle(d.code)} view={view} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {sections.length === 0 && unavailable.length === 0 && (
+          <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Partner Selection — модальная обёртка (мастер создания релиза). */
+export function DspPickerDialog({
+  open, onOpenChange, value, onChange,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  value: string[];
+  onChange: (codes: string[]) => void;
+}) {
+  const { t } = useLang();
+  const [draft, setDraft] = useState<string[]>(value);
+
+  useEffect(() => {
+    if (open) setDraft(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, value.join(",")]);
 
   const apply = () => { onChange(draft); onOpenChange(false); };
   const cancel = () => { setDraft(value); onOpenChange(false); };
 
-  const gridCls = view === "grid" ? "grid grid-cols-2 sm:grid-cols-3 gap-2" : "space-y-2";
-
   return (
     <Dialog open={open} onOpenChange={(b) => { if (!b) cancel(); }}>
       <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-0 gap-0">
-        {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="text-lg">{t.releaseWizard.partnerSelection}</DialogTitle>
-            <div className="flex items-center gap-0.5 rounded-md border border-border/50 p-0.5">
-              <button
-                type="button" onClick={() => setView("list")}
-                title={t.releaseWizard.listView}
-                className={`p-1.5 rounded transition ${view === "list" ? "bg-accent" : "hover:bg-accent/50"}`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                type="button" onClick={() => setView("grid")}
-                title={t.releaseWizard.gridView}
-                className={`p-1.5 rounded transition ${view === "grid" ? "bg-accent" : "hover:bg-accent/50"}`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          {/* "All / N partners selected" toggle */}
-          <button
-            type="button" onClick={toggleEverything}
-            className="inline-flex items-center gap-2 text-sm self-start"
-          >
-            <Checkbox checked={allSelected} className="pointer-events-none" />
-            {allSelected ? (
-              <span><span className="font-semibold text-primary">{t.releaseWizard.allLabel}</span> {t.releaseWizard.partnersSelectedLabel}</span>
-            ) : (
-              <span><span className="font-semibold text-primary">{selectedCount}</span> {t.releaseWizard.partnersSelectedLabel}</span>
-            )}
-          </button>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
+          <DialogTitle className="text-lg">{t.releaseWizard.partnerSelection}</DialogTitle>
         </DialogHeader>
-
-        {/* Search */}
-        <div className="px-6 pt-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={t.releaseWizard.searchPartners} className="pl-9 bg-background/40"
-              value={query} onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <DspPickerInline value={draft} onChange={setDraft} />
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-          {/* Unavailable (not connected for delivery) */}
-          {unavailable.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2.5">
-                {t.releaseWizard.unavailable} <span className="text-muted-foreground font-normal">{unavailable.length}</span>
-              </h4>
-              <div className={gridCls}>
-                {unavailable.map((d) => (
-                  <DspRow key={d.code} dsp={d} checked={false} disabled onToggle={() => {}} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Category sections */}
-          {grouped.map(([cat, items]) => {
-            const codes = items.map((i) => i.code);
-            const allOn = codes.length > 0 && codes.every((c) => draft.includes(c));
-            return (
-              <div key={cat}>
-                <h4 className="text-sm font-semibold mb-2">{t.releaseWizard.dspCategories[cat as keyof typeof t.releaseWizard.dspCategories] ?? cat}</h4>
-                <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2.5 cursor-pointer w-fit">
-                  <Checkbox checked={allOn} onCheckedChange={() => toggleAll(codes)} />
-                  {t.releaseWizard.selectAllPartners}
-                </label>
-                <div className={gridCls}>
-                  {items.map((d) => (
-                    <DspRow key={d.code} dsp={d} checked={draft.includes(d.code)} onToggle={() => toggle(d.code)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-
-          {grouped.length === 0 && unavailable.length === 0 && (
-            <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
-          )}
-        </div>
-
-        {/* Footer */}
         <DialogFooter className="px-6 py-4 border-t border-border/40">
           <Button variant="outline" onClick={cancel}>{t.createRelease.cancel}</Button>
           <Button onClick={apply}>{t.createRelease.save}</Button>
@@ -191,12 +252,13 @@ export function DspPickerDialog({
 }
 
 function DspRow({
-  dsp, checked, disabled, onToggle,
+  dsp, checked, disabled, onToggle, view,
 }: {
   dsp: DspCatalogItem;
   checked: boolean;
   disabled?: boolean;
   onToggle: () => void;
+  view: "grid" | "list" | "map";
 }) {
   const { t } = useLang();
   return (

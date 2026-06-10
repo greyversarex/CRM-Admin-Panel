@@ -5,3 +5,4 @@
 - [SplitShare ownership perms](splitshare-ownership-perms.md) — splits mutable/readable by admin/manager or release owner; reuse canMutateReleaseSplits; derive release from trackId; never `!scope.artistId ||` checks (IDOR).
 - [Audio preview player](audio-preview-player.md) — track preview must stream via native <audio>+Range, not wavesurfer (which full-downloads 44MB before play).
 - [Publishing works data-isolation](publishing-scope-all-endpoints.md) — work scope derived via track→release.labelId OR track.artist's label; enforce on every endpoint, not just list.
+- [DSP catalog category contract](dsp-catalog-category-contract.md) — /dsp-catalog `category` (incl. the `?? fallback` literal) must stay inside the OpenAPI enum; typecheck won't catch a stale fallback.
