@@ -2798,7 +2798,7 @@ components:
         ddexPartyId: { type: string, nullable: true }
         category:
           type: string
-          enum: [streaming_download, ugc_rights]
+          enum: [streaming, download, video, social, fingerprinting]
         isActive: { type: boolean }
         position: { type: integer }
       required: [code, name, category, isActive, position]

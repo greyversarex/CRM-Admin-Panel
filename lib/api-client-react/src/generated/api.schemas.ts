@@ -693,8 +693,11 @@ export type DspCatalogItemCategory =
   (typeof DspCatalogItemCategory)[keyof typeof DspCatalogItemCategory];
 
 export const DspCatalogItemCategory = {
-  streaming_download: "streaming_download",
-  ugc_rights: "ugc_rights",
+  streaming: "streaming",
+  download: "download",
+  video: "video",
+  social: "social",
+  fingerprinting: "fingerprinting",
 } as const;
 
 export interface DspCatalogItem {

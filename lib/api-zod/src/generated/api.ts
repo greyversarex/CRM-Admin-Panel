@@ -1521,7 +1521,13 @@ export const ListDspCatalogResponseItem = zod.object({
   name: zod.string(),
   logoUrl: zod.string().nullish(),
   ddexPartyId: zod.string().nullish(),
-  category: zod.enum(["streaming_download", "ugc_rights"]),
+  category: zod.enum([
+    "streaming",
+    "download",
+    "video",
+    "social",
+    "fingerprinting",
+  ]),
   isActive: zod.boolean(),
   position: zod.number(),
 });

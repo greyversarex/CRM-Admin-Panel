@@ -283,8 +283,11 @@ const translations = {
       noPartnersFound: "No partners found.",
       partnerNotConnected: "This partner is not yet connected for delivery. Contact your administrator to enable it.",
       dspCategories: {
-        streaming_download: "Streaming and Download",
-        ugc_rights: "UGC / Rights Management",
+        streaming: "Streaming",
+        download: "Download Stores",
+        video: "Video",
+        social: "Social & UGC",
+        fingerprinting: "Content Recognition",
       },
       dspCoverageRegions: {
         worldwide: "Worldwide",
@@ -1865,8 +1868,11 @@ const translations = {
       noPartnersFound: "Площадки не найдены.",
       partnerNotConnected: "Эта площадка ещё не подключена для доставки. Обратитесь к администратору, чтобы её включить.",
       dspCategories: {
-        streaming_download: "Стриминг и магазины",
-        ugc_rights: "UGC / Управление правами",
+        streaming: "Стриминг",
+        download: "Магазины загрузок",
+        video: "Видео",
+        social: "Соцсети и UGC",
+        fingerprinting: "Распознавание контента",
       },
       dspCoverageRegions: {
         worldwide: "Весь мир",

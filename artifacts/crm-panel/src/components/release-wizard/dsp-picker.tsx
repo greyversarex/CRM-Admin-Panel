@@ -8,7 +8,7 @@ import { Search, LayoutGrid, List, HelpCircle, Globe } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { useLang } from "@/lib/i18n";
 
-const CATEGORY_ORDER = ["streaming_download", "ugc_rights"];
+const CATEGORY_ORDER = ["streaming", "download", "video", "social", "fingerprinting"];
 
 // Географическое покрытие площадок (реальные регионы присутствия). Используется
 // в режиме «Карта покрытия». Первый регион считается основным для группировки.

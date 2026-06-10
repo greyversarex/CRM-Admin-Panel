@@ -31,20 +31,24 @@ async function loadReleaseInScope(req: any, idRaw: unknown): Promise<{ status: n
 }
 
 // ─── DSP catalog ────────────────────────────────────────────────────────────
-const CATEGORY_BY_CODE: Record<string, "streaming_download" | "ugc_rights"> = {
-  // Streaming and Download — музыкальные стриминги и магазины (вкл. региональные).
-  spotify: "streaming_download", apple_music: "streaming_download", amazon_music: "streaming_download",
-  deezer: "streaming_download", tidal: "streaming_download", pandora: "streaming_download",
-  napster: "streaming_download", soundcloud: "streaming_download", iheartradio: "streaming_download",
-  youtube_music: "streaming_download", beatport: "streaming_download",
-  yandex_music: "streaming_download", vk_music: "streaming_download", zvuk: "streaming_download",
-  jiosaavn: "streaming_download", gaana: "streaming_download", resso: "streaming_download",
-  kkbox: "streaming_download", netease: "streaming_download", tencent: "streaming_download",
-  alibaba: "streaming_download", anghami: "streaming_download", boom_play: "streaming_download",
-  audiomack: "streaming_download",
-  // UGC / Rights Management — соцсети, видео и идентификация контента.
-  tiktok: "ugc_rights", meta: "ugc_rights", cap_cut: "ugc_rights",
-  shazam: "ugc_rights", mixcloud: "ugc_rights", youtube_content: "ugc_rights",
+type DspCategory = "streaming" | "download" | "video" | "social" | "fingerprinting";
+const CATEGORY_BY_CODE: Record<string, DspCategory> = {
+  // Streaming — музыкальные стриминговые сервисы (вкл. региональные).
+  spotify: "streaming", apple_music: "streaming", amazon_music: "streaming",
+  youtube_music: "streaming", deezer: "streaming", tidal: "streaming",
+  pandora: "streaming", soundcloud: "streaming", napster: "streaming",
+  iheartradio: "streaming", yandex_music: "streaming", vk_music: "streaming",
+  zvuk: "streaming", jiosaavn: "streaming", gaana: "streaming", resso: "streaming",
+  kkbox: "streaming", netease: "streaming", tencent: "streaming", alibaba: "streaming",
+  anghami: "streaming", audiomack: "streaming", boom_play: "streaming", mixcloud: "streaming",
+  // Download — магазины загрузок.
+  beatport: "download",
+  // Video — видеоплатформы и Content ID.
+  youtube_content: "video",
+  // Social & UGC — соцсети и платформы пользовательского контента.
+  tiktok: "social", meta: "social", cap_cut: "social",
+  // Fingerprinting — распознавание и идентификация контента.
+  shazam: "fingerprinting",
 };
 
 router.get("/dsp-catalog", async (_req, res): Promise<void> => {
@@ -56,7 +60,7 @@ router.get("/dsp-catalog", async (_req, res): Promise<void> => {
     name: d.name,
     logoUrl: d.logoUrl,
     ddexPartyId: d.ddexPartyId,
-    category: CATEGORY_BY_CODE[d.code] ?? "streaming_download",
+    category: CATEGORY_BY_CODE[d.code] ?? "streaming",
     isActive: d.isActive,
     position: d.sortOrder,
   })));
