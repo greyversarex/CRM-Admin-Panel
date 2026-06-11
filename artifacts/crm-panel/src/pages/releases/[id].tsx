@@ -3,7 +3,7 @@ import {
   useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
   useDeliverRelease, useSubmitReleaseForReview,
   useUpdateTrack, useGetReleaseDsps, useUpdateReleaseDsps, useListSplits,
-  useGetReleaseArtists, useUpdateReleaseArtists,
+  useGetReleaseArtists, useUpdateReleaseArtists, useListDspCatalog,
   getGetReleaseQueryKey, getListReleasesQueryKey, getGetReleaseCountsQueryKey,
   getListDeliveriesQueryKey, getGetReleaseDspsQueryKey, getGetReleaseArtistsQueryKey,
   type Track, type DeliveryTarget,
@@ -2561,6 +2561,7 @@ function ReleaseAvailabilitySummaryCard({
   onEdit: () => void;
 }) {
   const { data: serverDsps = [] } = useGetReleaseDsps(release.id);
+  const { data: dspCatalog = [] } = useListDspCatalog();
   const [showIssues, setShowIssues] = useState(false);
 
   const dateLabel = release.releaseDate ? String(release.releaseDate).slice(0, 10) : "XXXX-XX-XX";
@@ -2638,13 +2639,40 @@ function ReleaseAvailabilitySummaryCard({
             <div className="text-sm text-muted-foreground">{territoryLabel}</div>
           </div>
 
-          <div className="space-y-1 border-t border-border/30 pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stores</h3>
-            <div className="text-sm text-muted-foreground">
-              {storeCount > 0
-                ? `${storeCount} ${storeCount === 1 ? "площадка выбрана" : "площадок выбрано"}`
-                : "Площадки не выбраны"}
-            </div>
+          <div className="space-y-2 border-t border-border/30 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Stores
+              {storeCount > 0 && (
+                <span className="ml-2 font-normal text-muted-foreground/70 normal-case tracking-normal">
+                  ({storeCount})
+                </span>
+              )}
+            </h3>
+            {storeCount === 0 ? (
+              <div className="text-sm text-muted-foreground">Площадки не выбраны</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {serverDsps.map((code) => {
+                  const dsp = dspCatalog.find((d) => d.code === code);
+                  return (
+                    <div
+                      key={code}
+                      title={dsp?.name ?? code}
+                      className="flex items-center gap-1.5 bg-muted/30 border border-border/40 rounded-md px-2 py-1"
+                    >
+                      {dsp?.logoUrl ? (
+                        <img src={assetHref(dsp.logoUrl)} alt="" className="h-4 w-4 rounded object-cover shrink-0" />
+                      ) : (
+                        <span className="h-4 w-4 rounded bg-muted flex items-center justify-center text-[9px] uppercase text-muted-foreground shrink-0">
+                          {code.slice(0, 2)}
+                        </span>
+                      )}
+                      <span className="text-xs text-foreground/80">{dsp?.name ?? code}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
