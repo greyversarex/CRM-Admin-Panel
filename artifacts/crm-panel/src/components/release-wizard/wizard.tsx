@@ -689,21 +689,17 @@ function Step1Details({
         {/* ── Primary Artists ──────────────────────────────────────────── */}
         <div className="space-y-2">
           <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.primaryArtistsRequired}</FieldLabel>
-          {isArtist ? (
-            <div className="flex items-center gap-2 bg-background/40 border border-border/60 rounded-md px-3 py-2 text-sm">
-              <span className="flex-1">{myArtist?.name ?? t.releaseWizard.yourArtist}</span>
-              <Badge variant="outline" className="text-[10px]">{t.releaseWizard.primaryYou}</Badge>
-            </div>
-          ) : (
-            <>
-              <MultiArtistPicker value={artists} onChange={setArtists} labelId={isLabel ? user?.labelId : null} />
-              {(isAdminLike || isLabel) && (
-                <Button type="button" variant="ghost" size="sm" className="text-xs"
-                  onClick={() => setArtistDialogOpen(true)}>
-                  <Plus className="h-3 w-3 mr-1" /> {t.releaseWizard.createNewArtist}
-                </Button>
-              )}
-            </>
+          <MultiArtistPicker
+            value={artists}
+            onChange={setArtists}
+            labelId={isLabel ? user?.labelId : null}
+            lockedArtistId={isArtist ? user?.artistId : null}
+          />
+          {(isAdminLike || isLabel) && (
+            <Button type="button" variant="ghost" size="sm" className="text-xs"
+              onClick={() => setArtistDialogOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" /> {t.releaseWizard.createNewArtist}
+            </Button>
           )}
           <label className="flex items-center gap-2 cursor-pointer mt-1">
             <Checkbox
