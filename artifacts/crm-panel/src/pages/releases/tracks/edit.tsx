@@ -935,20 +935,15 @@ export default function TrackEditPage() {
       </div>
 
       {/* ── Fixed bottom bar ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-3 flex items-center justify-between">
-        <Button variant="outline" onClick={() => setLocation(`/releases/${releaseId}`)}>
-          Cancel
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-4 flex items-center justify-between">
+        <Button variant="secondary" onClick={() => setLocation(`/releases/${releaseId}`)}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          Back
         </Button>
-        <div className="flex gap-2">
-          <Button onClick={save} disabled={isBusy}>
-            {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-            Save
-          </Button>
-          <Button variant="secondary" onClick={saveAndGoNext} disabled={isBusy}>
-            {isBusy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-            {nextTrack ? "Save & Next Track" : "Save & Finish"}
-          </Button>
-        </div>
+        <Button onClick={save} disabled={isBusy}>
+          {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+          Save
+        </Button>
       </div>
 
     </Layout>
