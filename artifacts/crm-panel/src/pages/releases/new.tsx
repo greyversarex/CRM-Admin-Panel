@@ -622,10 +622,10 @@ export default function CreateRelease() {
 
           {/* ── Actions ──────────────────────────────────────────────────── */}
           <div className="flex items-center justify-between pt-2 pb-6">
-            <Button variant="outline" size="default" onClick={() => setLocation("/releases")}>
+            <Button variant="outline" className="h-10 px-6" onClick={() => setLocation("/releases")}>
               {L.cancel}
             </Button>
-            <Button size="default" onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
+            <Button className="h-10 px-6" onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
               {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {L.save}
             </Button>
