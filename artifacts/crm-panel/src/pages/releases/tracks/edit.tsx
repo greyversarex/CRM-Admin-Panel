@@ -490,9 +490,9 @@ export default function TrackEditPage() {
               </p>
             )}
 
-            {/* ISRC + Clip Start Time */}
-            <div className="grid grid-cols-[1fr_auto] gap-4 items-end">
-              <div className="space-y-1.5">
+            {/* ISRC + Clip Start Time — оба поля в одну строку рядом */}
+            <div className="flex gap-4 items-end">
+              <div className="flex-1 space-y-1.5">
                 <Label className="text-sm text-muted-foreground">ISRC</Label>
                 <div className="flex gap-1.5">
                   <Input
