@@ -490,9 +490,9 @@ export default function TrackEditPage() {
               </p>
             )}
 
-            {/* ISRC + Clip Start Time — оба поля в одну строку рядом */}
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 space-y-1.5">
+            {/* ISRC + Clip Start Time — два равных столбца */}
+            <div className="grid grid-cols-2 gap-6 items-end">
+              <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">ISRC</Label>
                 <div className="flex gap-1.5">
                   <Input
@@ -508,7 +508,9 @@ export default function TrackEditPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Clip Start Time</Label>
+                <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
+                  Clip Start Time <InfoTip text="The time offset (minutes:seconds:centiseconds) at which the DSP preview clip should start." />
+                </Label>
                 <Input
                   value={`${clipMm}:${clipSs}:00`}
                   onChange={(e) => {
@@ -518,7 +520,7 @@ export default function TrackEditPage() {
                     setF({ ...f, clipStartSeconds: Math.max(0, mm * 60 + ss) });
                   }}
                   placeholder="00:00:00"
-                  className="font-mono w-28"
+                  className="font-mono w-full"
                 />
               </div>
             </div>
