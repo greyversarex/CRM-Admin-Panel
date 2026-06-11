@@ -100,10 +100,8 @@ export function WaveformPlayer({
         ctx.fillStyle = "rgba(148, 163, 184, 0.30)"; // slate-400
       }
 
-      const r = Math.min(barW / 2, 2);
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, barH, r);
-      ctx.fill();
+      // fillRect — безопасная альтернатива roundRect (поддерживается везде)
+      ctx.fillRect(x, y, barW, barH);
     }
   }, []);
 
@@ -123,16 +121,20 @@ export function WaveformPlayer({
     const dpr = window.devicePixelRatio || 1;
 
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      canvas.width  = Math.round(rect.width  * dpr);
-      canvas.height = Math.round(rect.height * dpr);
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.resetTransform();
-        ctx.scale(dpr, dpr);
+      try {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        canvas.width  = Math.round(rect.width  * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0); // universally supported
+          ctx.scale(dpr, dpr);
+        }
+        draw(duration > 0 ? current / duration : 0);
+      } catch {
+        // canvas недоступен — игнорируем
       }
-      draw(duration > 0 ? current / duration : 0);
     };
 
     const ro = new ResizeObserver(resize);
