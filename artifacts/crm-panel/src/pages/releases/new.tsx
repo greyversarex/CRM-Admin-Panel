@@ -15,14 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
-import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -72,6 +73,8 @@ export default function CreateRelease() {
   const [pLineYear, setPLineYear]       = useState<number | "">(CURRENT_YEAR);
   const [pLine, setPLine]               = useState("");
   const [isCompilation, setIsCompilation] = useState<boolean | null>(null);
+  const [artistOpen, setArtistOpen] = useState(false);
+  const [artistSearch, setArtistSearch] = useState("");
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
   const [quickArtistName, setQuickArtistName] = useState("");
   const createArtistMut = useCreateArtist();
@@ -371,23 +374,104 @@ export default function CreateRelease() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
-              <MultiArtistPicker
-                value={pickerArtists}
-                onChange={setReleaseArtists}
-                labelId={user?.role === "label" ? user.labelId : null}
-                lockedArtistId={user?.role === "artist" ? user.artistId : null}
-              />
-              {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setAddArtistDialogOpen(true)}
+              <Popover open={artistOpen} onOpenChange={setArtistOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={artistOpen}
+                    data-testid="select-artist"
+                    className="w-full justify-between font-normal h-9 px-3"
+                  >
+                    <span className={pickerArtists.length > 0 ? "truncate" : "text-foreground/40"}>
+                      {pickerArtists.length > 0
+                        ? pickerArtists.map(a => a.name).join(", ")
+                        : L.selectArtist}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="p-0 w-[var(--radix-popover-trigger-width)]"
+                  align="start"
+                  sideOffset={4}
                 >
-                  <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                  {L.addNewArtist}
-                </Button>
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder={L.searchArtist}
+                      value={artistSearch}
+                      onValueChange={setArtistSearch}
+                    />
+                    <CommandList className="max-h-[210px]">
+                      <CommandEmpty className="py-4 text-sm text-center text-muted-foreground">
+                        {L.noArtistsFound}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {artistOptions
+                          .filter(a => a.name.toLowerCase().includes(artistSearch.toLowerCase()))
+                          .map(a => {
+                            const isSelected = pickerArtists.some(r => r.artistId === a.id);
+                            const isLocked = user?.role === "artist" && a.id === user.artistId;
+                            return (
+                              <CommandItem
+                                key={a.id}
+                                value={String(a.id)}
+                                onSelect={() => {
+                                  if (isLocked) return;
+                                  if (isSelected) {
+                                    // убираем артиста
+                                    setReleaseArtists(prev =>
+                                      prev.filter(r => r.artistId !== a.id)
+                                        .map((r, i) => ({ ...r, position: i }))
+                                    );
+                                  } else {
+                                    // добавляем артиста
+                                    setReleaseArtists(prev => {
+                                      const hasPrimary = prev.some(r => r.role === "primary");
+                                      return [...prev, {
+                                        artistId: a.id,
+                                        name: a.name,
+                                        role: hasPrimary ? "featuring" : "primary",
+                                        position: prev.length,
+                                      }];
+                                    });
+                                  }
+                                }}
+                              >
+                                <Check className={`mr-2 h-4 w-4 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`} />
+                                <span className="flex-1">{a.name}</span>
+                                {isLocked && <span className="text-[10px] text-muted-foreground ml-2">Primary</span>}
+                              </CommandItem>
+                            );
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                    {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
+                      <>
+                        <CommandSeparator />
+                        <div className="p-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-primary hover:text-primary"
+                            onClick={() => {
+                              setArtistOpen(false);
+                              setAddArtistDialogOpen(true);
+                            }}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            {L.addNewArtist}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {artistOptions.length === 0 && (
+                <p className="text-sm text-muted-foreground">{L.noArtistsHint}</p>
               )}
               <label className="flex items-center gap-2.5 cursor-pointer text-sm">
                 <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
