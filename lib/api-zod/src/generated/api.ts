@@ -1719,6 +1719,7 @@ export const UpdateReleaseStatusBody = zod.object({
     "error",
     "takedown_requested",
     "removed",
+    "parked",
   ]),
   note: zod.string().nullish(),
 });

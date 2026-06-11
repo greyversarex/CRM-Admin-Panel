@@ -38,7 +38,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch as SwitchUI } from "@/components/ui/switch";
 import { Label as FieldLabel } from "@/components/ui/label";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AcrTrackModal } from "@/components/acr-track-modal";
 import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
@@ -132,6 +133,20 @@ export default function ReleaseDetail() {
     if (release && release.status !== "draft" && metaEditing) setMetaEditing(false);
   }, [release?.status, metaEditing]);
   const { user } = useAuth();
+  const isModeratorRole = user && (user.role === "admin" || user.role === "manager");
+
+  const { data: acrData } = useQuery({
+    queryKey: ["acr-checks-release", id],
+    queryFn: async () => {
+      const r = await fetch(`/api/distribution/acr/checks?releaseId=${id}`, { credentials: "same-origin" });
+      if (!r.ok) return { checks: [] as Array<{ id: number; trackId: number | null; status: string; matchedTitle: string | null; scannedAt: string }>, configured: false };
+      return r.json() as Promise<{ checks: Array<{ id: number; trackId: number | null; status: string; matchedTitle: string | null; scannedAt: string }>; configured: boolean }>;
+    },
+    enabled: Number.isFinite(id) && id > 0 && !!isModeratorRole,
+    staleTime: 30_000,
+  });
+  const releaseAcrChecks = acrData?.checks ?? [];
+  const releaseAcrConfigured = acrData?.configured ?? false;
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: getGetReleaseQueryKey(id) });
@@ -484,7 +499,12 @@ export default function ReleaseDetail() {
 
         {/* Tracks — individual card per track */}
         {(release.tracks ?? []).map((t, i) => (
-          <TrackRow key={t.id} t={t} index={i} release={release} onChange={invalidateAll} />
+          <TrackRow
+            key={t.id} t={t} index={i} release={release} onChange={invalidateAll}
+            acrChecks={releaseAcrChecks.filter(c => c.trackId === t.id)}
+            acrConfigured={releaseAcrConfigured}
+            isModeratorRole={!!isModeratorRole}
+          />
         ))}
         {(release.tracks ?? []).length === 0 && (
           <div className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border/50 rounded-lg">
@@ -988,10 +1008,14 @@ function TrackField({ label, value, chip }: { label: string; value: React.ReactN
   );
 }
 
+type TrackAcrCheck = { id: number; trackId: number | null; status: string; matchedTitle: string | null; scannedAt: string };
+
 function TrackRow({
-  t, index, release, onChange,
-}: { t: Track; index: number; release: any; onChange: () => void }) {
+  t, index, release, onChange, acrChecks = [], acrConfigured = false, isModeratorRole = false,
+}: { t: Track; index: number; release: any; onChange: () => void; acrChecks?: TrackAcrCheck[]; acrConfigured?: boolean; isModeratorRole?: boolean }) {
   const deleteTrack = useDeleteTrack();
+  const [acrOpen, setAcrOpen] = useState(false);
+  const latestAcr = acrChecks.length > 0 ? acrChecks[0] : null;
   const displayArtists: Array<{ name: string; role: string }> = Array.isArray((t as any).displayArtists) ? (t as any).displayArtists : [];
   const primaries  = displayArtists.filter(d => d.role === "primary");
   const featurings = displayArtists.filter(d => d.role === "featuring");
@@ -1012,6 +1036,7 @@ function TrackRow({
   const previewSs     = String(previewStart % 60).padStart(2, "0");
 
   return (
+    <>
     <Card id={`track-${t.id}`} className="bg-card/50 backdrop-blur border-border/50 scroll-mt-4 transition-shadow">
       {/* Card header: Track N · Show Issues | Delete | Edit */}
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
@@ -1022,6 +1047,35 @@ function TrackRow({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* ACR Check buttons — visible only to admin/manager */}
+          {isModeratorRole && (
+            <>
+              {latestAcr?.status === "matched" && (
+                <button
+                  onClick={() => setAcrOpen(true)}
+                  title="ACR: совпадение найдено — нажмите для деталей"
+                  className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors shrink-0"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={() => setAcrOpen(true)}
+                title={latestAcr ? `ACRCloud: ${latestAcr.status}` : "ACRCloud: нет проверок"}
+                className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors shrink-0 ${
+                  latestAcr?.status === "clean"
+                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30"
+                    : latestAcr?.status === "matched"
+                    ? "bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30"
+                    : latestAcr?.status === "pending"
+                    ? "bg-blue-500/20 border-blue-500/40 text-blue-400 animate-pulse"
+                    : "bg-muted/60 border-border/60 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <ScanSearch className="h-4 w-4" />
+              </button>
+            </>
+          )}
           <Button
             variant="outline" size="sm"
             className="border-rose-500/30 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-3 text-xs"
@@ -1114,6 +1168,17 @@ function TrackRow({
         </div>
       </CardContent>
     </Card>
+
+    {/* ACR Track Modal */}
+    {acrOpen && (
+      <AcrTrackModal
+        releaseId={release.id}
+        trackId={t.id}
+        trackTitle={t.title || `Track ${index + 1}`}
+        onClose={() => setAcrOpen(false)}
+      />
+    )}
+  </>
   );
 }
 

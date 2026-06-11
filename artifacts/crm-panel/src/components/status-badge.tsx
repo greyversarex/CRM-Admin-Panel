@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 type StatusType =
   | "draft" | "pending_review" | "approved" | "delivering" | "delivered"
-  | "live" | "error" | "takedown_requested" | "removed"
+  | "live" | "error" | "takedown_requested" | "removed" | "parked"
   | "active" | "inactive" | "suspended"
   | "todo" | "in_progress" | "done" | "cancelled"
   | "pending" | "paid" | "rejected"
@@ -56,6 +56,9 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   // Muted — neutral / inactive
   draft:    { pill: "bg-slate-500/10 text-slate-400 border-slate-500/20", dot: "bg-slate-500" },
   inactive: { pill: "bg-slate-500/10 text-slate-400 border-slate-500/20", dot: "bg-slate-500" },
+
+  // Purple — parked / hidden
+  parked: { pill: "bg-violet-500/12 text-violet-400 border-violet-500/25", dot: "bg-violet-400" },
 };
 
 const FALLBACK: StatusConfig = {

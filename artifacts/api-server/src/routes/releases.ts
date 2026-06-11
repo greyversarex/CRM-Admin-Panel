@@ -814,12 +814,15 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
 // Здесь — только то, что вправе сделать модератор/менеджер вручную.
 export const RELEASE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   draft:              ["pending_review"],
-  pending_review:     ["approved", "rejected", "draft"],
+  pending_review:     ["approved", "rejected", "draft", "parked"],
   // approved → delivering и error → delivering сюда НЕ входят: переход в
   // 'delivering' возможен только через POST /releases/:id/deliver, который
   // одновременно создаёт записи в deliveries (иначе статус был бы без job'ов).
   approved:           ["rejected"],
   rejected:           ["draft", "pending_review"],
+  // parked (Park/Hide): модератор откладывает релиз на потом, не принимая решение.
+  // Из parked можно вернуть в очередь (pending_review) или сразу отклонить.
+  parked:             ["pending_review", "rejected"],
   delivering:         ["delivered", "error"],
   delivered:          ["live", "error"],
   live:               ["takedown_requested"],

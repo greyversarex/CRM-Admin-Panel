@@ -21,7 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   X, CheckCircle2, XCircle, AlertCircle, ShieldAlert, FileMusic, Music2, ScanSearch,
   Image as ImageIcon, Calendar, Globe, Disc3, Hash, Loader2, ExternalLink, Languages,
-  PenTool, Mic, Sliders,
+  PenTool, Mic, Sliders, ChevronDown, PauseCircle, AlertTriangle, LogOut,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FailReturnDialog } from "@/components/fail-return-dialog";
 
 // ─── Типы ответа от /distribution/moderation/:id/details ───────────────
 
@@ -133,6 +138,7 @@ export function ModerationDetailDialog({
   const qc = useQueryClient();
   const { toast } = useToast();
   const [note, setNote] = useState("");
+  const [failReturnOpen, setFailReturnOpen] = useState(false);
 
   const q = useQuery({
     queryKey: ["moderation-detail", releaseId],
@@ -140,8 +146,8 @@ export function ModerationDetailDialog({
   });
 
   const decide = useMutation({
-    mutationFn: (status: "approved" | "rejected") =>
-      jpatch(`/api/releases/${releaseId}/status`, { status, note: note.trim() || undefined }),
+    mutationFn: ({ status, noteOverride }: { status: "approved" | "rejected" | "parked"; noteOverride?: string }) =>
+      jpatch(`/api/releases/${releaseId}/status`, { status, note: noteOverride ?? (note.trim() || undefined) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["moderation"] });
       qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
@@ -213,26 +219,71 @@ export function ModerationDetailDialog({
             </div>
 
             {/* Footer actions */}
-            <div className="border-t bg-muted/30 px-6 py-4 flex items-center justify-end gap-2 sticky bottom-0">
-              <Button variant="outline" onClick={onClose} data-testid="button-close">Закрыть</Button>
-              <Button
-                variant="destructive"
-                disabled={decide.isPending || !note.trim()}
-                onClick={() => decide.mutate("rejected")}
-                data-testid="button-reject"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Отклонить ({errors.length} ошибок)
-              </Button>
+            <div className="border-t bg-muted/30 px-6 py-4 flex items-center justify-between gap-2 sticky bottom-0">
+              {/* More Actions dropdown (left) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={decide.isPending} data-testid="button-more-actions">
+                    More actions
+                    <ChevronDown className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52">
+                  <DropdownMenuItem onClick={onClose}>
+                    <LogOut className="h-4 w-4 mr-2 text-muted-foreground" />
+                    Save &amp; Exit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setFailReturnOpen(true)}
+                    className="text-amber-400 focus:text-amber-300"
+                    data-testid="dropdown-fail-return"
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Fail &amp; Return
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => decide.mutate({ status: "parked" })}
+                    disabled={decide.isPending}
+                    data-testid="dropdown-park"
+                  >
+                    <PauseCircle className="h-4 w-4 mr-2 text-violet-400" />
+                    Park / Hide
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={onClose}
+                    className="text-muted-foreground focus:text-foreground"
+                    data-testid="dropdown-discard"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Discard &amp; Exit
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Approve (right) */}
               <Button
                 disabled={decide.isPending || errors.length > 0}
-                onClick={() => decide.mutate("approved")}
+                onClick={() => decide.mutate({ status: "approved" })}
                 data-testid="button-approve"
               >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
                 Одобрить релиз
               </Button>
             </div>
+
+            {/* Fail & Return structured dialog */}
+            <FailReturnDialog
+              open={failReturnOpen}
+              onClose={() => setFailReturnOpen(false)}
+              onConfirm={(builtNote) => {
+                const combined = [builtNote, note.trim()].filter(Boolean).join("\n\n---\n\n");
+                decide.mutate({ status: "rejected", noteOverride: combined });
+                setFailReturnOpen(false);
+              }}
+              isPending={decide.isPending}
+            />
           </>
         )}
       </DialogContent>

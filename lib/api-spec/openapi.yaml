@@ -372,7 +372,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed, parked]
         - name: artist_id
           in: query
           schema:
@@ -2341,7 +2341,7 @@ components:
           enum: [single, album, ep, compilation]
         status:
           type: string
-          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed, parked]
         statusNote:
           type: string
           nullable: true
@@ -2458,7 +2458,7 @@ components:
             Артистский POST /releases/:id/submit сюда не входит (используйте canSubmit).
           items:
             type: string
-            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+            enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed, parked]
         isEditable:
           type: boolean
           description: |
@@ -2600,7 +2600,7 @@ components:
       properties:
         status:
           type: string
-          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed]
+          enum: [draft, pending_review, approved, rejected, delivering, delivered, live, error, takedown_requested, removed, parked]
         note:
           type: string
           nullable: true
