@@ -21,7 +21,6 @@ import {
   Wallet,
   Coins,
   UserCog,
-  Settings2,
   LogOut,
   Music2,
   CircleUser,
@@ -140,12 +139,6 @@ const adminNavGroups: NavGroup[] = [
     ],
   },
   {
-    titleKey: "system",
-    items: [
-      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
-    ],
-  },
-  {
     titleKey: "account_group",
     items: [
       { nameKey: "profile", href: "/profile", icon: CircleUser, iconColor: "text-pink-400" },
@@ -200,12 +193,6 @@ const labelNavGroups: NavGroup[] = [
       { nameKey: "support", href: "/support", icon: LifeBuoy, iconColor: "text-yellow-400" },
     ],
   },
-  {
-    titleKey: "account_group",
-    items: [
-      { nameKey: "settings", href: "/settings", icon: Settings2, iconColor: "text-slate-400" },
-    ],
-  },
 ];
 
 const artistNavGroups: NavGroup[] = [
@@ -253,8 +240,7 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "account_group",
     items: [
-      { nameKey: "settings", href: "/settings", icon: Settings2,  iconColor: "text-slate-400" },
-      { nameKey: "profile",  href: "/profile",  icon: CircleUser, iconColor: "text-pink-400" },
+      { nameKey: "profile", href: "/profile", icon: CircleUser, iconColor: "text-pink-400" },
     ],
   },
 ];

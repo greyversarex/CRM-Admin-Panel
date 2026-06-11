@@ -4,7 +4,7 @@ import { NotificationsPopover } from "./notifications-popover";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import {
   Globe, ChevronDown, Plus,
-  User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut,
+  User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut, Settings2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -176,6 +176,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <CreditCard className="h-3.5 w-3.5 text-violet-400" />
                       </span>
                       Оплата и налоги
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-sm cursor-pointer gap-3 py-2.5"
+                      onClick={() => navigate("/settings")}
+                    >
+                      <span className="h-7 w-7 rounded-md bg-slate-500/10 flex items-center justify-center">
+                        <Settings2 className="h-3.5 w-3.5 text-slate-400" />
+                      </span>
+                      Настройки
                     </DropdownMenuItem>
                     {user?.role === "admin" && !impersonator && (
                       <DropdownMenuItem
