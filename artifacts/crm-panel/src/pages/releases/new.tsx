@@ -622,10 +622,10 @@ export default function CreateRelease() {
 
           {/* ── Actions ──────────────────────────────────────────────────── */}
           <div className="flex items-center justify-between pt-2 pb-6">
-            <Button variant="outline" style={{ height: 36 }} onClick={() => setLocation("/releases")}>
+            <Button variant="outline" style={{ height: 36, boxShadow: "none" }} onClick={() => setLocation("/releases")}>
               {L.cancel}
             </Button>
-            <Button style={{ height: 36 }} onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
+            <Button style={{ height: 36, boxShadow: "none" }} onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
               {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {L.save}
             </Button>
