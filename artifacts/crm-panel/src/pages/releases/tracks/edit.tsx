@@ -490,8 +490,8 @@ export default function TrackEditPage() {
               </p>
             )}
 
-            {/* ISRC + Clip Start + Preview Start */}
-            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
+            {/* ISRC + Clip Start Time */}
+            <div className="grid grid-cols-[1fr_auto] gap-4 items-end">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">ISRC</Label>
                 <div className="flex gap-1.5">
@@ -510,22 +510,16 @@ export default function TrackEditPage() {
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Clip Start Time</Label>
                 <Input
-                  value={`${clipMm}:${clipSs}`}
+                  value={`${clipMm}:${clipSs}:00`}
                   onChange={(e) => {
-                    const [mm, ss] = e.target.value.split(":").map(Number);
-                    setF({ ...f, clipStartSeconds: Math.max(0, (mm || 0) * 60 + (ss || 0)) });
+                    const parts = e.target.value.split(":").map((p) => parseInt(p, 10) || 0);
+                    const mm = parts[0] ?? 0;
+                    const ss = Math.min(59, parts[1] ?? 0);
+                    setF({ ...f, clipStartSeconds: Math.max(0, mm * 60 + ss) });
                   }}
-                  placeholder="00:00"
-                  className="font-mono w-24"
+                  placeholder="00:00:00"
+                  className="font-mono w-28"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground text-right block">
-                  Preview Start Time: {clipMm}:{clipSs}:00
-                </Label>
-                <div className="h-9 border border-border/40 rounded-md px-3 flex items-center text-sm font-mono text-muted-foreground/60">
-                  {clipMm}:{clipSs}:00
-                </div>
               </div>
             </div>
 

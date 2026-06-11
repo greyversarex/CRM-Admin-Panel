@@ -134,10 +134,8 @@ export function WaveformPlayer({
       sizeRef.current = { w, h };
       canvas.width  = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
+      // Без setTransform — draw работает в физических пикселях (canvas.width/height).
+      // CSS-размер задаётся через Tailwind (absolute inset-0), поэтому пропорции корректны.
       draw(duration > 0 ? current / duration : 0);
     };
 
