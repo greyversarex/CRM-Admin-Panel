@@ -1,6 +1,7 @@
 // Аудиоплеер с визуализацией волнограммы (Canvas + нативный <audio>).
 // Нативный <audio> с Range-стримингом — воспроизведение стартует мгновенно.
-// Волнограмма генерируется детерминированно из хэша пути файла.
+// ВАЖНО: ResizeObserver наблюдает за wrapper-div, а НЕ за canvas,
+//         чтобы не вызывать browser "ResizeObserver loop" error.
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Loader2, AlertTriangle } from "lucide-react";
@@ -42,8 +43,7 @@ function generateBars(seed: number, count: number): number[] {
     if (rng() < 0.07) v = 0.04 + rng() * 0.08;
     raw.push(v);
   }
-  // Нормализуем: максимум всегда 1.0
-  const mx = Math.max(...raw);
+  const mx = Math.max(...raw, 0.001);
   return raw.map((x) => x / mx);
 }
 
@@ -56,10 +56,14 @@ export function WaveformPlayer({
   objectPath: string;
   filename?: string | null;
 }) {
-  const audioRef  = useRef<HTMLAudioElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const barsRef   = useRef<number[]>([]);
-  const rafRef    = useRef<number | null>(null);
+  const audioRef      = useRef<HTMLAudioElement | null>(null);
+  const canvasRef     = useRef<HTMLCanvasElement | null>(null);
+  // Наблюдаем за wrapper-div, а не за canvas — избегаем ResizeObserver loop.
+  const wrapperRef    = useRef<HTMLDivElement | null>(null);
+  const barsRef       = useRef<number[]>([]);
+  const rafRef        = useRef<number | null>(null);
+  // Храним последние размеры canvas в ref, чтобы draw мог их использовать.
+  const sizeRef       = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [canPlay,   setCanPlay]   = useState(false);
@@ -67,6 +71,7 @@ export function WaveformPlayer({
   const [current,   setCurrent]   = useState(0);
   const [duration,  setDuration]  = useState(0);
 
+  // Сбрасываем всё при смене трека.
   useEffect(() => {
     barsRef.current = generateBars(hashString(objectPath), BAR_COUNT);
     setCanPlay(false); setError(false); setIsPlaying(false);
@@ -81,31 +86,30 @@ export function WaveformPlayer({
 
     const W = canvas.width;
     const H = canvas.height;
+    if (W === 0 || H === 0) return;
+
     ctx.clearRect(0, 0, W, H);
 
     const bars = barsRef.current;
+    if (!bars.length) return;
+
     const gap  = 2;
-    const barW = (W - gap * (bars.length - 1)) / bars.length;
+    const barW = Math.max(1, (W - gap * (bars.length - 1)) / bars.length);
     const playedIdx = Math.floor(progress * bars.length);
 
     for (let i = 0; i < bars.length; i++) {
       const x    = i * (barW + gap);
-      const barH = Math.max(3, bars[i] * H * 0.9);
+      const barH = Math.max(3, bars[i] * H * 0.88);
       const y    = (H - barH) / 2;
 
-      // Сыгранная часть — индиго, несыгранная — серая
-      if (i < playedIdx) {
-        ctx.fillStyle = "rgba(129, 140, 248, 0.95)"; // indigo-400
-      } else {
-        ctx.fillStyle = "rgba(148, 163, 184, 0.30)"; // slate-400
-      }
-
-      // fillRect — безопасная альтернатива roundRect (поддерживается везде)
+      ctx.fillStyle = i < playedIdx
+        ? "rgba(129, 140, 248, 0.95)"  // indigo-400 — сыгранная часть
+        : "rgba(148, 163, 184, 0.30)"; // slate-400  — несыгранная
       ctx.fillRect(x, y, barW, barH);
     }
   }, []);
 
-  // Перерисовываем через rAF чтобы не перегружать рендер.
+  // rAF-перерисовка при изменении позиции / длительности.
   useEffect(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
@@ -114,32 +118,40 @@ export function WaveformPlayer({
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [current, duration, draw]);
 
-  // ResizeObserver — корректно масштабируем canvas при изменении ширины контейнера.
+  // Масштабирование canvas.
+  // КРИТИЧНО: наблюдаем wrapper-div, а НЕ canvas. Изменение canvas.width/height
+  // не влияет на размер wrapper-div, поэтому loop не возникает.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
+    const wrapper = wrapperRef.current;
+    const canvas  = canvasRef.current;
+    if (!wrapper || !canvas) return;
 
-    const resize = () => {
-      try {
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        canvas.width  = Math.round(rect.width  * dpr);
-        canvas.height = Math.round(rect.height * dpr);
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.setTransform(1, 0, 0, 1, 0, 0); // universally supported
-          ctx.scale(dpr, dpr);
-        }
-        draw(duration > 0 ? current / duration : 0);
-      } catch {
-        // canvas недоступен — игнорируем
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const applySize = (w: number, h: number) => {
+      if (w === 0 || h === 0) return;
+      if (sizeRef.current.w === w && sizeRef.current.h === h) return;
+      sizeRef.current = { w, h };
+      canvas.width  = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
+      draw(duration > 0 ? current / duration : 0);
     };
 
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-    resize();
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        applySize(width, height);
+      }
+    });
+
+    ro.observe(wrapper);
+    const rect = wrapper.getBoundingClientRect();
+    applySize(rect.width, rect.height);
+
     return () => ro.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draw, objectPath]);
@@ -158,7 +170,7 @@ export function WaveformPlayer({
   };
 
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const a = audioRef.current;
+    const a      = audioRef.current;
     const canvas = canvasRef.current;
     if (!a || !canvas || !canPlay || !duration) return;
     const rect  = canvas.getBoundingClientRect();
@@ -169,8 +181,9 @@ export function WaveformPlayer({
 
   return (
     <div className="rounded-lg border border-primary/30 bg-[#0d0f18] px-4 py-3 space-y-1.5">
-      {/* Основная строка: кнопка + время + волна + время */}
+      {/* Основная строка: кнопка + время + волнограмма + время */}
       <div className="flex items-center gap-3">
+
         {/* Play / Pause */}
         <Button
           type="button"
@@ -195,14 +208,16 @@ export function WaveformPlayer({
           {fmt(current)}
         </span>
 
-        {/* Волнограмма */}
-        <canvas
-          ref={canvasRef}
-          onClick={onCanvasClick}
-          className="flex-1 h-12 block"
-          style={{ cursor: canPlay && !error ? "pointer" : "default" }}
-          aria-label="Волнограмма"
-        />
+        {/* Wrapper-div наблюдается ResizeObserver; canvas внутри него */}
+        <div ref={wrapperRef} className="flex-1 h-12 relative">
+          <canvas
+            ref={canvasRef}
+            onClick={onCanvasClick}
+            className="absolute inset-0 w-full h-full block"
+            style={{ cursor: canPlay && !error ? "pointer" : "default" }}
+            aria-label="Волнограмма"
+          />
+        </div>
 
         {/* Продолжительность */}
         <span className="shrink-0 text-[11px] font-mono text-muted-foreground tabular-nums w-9 text-right">
