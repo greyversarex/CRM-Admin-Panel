@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useListArtists, useListLabels, useCreateRelease, useCreateArtist,
+  useListArtists, useListLabels, useCreateRelease, useCreateArtist, useUpdateReleaseArtists,
   getListReleasesQueryKey, getGetReleaseCountsQueryKey, getListArtistsQueryKey,
+  type ReleaseArtistRef,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
@@ -14,15 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { CoverUploader } from "@/components/asset-uploader";
+import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -62,7 +62,7 @@ export default function CreateRelease() {
   const [releaseVersion, setReleaseVersion] = useState("");
   const [language, setLanguage]         = useState("Tajik");
   const [translations, setTranslations] = useState<Translation[]>([]);
-  const [artistId, setArtistId]         = useState<number | null>(null);
+  const [releaseArtists, setReleaseArtists] = useState<ReleaseArtistRef[]>([]);
   const [isVariousArtists, setIsVariousArtists] = useState(false);
   const [labelId, setLabelId]           = useState<number | null>(null);
   const [genre, setGenre]               = useState("");
@@ -72,8 +72,6 @@ export default function CreateRelease() {
   const [pLineYear, setPLineYear]       = useState<number | "">(CURRENT_YEAR);
   const [pLine, setPLine]               = useState("");
   const [isCompilation, setIsCompilation] = useState<boolean | null>(null);
-  const [artistOpen, setArtistOpen] = useState(false);
-  const [artistSearch, setArtistSearch] = useState("");
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
   const [quickArtistName, setQuickArtistName] = useState("");
   const createArtistMut = useCreateArtist();
@@ -86,12 +84,6 @@ export default function CreateRelease() {
   const { data: labelsData } = useListLabels({ limit: 200, page: 1 } as never);
   const labels = useMemo(() => labelsData?.data ?? [], [labelsData]);
 
-  useEffect(() => {
-    if (!user) return;
-    if (user.role === "artist" && user.artistId && !artistId) setArtistId(user.artistId);
-    if (user.role === "label" && user.labelId && !labelId) setLabelId(user.labelId);
-  }, [user]);
-
   const artistOptions = useMemo(() => {
     if (!user) return artists;
     if (user.role === "artist") return artists.filter(a => a.id === user.artistId);
@@ -100,33 +92,44 @@ export default function CreateRelease() {
   }, [artists, user]);
 
   useEffect(() => {
+    if (!user) return;
+    if (user.role === "label" && user.labelId && !labelId) setLabelId(user.labelId);
+  }, [user]);
+
+  // Инициализируем список артистов для роли artist (ждём загрузки artistOptions)
+  useEffect(() => {
+    if (!user || user.role !== "artist" || !user.artistId) return;
+    if (releaseArtists.length > 0) return; // уже инициализировано
+    const myArtist = artistOptions.find(a => a.id === user.artistId);
+    if (myArtist) {
+      setReleaseArtists([{ artistId: myArtist.id, name: myArtist.name, role: "primary", position: 0 }]);
+    }
+  }, [user, artistOptions]);
+
+  useEffect(() => {
     if (releaseType === "compilation" && isCompilation !== true) setIsCompilation(true);
     if (releaseType !== "compilation" && isCompilation === true) setIsCompilation(false);
   }, [releaseType]);
 
-  const createMut = useCreateRelease({
-    mutation: {
-      onSuccess: async (rel: any) => {
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: getListReleasesQueryKey() }),
-          qc.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() }),
-        ]);
-        toast({ title: L.draftCreatedTitle, description: L.draftCreatedDesc.replace("{title}", rel.title) });
-        setLocation(`/releases/${rel.id}`);
-      },
-      onError: (e: any) => {
-        toast({
-          title: L.createFailedTitle,
-          description: (e as any)?.response?.data?.error ?? (e as any)?.message ?? L.unknownError,
-          variant: "destructive",
-        });
-      },
-    },
-  } as never);
+  const updateArtistsMut = useUpdateReleaseArtists();
+
+  // Для роли artist: pickerArtists fallback к user.artistId пока список пуст
+  const pickerArtists = useMemo<ReleaseArtistRef[]>(() => {
+    if (releaseArtists.length > 0) return releaseArtists;
+    if (user?.role === "artist" && user.artistId) {
+      const a = artistOptions.find(x => x.id === user.artistId);
+      if (a) return [{ artistId: a.id, name: a.name, role: "primary", position: 0 }];
+    }
+    return releaseArtists;
+  }, [releaseArtists, user, artistOptions]);
+
+  const primaryArtistId = pickerArtists.find(a => a.role === "primary")?.artistId ?? null;
+
+  const createMut = useCreateRelease({} as never);
 
   const canCreate =
     title.trim().length >= 1 &&
-    artistId != null &&
+    primaryArtistId != null &&
     coverAiUsage !== "" &&
     !!genre &&
     isCompilation !== null &&
@@ -154,7 +157,16 @@ export default function CreateRelease() {
         },
       });
       await qc.invalidateQueries({ queryKey: getListArtistsQueryKey() });
-      setArtistId(created.id);
+      // Добавляем нового артиста в список: primary если список пуст, иначе featuring
+      setReleaseArtists(prev => {
+        const hasPrimary = prev.some(a => a.role === "primary");
+        return [...prev, {
+          artistId: created.id,
+          name: created.name,
+          role: hasPrimary ? "featuring" : "primary",
+          position: prev.length,
+        }];
+      });
       setAddArtistDialogOpen(false);
       setQuickArtistName("");
       toast({ title: L.artistCreatedTitle, description: L.artistCreatedDesc.replace("{name}", created.name) });
@@ -163,34 +175,57 @@ export default function CreateRelease() {
     }
   }
 
-  function handleCreate() {
-    if (!artistId) return;
+  async function handleCreate() {
+    if (!primaryArtistId) return;
     const cleanedTranslations = translations
       .filter(tr => tr.language.trim() && tr.title.trim())
       .map(tr => ({ language: tr.language.trim(), title: tr.title.trim(), version: tr.version?.trim() || null }));
 
-    createMut.mutate({
-      data: {
-        title: title.trim(),
-        releaseType,
-        artistId,
-        labelId: labelId ?? undefined,
-        releaseVersion: releaseVersion.trim() || undefined,
-        coverUrl: coverUrl || undefined,
-        coverAiUsage: coverAiUsage || undefined,
-        language: language || undefined,
-        genre: genre || undefined,
-        subgenre: subgenre || undefined,
-        cLine: cLine.trim() || undefined,
-        cLineYear: cLineYear === "" ? undefined : Number(cLineYear),
-        pLine: pLine.trim() || undefined,
-        pLineYear: pLineYear === "" ? undefined : Number(pLineYear),
-        isCompilation: isCompilation === true,
-        isVariousArtists,
-        upcRequestPending: true,
-        metadataTranslations: cleanedTranslations,
-      },
-    });
+    try {
+      const rel = await createMut.mutateAsync({
+        data: {
+          title: title.trim(),
+          releaseType,
+          artistId: primaryArtistId,
+          labelId: labelId ?? undefined,
+          releaseVersion: releaseVersion.trim() || undefined,
+          coverUrl: coverUrl || undefined,
+          coverAiUsage: coverAiUsage || undefined,
+          language: language || undefined,
+          genre: genre || undefined,
+          subgenre: subgenre || undefined,
+          cLine: cLine.trim() || undefined,
+          cLineYear: cLineYear === "" ? undefined : Number(cLineYear),
+          pLine: pLine.trim() || undefined,
+          pLineYear: pLineYear === "" ? undefined : Number(pLineYear),
+          isCompilation: isCompilation === true,
+          isVariousArtists,
+          upcRequestPending: true,
+          metadataTranslations: cleanedTranslations,
+        },
+      } as never) as any;
+
+      // Если выбрано несколько артистов — сохраняем их
+      if (pickerArtists.length > 1) {
+        await updateArtistsMut.mutateAsync({
+          id: rel.id,
+          data: { artists: pickerArtists.map(a => ({ artistId: a.artistId, role: a.role })) },
+        } as never);
+      }
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getListReleasesQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() }),
+      ]);
+      toast({ title: L.draftCreatedTitle, description: L.draftCreatedDesc.replace("{title}", rel.title) });
+      setLocation(`/releases/${rel.id}`);
+    } catch (e: any) {
+      toast({
+        title: L.createFailedTitle,
+        description: e?.response?.data?.error ?? e?.message ?? L.unknownError,
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -336,91 +371,31 @@ export default function CreateRelease() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
-            <Popover open={artistOpen} onOpenChange={setArtistOpen}>
-              <PopoverTrigger asChild>
+              <MultiArtistPicker
+                value={pickerArtists}
+                onChange={setReleaseArtists}
+                labelId={user?.role === "label" ? user.labelId : null}
+                lockedArtistId={user?.role === "artist" ? user.artistId : null}
+              />
+              {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
                 <Button
                   type="button"
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={artistOpen}
-                  data-testid="select-artist"
-                  className="w-full justify-between font-normal h-9 px-3"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setAddArtistDialogOpen(true)}
                 >
-                  <span className={artistId ? "" : "text-foreground/40"}>
-                    {artistId
-                      ? (artistOptions.find(a => a.id === artistId)?.name ?? L.selectArtist)
-                      : L.selectArtist}
-                  </span>
-                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                  <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                  {L.addNewArtist}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="p-0 w-[var(--radix-popover-trigger-width)]"
-                align="start"
-                sideOffset={4}
-              >
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder={L.searchArtist}
-                    value={artistSearch}
-                    onValueChange={setArtistSearch}
-                  />
-                  <CommandList className="max-h-[210px]">
-                    <CommandEmpty className="py-4 text-sm text-center text-muted-foreground">
-                      {L.noArtistsFound}
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {artistOptions
-                        .filter(a => a.name.toLowerCase().includes(artistSearch.toLowerCase()))
-                        .map(a => (
-                          <CommandItem
-                            key={a.id}
-                            value={String(a.id)}
-                            onSelect={() => {
-                              setArtistId(a.id);
-                              setArtistOpen(false);
-                              setArtistSearch("");
-                            }}
-                          >
-                            <Check className={`mr-2 h-4 w-4 ${artistId === a.id ? "opacity-100" : "opacity-0"}`} />
-                            {a.name}
-                          </CommandItem>
-                        ))}
-                    </CommandGroup>
-                  </CommandList>
-                  {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
-                    <>
-                      <CommandSeparator />
-                      <div className="p-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start text-primary hover:text-primary"
-                          onClick={() => {
-                            setArtistOpen(false);
-                            setAddArtistDialogOpen(true);
-                          }}
-                        >
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          {L.addNewArtist}
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {artistOptions.length === 0 && (
-              <p className="text-sm text-muted-foreground">{L.noArtistsHint}</p>
-            )}
-            <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-              <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
-              <span>
-                {L.variousArtists}
-                <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
-              </span>
-            </label>
+              )}
+              <label className="flex items-center gap-2.5 cursor-pointer text-sm">
+                <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
+                <span>
+                  {L.variousArtists}
+                  <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
+                </span>
+              </label>
             </CardContent>
           </Card>
 
