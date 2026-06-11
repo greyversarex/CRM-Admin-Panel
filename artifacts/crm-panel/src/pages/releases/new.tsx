@@ -447,23 +447,29 @@ export default function CreateRelease() {
                           })}
                       </CommandGroup>
                     </CommandList>
+                    {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
+                      <>
+                        <CommandSeparator />
+                        <div className="p-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-primary hover:text-primary"
+                            onClick={() => {
+                              setArtistOpen(false);
+                              setAddArtistDialogOpen(true);
+                            }}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            {L.addNewArtist}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </Command>
                 </PopoverContent>
               </Popover>
-              {(user?.role === "admin" || user?.role === "manager" || user?.role === "label") && (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-primary hover:text-primary"
-                    onClick={() => setAddArtistDialogOpen(true)}
-                  >
-                    <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                    {L.addNewArtist}
-                  </Button>
-                </div>
-              )}
               {artistOptions.length === 0 && (
                 <p className="text-sm text-muted-foreground">{L.noArtistsHint}</p>
               )}
@@ -614,18 +620,17 @@ export default function CreateRelease() {
             </CardContent>
           </Card>
 
+          {/* ── Actions ──────────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between pt-2 pb-6">
+            <Button variant="outline" onClick={() => setLocation("/releases")}>
+              {L.cancel}
+            </Button>
+            <Button onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
+              {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {L.save}
+            </Button>
+          </div>
         </div>
-      </div>
-
-      {/* ── Sticky bottom bar ────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-3 flex items-center justify-between">
-        <Button variant="outline" onClick={() => setLocation("/releases")}>
-          {L.cancel}
-        </Button>
-        <Button onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
-          {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {L.save}
-        </Button>
       </div>
 
       {/* ── Quick Create Artist dialog (Symphonic-style) ─────────────────── */}
