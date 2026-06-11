@@ -5,6 +5,7 @@
 // Кнопки: Cancel | Save | Save & Next Track
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetTrack,
   useUpdateTrack,
@@ -278,6 +279,7 @@ export default function TrackEditPage() {
   const nextTrack = allTracks[trackIndex + 1] ?? null;
 
   const updateTrack = useUpdateTrack();
+  const queryClient = useQueryClient();
 
   // Пул стерео-аудио релиза — все файлы, загруженные на странице Upload Stereo
   // Audio. Из него трек выбирает свой файл через выпадающий список.
@@ -313,8 +315,10 @@ export default function TrackEditPage() {
         id: track.id,
         data: { ...formToBody(f), artistId: track.artistId },
       });
+      // Инвалидируем кэш: трек, список треков релиза и все треки.
+      await queryClient.invalidateQueries({ queryKey: [`/api/tracks/${track.id}`] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/tracks"] });
       toast({ title: "Сохранено", description: `Трек «${f.title}» обновлён.` });
-      void refetch();
       return true;
     } catch (e: any) {
       toast({ title: "Не удалось сохранить", description: e?.message ?? "Ошибка", variant: "destructive" });
@@ -512,14 +516,14 @@ export default function TrackEditPage() {
                   Clip Start Time <InfoTip text="The time offset (minutes:seconds:centiseconds) at which the DSP preview clip should start." />
                 </Label>
                 <Input
-                  value={`${clipMm}:${clipSs}:00`}
+                  value={`${clipMm}:${clipSs}`}
                   onChange={(e) => {
                     const parts = e.target.value.split(":").map((p) => parseInt(p, 10) || 0);
                     const mm = parts[0] ?? 0;
                     const ss = Math.min(59, parts[1] ?? 0);
                     setF({ ...f, clipStartSeconds: Math.max(0, mm * 60 + ss) });
                   }}
-                  placeholder="00:00:00"
+                  placeholder="00:00"
                   className="font-mono w-full"
                 />
               </div>
@@ -641,8 +645,12 @@ export default function TrackEditPage() {
               </div>
             </div>
             </div>
+            </CardContent>
+          </Card>
 
-            <Separator className="opacity-20" />
+          {/* ── Card 3: Display Artists, Contributors, Genre, etc. ──── */}
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
+            <CardContent className="p-6 space-y-6">
 
             {/* Display Artists */}
             <div className="space-y-4">
