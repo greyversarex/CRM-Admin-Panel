@@ -1,9 +1,6 @@
-// Плеер с визуализацией волнограммы (canvas).
-//
-// Нативный <audio> + Range-стриминг — воспроизведение стартует мгновенно.
-// Волнограмма — псевдослучайные столбики, сгенерированные из хэша пути файла,
-// поэтому одна и та же дорожка всегда выглядит одинаково.
-// Клик по волнограмме — перемотка.
+// Аудиоплеер с визуализацией волнограммы (Canvas + нативный <audio>).
+// Нативный <audio> с Range-стримингом — воспроизведение стартует мгновенно.
+// Волнограмма генерируется детерминированно из хэша пути файла.
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Loader2, AlertTriangle } from "lucide-react";
@@ -13,18 +10,7 @@ function fmt(s: number): string {
   if (!isFinite(s) || s < 0) s = 0;
   const m = Math.floor(s / 60);
   const r = Math.floor(s % 60);
-  return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-// Простой детерминированный PRNG (mulberry32) — одинаковые бары для одного файла.
-function makePRNG(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s |= 0; s = s + 0x6D2B79F5 | 0;
-    let t = Math.imul(s ^ s >>> 15, 1 | s);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
+  return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
 }
 
 function hashString(str: string): number {
@@ -36,26 +22,32 @@ function hashString(str: string): number {
   return h >>> 0;
 }
 
-// Генерируем массив высот баров [0..1] для волнограммы.
-function generateBars(seed: number, count: number): number[] {
-  const rng = makePRNG(seed);
-  const bars: number[] = [];
-  // Создаём «волнообразный» паттерн с плавными переходами
-  let prev = 0.4 + rng() * 0.3;
-  for (let i = 0; i < count; i++) {
-    const delta = (rng() - 0.5) * 0.3;
-    let next = Math.max(0.08, Math.min(1.0, prev + delta));
-    // Добавляем случайные пики
-    if (rng() < 0.05) next = 0.7 + rng() * 0.3;
-    if (rng() < 0.08) next = 0.05 + rng() * 0.1;
-    bars.push(next);
-    prev = next;
-  }
-  return bars;
+function makePRNG(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s |= 0; s = s + 0x6d2b79f5 | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-const BAR_COUNT = 160;
-const BAR_GAP = 1;
+function generateBars(seed: number, count: number): number[] {
+  const rng = makePRNG(seed);
+  const raw: number[] = [];
+  let v = 0.4 + rng() * 0.3;
+  for (let i = 0; i < count; i++) {
+    v = Math.max(0.06, Math.min(1, v + (rng() - 0.5) * 0.28));
+    if (rng() < 0.04) v = 0.75 + rng() * 0.25;
+    if (rng() < 0.07) v = 0.04 + rng() * 0.08;
+    raw.push(v);
+  }
+  // Нормализуем: максимум всегда 1.0
+  const mx = Math.max(...raw);
+  return raw.map((x) => x / mx);
+}
+
+const BAR_COUNT = 180;
 
 export function WaveformPlayer({
   objectPath,
@@ -64,79 +56,91 @@ export function WaveformPlayer({
   objectPath: string;
   filename?: string | null;
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef  = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const barsRef = useRef<number[]>([]);
+  const barsRef   = useRef<number[]>([]);
+  const rafRef    = useRef<number | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [canPlay, setCanPlay] = useState(false);
-  const [error, setError] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [canPlay,   setCanPlay]   = useState(false);
+  const [error,     setError]     = useState(false);
+  const [current,   setCurrent]   = useState(0);
+  const [duration,  setDuration]  = useState(0);
 
-  // Генерируем стабильные бары по хэшу пути файла.
   useEffect(() => {
     barsRef.current = generateBars(hashString(objectPath), BAR_COUNT);
-    setCanPlay(false);
-    setError(false);
-    setIsPlaying(false);
-    setCurrent(0);
-    setDuration(0);
+    setCanPlay(false); setError(false); setIsPlaying(false);
+    setCurrent(0);     setDuration(0);
   }, [objectPath]);
 
-  const drawWaveform = useCallback((progress: number) => {
+  const draw = useCallback((progress: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { width, height } = canvas;
-    ctx.clearRect(0, 0, width, height);
+
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
 
     const bars = barsRef.current;
-    const barW = (width - BAR_GAP * (bars.length - 1)) / bars.length;
+    const gap  = 2;
+    const barW = (W - gap * (bars.length - 1)) / bars.length;
     const playedIdx = Math.floor(progress * bars.length);
 
     for (let i = 0; i < bars.length; i++) {
-      const x = i * (barW + BAR_GAP);
-      const barH = Math.max(2, bars[i] * height);
-      const y = (height - barH) / 2;
+      const x    = i * (barW + gap);
+      const barH = Math.max(3, bars[i] * H * 0.9);
+      const y    = (H - barH) / 2;
 
-      ctx.fillStyle = i < playedIdx
-        ? "rgba(99, 102, 241, 0.9)"   // indigo-500 — воспроизведено
-        : "rgba(148, 163, 184, 0.35)"; // slate-400 — ещё не воспроизведено
+      // Сыгранная часть — индиго, несыгранная — серая
+      if (i < playedIdx) {
+        ctx.fillStyle = "rgba(129, 140, 248, 0.95)"; // indigo-400
+      } else {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.30)"; // slate-400
+      }
 
-      // Скруглённые столбики
-      const radius = Math.min(barW / 2, 2);
+      const r = Math.min(barW / 2, 2);
       ctx.beginPath();
-      ctx.roundRect(x, y, barW, barH, radius);
+      ctx.roundRect(x, y, barW, barH, r);
       ctx.fill();
     }
   }, []);
 
-  // Перерисовываем при каждом изменении текущего времени.
+  // Перерисовываем через rAF чтобы не перегружать рендер.
   useEffect(() => {
-    const progress = duration > 0 ? current / duration : 0;
-    drawWaveform(progress);
-  }, [current, duration, drawWaveform]);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      draw(duration > 0 ? current / duration : 0);
+    });
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [current, duration, draw]);
 
-  // Первая отрисовка (пустая волна) при монтировании и смене файла.
-  useEffect(() => {
-    drawWaveform(0);
-  }, [objectPath, drawWaveform]);
-
-  // Масштабируем canvas под реальный DPR.
+  // ResizeObserver — корректно масштабируем canvas при изменении ширины контейнера.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext("2d");
-    if (ctx) ctx.scale(dpr, dpr);
-    drawWaveform(duration > 0 ? current / duration : 0);
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      canvas.width  = Math.round(rect.width  * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.resetTransform();
+        ctx.scale(dpr, dpr);
+      }
+      draw(duration > 0 ? current / duration : 0);
+    };
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+    resize();
+    return () => ro.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [draw, objectPath]);
 
   const togglePlay = () => {
     const a = audioRef.current;
@@ -154,26 +158,26 @@ export function WaveformPlayer({
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const a = audioRef.current;
     const canvas = canvasRef.current;
-    if (!a || !canvas || !canPlay || !isFinite(duration) || duration <= 0) return;
-    const rect = canvas.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    const time = Math.max(0, Math.min(duration, ratio * duration));
-    a.currentTime = time;
-    setCurrent(time);
+    if (!a || !canvas || !canPlay || !duration) return;
+    const rect  = canvas.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    a.currentTime = ratio * duration;
+    setCurrent(a.currentTime);
   };
 
   return (
-    <div className="rounded-md border border-primary/40 bg-[#0f1117] p-3 space-y-2">
+    <div className="rounded-lg border border-primary/30 bg-[#0d0f18] px-4 py-3 space-y-1.5">
+      {/* Основная строка: кнопка + время + волна + время */}
       <div className="flex items-center gap-3">
-        {/* Кнопка Play/Pause */}
+        {/* Play / Pause */}
         <Button
           type="button"
           size="icon"
-          className="shrink-0 h-9 w-9 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground"
+          className="shrink-0 h-9 w-9 rounded-full bg-primary hover:bg-primary/80 text-white border-0"
+          style={{ boxShadow: "none", minHeight: 0 }}
           disabled={!canPlay || error}
           onClick={togglePlay}
           aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-          style={{ boxShadow: "none" }}
         >
           {!canPlay && !error ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -184,8 +188,8 @@ export function WaveformPlayer({
           )}
         </Button>
 
-        {/* Временная метка — начало */}
-        <span className="text-[11px] font-mono text-muted-foreground tabular-nums shrink-0 w-8">
+        {/* Текущее время */}
+        <span className="shrink-0 text-[11px] font-mono text-muted-foreground tabular-nums w-9">
           {fmt(current)}
         </span>
 
@@ -193,36 +197,32 @@ export function WaveformPlayer({
         <canvas
           ref={canvasRef}
           onClick={onCanvasClick}
-          className="flex-1 h-14"
-          style={{ cursor: canPlay ? "pointer" : "default" }}
-          aria-label="Волнограмма — клик для перемотки"
+          className="flex-1 h-12 block"
+          style={{ cursor: canPlay && !error ? "pointer" : "default" }}
+          aria-label="Волнограмма"
         />
 
-        {/* Временная метка — конец */}
-        <span className="text-[11px] font-mono text-muted-foreground tabular-nums shrink-0 w-10 text-right">
+        {/* Продолжительность */}
+        <span className="shrink-0 text-[11px] font-mono text-muted-foreground tabular-nums w-9 text-right">
           {error ? "—" : fmt(duration)}
         </span>
       </div>
 
-      {/* Имя файла */}
-      {filename && (
-        <div className="text-[11px] text-muted-foreground truncate pl-12">{filename}</div>
-      )}
-
-      {error && (
-        <div className="flex items-center gap-1.5 text-xs text-rose-300 pl-12">
-          <AlertTriangle className="h-3.5 w-3.5" /> Не удалось загрузить аудио.
+      {/* Имя файла или ошибка */}
+      {error ? (
+        <div className="flex items-center gap-1.5 text-xs text-rose-400 pl-12">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Не удалось загрузить аудио для предпрослушивания.
         </div>
-      )}
+      ) : filename ? (
+        <div className="text-[11px] text-muted-foreground/70 truncate pl-12">{filename}</div>
+      ) : null}
 
       <audio
         ref={audioRef}
         src={assetHref(objectPath)}
         preload="metadata"
-        onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration || 0);
-          setCanPlay(true);
-        }}
+        onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration || 0); setCanPlay(true); }}
         onCanPlay={() => setCanPlay(true)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
