@@ -96,8 +96,12 @@ export default function CreateRelease() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role === "label" && user.labelId && !labelId) setLabelId(user.labelId);
-  }, [user]);
+    if (user.role === "label" && user.labelId && !labelId) {
+      setLabelId(user.labelId);
+      const found = labels.find(l => l.id === user.labelId);
+      if (found) { setCLine(found.name); setPLine(found.name); }
+    }
+  }, [user, labels]);
 
   // Инициализируем список артистов для роли artist (ждём загрузки artistOptions)
   useEffect(() => {
@@ -374,7 +378,7 @@ export default function CreateRelease() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
-              <Popover open={artistOpen} onOpenChange={setArtistOpen}>
+              <Popover open={isVariousArtists ? false : artistOpen} onOpenChange={v => { if (!isVariousArtists) setArtistOpen(v); }}>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
@@ -382,6 +386,7 @@ export default function CreateRelease() {
                     role="combobox"
                     aria-expanded={artistOpen}
                     data-testid="select-artist"
+                    disabled={isVariousArtists}
                     className="w-full justify-between font-normal h-9 px-3"
                   >
                     <span className={pickerArtists.length > 0 ? "truncate" : "text-foreground/40"}>
@@ -525,7 +530,17 @@ export default function CreateRelease() {
               <FieldLabel className="text-sm">{L.labelName}</FieldLabel>
               <Select
                 value={labelId ? String(labelId) : "none"}
-                onValueChange={v => setLabelId(v === "none" ? null : Number(v))}
+                onValueChange={v => {
+                  const id = v === "none" ? null : Number(v);
+                  setLabelId(id);
+                  if (id) {
+                    const found = labels.find(l => l.id === id);
+                    if (found) {
+                      setCLine(found.name);
+                      setPLine(found.name);
+                    }
+                  }
+                }}
                 disabled={user?.role === "label"}
               >
                 <SelectTrigger data-testid="select-label"><SelectValue /></SelectTrigger>
