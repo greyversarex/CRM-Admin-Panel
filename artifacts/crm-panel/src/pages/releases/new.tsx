@@ -94,14 +94,23 @@ export default function CreateRelease() {
     return artists;
   }, [artists, user]);
 
+  // Для роли "label" — автоматически выставляем их лейбл
   useEffect(() => {
     if (!user) return;
     if (user.role === "label" && user.labelId && !labelId) {
       setLabelId(user.labelId);
-      const found = labels.find(l => l.id === user.labelId);
-      if (found) { setCLine(found.name); setPLine(found.name); }
     }
-  }, [user, labels]);
+  }, [user]);
+
+  // Автозаполнение C Line / P Line именем лейбла при выборе или авто-установке
+  useEffect(() => {
+    if (!labelId || !labels.length) return;
+    const found = labels.find(l => l.id === labelId);
+    if (found) {
+      setCLine(found.name);
+      setPLine(found.name);
+    }
+  }, [labelId, labels]);
 
   // Инициализируем список артистов для роли artist (ждём загрузки artistOptions)
   useEffect(() => {
@@ -530,17 +539,7 @@ export default function CreateRelease() {
               <FieldLabel className="text-sm">{L.labelName}</FieldLabel>
               <Select
                 value={labelId ? String(labelId) : "none"}
-                onValueChange={v => {
-                  const id = v === "none" ? null : Number(v);
-                  setLabelId(id);
-                  if (id) {
-                    const found = labels.find(l => l.id === id);
-                    if (found) {
-                      setCLine(found.name);
-                      setPLine(found.name);
-                    }
-                  }
-                }}
+                onValueChange={v => setLabelId(v === "none" ? null : Number(v))}
                 disabled={user?.role === "label"}
               >
                 <SelectTrigger data-testid="select-label"><SelectValue /></SelectTrigger>
