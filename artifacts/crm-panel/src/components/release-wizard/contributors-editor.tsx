@@ -192,7 +192,7 @@ function Editor<T>({
       )}
 
       {/* Column headers aligned with grid columns below */}
-      <div className="grid gap-2 px-0.5" style={{ gridTemplateColumns: "320px 160px 36px" }}>
+      <div className="grid gap-2 px-0.5" style={{ gridTemplateColumns: "1fr 160px 36px" }}>
         <span className="text-xs text-muted-foreground/70">Artist Name</span>
         <span className="text-xs text-muted-foreground/70">Role</span>
         <span />
@@ -202,7 +202,7 @@ function Editor<T>({
 
       <div className="space-y-1.5">
         {rows.map((row, i) => (
-          <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: "320px 160px 36px" }}>
+          <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 160px 36px" }}>
             {renderRow(row, i)}
             <Button
               type="button"
