@@ -80,8 +80,7 @@ const adminOnly = requireRole("admin", "manager");
 
 router.use(dashboardRouter);          // scoped per-route inside (artist/label get filtered widgets)
 router.use(artistsRouter);            // scoped per-route inside
-router.use("/labels", adminOnly, requireManagerPermission("catalog"));     // labels mgmt is admin/manager only
-router.use(labelsRouter);
+router.use(labelsRouter);             // GET scoped per-role inside; POST/PUT/DELETE guarded inside
 router.use(releasesRouter);           // scoped per-route inside
 router.use(releasesExtrasRouter);     // /dsp-catalog + /releases/:id/{artists,dsps,validate}
 router.use(releaseFlowRouter);        // Symphonic-flow: /releases/check-upc, /tracks/reusable, reorder, /issues
