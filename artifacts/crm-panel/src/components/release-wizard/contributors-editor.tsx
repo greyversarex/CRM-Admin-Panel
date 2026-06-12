@@ -46,7 +46,7 @@ export function DisplayArtistsEditor({
             placeholder={t.releaseWizard.selectOrTypeArtist}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
-            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -82,7 +82,7 @@ export function WritersEditor({
             placeholder={t.releaseWizard.selectOrTypeWriter}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
-            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
             </SelectContent>
@@ -118,7 +118,7 @@ export function PerformersEditor({
             placeholder={t.releaseWizard.selectOrTypePerformer}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -154,7 +154,7 @@ export function ProductionEditor({
             placeholder={t.releaseWizard.selectOrTypeName}
           />
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
-            <SelectTrigger className="bg-background/40 w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
             </SelectContent>
@@ -192,7 +192,7 @@ function Editor<T>({
       )}
 
       {/* Column headers aligned with grid columns below */}
-      <div className="grid gap-2 px-0.5" style={{ gridTemplateColumns: "1fr 160px 36px" }}>
+      <div className="grid gap-2 px-0.5" style={{ gridTemplateColumns: "1fr 1fr 36px" }}>
         <span className="text-xs text-muted-foreground/70">Artist Name</span>
         <span className="text-xs text-muted-foreground/70">Role</span>
         <span />
@@ -202,7 +202,7 @@ function Editor<T>({
 
       <div className="space-y-1.5">
         {rows.map((row, i) => (
-          <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 160px 36px" }}>
+          <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 36px" }}>
             {renderRow(row, i)}
             <Button
               type="button"
