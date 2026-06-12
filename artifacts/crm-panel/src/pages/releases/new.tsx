@@ -396,13 +396,25 @@ export default function CreateRelease() {
                     aria-expanded={artistOpen}
                     data-testid="select-artist"
                     disabled={isVariousArtists}
-                    className="w-full justify-between font-normal h-9 px-3"
+                    className="w-full justify-between font-normal min-h-9 h-auto px-3 py-1.5"
                   >
-                    <span className={pickerArtists.length > 0 ? "truncate" : "text-foreground/40"}>
-                      {pickerArtists.length > 0
-                        ? pickerArtists.map(a => a.name).join(", ")
-                        : L.selectArtist}
-                    </span>
+                    {pickerArtists.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                        {pickerArtists.map(a => (
+                          <span
+                            key={a.artistId}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-primary/15 text-primary border border-primary/25"
+                          >
+                            {a.name}
+                            {a.role === "primary" && (
+                              <span className="text-[9px] opacity-60 font-normal">primary</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-foreground/40">{L.selectArtist}</span>
+                    )}
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
                   </Button>
                 </PopoverTrigger>
