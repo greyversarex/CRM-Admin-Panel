@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, tracksTable, artistsTable, releasesTable } from "@workspace/db";
-import { count, eq, desc, and, inArray } from "drizzle-orm";
+import { count, eq, desc, and, inArray, ne } from "drizzle-orm";
 import { CreateTrackBody, UpdateTrackBody, GetTrackParams, UpdateTrackParams, DeleteTrackParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
@@ -65,19 +65,26 @@ router.get("/tracks", async (req, res): Promise<void> => {
 
   // Scope: artist sees only own tracks; label sees tracks of their label's artists.
   const scope = getDataScope(req);
-  let where: any = undefined;
+  const releaseIdParam = req.query.release_id ? parseInt(req.query.release_id as string, 10) : undefined;
+  const conditions: any[] = [];
   if (!scope.fullAccess) {
     if (scope.role === "artist") {
       if (scope.artistId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
-      where = eq(tracksTable.artistId, scope.artistId);
+      conditions.push(eq(tracksTable.artistId, scope.artistId));
     } else if (scope.role === "label") {
       if (scope.labelId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
       const labelArtists = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId));
       const ids = labelArtists.map(a => a.id);
       if (ids.length === 0) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
-      where = inArray(tracksTable.artistId, ids);
+      conditions.push(inArray(tracksTable.artistId, ids));
     }
   }
+  // Фильтр по релизу: раньше query-параметр release_id игнорировался, поэтому
+  // страница трека получала неполный/чужой список треков. Теперь учитываем его.
+  if (releaseIdParam !== undefined && !Number.isNaN(releaseIdParam)) {
+    conditions.push(eq(tracksTable.releaseId, releaseIdParam));
+  }
+  const where: any = conditions.length ? and(...conditions) : undefined;
 
   const tracks = await db.select().from(tracksTable).where(where).limit(limit).offset(offset).orderBy(desc(tracksTable.createdAt));
   const [totalResult] = await db.select({ count: count() }).from(tracksTable).where(where);
@@ -180,6 +187,27 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
     }
     if (body.releaseId !== undefined && body.releaseId !== existing.releaseId) {
       res.status(403).json({ error: "Cannot change releaseId" }); return;
+    }
+  }
+
+  // Инвариант «один аудиофайл = один трек»: нельзя привязать файл, уже
+  // используемый другим треком этого же релиза. Проверяем только при смене
+  // audioUrl, чтобы не блокировать сохранение легаси-дубликатов без изменений.
+  const nextAudioUrl = (parsed.data as Record<string, unknown>).audioUrl;
+  if (
+    typeof nextAudioUrl === "string" && nextAudioUrl &&
+    nextAudioUrl !== existing.audioUrl && existing.releaseId != null
+  ) {
+    const [clash] = await db.select({ id: tracksTable.id })
+      .from(tracksTable)
+      .where(and(
+        eq(tracksTable.releaseId, existing.releaseId),
+        eq(tracksTable.audioUrl, nextAudioUrl),
+        ne(tracksTable.id, existing.id),
+      ));
+    if (clash) {
+      res.status(409).json({ error: "Этот аудиофайл уже привязан к другому треку релиза." });
+      return;
     }
   }
 

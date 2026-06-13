@@ -271,7 +271,7 @@ export default function TrackEditPage() {
   const { data: track, isLoading, error, refetch } = useGetTrack(trackId);
   const { data: release } = useGetRelease(releaseId);
   const { data: tracksData } = useListTracks(
-    { release_id: releaseId },
+    { release_id: releaseId, limit: 500 },
     { query: { enabled: releaseId > 0 } } as never,
   );
   const allTracks: Track[] = (tracksData as any)?.data ?? [];
@@ -288,6 +288,13 @@ export default function TrackEditPage() {
     { query: { enabled: releaseId > 0 } } as never,
   );
   const audioPool: Asset[] = (audioAssetsData as any) ?? [];
+  // Аудиофайлы, уже привязанные к ДРУГИМ трекам релиза — их нельзя выбрать
+  // повторно для текущего трека (один файл = один трек).
+  const audioUsedByOtherTracks = new Set(
+    allTracks
+      .filter((t) => t.id !== trackId && t.audioUrl)
+      .map((t) => t.audioUrl as string),
+  );
 
   const [f, setF] = useState<FormState | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -372,11 +379,13 @@ export default function TrackEditPage() {
   };
 
   type AudioOption = { value: string; label: string; sub: string };
-  const audioOptions: AudioOption[] = audioPool.map((a) => ({
-    value: a.objectPath,
-    label: a.filename,
-    sub: `загружен ${fmtUploaded(a.createdAt)}`,
-  }));
+  const audioOptions: AudioOption[] = audioPool
+    .filter((a) => !audioUsedByOtherTracks.has(a.objectPath))
+    .map((a) => ({
+      value: a.objectPath,
+      label: a.filename,
+      sub: `загружен ${fmtUploaded(a.createdAt)}`,
+    }));
   if (f.audioUrl && !audioOptions.some((o) => o.value === f.audioUrl)) {
     audioOptions.unshift({
       value: f.audioUrl,

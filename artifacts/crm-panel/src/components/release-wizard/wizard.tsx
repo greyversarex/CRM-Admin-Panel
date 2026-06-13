@@ -704,7 +704,22 @@ function Step1Details({
           <label className="flex items-center gap-2 cursor-pointer mt-1">
             <Checkbox
               checked={form.isVariousArtists}
-              onCheckedChange={(v) => set("isVariousArtists", !!v)}
+              onCheckedChange={(v) => {
+                const on = !!v;
+                set("isVariousArtists", on);
+                // При «Various Artists» (сборник 5+ артистов) очищаем выбранных
+                // артистов релиза, чтобы прежний единственный исполнитель не «залипал».
+                // Для роли «артист» оставляем его собственного (заблокированного)
+                // артиста — у релиза обязателен primary artistId (NOT NULL).
+                if (on) {
+                  const lockedId = isArtist ? user?.artistId : null;
+                  const kept = lockedId != null
+                    ? artists.filter((a) => a.artistId === lockedId)
+                    : [];
+                  setArtists(kept);
+                  set("artistId", kept[0]?.artistId ?? 0);
+                }
+              }}
             />
             <span className="text-sm text-muted-foreground">
               {t.createRelease.variousArtists}{" "}
