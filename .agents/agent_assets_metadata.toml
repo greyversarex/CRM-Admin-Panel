@@ -30,3 +30,9 @@ id = "CGrSNYvR6tLeBZdQZXxkn"
 uri = "file://AUDIT_REPORT.md"
 type = "text"
 title = "Аудит кодовой базы Tajik Music Distribution CRM"
+
+[[outputs]]
+id = "MvqI8_qa_Px83EyBEEJP9"
+uri = "file://audit/tajik-music-crm-audit.xml"
+type = "unspecified"
+title = "Технический аудит — Tajik Music Distribution CRM (XML)"

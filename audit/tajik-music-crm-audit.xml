@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<audit_report>
+  <meta>
+    <project>Tajik Music Distribution CRM</project>
+    <title>Честный технический аудит: что реально работает в коде</title>
+    <language>ru</language>
+    <stack>TypeScript monorepo, Express 5, Drizzle ORM + PostgreSQL 16, React 19 + Vite + Tailwind 4 + shadcn/ui, Zod/OpenAPI</stack>
+    <method>Сверка выводов по коду с фактическим состоянием БД (количество строк). Принцип: «код написан» не равно «функция работает на реальных данных». 0 строк в таблице = функция в реальности ни разу не отработала.</method>
+    <db_tables_total>64</db_tables_total>
+    <db_tables_with_data>19</db_tables_with_data>
+  </meta>
+
+  <summary_top>
+    <key_verdict>Это не «красивая вёрстка без логики». Код качественный, архитектура зрелая, большинство ядровых функций реально реализованы. НО почти все данные — сидовые (демо); многие интеграции написаны, но ни разу не запускались на реальных внешних сервисах; Broma16 и видео/Vevo в коде отсутствуют полностью.</key_verdict>
+  </summary_top>
+
+  <sections>
+
+    <section id="A" name="Авторизация и роли">
+      <status>Полностью работает</status>
+      <status_icon>green</status_icon>
+      <implemented>
+        <item>Логин: routes/auth.ts — bcryptjs, сессии в Postgres (connect-pg-simple), блокировка после 5 неудач на 15 мин, rate-limit, регенерация сессии при входе (защита от session fixation).</item>
+        <item>Регистрация: через заявки (routes/signup.ts) — пользователь подаёт заявку, админ одобряет, создаётся User + Artist/Label в транзакции с временным паролем.</item>
+        <item>Роли Admin/Manager/Label/Artist реально enforced: getDataScope() + resolveScopeFilter() фильтруют запросы по artistId/labelId из сессии. Чужой artist_id перезатирается своим, иначе 403. Row-level доступ на уровне кода.</item>
+        <item>Безопасность: helmet, CSP в проде, CORS-whitelist, API-ключи (X-API-Key, SHA-256), импersonation с аудитом.</item>
+      </implemented>
+      <not_implemented>
+        <item>Таблица signup_requests пустая (0) — потоком регистрации ещё не пользовались (логика рабочая).</item>
+      </not_implemented>
+      <show_to_client>Да</show_to_client>
+    </section>
+
+    <section id="B" name="Создание релиза (главная функция)">
+      <status>Работает end-to-end</status>
+      <status_icon>green</status_icon>
+      <implemented>
+        <item>Метаданные: полный набор (title, releaseType, artistId, labelId, upc, genre/subgenre, language, releaseDate, pLine/cLine, territories, isExplicit), сохраняются через POST/PUT /api/releases.</item>
+        <item>Загрузка аудио: реальная, presigned-upload. Валидация: только WAV/AIFF/FLAC, не ниже 44.1kHz, 16/24-bit, стерео, не более 200MB. SHA-256, длительность через music-metadata.</item>
+        <item>Обложка: реальная (JPG/PNG/WEBP, до 25MB), путь пишется в releasesTable.coverUrl.</item>
+        <item>Треки: привязка через releaseId + trackNumber, поштучно и пачкой.</item>
+        <item>Статусы: Draft -> Pending -> Approved/Rejected -> Delivering -> Delivered, с блокировкой редактирования после выхода из draft.</item>
+        <item>Импорт по UPC: реально тянет данные из Spotify/MusicBrainz.</item>
+      </implemented>
+      <not_implemented>
+        <item>Хранилище файлов — локальный диск по умолчанию (ObjectStorageService, есть задел под Google Cloud Storage, но облако не настроено). Для масштабирования нужен S3/GCS.</item>
+      </not_implemented>
+      <show_to_client>Да (самая сильная часть проекта)</show_to_client>
+    </section>
+
+    <section id="C" name="Артисты и лейблы">
+      <status>Работает</status>
+      <status_icon>green</status_icon>
+      <implemented>
+        <item>Артисты: routes/artists.ts + artist-form-dialog.tsx — фото, био, жанр, соцсети, Spotify/Apple ID. Релизы артиста через JOIN.</item>
+        <item>Лейблы: иерархия с под-лейблами (parentLabelId), связи лейбл-артист-релиз, скоупинг (лейбл видит только своё).</item>
+        <item>В БД (сид): artists=4, labels=2, releases=5, tracks=5.</item>
+      </implemented>
+      <not_implemented/>
+      <show_to_client>Да</show_to_client>
+    </section>
+
+    <section id="D" name="Каталог / Music Library">
+      <status>В основном работает</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Списки треков/релизов с поиском (ilike) и фильтрами — реально.</item>
+        <item>Импорт по UPC/ISRC через Spotify — реально.</item>
+        <item>Transfer Track: перенос релиза из Spotify, создаёт артиста+лейбл+релиз+треки в одной транзакции — реально.</item>
+      </implemented>
+      <not_implemented>
+        <item>Импорт каталога через CSV — тонко. CSV-импорт мощный есть для финансовых отчётов (ingestion), универсального «CSV в каталог» почти нет.</item>
+      </not_implemented>
+      <show_to_client>В основном (кроме массового CSV-импорта каталога)</show_to_client>
+    </section>
+
+    <section id="E" name="ACRCloud (проверка дубликатов)">
+      <status>Код полный, но ни разу не запускался</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Реализация Identify API целиком (routes/distribution-extras.ts, connectors/acrcloud.ts): сэмпл 512KB со смещением 20%, HMAC-SHA1, результат в acr_checks, отображение в acr-tab.tsx, влияет на Risk Score.</item>
+      </implemented>
+      <not_implemented>
+        <item>Таблица acr_checks = 0 строк, integration_credentials = 0. Реальные ключи не введены, проверка не запускалась ни на одном файле.</item>
+      </not_implemented>
+      <show_to_client>С оговоркой: «реализовано в коде» — да; «протестировано на реальных треках» — нет</show_to_client>
+    </section>
+
+    <section id="F" name="Broma16 API">
+      <status>Не существует</status>
+      <status_icon>red</status_icon>
+      <implemented/>
+      <not_implemented>
+        <item>Два независимых поиска по всему коду (broma, broma16, partner-api, X-Access-Token, send-moderate) — ноль совпадений.</item>
+        <item>Нет авторизации, отправки релизов, статистики, словарей.</item>
+        <item>Вместо проксирования в Broma16 система спроектирована генерировать собственный DDEX ERN и слать напрямую на DSP по SFTP — другая модель дистрибуции.</item>
+      </not_implemented>
+      <show_to_client>Нет</show_to_client>
+    </section>
+
+    <section id="G" name="Паблишинг">
+      <status>Частично</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Раздел есть (routes/publishing.ts, pages/publishing). Авторы/композиторы с ролями, валидация долей = ровно 100%, проверка дублей — реально.</item>
+        <item>PRO (ASCAP/BMI/MLC/Songtrust), CAE/IPI — поля и привязка есть.</item>
+        <item>publishing_works=3 (сид).</item>
+      </implemented>
+      <not_implemented>
+        <item>Регистрация в PRO — «скелет»: POST на эндпоинты при настройке, но без стандартного CWR-файла (generic JSON).</item>
+        <item>Связь с Broma16 — нет (Broma16 нет вообще).</item>
+      </not_implemented>
+      <show_to_client>Частично: управление произведениями — да; авторегистрация в PRO — нет</show_to_client>
+    </section>
+
+    <section id="H" name="Финансы / Рояльти / Splits">
+      <status>Логика реальная, но без реальных данных</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Splits (Artist%/Label%/Distributor%) с валидацией =100% на фронте и бэке — реально.</item>
+        <item>Балансы реальные, не моки: Баланс = (Доход × (1 − 15% комиссия)) − Выплаты, считается из таблицы transactions.</item>
+        <item>Выплаты: с проверкой KYC и банковских реквизитов, two-step approval (maker/checker).</item>
+        <item>Источник цифр: transactions, которые наполняет ingestion-сервис из CSV-отчётов DSP (матчинг по ISRC, дедуп по SHA-256).</item>
+      </implemented>
+      <not_implemented>
+        <item>ingestion_imports = 0, usage_reports = 0: ни один реальный отчёт DSP не загружен. Сейчас только сид (transactions=7, payouts=4, splits=3).</item>
+        <item>Всё в USD (мультивалюты нет). Комиссия 15% захардкожена.</item>
+      </not_implemented>
+      <show_to_client>С оговоркой: механика — да; «реальные деньги артистов» — нет данных</show_to_client>
+    </section>
+
+    <section id="I" name="Аналитика / Дашборды">
+      <status>Запросы реальные, данных почти нет</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Метрики дашборда (totalRevenue, totalStreams, рост 30д vs 30д) — реальные SQL-агрегаты из usage_reports и transactions, со скоупингом по роли.</item>
+        <item>Графики (стримы, доход, гео, топ-треки) — из /api/analytics/*.</item>
+      </implemented>
+      <not_implemented>
+        <item>usage_reports = 0, playlist_stats = 0, tiktok_stats = 0, ugc_metrics = 0. Стримов нет нигде.</item>
+        <item>Источник стримов НЕ живой внешний API, а импорт CSV/TSV от DSP, который не запускался.</item>
+      </not_implemented>
+      <show_to_client>С оговоркой: структура — да; цифры сейчас пустые/демо</show_to_client>
+    </section>
+
+    <section id="J" name="CRM-модуль">
+      <status>В основном работает</status>
+      <status_icon>yellow</status_icon>
+      <implemented>
+        <item>Контакты — полный CRUD (contacts=4 сид).</item>
+        <item>Задачи/заметки (pinned, назначение на админов) — реально (crm_tasks=5).</item>
+        <item>Уведомления — реально, через SSE (real-time в браузер).</item>
+      </implemented>
+      <not_implemented>
+        <item>История коммуникаций (единый лог писем по контакту) — по сути нет, только глобальные кампании + internal_notes.</item>
+      </not_implemented>
+      <show_to_client>В основном: контакты/задачи/уведомления — да; история коммуникаций — нет</show_to_client>
+    </section>
+
+    <section id="K" name="Видео / Vevo">
+      <status>Не существует</status>
+      <status_icon>red</status_icon>
+      <implemented/>
+      <not_implemented>
+        <item>Поиск video/vevo в роутах — ноль функционального кода. Упоминания в UI/правах — заглушки.</item>
+      </not_implemented>
+      <show_to_client>Нет</show_to_client>
+    </section>
+
+    <section id="L" name="Остальное">
+      <items>
+        <item name="Email/Push кампании" status="yellow">Код реальный (шаблоны с переменными, фильтр аудитории, SMTP). Но campaigns=0, email_templates=0, SMTP-креды не настроены.</item>
+        <item name="Auto-approval (модерация)" status="red">Таблица moderation_rules и API есть, но правила не вызываются в потоке сабмита. Конфиг без исполнения.</item>
+        <item name="Fraud detection" status="yellow">Движок реально стартует (логи: [fraud-engine] started), но fraud_rules=0 и usage_reports=0, сейчас ничего не находит.</item>
+        <item name="Settings / DDEX config" status="yellow">Код реальный (SMTP, storage, DSP-креды), но platform_settings=0, работает на дефолтах.</item>
+        <item name="Audit logs" status="green">Реально: кто/что/до/после (auditMutation), audit_log=11.</item>
+        <item name="KYC / верификация" status="yellow">Полный флоу (загрузка паспорта, ревью админом, приватное хранилище), но kyc_documents=0, не использовался.</item>
+        <item name="Контракты" status="red">Только статус-трекинг на users, генерации/движка контрактов нет.</item>
+        <item name="DDEX / SFTP доставка" status="yellow">Сильный код: воркер очереди deliveries, генератор DDEX ERN 4.3 XML, SFTP-транспорт (ssh2-sftp-client), ack-poller, ретраи с backoff. Но ddex_batches=0, ddex_acknowledgements=0, на реальный DSP ещё ничего не отправлялось.</item>
+      </items>
+    </section>
+
+  </sections>
+
+  <database>
+    <total_tables>64</total_tables>
+    <migrations_applied>21</migrations_applied>
+    <migrations_status>Накатились без ошибок</migrations_status>
+    <tables_with_seed_data>
+      <table name="users" rows="4"/>
+      <table name="artists" rows="4"/>
+      <table name="labels" rows="2"/>
+      <table name="releases" rows="5"/>
+      <table name="tracks" rows="5"/>
+      <table name="transactions" rows="7"/>
+      <table name="payouts" rows="4"/>
+      <table name="splits" rows="3"/>
+      <table name="publishing_works" rows="3"/>
+      <table name="contacts" rows="4"/>
+      <table name="crm_tasks" rows="5"/>
+      <table name="deliveries" rows="7"/>
+      <table name="dsp_catalog" rows="30"/>
+      <table name="integrations" rows="30"/>
+      <table name="audit_log" rows="11"/>
+      <table name="activity_log" rows="7"/>
+      <table name="manager_permissions" rows="9"/>
+      <table name="ddex_messages" rows="1"/>
+      <table name="realtime_alerts" rows="1"/>
+    </tables_with_seed_data>
+    <empty_tables_key>
+      <table name="acr_checks"/>
+      <table name="usage_reports"/>
+      <table name="ingestion_imports"/>
+      <table name="integration_credentials"/>
+      <table name="ddex_batches"/>
+      <table name="ddex_acknowledgements"/>
+      <table name="kyc_documents"/>
+      <table name="campaigns"/>
+      <table name="email_templates"/>
+      <table name="notifications"/>
+      <table name="fraud_rules"/>
+      <table name="fraud_alerts"/>
+      <table name="moderation_rules"/>
+      <table name="platform_settings"/>
+      <table name="signup_requests"/>
+      <table name="release_artists"/>
+      <table name="release_dsps"/>
+      <table name="dsp_deals"/>
+    </empty_tables_key>
+    <conclusion>Схема под огромный функционал готова, но реальные данные есть только демо-сид. Все «потоковые» таблицы (стримы, отчёты, проверки, доставки, креды) — пустые.</conclusion>
+  </database>
+
+  <technical_state>
+    <stack>Node 24 + TypeScript, Express 5, Drizzle ORM + PostgreSQL 16, React 19 + Vite + Tailwind 4 + shadcn/ui, Zod/OpenAPI</stack>
+    <runs_locally>Да, без ошибок. Оба сервиса работают (API :8080, фронт :5000), страница логина рендерится.</runs_locally>
+    <console>Только ожидаемый 401 на /api/auth/me до входа — это норма.</console>
+    <file_storage>Локальный диск по умолчанию (есть задел под GCS).</file_storage>
+    <code_notes>
+      <note>Безопасность на хорошем уровне (helmet/CSP/CORS/скоупинг/bcrypt/rate-limit).</note>
+      <note>Потенциальный момент: обогащение релизов отдельными count-запросами (риск N+1 на больших списках) — стоит проверить под нагрузкой.</note>
+      <note>Транскрипция аудио (OpenAI Whisper) ждёт OPENAI_API_KEY; на остальной функционал не влияет.</note>
+    </code_notes>
+  </technical_state>
+
+  <final_summary>
+    <readiness_table>
+      <row section="Авторизация и роли" readiness="90%" status="Работает" show="Да"/>
+      <row section="Создание релиза" readiness="85%" status="Работает" show="Да"/>
+      <row section="Артисты и лейблы" readiness="85%" status="Работает" show="Да"/>
+      <row section="Каталог / Library" readiness="75%" status="Частично" show="В основном"/>
+      <row section="ACRCloud" readiness="60%" status="Код есть, не тестировался" show="С оговоркой"/>
+      <row section="Broma16" readiness="0%" status="Нет" show="Нет"/>
+      <row section="Паблишинг" readiness="60%" status="Частично" show="Частично"/>
+      <row section="Финансы / Splits" readiness="75%" status="Логика есть, данных нет" show="С оговоркой"/>
+      <row section="Аналитика / Дашборды" readiness="50%" status="Запросы есть, данных нет" show="С оговоркой"/>
+      <row section="CRM" readiness="70%" status="Частично" show="В основном"/>
+      <row section="Видео / Vevo" readiness="0%" status="Нет" show="Нет"/>
+      <row section="Коммуникации (email/push)" readiness="65%" status="Код есть, не настроено" show="Частично"/>
+      <row section="Автоматизация (модерация/fraud)" readiness="30%" status="Конфиг без исполнения" show="Нет"/>
+      <row section="Settings / DDEX config" readiness="80%" status="На дефолтах" show="Да"/>
+      <row section="Audit logs" readiness="90%" status="Работает" show="Да"/>
+      <row section="KYC" readiness="75%" status="Не использовался" show="С оговоркой"/>
+      <row section="Контракты" readiness="40%" status="Только статусы" show="Нет"/>
+      <row section="DDEX / SFTP доставка" readiness="70%" status="Код есть, не отправлялось" show="С оговоркой"/>
+    </readiness_table>
+
+    <top5_ready>
+      <item>Авторизация, роли и разделение доступа на уровне SQL (artist/label видят только своё).</item>
+      <item>Создание релиза end-to-end с реальной техвалидацией аудио (WAV/FLAC, битность, стерео).</item>
+      <item>Управление артистами/лейблами с иерархией под-лейблов.</item>
+      <item>Финансовая логика (splits 100%, балансы из транзакций, выплаты с KYC/maker-checker).</item>
+      <item>Audit logs и Transfer Track (импорт из Spotify в каталог).</item>
+    </top5_ready>
+
+    <top5_missing>
+      <item>Broma16 — нет вообще.</item>
+      <item>Видео / Vevo — нет вообще.</item>
+      <item>Авто-модерация (правила есть, но не вызываются при сабмите).</item>
+      <item>Контракты — только статус, движка нет.</item>
+      <item>Реальные данные стримов/отчётов — ни один DSP-отчёт не загружен (usage_reports=0).</item>
+    </top5_missing>
+
+    <top5_partial_long>
+      <item>DDEX/SFTP доставка — код мощный, но не проверен ни на одном реальном DSP (нужны креды + тестовая отправка + обработка ack).</item>
+      <item>ACRCloud — нужно подключить реальные ключи и прогнать на живых файлах.</item>
+      <item>Ingestion отчётов DSP — без него вся аналитика и финансы пустые; нужно настроить и протестировать на форматах Spotify/Apple.</item>
+      <item>Паблишинг -> регистрация в PRO — нужен стандартный CWR, а не generic JSON.</item>
+      <item>Коммуникации — настройка SMTP/push и реальная рассылка.</item>
+    </top5_partial_long>
+
+    <overall_readiness>
+      <number>55%</number>
+      <explanation>Как внутренняя CRM/каталог система код тянет на ~70-75% (ядро реально работает и сделано добротно). Как работающая платформа дистрибуции, которая реально отправляет музыку на площадки и показывает артистам настоящие цифры — ближе к 40-45%: ключевая дистрибуция (Broma16) отсутствует, собственная DDEX-доставка ни разу не отправлялась вживую, аналитика и финансы без реальных данных, видео нет. Усреднённо ~55%.</explanation>
+      <key_distinction>Главное, что отделяет «выглядит готовым» от «готово»: система ни разу не прогонялась на реальных данных и реальных внешних сервисах — только на демо-сиде.</key_distinction>
+    </overall_readiness>
+  </final_summary>
+
+</audit_report>
