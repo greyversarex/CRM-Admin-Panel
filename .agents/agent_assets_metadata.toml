@@ -36,3 +36,9 @@ id = "MvqI8_qa_Px83EyBEEJP9"
 uri = "file://audit/tajik-music-crm-audit.xml"
 type = "unspecified"
 title = "Технический аудит — Tajik Music Distribution CRM (XML)"
+
+[[outputs]]
+id = "PhUYq5m1_JfQAFIUaC6rF"
+uri = "file://audit/Tajik-Music-CRM-Audit.docx"
+type = "word_document"
+title = "Технический аудит — Tajik Music Distribution CRM (Word)"
