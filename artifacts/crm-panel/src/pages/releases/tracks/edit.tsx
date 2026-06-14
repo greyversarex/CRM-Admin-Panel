@@ -72,7 +72,7 @@ type FormState = {
   subgenre:           string;
   language:           string;
   isExplicit:         boolean;
-  explicitStatus:     "non_explicit" | "explicit" | "censored";
+  explicitStatus:     "" | "non_explicit" | "explicit" | "censored";
   aiUsage:            "none" | "some" | "all";
   clipStartSeconds:   number;
   recordingYear:      number | null;
@@ -103,7 +103,7 @@ function trackToForm(t: Track): FormState {
     subgenre:           t.subgenre ?? "",
     language:           t.language ?? "",
     isExplicit:         !!t.isExplicit,
-    explicitStatus:     (t.explicitStatus ?? "non_explicit") as FormState["explicitStatus"],
+    explicitStatus:     (t.explicitStatus ?? "") as FormState["explicitStatus"],
     aiUsage:            (t.aiUsage ?? "none") as FormState["aiUsage"],
     clipStartSeconds:   t.clipStartSeconds ?? 0,
     recordingYear:      t.recordingYear ?? null,
@@ -136,7 +136,7 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     subgenre:           N(f.subgenre),
     language:           N(f.language),
     isExplicit:         f.isExplicit,
-    explicitStatus:     f.explicitStatus,
+    explicitStatus:     (f.explicitStatus || "non_explicit") as "non_explicit" | "explicit" | "censored",
     aiUsage:            f.aiUsage,
     clipStartSeconds:   f.clipStartSeconds,
     recordingYear:      f.recordingYear ?? null,
@@ -317,6 +317,22 @@ export default function TrackEditPage() {
       toast({ title: "Название трека обязательно", variant: "destructive" });
       return false;
     }
+    if (f.writers.filter((w) => w.name.trim()).length === 0) {
+      toast({
+        title: "Укажите хотя бы одного автора",
+        description: "Поле «Writers» обязательно для сохранения.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (!f.explicitStatus) {
+      toast({
+        title: "Укажите Explicit Status",
+        description: "Выберите: Non Explicit, Explicit или Censored.",
+        variant: "destructive",
+      });
+      return false;
+    }
     try {
       await updateTrack.mutateAsync({
         id: track.id,
@@ -406,7 +422,7 @@ export default function TrackEditPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto pb-28">
+      <div className="max-w-7xl mx-auto pb-8">
 
         {/* ── Back + track index ───────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-4">
@@ -940,19 +956,19 @@ export default function TrackEditPage() {
             </CardContent>
           </Card>
 
-        </div>
-      </div>
+          {/* ── Actions ─────────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between">
+            <Button variant="outline" onClick={() => setLocation(`/releases/${releaseId}`)}>
+              <ArrowLeft className="h-4 w-4 mr-1.5" />
+              Back
+            </Button>
+            <Button onClick={save} disabled={isBusy}>
+              {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+              Save
+            </Button>
+          </div>
 
-      {/* ── Fixed bottom bar ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border/50 px-6 py-4 flex items-center justify-between">
-        <Button variant="secondary" onClick={() => setLocation(`/releases/${releaseId}`)}>
-          <ArrowLeft className="h-4 w-4 mr-1.5" />
-          Back
-        </Button>
-        <Button onClick={save} disabled={isBusy}>
-          {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-          Save
-        </Button>
+        </div>
       </div>
 
     </Layout>
