@@ -78,12 +78,12 @@ export function TrackCard({
           subgenre: draft.subgenre ?? null,
           language: draft.language ?? null,
           isExplicit: draft.isExplicit,
-          explicitStatus: draft.explicitStatus,
-          aiUsage: draft.aiUsage,
+          explicitStatus: draft.explicitStatus || undefined,
+          aiUsage: draft.aiUsage || undefined,
           clipStartSeconds: draft.clipStartSeconds,
           recordingYear: draft.recordingYear ?? null,
           countryOfRecording: draft.countryOfRecording ?? null,
-          audioStyle: draft.audioStyle,
+          audioStyle: draft.audioStyle || undefined,
           vocalLanguage: draft.vocalLanguage ?? null,
           lyrics: draft.lyrics ?? null,
           audioUrl: draft.audioUrl ?? null,
@@ -237,8 +237,8 @@ export function TrackCard({
               </Select>
             </Field>
             <Field label={t.releaseWizard.audioStyleLabel}>
-              <Select value={draft.audioStyle} onValueChange={(v) => set("audioStyle", v as Track["audioStyle"])}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+              <Select value={draft.audioStyle ?? ""} onValueChange={(v) => set("audioStyle", v as Track["audioStyle"])}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder={t.releaseWizard.selectPlaceholder} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="vocal">{t.releaseWizard.vocal}</SelectItem>
                   <SelectItem value="instrumental">{t.releaseWizard.instrumental}</SelectItem>
@@ -246,8 +246,8 @@ export function TrackCard({
               </Select>
             </Field>
             <Field label={t.releaseWizard.aiUsageLabel}>
-              <Select value={draft.aiUsage} onValueChange={(v) => set("aiUsage", v as Track["aiUsage"])}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+              <Select value={draft.aiUsage ?? ""} onValueChange={(v) => set("aiUsage", v as Track["aiUsage"])}>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder={t.releaseWizard.selectPlaceholder} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">{t.releaseWizard.aiNotUsed}</SelectItem>
                   <SelectItem value="some">{t.releaseWizard.aiPartial}</SelectItem>
@@ -256,11 +256,11 @@ export function TrackCard({
               </Select>
             </Field>
             <Field label={t.releaseWizard.explicitStatusLabel}>
-              <Select value={draft.explicitStatus} onValueChange={(v) => {
+              <Select value={draft.explicitStatus ?? ""} onValueChange={(v) => {
                 set("explicitStatus", v as Track["explicitStatus"]);
                 set("isExplicit", v === "explicit");
               }}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-background/40"><SelectValue placeholder={t.releaseWizard.selectPlaceholder} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="non_explicit">{t.releaseWizard.nonExplicit}</SelectItem>
                   <SelectItem value="explicit">Explicit</SelectItem>

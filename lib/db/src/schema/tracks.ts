@@ -62,20 +62,20 @@ export const tracksTable = pgTable("tracks", {
   language: text("language"),
   isExplicit: boolean("is_explicit").notNull().default(false),
   /**
-   * 3-state explicit: non_explicit | explicit | censored.
+   * 3-state explicit: non_explicit | explicit | censored | null (not set yet).
    * Заменяет boolean isExplicit в DDEX-выгрузке (boolean остаётся для совместимости).
    */
-  explicitStatus: text("explicit_status").notNull().default("non_explicit"),
-  /** Использование AI: none | some | all. Регуляторное требование DSP с 2024. */
-  aiUsage: text("ai_usage").notNull().default("none"),
+  explicitStatus: text("explicit_status"),
+  /** Использование AI: none | some | all | null (not set yet). Регуляторное требование DSP с 2024. */
+  aiUsage: text("ai_usage"),
   /** Превью DSP начнёт играть с этой секунды. */
   clipStartSeconds: integer("clip_start_seconds").notNull().default(0),
   /** Год записи (отдельно от даты релиза). */
   recordingYear: integer("recording_year"),
   /** ISO-3166-1 alpha-2 страны записи. */
   countryOfRecording: text("country_of_recording"),
-  /** instrumental | vocal */
-  audioStyle: text("audio_style").notNull().default("vocal"),
+  /** instrumental | vocal | null (not set yet) */
+  audioStyle: text("audio_style"),
   /** ISO-639-1 язык вокала. Для Apple/Spotify lyrics matching. */
   vocalLanguage: text("vocal_language"),
   /** Полный текст песни (опционально). */
