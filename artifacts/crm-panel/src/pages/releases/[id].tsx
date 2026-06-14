@@ -20,7 +20,7 @@ import {
   ChevronLeft, ChevronDown, ImageIcon, Edit3, XCircle, Globe2, Music2, AlertTriangle,
   Calendar, Plus, Trash2, Send, ShieldCheck, Lock, CheckCircle2, Clock,
   ShieldAlert, ScanSearch, Database, ListChecks, Share2, RefreshCw, Pencil,
-  Upload, FilePlus2, FolderInput, Loader2, Save,
+  Upload, FilePlus2, FolderInput, Loader2, Save, Headphones, ArrowDownToLine,
 } from "lucide-react";
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
@@ -359,9 +359,38 @@ export default function ReleaseDetail() {
             <span className="text-sm text-muted-foreground">Status</span>
             <StatusBadge status={release.status} className="text-xs" />
           </div>
-          {release.isEditable && (
-            <DeleteReleaseButton releaseId={release.id} releaseTitle={release.title} onDeleted={() => setLocation("/releases")} />
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {release.status === "approved" && (
+              <>
+                {release.allowedTransitions.includes("takedown_requested") && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10 h-8 text-xs"
+                    onClick={() => setTakedownOpen(true)}
+                  >
+                    <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" /> Take Down
+                  </Button>
+                )}
+                <Button
+                  size="sm" variant="outline"
+                  className="bg-card h-8 text-xs"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Edit3 className="h-3.5 w-3.5 mr-1.5" /> Edit Release
+                </Button>
+                <Button
+                  size="sm" variant="outline"
+                  className="bg-card h-8 text-xs"
+                  onClick={() => document.getElementById("card-tracks")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
+                  <Headphones className="h-3.5 w-3.5 mr-1.5" /> Listening Page
+                </Button>
+              </>
+            )}
+            {release.isEditable && (
+              <DeleteReleaseButton releaseId={release.id} releaseTitle={release.title} onDeleted={() => setLocation("/releases")} />
+            )}
+          </div>
         </div>
 
         {/* Release Details */}
