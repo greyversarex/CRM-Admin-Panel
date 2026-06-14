@@ -73,11 +73,11 @@ type FormState = {
   language:           string;
   isExplicit:         boolean;
   explicitStatus:     "" | "non_explicit" | "explicit" | "censored";
-  aiUsage:            "none" | "some" | "all";
+  aiUsage:            "" | "none" | "some" | "all";
   clipStartSeconds:   number;
   recordingYear:      number | null;
   countryOfRecording: string;
-  audioStyle:         "instrumental" | "vocal";
+  audioStyle:         "" | "instrumental" | "vocal";
   vocalLanguage:      string;
   lyrics:             string;
   iswc:               string;
@@ -104,11 +104,11 @@ function trackToForm(t: Track): FormState {
     language:           t.language ?? "",
     isExplicit:         !!t.isExplicit,
     explicitStatus:     (t.explicitStatus ?? "") as FormState["explicitStatus"],
-    aiUsage:            (t.aiUsage ?? "none") as FormState["aiUsage"],
+    aiUsage:            (t.aiUsage ?? "") as FormState["aiUsage"],
     clipStartSeconds:   t.clipStartSeconds ?? 0,
     recordingYear:      t.recordingYear ?? null,
     countryOfRecording: t.countryOfRecording ?? "",
-    audioStyle:         (t.audioStyle ?? "vocal") as FormState["audioStyle"],
+    audioStyle:         (t.audioStyle ?? "") as FormState["audioStyle"],
     vocalLanguage:      t.vocalLanguage ?? "",
     lyrics:             t.lyrics ?? "",
     iswc:               t.iswc ?? "",
@@ -137,12 +137,12 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     language:           N(f.language),
     isExplicit:         f.isExplicit,
     explicitStatus:     (f.explicitStatus || "non_explicit") as "non_explicit" | "explicit" | "censored",
-    aiUsage:            f.aiUsage,
+    aiUsage:            (f.aiUsage || "none") as "none" | "some" | "all",
     clipStartSeconds:   f.clipStartSeconds,
     recordingYear:      f.recordingYear ?? null,
     countryOfRecording: N(f.countryOfRecording),
-    audioStyle:         f.audioStyle,
-    vocalLanguage:      f.audioStyle === "vocal" ? N(f.vocalLanguage) : null,
+    audioStyle:         (f.audioStyle || "vocal") as "instrumental" | "vocal",
+    vocalLanguage:      (f.audioStyle === "vocal" || !f.audioStyle) ? N(f.vocalLanguage) : null,
     lyrics:             N(f.lyrics),
     iswc:               N(f.iswc),
     audioUrl:           f.audioUrl,
@@ -321,6 +321,14 @@ export default function TrackEditPage() {
       toast({
         title: "Укажите хотя бы одного автора",
         description: "Поле «Writers» обязательно для сохранения.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (!f.audioStyle) {
+      toast({
+        title: "Укажите Audio Style",
+        description: "Выберите: Instrumental или Vocal.",
         variant: "destructive",
       });
       return false;
@@ -962,9 +970,9 @@ export default function TrackEditPage() {
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Back
             </Button>
-            <Button onClick={save} disabled={isBusy}>
+            <Button onClick={nextTrack ? saveAndGoNext : save} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-              Save
+              {nextTrack ? "Save & go next" : "Save"}
             </Button>
           </div>
 
