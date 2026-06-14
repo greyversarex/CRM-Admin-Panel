@@ -972,7 +972,7 @@ export default function TrackEditPage() {
             </Button>
             <Button onClick={nextTrack ? saveAndGoNext : save} disabled={isBusy}>
               {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-              {nextTrack ? "Save & go next" : "Save"}
+              {nextTrack ? "Save & Next track" : "Save"}
             </Button>
           </div>
 
