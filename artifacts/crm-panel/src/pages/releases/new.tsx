@@ -387,7 +387,7 @@ export default function CreateRelease() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
-              <Popover open={isVariousArtists ? false : artistOpen} onOpenChange={v => { if (!isVariousArtists) setArtistOpen(v); }}>
+              <Popover open={artistOpen} onOpenChange={setArtistOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
@@ -395,7 +395,6 @@ export default function CreateRelease() {
                     role="combobox"
                     aria-expanded={artistOpen}
                     data-testid="select-artist"
-                    disabled={isVariousArtists}
                     className="w-full justify-between font-normal min-h-9 h-auto px-3 py-1.5"
                   >
                     {pickerArtists.length > 0 ? (
@@ -500,7 +499,20 @@ export default function CreateRelease() {
                 <p className="text-sm text-muted-foreground">{L.noArtistsHint}</p>
               )}
               <label className="flex items-center gap-2.5 cursor-pointer text-sm">
-                <Checkbox checked={isVariousArtists} onCheckedChange={v => setIsVariousArtists(!!v)} />
+                <Checkbox
+                  checked={isVariousArtists}
+                  onCheckedChange={(v) => {
+                    const on = !!v;
+                    setIsVariousArtists(on);
+                    if (on) {
+                      setReleaseArtists((prev) =>
+                        user?.role === "artist" && user.artistId
+                          ? prev.filter((a) => a.artistId === user.artistId)
+                          : []
+                      );
+                    }
+                  }}
+                />
                 <span>
                   {L.variousArtists}
                   <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
