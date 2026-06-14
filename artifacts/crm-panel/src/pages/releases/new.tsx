@@ -387,7 +387,7 @@ export default function CreateRelease() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-3">
-              <Popover open={artistOpen} onOpenChange={setArtistOpen}>
+              <Popover open={isVariousArtists ? false : artistOpen} onOpenChange={v => { if (!isVariousArtists) setArtistOpen(v); }}>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
@@ -395,6 +395,7 @@ export default function CreateRelease() {
                     role="combobox"
                     aria-expanded={artistOpen}
                     data-testid="select-artist"
+                    disabled={isVariousArtists}
                     className="w-full justify-between font-normal min-h-9 h-auto px-3 py-1.5"
                   >
                     {pickerArtists.length > 0 ? (
