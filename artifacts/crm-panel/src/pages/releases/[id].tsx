@@ -25,6 +25,7 @@ import {
 import { adminApi } from "@/lib/admin-api";
 import { CoverUploader, AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
 import { BulkTracksDialog } from "@/components/bulk-tracks-dialog";
+import { WaveformPlayer } from "@/components/waveform-player";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
@@ -1161,11 +1162,15 @@ function TrackRow({
           />
         </div>
 
-        {/* Footer: audio status + preview start */}
-        <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground/70">
-          <span>{t.audioUrl ? "Audio file linked" : "No audio file linked"}</span>
-          <span>Preview Start Time: {previewMm}:{previewSs}:00</span>
-        </div>
+        {/* Waveform player / audio status */}
+        {t.audioUrl ? (
+          <WaveformPlayer objectPath={t.audioUrl} filename={null} />
+        ) : (
+          <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground/70">
+            <span>No audio file linked</span>
+            <span>Preview Start Time: {previewMm}:{previewSs}:00</span>
+          </div>
+        )}
       </CardContent>
     </Card>
 
