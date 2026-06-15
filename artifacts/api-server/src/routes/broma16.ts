@@ -229,12 +229,19 @@ broma16Router.post("/broma16/releases/:id/push", ...staff, async (req, res) => {
     return;
   }
   const [release] = await db
-    .select({ id: releasesTable.id })
+    .select({ id: releasesTable.id, status: releasesTable.status })
     .from(releasesTable)
     .where(eq(releasesTable.id, id))
     .limit(1);
   if (!release) {
     res.status(404).json({ error: "Релиз не найден" });
+    return;
+  }
+  // Отправлять в Broma16 можно только одобренный релиз.
+  if (release.status !== "approved") {
+    res.status(409).json({
+      error: "Релиз можно отправить в Broma16 только после одобрения (статус «approved»).",
+    });
     return;
   }
   // Сохраняем витрины, если ключ outlets присутствует в теле (даже пустой

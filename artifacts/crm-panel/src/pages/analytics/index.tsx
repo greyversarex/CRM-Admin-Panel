@@ -11,6 +11,7 @@ import { useLang } from "@/lib/i18n";
 import { UgcTab } from "./ugc-tab";
 import { RealtimeTab } from "./realtime-tab";
 import { useAuth } from "@/lib/auth";
+import { useManagerPermissions } from "@/lib/manager-permissions";
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
@@ -88,6 +89,9 @@ export default function AnalyticsPage() {
   const { user, isLoading } = useAuth();
   const role = user?.role;
   const isAdminOrManager = role === "admin" || role === "manager";
+  const { perms } = useManagerPermissions(role);
+  // Кнопка синхронизации статистики дергает Broma16, а это право «distribution».
+  const canSyncStatistics = isAdminOrManager && perms.distribution;
 
   const [period, setPeriod] = useState<Period>("30d");
   const [streams, setStreams] = useState<StreamsResp | null>(null);
@@ -207,16 +211,18 @@ export default function AnalyticsPage() {
                 <SelectItem value="1y">{t.analytics.period_1y}</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              className="bg-card"
-              onClick={syncStatistics}
-              disabled={syncing}
-              title="Запросить свежую статистику из Broma16 (за вчерашний день)"
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
-              {syncing ? "Синхронизация…" : "Синхронизировать статистику"}
-            </Button>
+            {canSyncStatistics && (
+              <Button
+                variant="outline"
+                className="bg-card"
+                onClick={syncStatistics}
+                disabled={syncing}
+                title="Запросить свежую статистику из Broma16 (за вчерашний день)"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+                {syncing ? "Синхронизация…" : "Синхронизировать статистику"}
+              </Button>
+            )}
             <Button
               variant="outline"
               className="bg-card"
