@@ -220,7 +220,7 @@ export function computeDiff(
 // факт записи (рутины в проде должны передавать `void auditMutation(...)`).
 export type AuditAction =
   | "create" | "update" | "delete" | "login"
-  | "approve" | "reject" | "deliver" | "submit"
+  | "approve" | "reject" | "deliver" | "submit" | "cancel_submit"
   | "accept" | "invite"
   | "freeze" | "unfreeze"
   | "approve_payout" | "reject_payout"

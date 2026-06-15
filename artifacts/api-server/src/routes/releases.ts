@@ -684,10 +684,36 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
 
   const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
-  if (!releaseInScope(getDataScope(req), existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
 
-  const [release] = await db.delete(releasesTable).where(eq(releasesTable.id, params.data.id)).returning();
+  // Удалять разрешено только черновики и отклонённые релизы. Релиз на модерации /
+  // одобренный / живой защищён жизненным циклом: его сначала нужно отозвать
+  // (Cancel Submission) или снять с публикации (Take Down). Модераторам
+  // (fullAccess) оставляем право удалить любой статус — например, чтобы вычистить
+  // ошибочные данные.
+  //
+  // Удаление выполняем условным DELETE (а не delete-by-id), чтобы статус-гард был
+  // атомарным: если параллельный запрос успеет перевести черновик в pending_review/
+  // approved до выполнения нашего DELETE, условие WHERE status IN (...) не совпадёт
+  // и защищённый релиз не будет удалён (вернём 409). Для fullAccess условие по
+  // статусу не накладываем.
+  const deleteWhere = scope.fullAccess
+    ? eq(releasesTable.id, params.data.id)
+    : and(eq(releasesTable.id, params.data.id), inArray(releasesTable.status, ["draft", "rejected"]));
+
+  const [release] = await db.delete(releasesTable).where(deleteWhere).returning();
   if (!release) {
+    // 0 строк: для owner это значит, что релиз сменил статус между проверкой и
+    // удалением (гонка) — релиз ещё существует, но больше не удаляем.
+    const [stillThere] = await db.select({ status: releasesTable.status })
+      .from(releasesTable).where(eq(releasesTable.id, params.data.id));
+    if (stillThere) {
+      res.status(409).json({
+        error: `Release in status '${stillThere.status}' cannot be deleted. Withdraw the submission or take it down first.`,
+      });
+      return;
+    }
     res.status(404).json({ error: "Release not found" });
     return;
   }
@@ -808,6 +834,193 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
   res.json(enriched);
 });
 
+// POST /releases/:id/cancel-submission — владелец релиза (артист/лейбл) или
+// admin/manager отзывает релиз с модерации обратно в черновик. Это нужно, чтобы
+// автор мог снова отредактировать релиз (в pending_review редактирование закрыто)
+// или удалить его. Допустимо только из статуса 'pending_review'.
+// Отдельный от PATCH /status эндпоинт: тот доступен только модераторам, а отзыв
+// собственной заявки должен быть доступен и владельцу.
+router.post("/releases/:id/cancel-submission", async (req, res): Promise<void> => {
+  const params = UpdateReleaseStatusParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (existing.status !== "pending_review") {
+    res.status(409).json({
+      error: `Release in status '${existing.status}' has no active submission to cancel. Only 'pending_review' releases can be withdrawn.`,
+    });
+    return;
+  }
+
+  // Атомарный условный UPDATE: применяется только если статус всё ещё
+  // pending_review. Защита от гонки с решением модератора (approve/reject):
+  // если модератор успел сменить статус — наш UPDATE вернёт 0 строк и 409.
+  const updated = await db.update(releasesTable)
+    .set({ status: "draft", statusNote: null })
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      eq(releasesTable.status, "pending_review"),
+    ))
+    .returning();
+
+  const release = updated[0];
+  if (!release) {
+    res.status(409).json({
+      error: "Release status changed concurrently. Reload and try again.",
+    });
+    return;
+  }
+
+  void auditMutation(req, { action: "cancel_submit", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  // Уведомляем модераторов, что заявку отозвали — чтобы её убрали из очереди.
+  const sessionUser = req.session?.user;
+  const byName = sessionUser?.name ?? sessionUser?.email ?? "владелец";
+  void notifyAdmins({
+    type: "release_submission_cancelled",
+    title: `↩️ Релиз снят с модерации: «${release.title}»`,
+    body: `Заявку отозвал: ${byName}. Релиз вернулся в черновики.`,
+    entityType: "release",
+    entityId: release.id,
+    link: `/distribution`,
+  });
+
+  const enriched = await enrichRelease(release);
+  res.json(enriched);
+});
+
+// POST /releases/:id/reopen — владелец релиза (артист/лейбл) или admin/manager
+// возвращает релиз в черновик для редактирования. Доступно из 'approved' (откатить
+// одобрение и поправить метаданные перед повторной отправкой) и из 'rejected'
+// (начать исправление). Отдельный от PATCH /status эндпоинт: тот только для
+// модераторов, а редактировать свой релиз вправе и владелец.
+router.post("/releases/:id/reopen", async (req, res): Promise<void> => {
+  const params = UpdateReleaseStatusParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (existing.status !== "approved" && existing.status !== "rejected") {
+    res.status(409).json({
+      error: `Release in status '${existing.status}' cannot be reopened for editing. Only 'approved' or 'rejected' releases can be reverted to draft.`,
+    });
+    return;
+  }
+
+  // Атомарный условный UPDATE: применяется только если статус не изменился —
+  // защита от гонки с решением модератора (deliver / takedown и т.п.).
+  const updated = await db.update(releasesTable)
+    .set({ status: "draft", statusNote: null })
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      eq(releasesTable.status, existing.status),
+    ))
+    .returning();
+
+  const release = updated[0];
+  if (!release) {
+    res.status(409).json({ error: "Release status changed concurrently. Reload and try again." });
+    return;
+  }
+
+  void auditMutation(req, { action: "reopen", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  // Если откатили уже одобренный релиз — уведомляем модераторов: релиз снова
+  // правится, после повторной отправки его придётся проверить заново.
+  if (existing.status === "approved") {
+    const sessionUser = req.session?.user;
+    const byName = sessionUser?.name ?? sessionUser?.email ?? "владелец";
+    void notifyAdmins({
+      type: "release_reopened",
+      title: `✏️ Одобренный релиз вернули в редактирование: «${release.title}»`,
+      body: `Релиз вернул в черновик: ${byName}. Потребуется повторная модерация после отправки.`,
+      entityType: "release",
+      entityId: release.id,
+      link: `/distribution`,
+    });
+  }
+
+  const enriched = await enrichRelease(release);
+  res.json(enriched);
+});
+
+// POST /releases/:id/request-takedown — владелец релиза (артист/лейбл) или
+// admin/manager запрашивает снятие релиза с публикации. Доступно из 'approved'
+// (отменить ещё не отгруженный релиз) и из 'live' (снять с DSP). Переводит релиз
+// в 'takedown_requested'; финальное удаление с площадок подтверждает модератор.
+// Отдельный от PATCH /status эндпоинт: тот только для модераторов, а запросить
+// снятие своего релиза вправе и владелец.
+router.post("/releases/:id/request-takedown", async (req, res): Promise<void> => {
+  const params = UpdateReleaseStatusParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+
+  const scope = getDataScope(req);
+  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+
+  if (existing.status !== "approved" && existing.status !== "live") {
+    res.status(409).json({
+      error: `Release in status '${existing.status}' cannot be taken down. Only 'approved' or 'live' releases can be taken down.`,
+    });
+    return;
+  }
+
+  const updated = await db.update(releasesTable)
+    .set({ status: "takedown_requested", statusNote: note || null })
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      eq(releasesTable.status, existing.status),
+    ))
+    .returning();
+
+  const release = updated[0];
+  if (!release) {
+    res.status(409).json({ error: "Release status changed concurrently. Reload and try again." });
+    return;
+  }
+
+  void auditMutation(req, { action: "update", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  const sessionUser = req.session?.user;
+  const byName = sessionUser?.name ?? sessionUser?.email ?? "владелец";
+  void notifyAdmins({
+    type: "release_takedown_requested",
+    title: `⚠️ Запрос на снятие релиза: «${release.title}»`,
+    body: `Снятие запросил: ${byName}.${note ? ` Причина: ${note}` : ""}`,
+    entityType: "release",
+    entityId: release.id,
+    link: `/distribution`,
+  });
+
+  // Уведомляем владельца (артист/лейбл), что релиз поставлен в очередь на снятие.
+  const ownerPayload = {
+    type: "release_takedown_requested",
+    title: `⚠️ Релиз «${release.title}» снят с публикации`,
+    body: note ? `Причина: ${note}` : "",
+    entityType: "release" as const,
+    entityId: release.id,
+    link: `/releases/${release.id}`,
+  };
+  void notifyByArtistId(release.artistId, ownerPayload);
+  if (release.labelId) void notifyByLabelId(release.labelId, ownerPayload);
+
+  const enriched = await enrichRelease(release);
+  res.json(enriched);
+});
+
 // State-machine допустимых переходов для админ/manager PATCH /releases/:id/status.
 // Submit (артист draft|rejected → pending_review) идёт через POST /releases/:id/submit.
 // Delivery (approved/error → delivering) ставит сам POST /releases/:id/deliver.
@@ -818,7 +1031,11 @@ export const RELEASE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   // approved → delivering и error → delivering сюда НЕ входят: переход в
   // 'delivering' возможен только через POST /releases/:id/deliver, который
   // одновременно создаёт записи в deliveries (иначе статус был бы без job'ов).
-  approved:           ["rejected"],
+  // takedown_requested: владелец/модератор может запросить снятие одобренного
+  // релиза (кнопка «Take Down»). draft: владелец/модератор может вернуть релиз
+  // в редактирование (кнопка «Edit Release») ещё до отгрузки в DSP. Оба перехода
+  // также доступны владельцу через POST /reopen и /request-takedown.
+  approved:           ["rejected", "takedown_requested", "draft"],
   rejected:           ["draft", "pending_review"],
   // parked (Park/Hide): модератор откладывает релиз на потом, не принимая решение.
   // Из parked можно вернуть в очередь (pending_review) или сразу отклонить.

@@ -1,6 +1,6 @@
 import { Layout } from "@/components/layout";
 import {
-  useGetRelease, useUpdateReleaseStatus, useUpdateRelease, useCreateTrack, useDeleteTrack,
+  useGetRelease, useUpdateRelease, useCreateTrack, useDeleteTrack,
   useDeliverRelease, useSubmitReleaseForReview,
   useUpdateTrack, useGetReleaseDsps, useUpdateReleaseDsps, useListSplits,
   useGetReleaseArtists, useUpdateReleaseArtists, useListDspCatalog,
@@ -122,6 +122,7 @@ export default function ReleaseDetail() {
   const [takedownOpen, setTakedownOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [cancelSubmitOpen, setCancelSubmitOpen] = useState(false);
   const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
   const [bulkCount, setBulkCount] = useState("1");
   const [isBulkCreating, setIsBulkCreating] = useState(false);
@@ -197,6 +198,15 @@ export default function ReleaseDetail() {
             release={release}
             enableEditing={() => setMetaEditing(true)}
             onClose={() => { setSubmitOpen(false); invalidateAll(); }}
+          />
+        </Dialog>
+      )}
+      {cancelSubmitOpen && (
+        <Dialog open={cancelSubmitOpen} onOpenChange={setCancelSubmitOpen}>
+          <CancelSubmissionDialog
+            releaseId={id}
+            releaseTitle={release.title}
+            onClose={() => { setCancelSubmitOpen(false); invalidateAll(); }}
           />
         </Dialog>
       )}
@@ -378,6 +388,24 @@ export default function ReleaseDetail() {
                   onClick={() => setEditOpen(true)}
                 >
                   <Edit3 className="h-3.5 w-3.5 mr-1.5" /> Edit Release
+                </Button>
+                <Button
+                  size="sm" variant="outline"
+                  className="bg-card h-8 text-xs"
+                  onClick={() => document.getElementById("card-tracks")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
+                  <Headphones className="h-3.5 w-3.5 mr-1.5" /> Listening Page
+                </Button>
+              </>
+            )}
+            {release.status === "pending_review" && (
+              <>
+                <Button
+                  size="sm" variant="outline"
+                  className="bg-card border-amber-500/30 text-amber-300 hover:bg-amber-500/10 h-8 text-xs"
+                  onClick={() => setCancelSubmitOpen(true)}
+                >
+                  <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel Submission
                 </Button>
                 <Button
                   size="sm" variant="outline"
@@ -1022,6 +1050,51 @@ function DeleteReleaseButton({
   );
 }
 
+// ─── Cancel Submission dialog ────────────────────────────────────────────
+// Отзыв релиза с модерации обратно в черновик. Доступен владельцу (артист/лейбл)
+// и admin/manager. После отзыва релиз снова можно редактировать или удалить.
+function CancelSubmissionDialog({
+  releaseId, releaseTitle, onClose,
+}: { releaseId: number; releaseTitle: string; onClose: () => void }) {
+  const [pending, setPending] = useState(false);
+
+  const handleCancel = async () => {
+    setPending(true);
+    try {
+      await adminApi(`/api/releases/${releaseId}/cancel-submission`, { method: "POST" });
+      toast({
+        title: "Заявка отозвана",
+        description: `«${releaseTitle}» вернулся в черновики — теперь его можно отредактировать или удалить.`,
+      });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Не удалось отозвать заявку", description: e?.message ?? "Ошибка", variant: "destructive" });
+      setPending(false);
+    }
+  };
+
+  return (
+    <DialogContent className="bg-card border-border max-w-md">
+      <DialogHeader>
+        <DialogTitle>Cancel Submission</DialogTitle>
+        <DialogDescription>
+          Отзыв заявки уберёт релиз из очереди модерации — вы сможете изменить его перед повторной
+          отправкой или удалить при необходимости. Точно отозвать с модерации релиз{" "}
+          <span className="font-semibold text-foreground">«{releaseTitle}»</span>?
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onClose} disabled={pending}>
+          Cancel
+        </Button>
+        <Button onClick={handleCancel} disabled={pending}>
+          {pending ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Отзываю…</> : "Cancel Submission"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 // ─── Track row (Symphonic-style read-only card with Edit/Delete) ────────
 const DASH = "------";
 function TrackField({ label, value, chip }: { label: string; value: React.ReactNode; chip?: boolean }) {
@@ -1239,7 +1312,7 @@ function DspPill({ name }: { name: string }) {
 function EditReleaseDialog({
   releaseId, title, currentStatus, onClose,
 }: { releaseId: number; title: string; currentStatus: string; onClose: () => void }) {
-  const updateStatus = useUpdateReleaseStatus();
+  const [pending, setPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const isAlreadyDraft = currentStatus === "draft";
 
@@ -1285,14 +1358,16 @@ function EditReleaseDialog({
           <Button onClick={onClose}>Понятно, редактирую</Button>
         ) : (
           <Button
-            disabled={!confirmed || updateStatus.isPending}
+            disabled={!confirmed || pending}
             onClick={async () => {
+              setPending(true);
               try {
-                await updateStatus.mutateAsync({ id: releaseId, data: { status: "draft", note: "Edit requested" } });
+                await adminApi(`/api/releases/${releaseId}/reopen`, { method: "POST" });
                 toast({ title: "Релиз переведён в редактирование", description: "Можете вносить изменения." });
                 onClose();
               } catch (e) {
                 toast({ variant: "destructive", title: "Не удалось перевести релиз", description: (e as Error).message });
+                setPending(false);
               }
             }}
           >
@@ -1564,7 +1639,7 @@ function SubmitForReviewDialog({
 
 // ─── Take Down dialog ─────────────────────────────────────────────────────
 function TakeDownDialog({ releaseId, onClose }: { releaseId: number; onClose: () => void }) {
-  const updateStatus = useUpdateReleaseStatus();
+  const [pending, setPending] = useState(false);
   const [reason, setReason] = useState<string>("Other");
   const [other, setOther] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -1603,12 +1678,21 @@ function TakeDownDialog({ releaseId, onClose }: { releaseId: number; onClose: ()
         <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button
           variant="destructive"
-          disabled={!confirmed || updateStatus.isPending}
+          disabled={!confirmed || pending}
           onClick={async () => {
             const note = reason === "Other" ? other : reason;
-            await updateStatus.mutateAsync({ id: releaseId, data: { status: "takedown_requested", note: note || reason } });
-            toast({ title: "Takedown requested", description: "Your release will be removed from DSPs." });
-            onClose();
+            setPending(true);
+            try {
+              await adminApi(`/api/releases/${releaseId}/request-takedown`, {
+                method: "POST",
+                body: JSON.stringify({ note: note || reason }),
+              });
+              toast({ title: "Takedown requested", description: "Your release will be removed from DSPs." });
+              onClose();
+            } catch (e) {
+              toast({ variant: "destructive", title: "Не удалось снять релиз", description: (e as Error).message });
+              setPending(false);
+            }
           }}
         >
           Take Down
