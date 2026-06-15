@@ -119,6 +119,9 @@ export const tracksTable = pgTable("tracks", {
   /** Production & Engineering (см. TrackProductionMember[]). */
   production: jsonb("production").$type<TrackProductionMember[]>().notNull().default(sql`'[]'::jsonb`),
 
+  /** ID фонограммы (recording) в Broma16 после загрузки аудио (шаг 3 пушера). */
+  broma16RecordingId: integer("broma16_recording_id"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

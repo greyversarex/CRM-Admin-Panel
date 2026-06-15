@@ -147,6 +147,15 @@ const SERVICES: ServiceDef[] = [
     ],
   },
   {
+    code: "broma16", name: "Broma16 (ROD)", category: "dsp", authType: "basic",
+    description: "Основной дистрибьютор лейбла (ROD API). Доставка релизов на витрины (DSP) и сбор статистики стримов/доходов. Один аккаунт на лейбл.",
+    fields: [
+      { key: "email",    label: "Email",  required: true, placeholder: "label@example.com" },
+      { key: "password", label: "Пароль", type: "password", required: true },
+    ],
+    docsUrl: "https://api-rod.broma16.ru",
+  },
+  {
     code: "apple_music", name: "Apple Music / MusicKit", category: "dsp", authType: "bearer",
     description: "Аналитика и метаданные через MusicKit API. Требует Team ID + Key ID + .p8 ключ из Apple Developer.",
     fields: [

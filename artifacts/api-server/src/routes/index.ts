@@ -46,6 +46,7 @@ import takedownsRouter from "./takedowns";
 import labelMembersRouter, { labelMembersPublicRouter } from "./label-members";
 import marketingRouter from "./marketing";
 import analyticsMarketingRouter from "./analytics-marketing";
+import broma16Router from "./broma16";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireManagerPermission } from "../lib/manager-permissions";
 import { securityPolicy } from "../middlewares/security-policy";
@@ -139,6 +140,9 @@ router.use(deliveryRouter);
 // Distribution extras: ACRCloud + Disputes — admin/manager only.
 router.use("/distribution", adminOnly, requireManagerPermission("distribution"));
 router.use(distributionExtrasRouter);
+// Broma16 (ROD) — login/тест/статус (+ в след. фазах словари, статистика, пуш).
+// Гарды навешаны per-route внутри broma16Router (admin/manager + distribution).
+router.use(broma16Router);
 router.use("/ddex", adminOnly, requireManagerPermission("distribution"));
 router.use(ddexRouter);
 router.use(assetsRouter);                // scoped per-route inside (cover/audio/KYC streaming) — ДО integrationsRouter

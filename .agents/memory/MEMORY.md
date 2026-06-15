@@ -8,4 +8,5 @@
 - [Publishing works data-isolation](publishing-scope-all-endpoints.md) — work scope derived via track→release.labelId OR track.artist's label; enforce on every endpoint, not just list.
 - [Release artists endpoint scope](release-artists-scope.md) — PUT /releases/:id/artists must scope-check every payload artistId (first primary = owner); save artists before metadata.
 - [DSP catalog category contract](dsp-catalog-category-contract.md) — /dsp-catalog `category` (incl. the `?? fallback` literal) must stay inside the OpenAPI enum; typecheck won't catch a stale fallback.
+- [lib/db migrations + concurrency](broma16-migrations-and-concurrency.md) — drizzle journal-tracked migrator (one-shot per DB); for runtime races prefer pg advisory locks / in-process mutex over new constraints.
 - [Generated client params vs server](generated-client-params-vs-server.md) — orval ListXParams (release_id, limit…) may be silently ignored by the Express route; verify server honors a filter before relying on it, and combine filters with scope via and(...).

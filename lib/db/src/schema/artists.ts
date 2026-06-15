@@ -16,6 +16,17 @@ export const artistsTable = pgTable("artists", {
   spotifyId: text("spotify_id"),
   appleId: text("apple_id"),
   socialLinks: jsonb("social_links"),
+  // ── Broma16 (ROD API) идентификаторы ─────────────────────────────
+  /** UUID артиста в Broma16 (используется в performers/main_performer). */
+  broma16ArtistId: text("broma16_artist_id"),
+  /** Числовой H11-идентификатор артиста в Broma16 (если выдан). */
+  artistH11: integer("artist_h11"),
+  /** IPI Name Number (для PRO-регистрации в Broma16). */
+  ipiNameNumber: text("ipi_name_number"),
+  /** IPN (Interested Party Number). */
+  ipn: text("ipn"),
+  /** ISNI артиста. */
+  isni: text("isni"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

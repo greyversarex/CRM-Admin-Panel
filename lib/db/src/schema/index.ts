@@ -51,3 +51,4 @@ export * from "./label_members";
 export * from "./dsp_catalog";
 export * from "./release_artists";
 export * from "./release_dsps";
+export * from "./broma16";

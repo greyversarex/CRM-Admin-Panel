@@ -15,7 +15,8 @@ import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
-import { Download, TrendingUp, TrendingDown, Play, Music, Globe2, DollarSign, Lock } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Play, Music, Globe2, DollarSign, Lock, RefreshCw } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 // ─── API helper ─────────────────────────────────────────────────────────────
 
@@ -95,6 +96,29 @@ export default function AnalyticsPage() {
   const [tracks, setTracks] = useState<TopTrack[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // Ручной запуск сбора статистики из Broma16 (за вчерашний день). Опрос отчёта
+  // идёт в фоне на сервере, поэтому здесь просто запускаем процесс.
+  const syncStatistics = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/broma16/statistics/sync`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      toast({
+        title: "Синхронизация запущена",
+        description: "Статистика из Broma16 собирается в фоне — данные появятся через несколько минут.",
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Не удалось запустить синхронизацию", description: (e as Error).message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAdminOrManager) { setLoading(false); return; }
@@ -183,6 +207,16 @@ export default function AnalyticsPage() {
                 <SelectItem value="1y">{t.analytics.period_1y}</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              className="bg-card"
+              onClick={syncStatistics}
+              disabled={syncing}
+              title="Запросить свежую статистику из Broma16 (за вчерашний день)"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+              {syncing ? "Синхронизация…" : "Синхронизировать статистику"}
+            </Button>
             <Button
               variant="outline"
               className="bg-card"

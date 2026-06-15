@@ -89,6 +89,19 @@ export const releasesTable = pgTable("releases", {
    * Пересчитывается вместе с riskScore.
    */
   riskFactors: jsonb("risk_factors").$type<ReleaseRiskFactor[]>().notNull().default(sql`'[]'::jsonb`),
+
+  // ── Broma16 (ROD API) интеграция ─────────────────────────────────
+  /** ID релиза в Broma16 после успешного создания (шаг 2 пушера). NULL = ещё не отправлен. */
+  broma16ReleaseId: integer("broma16_release_id"),
+  /** Статус модерации в Broma16: pending | approved | rejected | on_platforms | NULL. */
+  broma16ModerationStatus: text("broma16_moderation_status"),
+  /** Выбранные витрины (outlet-коды) для дистрибуции через Broma16. */
+  broma16DistributionOutlets: jsonb("broma16_distribution_outlets").$type<string[]>(),
+  /** Когда релиз был успешно отправлен на модерацию в Broma16. */
+  broma16PushedAt: timestamp("broma16_pushed_at", { withTimezone: true }),
+  /** Текст последней ошибки пуша в Broma16 (для UI «Повторить»). */
+  broma16LastError: text("broma16_last_error"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
