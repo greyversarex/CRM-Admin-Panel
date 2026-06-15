@@ -29,9 +29,10 @@ db.transaction(async (tx) => {
 ```
 
 **Why:** avoids migration churn / journal risk for a guard that doesn't need a
-persisted constraint. Used for the Broma16 push-enqueue (one active job per
-release) and an in-process promise-chain mutex serializes statistics ingestion
-(cron + manual sync write the same usage table).
+persisted constraint. For a "don't run two of these at once" guard within a
+single process, an in-process promise-chain mutex is even cheaper than touching
+the DB.
 
-**How to apply:** reach for advisory locks / in-process mutex for "don't run two
-of these at once"; reserve new migrations for durable schema/constraint changes.
+**How to apply:** reach for advisory locks (cross-process) or an in-process
+mutex (same process) to serialize concurrent operations; reserve new migrations
+for durable schema/constraint changes.

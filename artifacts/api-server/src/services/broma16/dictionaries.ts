@@ -11,6 +11,7 @@ import { broma16DictionariesTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
+import { Broma16ValidationError } from "./errors";
 
 export type DictionaryType = "genre" | "language" | "release_type" | "outlet" | "country";
 
@@ -186,11 +187,14 @@ export async function resolveGenres(names: string[]): Promise<string[]> {
   return Array.from(new Set(out));
 }
 
-/** Страна записи → country_id (по умолчанию Таджикистан). */
+/** Страна записи → country_id (строго из словаря Broma16, без хардкода). */
 export async function resolveCountryId(nameOrCode?: string | null): Promise<number> {
-  const FALLBACK_TAJIKISTAN = 186;
   const dict = await getDictionary("country");
-  if (dict.length === 0) return FALLBACK_TAJIKISTAN;
+  if (dict.length === 0) {
+    throw new Broma16ValidationError(
+      "Словарь стран Broma16 пуст — синхронизируйте словари в настройках интеграции перед отправкой релиза.",
+    );
+  }
   const target = norm(nameOrCode ?? "tajikistan");
   const hints = nameOrCode ? [target] : ["таджик", "tajik", "tj"];
   const match =
@@ -200,7 +204,9 @@ export async function resolveCountryId(nameOrCode?: string | null): Promise<numb
     const id = Number(match.externalId);
     if (Number.isFinite(id)) return id;
   }
-  return FALLBACK_TAJIKISTAN;
+  throw new Broma16ValidationError(
+    `Не удалось определить страну записи «${nameOrCode ?? "Таджикистан"}» в словаре Broma16 — проверьте словарь стран или укажите корректную страну записи трека.`,
+  );
 }
 
 const LANGUAGE_NAME_HINTS: Record<string, string[]> = {

@@ -56,17 +56,57 @@ async function assertSafeExternalUrl(u: URL): Promise<void> {
   }
 }
 
+const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+const MAX_REDIRECTS = 5;
+
+// Базовая проверка формы URL: только http(s), без учётных данных в URL и без
+// нестандартных портов (публичные CDN отдают обложки по 80/443).
+function assertUrlShape(u: URL): void {
+  if (!ALLOWED_PROTOCOLS.has(u.protocol)) {
+    throw new Error(`Недопустимый протокол ассета: ${u.protocol}`);
+  }
+  if (u.username || u.password) {
+    throw new Error("URL ассета не должен содержать учётные данные");
+  }
+  if (u.port && u.port !== "80" && u.port !== "443") {
+    throw new Error(`Недопустимый порт ассета: ${u.port}`);
+  }
+}
+
+// Скачивание внешнего ассета с ручной обработкой редиректов: каждый хоп
+// (в т.ч. Location-редиректы) проверяется по форме URL и на приватные/локальные
+// адреса. Без этого публичный URL мог бы редиректом увести на внутренний
+// ресурс (SSRF через редирект).
+async function safeExternalFetch(initial: string): Promise<{ res: Response; finalUrl: URL }> {
+  let current = new URL(initial);
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    assertUrlShape(current);
+    await assertSafeExternalUrl(current);
+    const res = await fetch(current.toString(), {
+      redirect: "manual",
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) return { res, finalUrl: current };
+      current = new URL(location, current); // резолвим относительный Location
+      continue;
+    }
+    return { res, finalUrl: current };
+  }
+  throw new Error("Слишком много перенаправлений при загрузке ассета");
+}
+
 export async function fetchAssetBytes(url: string): Promise<AssetBytes> {
   const trimmed = url.trim();
   if (!trimmed) throw new Error("Пустой URL ассета");
 
   if (/^https?:\/\//i.test(trimmed)) {
-    await assertSafeExternalUrl(new URL(trimmed));
-    const res = await fetch(trimmed, { signal: AbortSignal.timeout(120_000) });
+    const { res, finalUrl } = await safeExternalFetch(trimmed);
     if (!res.ok) throw new Error(`Не удалось скачать ассет (HTTP ${res.status})`);
     const buffer = Buffer.from(await res.arrayBuffer());
     const contentType = res.headers.get("content-type") ?? "application/octet-stream";
-    const filename = path.basename(new URL(trimmed).pathname) || "asset";
+    const filename = path.basename(finalUrl.pathname) || "asset";
     return { buffer, contentType, filename };
   }
 
