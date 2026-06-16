@@ -5,6 +5,7 @@ import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, De
 import { requireAuth, getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { notifyAdmins } from "../services/notifications";
+import { releaseEditableReason } from "./releases";
 
 const router = Router();
 
@@ -51,6 +52,24 @@ async function canMutateReleaseSplits(
   if (scope.artistId && release.artistId === scope.artistId) return true;
   if (scope.labelId && release.labelId === scope.labelId) return true;
   return false;
+}
+
+/**
+ * Сплиты можно МЕНЯТЬ (создавать/править/удалять) только пока релиз редактируем
+ * (draft/rejected) — так же, как треки и метаданные. На модерации
+ * (pending_review) и после одобрения набор сплитов заблокирован для владельцев.
+ * Admin/manager (fullAccess) обходят блокировку. Возвращает строку-причину для
+ * 409 либо null, если менять можно.
+ */
+async function releaseSplitLockReason(
+  scope: ReturnType<typeof getDataScope>,
+  releaseId: number | null | undefined,
+): Promise<string | null> {
+  if (scope.fullAccess) return null;
+  if (releaseId == null) return null;
+  const [rel] = await db.select({ status: releasesTable.status }).from(releasesTable).where(eq(releasesTable.id, releaseId));
+  if (!rel) return null;
+  return releaseEditableReason(scope, rel.status);
 }
 
 /**
@@ -160,6 +179,8 @@ router.post("/splits", requireAuth, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden: можно назначать сплиты только на своих релизах" });
     return;
   }
+  const lockReason = await releaseSplitLockReason(scope, target.releaseId);
+  if (lockReason) { res.status(409).json({ error: lockReason }); return; }
 
   const total = parsed.data.participants.reduce((sum, p) => sum + p.percentage, 0);
   if (Math.abs(total - 100) > 0.01) {
@@ -246,6 +267,12 @@ router.put("/splits/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden: нельзя переносить сплит на чужой релиз" });
     return;
   }
+  // Блокировка по статусу релиза: владелец не может менять сплиты релиза на
+  // модерации/после одобрения. Проверяем и текущий, и целевой релиз.
+  const putLockReason =
+    (await releaseSplitLockReason(scope, existing.releaseId)) ??
+    (await releaseSplitLockReason(scope, target.releaseId));
+  if (putLockReason) { res.status(409).json({ error: putLockReason }); return; }
 
   const [split] = await db.update(splitsTable)
     .set({ ...parsed.data, participants: parsed.data.participants as any })
@@ -280,6 +307,8 @@ router.delete("/splits/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden: можно удалять сплиты только на своих релизах" });
     return;
   }
+  const delLockReason = await releaseSplitLockReason(scope, existing.releaseId);
+  if (delLockReason) { res.status(409).json({ error: delLockReason }); return; }
 
   const [split] = await db.delete(splitsTable).where(eq(splitsTable.id, params.data.id)).returning();
   if (!split) {

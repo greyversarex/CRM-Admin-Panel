@@ -532,7 +532,12 @@ export default function ReleaseDetail() {
               Show Issues
             </span>
           </div>
-          {(release.tracks ?? []).length > 0 && (
+          {/* Групповое редактирование треков (Multi Track Edit / Reorder / Upload
+              Audio) ведёт на страницы, где правки идут через PUT/POST /tracks и
+              attach ассетов — бэкенд блокирует их для владельца на нередактируемом
+              релизе (409). Поэтому кнопки показываем только когда релиз редактируем
+              (draft/rejected), как и остальные edit-кнопки на странице. */}
+          {release.isEditable && (release.tracks ?? []).length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 size="sm" className="text-xs h-8"
@@ -1183,19 +1188,24 @@ function TrackRow({
               </button>
             </>
           )}
-          <Button
-            variant="outline" size="sm"
-            className="border-rose-500/30 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-3 text-xs"
-            onClick={async () => {
-              if (!confirm(`Delete track "${t.title || `#${index + 1}`}"?`)) return;
-              await deleteTrack.mutateAsync({ id: t.id });
-              toast({ title: "Track deleted" });
-              onChange();
-            }}
-            disabled={deleteTrack.isPending}
-          >
-            Delete
-          </Button>
+          {/* Delete/Edit трека доступны только когда релиз редактируем (draft/
+              rejected). На модерации (pending_review) и далее кнопки скрыты —
+              после Cancel Submission релиз снова draft и кнопки возвращаются. */}
+          {release.isEditable && (
+            <Button
+              variant="outline" size="sm"
+              className="border-rose-500/30 text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 h-8 px-3 text-xs"
+              onClick={async () => {
+                if (!confirm(`Delete track "${t.title || `#${index + 1}`}"?`)) return;
+                await deleteTrack.mutateAsync({ id: t.id });
+                toast({ title: "Track deleted" });
+                onChange();
+              }}
+              disabled={deleteTrack.isPending}
+            >
+              Delete
+            </Button>
+          )}
           {release.isEditable && (
             <Link href={`/releases/${release.id}/tracks/${t.id}/edit`}>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs bg-card">
@@ -2880,9 +2890,13 @@ function SplitShareSetupSummaryCard({
               SplitShare автоматически рассчитывает доли роялти для ваших соавторов и переводит
               выплаты на их счета. Назначьте трекам сплит, чтобы доход делился автоматически.
             </p>
-            <Button variant="outline" size="sm" className="bg-card text-xs shrink-0" onClick={onEdit}>
-              <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
-            </Button>
+            {/* Edit сплитов доступен только пока релиз редактируем (draft/rejected).
+                На модерации скрыт; после Cancel Submission возвращается. */}
+            {release.isEditable && (
+              <Button variant="outline" size="sm" className="bg-card text-xs shrink-0" onClick={onEdit}>
+                <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
+              </Button>
+            )}
           </div>
 
           {tracks.length > 0 && unassignedCount > 0 && (

@@ -245,12 +245,15 @@ function SplitShareEditor({ release }: { release: ReleaseDetail }) {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   // Назначать сплиты могут admin/manager (любой релиз) либо владелец релиза:
-  // лейбл — для своих релизов, артист — для своих.
-  const canAssign =
-    user?.role === "admin" ||
-    user?.role === "manager" ||
+  // лейбл — для своих релизов, артист — для своих. Владелец — ТОЛЬКО пока релиз
+  // редактируем (draft/rejected): на модерации и после одобрения набор сплитов
+  // заблокирован (совпадает с бэкендовой проверкой releaseSplitLockReason и со
+  // скрытой кнопкой Edit на странице релиза). Admin/manager не ограничены статусом.
+  const isModerator = user?.role === "admin" || user?.role === "manager";
+  const isOwner =
     (user?.role === "label" && user?.labelId != null && release.labelId === user.labelId) ||
     (user?.role === "artist" && user?.artistId != null && release.artistId === user.artistId);
+  const canAssign = isModerator || (isOwner && !!release.isEditable);
 
   const { data: splits } = useListSplits({ release_id: release.id, limit: 200 });
   const byTrack = useMemo(() => {
@@ -337,7 +340,9 @@ function SplitShareEditor({ release }: { release: ReleaseDetail }) {
 
           {!canAssign && (
             <p className="text-[11px] text-muted-foreground -mt-2">
-              Назначать сплиты могут администратор или менеджер. Вы можете просматривать статус назначения.
+              {isOwner && !release.isEditable
+                ? "Релиз отправлен на модерацию — набор сплитов заблокирован. Отзовите заявку (Cancel Submission) на странице релиза, чтобы снова редактировать сплиты."
+                : "Назначать сплиты могут администратор, менеджер или владелец релиза. Вы можете просматривать статус назначения."}
             </p>
           )}
 

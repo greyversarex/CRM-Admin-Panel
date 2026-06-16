@@ -23,3 +23,15 @@ must never touch another owner's release. Earlier admin/manager-only gating bloc
   `canMutateReleaseSplits` which requires the binding to be truthy AND match.
 - Accept/reject (`/splits/:id/accept|reject`) is separate: participant-bound by
   entityType+entityId, only artist/label roles. Leave it alone.
+
+**Status lock (separate from ownership):** ownership (`canMutateReleaseSplits`) is
+NOT enough — owners must also be blocked from changing splits once the release
+leaves draft/rejected (pending_review, approved, live, delivering…), exactly like
+tracks/metadata. Enforce a second gate via `releaseSplitLockReason` (fullAccess
+bypass; null when releaseId null; else `releaseEditableReason(scope, status)` →
+409) on POST/PUT/DELETE. PUT must lock BOTH existing and target release. This is
+the same lock tracks use (`releaseLockReasonForTrack`/`releaseEditableReason`),
+which is the source of truth for "is this release editable by an owner".
+**Why:** hidden UI (SplitShare Edit button gated on `release.isEditable`) is only
+honest if the API rejects the same mutation — owner could otherwise open
+`/releases/:id/splitshare` directly and edit a release under moderation.
