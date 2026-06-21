@@ -1,0 +1,383 @@
+ВАЖНОЕ ИЗМЕНЕНИЕ ПОДХОДА К ACRCLOUD
+Текущая реализация ACRCloud (connectors/acrcloud.ts — Identify API, 512KB сэмпл, HMAC-SHA1)
+— это НЕПРАВИЛЬНЫЙ подход для нашей задачи.
+
+ACRCloud работает с нами по партнёрскому соглашению через S3 Drops.
+Мы НЕ отправляем сэмпл через API. Мы загружаем полный DDEX ERN пакет (XML + аудио + обложка)
+в их S3 бакет. Это как отправка релиза на DSP — только получатель ACRCloud.
+
+ВЕРСИЯ DDEX — ВАЖНОЕ УТОЧНЕНИЕ
+Менеджеры ACRCloud подтвердили: они принимают ЛЮБУЮ версию DDEX (3.8.2, 4.2, 4.3 и т.д.).
+
+У нас в коде УЖЕ ЕСТЬ рабочий генератор DDEX ERN 4.3 (для доставки на DSP).
+ПРИОРИТЕТ — переиспользовать существующий генератор ERN 4.3, а не писать новый под 3.8.2.
+
+Алгоритм действий:
+
+ПОСМОТРИ существующий генератор ERN 4.3 (тот, что используется для DDEX/SFTP доставки)
+Адаптируй его для ACRCloud как получателя:
+MessageRecipient PartyId: PADPIDA2016110503N
+MessageRecipient Name: ACRCloud
+MessageSender PartyId: PA-DPIDA-2024053004-T
+MessageSender Name: Tajik Music
+Проверь, что генерируется валидный XML в версии 4.3
+Если существующий генератор легко адаптируется — ИСПОЛЬЗУЙ ЕГО, не пиши новый
+Если существующий генератор 4.3 не подходит по структуре — тогда используй шаблон
+ern/382 из раздела ниже как fallback (3.8.2 — это версия из sample.xml, точно рабочая)
+В sample.xml (ern/382) показана структура, которую ACRCloud ТОЧНО принимает.
+Если 4.3 пройдёт — отлично. Если нет — откатывайся на структуру 3.8.2.
+
+ВХОДНЫЕ ДАННЫЕ ОТ ACRCloud
+text
+
+Region: us-east-1
+Bucket: acrcloud-partners
+AccessKey: (в .env — ACRCLOUD_S3_ACCESS_KEY)
+SecretKey: (в .env — ACRCLOUD_S3_SECRET_KEY)
+Prefix: TajikMusic/*
+Наш DDEX Party ID: PA-DPIDA-2024053004-T
+Party ID ACRCloud (получатель): PADPIDA2016110503N
+
+ФОРМАТ DDEX ERN 3.8.2 (ИЗ SAMPLE.XML)
+Вот точная структура XML, которую нужно генерировать.
+Каждый релиз = один XML файл + аудио + обложка, упакованные в ZIP.
+
+СТРУКТУРА ZIP ПАКЕТА
+text
+
+{UPC}.zip
+├── {UPC}.xml                    ← DDEX ERN сообщение
+└── resources/
+    ├── {UPC}_T1_0_SoundRecording_001_001.wav   ← аудио трек 1
+    ├── {UPC}_T2_0_SoundRecording_001_002.wav   ← аудио трек 2 (если есть)
+    └── {UPC}_T3_Image.jpg                      ← обложка
+XML СТРУКТУРА (генерировать ТОЧНО по этому шаблону)
+XML
+
+<?xml version="1.0" encoding="UTF-8"?>
+<ern:NewReleaseMessage
+  MessageSchemaVersionId="ern/382"
+  ReleaseProfileVersionId="CommonReleaseTypes/13/AudioAlbumMusicandSpeech"
+  xmlns:ern="http://ddex.net/xml/ern/382"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://ddex.net/xml/ern/382 http://ddex.net/xml/ern/382/release-notification.xsd"
+  xmlns:avs="http://ddex.net/xml/avs/avs">
+
+  <!-- MESSAGE HEADER -->
+  <MessageHeader>
+    <MessageThreadId>TajikMusic_{UPC}_{timestamp}</MessageThreadId>
+    <MessageId>TajikMusic_{UPC}_{timestamp}</MessageId>
+    <MessageFileName>{UPC}.xml</MessageFileName>
+    <MessageSender>
+      <PartyId>PA-DPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music</FullName>
+      </PartyName>
+    </MessageSender>
+    <SentOnBehalfOf>
+      <PartyId>PA-DPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music</FullName>
+      </PartyName>
+    </SentOnBehalfOf>
+    <MessageRecipient>
+      <PartyId>PADPIDA2016110503N</PartyId>
+      <PartyName>
+        <FullName>ACRCloud</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>{ISO datetime}</MessageCreatedDateTime>
+    <MessageControlType>LiveMessage</MessageControlType>
+  </MessageHeader>
+
+  <UpdateIndicator>OriginalMessage</UpdateIndicator>
+
+  <!-- RESOURCE LIST -->
+  <ResourceList>
+    <!-- Для каждого трека — один SoundRecording блок -->
+    <SoundRecording>
+      <SoundRecordingType>MusicalWorkSoundRecording</SoundRecordingType>
+      <SoundRecordingId>
+        <ISRC>{ISRC трека}</ISRC>
+        <ProprietaryId Namespace="PA-DPIDA-2024053004-T">{внутренний ID}</ProprietaryId>
+      </SoundRecordingId>
+      <ResourceReference>A1</ResourceReference>  <!-- A1, A2, A3... -->
+      <ReferenceTitle>
+        <TitleText>{название трека}</TitleText>
+        <SubTitle>{версия или пусто}</SubTitle>
+      </ReferenceTitle>
+      <IsInstrumental>{true/false}</IsInstrumental>
+      <Duration>{длительность в ISO 8601, например PT3M45S}</Duration>
+      <SoundRecordingDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <Title TitleType="DisplayTitle">
+          <TitleText>{название трека}</TitleText>
+          <SubTitle>{версия}</SubTitle>
+        </Title>
+        <DisplayArtist SequenceNumber="1">
+          <PartyName LanguageAndScriptCode="en">
+            <FullName>{имя артиста}</FullName>
+          </PartyName>
+          <PartyId Namespace="PA-DPIDA-2024053004-T">{ID артиста}</PartyId>
+          <ArtistRole>MainArtist</ArtistRole>
+        </DisplayArtist>
+        <!-- Featured артисты (если есть) -->
+        <DisplayArtistName LanguageAndScriptCode="en">{имя артиста}</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">{название лейбла}</LabelName>
+        <PLine>
+          <Year>{год}</Year>
+          <PLineText>{P-Line текст}</PLineText>
+        </PLine>
+        <Genre>
+          <GenreText>{жанр}</GenreText>
+          <SubGenre>{поджанр или убрать}</SubGenre>
+        </Genre>
+        <ParentalWarningType>{NotExplicit или Explicit}</ParentalWarningType>
+        <TechnicalSoundRecordingDetails>
+          <TechnicalResourceDetailsReference>T1_0</TechnicalResourceDetailsReference>
+          <AudioCodecType>{WAV или FLAC}</AudioCodecType>
+          <NumberOfChannels>2</NumberOfChannels>
+          <SamplingRate UnitOfMeasure="kHz">44.1</SamplingRate>
+          <BitsPerSample>16</BitsPerSample>
+          <IsPreview>false</IsPreview>
+          <PreviewDetails>
+            <StartPoint>0</StartPoint>
+            <Duration>PT30S</Duration>
+            <ExpressionType>Instructive</ExpressionType>
+          </PreviewDetails>
+          <File>
+            <FileName>{UPC}_T1_0_SoundRecording_001_001.wav</FileName>
+            <FilePath>resources/</FilePath>
+            <HashSum>
+              <HashSum>{MD5 хэш файла}</HashSum>
+              <HashSumAlgorithmType>MD5</HashSumAlgorithmType>
+            </HashSum>
+          </File>
+        </TechnicalSoundRecordingDetails>
+      </SoundRecordingDetailsByTerritory>
+      <TerritoryOfCommissioning>Worldwide</TerritoryOfCommissioning>
+    </SoundRecording>
+
+    <!-- COVER IMAGE -->
+    <Image>
+      <ImageType>FrontCoverImage</ImageType>
+      <ImageId>
+        <ProprietaryId Namespace="PA-DPIDA-2024053004-T">{ID}</ProprietaryId>
+      </ImageId>
+      <ResourceReference>A{N+1}</ResourceReference>  <!-- следующий после треков -->
+      <ImageDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <TechnicalImageDetails>
+          <TechnicalResourceDetailsReference>T{N+1}</TechnicalResourceDetailsReference>
+          <ImageCodecType>{JPG или PNG}</ImageCodecType>
+          <File>
+            <FileName>{UPC}_T{N+1}_Image.jpg</FileName>
+            <FilePath>resources/</FilePath>
+            <HashSum>
+              <HashSum>{MD5 хэш обложки}</HashSum>
+              <HashSumAlgorithmType>MD5</HashSumAlgorithmType>
+            </HashSum>
+          </File>
+        </TechnicalImageDetails>
+      </ImageDetailsByTerritory>
+    </Image>
+  </ResourceList>
+
+  <!-- RELEASE LIST -->
+  <ReleaseList>
+    <!-- ГЛАВНЫЙ РЕЛИЗ (альбом/сингл) -->
+    <Release IsMainRelease="true">
+      <ReleaseId>
+        <ICPN IsEan="true">{UPC}</ICPN>
+        <CatalogNumber Namespace="PA-DPIDA-2024053004-T">{каталожный номер}</CatalogNumber>
+      </ReleaseId>
+      <ReleaseReference>R0</ReleaseReference>
+      <ReferenceTitle>
+        <TitleText>{название релиза}</TitleText>
+        <SubTitle>{версия или пусто}</SubTitle>
+      </ReferenceTitle>
+      <ReleaseResourceReferenceList>
+        <!-- PrimaryResource для каждого трека -->
+        <ReleaseResourceReference ReleaseResourceType="PrimaryResource">A1</ReleaseResourceReference>
+        <!-- SecondaryResource для обложки -->
+        <ReleaseResourceReference ReleaseResourceType="SecondaryResource">A3</ReleaseResourceReference>
+      </ReleaseResourceReferenceList>
+      <ReleaseType>{Album или Single}</ReleaseType>
+      <ReleaseDetailsByTerritory>
+        <TerritoryCode>Worldwide</TerritoryCode>
+        <DisplayArtistName LanguageAndScriptCode="en">{имя артиста}</DisplayArtistName>
+        <LabelName LanguageAndScriptCode="en">{лейбл}</LabelName>
+        <Genre>
+          <GenreText>{жанр}</GenreText>
+        </Genre>
+        <ReleaseDate>{дата релиза YYYY-MM-DD}</ReleaseDate>
+        <!-- ResourceGroup с треками -->
+      </ReleaseDetailsByTerritory>
+      <PLine>
+        <Year>{год}</Year>
+        <PLineText>{P-Line}</PLineText>
+      </PLine>
+      <CLine>
+        <Year>{год}</Year>
+        <CLineText>{C-Line}</CLineText>
+      </CLine>
+    </Release>
+  </ReleaseList>
+
+  <!-- DEAL LIST -->
+  <DealList>
+    <ReleaseDeal>
+      <DealReleaseReference>R0</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>RightsClaimModel</CommercialModelType>
+          <Usage>
+            <UseType>UserMakeAvailableLabelProvided</UseType>
+          </Usage>
+          <ValidityPeriod>
+            <StartDateTime>{дата релиза}T00:00:00+00:00</StartDateTime>
+          </ValidityPeriod>
+          <RightsClaimPolicy>
+            <RightsClaimPolicyType>Monetize</RightsClaimPolicyType>
+          </RightsClaimPolicy>
+        </DealTerms>
+      </Deal>
+    </ReleaseDeal>
+  </DealList>
+</ern:NewReleaseMessage>
+ЭТО НУЖНО РЕАЛИЗОВАТЬ — 4 МОДУЛЯ
+МОДУЛЬ 1: DDEX ERN 3.8.2 ГЕНЕРАТОР
+Создай server/connectors/acrcloud-ddex-generator.ts:
+
+Метод generateErn382Xml(releaseId):
+
+Берёт релиз из нашей БД (releases + tracks + artist + label)
+Генерирует DDEX ERN 3.8.2 XML по структуре выше
+КЛЮЧЕВЫЕ ПРАВИЛА:
+Namespace: http://ddex.net/xml/ern/382 (НЕ 43!)
+MessageSchemaVersionId: ern/382 (НЕ ern/43!)
+xsi:schemaLocation: http://ddex.net/xml/ern/382 http://ddex.net/xml/ern/382/release-notification.xsd
+MessageSender PartyId: PA-DPIDA-2024053004-T
+MessageRecipient PartyId: PADPIDA2016110503N
+Duration в формате ISO 8601: PT3M45S (3 мин 45 сек). Конвертировать из секунд.
+Каждый аудиофайл: вычислить MD5 хэш
+Обложка: вычислить MD5 хэш
+ResourceReference: A1, A2, ... для треков, A{N+1} для обложки
+TechnicalResourceDetailsReference: T1_0, T2_0, ... для треков, T{N+1} для обложки
+FilePath: всегда resources/
+FileName: {UPC}_T{n}_0_SoundRecording_001_{nn}.wav для аудио
+FileName: {UPC}_T{n}_Image.jpg для обложки
+Возвращает готовую XML строку
+ВАЖНО: посмотри на существующий DDEX генератор (ern/43) — там есть полезная логика
+(вычисление длительности, MD5, структура ResourceGroup). Адаптируй под 3.8.2.
+
+МОДУЛЬ 2: ZIP УПАКОВЩИК
+Создай server/connectors/acrcloud-packager.ts:
+
+Метод createDropPackage(releaseId):
+
+Вызывает generateErn382Xml(releaseId) → получает XML
+Скачивает аудиофайлы треков (из нашего хранилища)
+Скачивает обложку
+Создаёт ZIP архив со структурой:
+text
+
+{UPC}.xml                      ← в корне
+resources/
+  {UPC}_T1_0_SoundRecording_001_001.wav   ← трек 1
+  {UPC}_T2_0_SoundRecording_001_002.wav   ← трек 2
+  {UPC}_T3_Image.jpg                      ← обложка
+Имена файлов в ZIP должны СОВПАДАТЬ с именами в XML (FileName тег)
+Возвращает Buffer ZIP архива (или путь к временному файлу)
+Используй archiver или adm-zip npm пакет.
+
+МОДУЛЬ 3: S3 ЗАГРУЗЧИК
+Создай server/connectors/acrcloud-s3.ts:
+
+Установи @aws-sdk/client-s3 (если ещё нет).
+
+TypeScript
+
+// Конфигурация из .env:
+// ACRCLOUD_S3_REGION=us-east-1
+// ACRCLOUD_S3_BUCKET=acrcloud-partners
+// ACRCLOUD_S3_ACCESS_KEY=...
+// ACRCLOUD_S3_SECRET_KEY=...
+// ACRCLOUD_S3_PREFIX=TajikMusic
+
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
+// Метод uploadDrop(zipBuffer, releaseId)
+// 1. S3 key = `${prefix}/${UPC}_${timestamp}.zip`
+//    Например: TajikMusic/1234567890123_20240620.zip
+// 2. putObject в бакет acrcloud-partners
+// 3. Логировать в БД (acr_checks или deliveries):
+//    - release_id
+//    - s3_key
+//    - uploaded_at
+//    - status: "dropped" (отправлено, ждёт обработки ACRCloud)
+// 4. Возвратить URL или S3 key
+ВАЖНО: НЕ хардкодить ключи. Читать из .env. Если ключей нет — понятная ошибка.
+
+МОДУЛЬ 4: ПОЛНЫЙ WORKFLOW + UI
+Создай роут POST /api/releases/{id}/acrcloud-check:
+
+Проверить, что релиз имеет треки с аудио и обложку
+Сгенерировать ERN XML (Модуль 1)
+Упаковать в ZIP (Модуль 2)
+Загрузить в S3 (Модуль 3)
+Обновить статус релиза / трека:
+acr_checks: { release_id, track_id, status: "dropped", s3_key, created_at }
+Вернуть результат: "Drop uploaded to S3, ACRCloud will process"
+UI в карточке релиза:
+
+Кнопка "Send to ACRCloud" (отправить на проверку дубликатов)
+После отправки: статус "Sent to ACRCloud (processing)"
+Поле для ручного ввода результата от ACRCloud (пока обработка ручная от Tony)
+"Unique" / "Duplicate Found" / "Processing"
+.ENV ПЕРЕМЕННЫЕ
+text
+
+ACRCLOUD_S3_REGION=us-east-1
+ACRCLOUD_S3_BUCKET=acrcloud-partners
+ACRCLOUD_S3_ACCESS_KEY=...
+ACRCLOUD_S3_SECRET_KEY=...
+ACRCLOUD_S3_PREFIX=TajikMusic
+ACRCLOUD_SENDER_PARTY_ID=PA-DPIDA-2024053004-T
+ACRCLOUD_RECIPIENT_PARTY_ID=PADPIDA2016110503N
+ПОРЯДОК ВЫПОЛНЕНИЯ
+МОДУЛЬ 1 (генератор XML) — создай и проверь, что XML генерируется
+МОДУЛЬ 2 (ZIP упаковщик) — создай и проверь, что ZIP создаётся правильно
+МОДУЛЬ 3 (S3 загрузчик) — создай, добавь .env переменные
+МОДУЛЬ 4 (роут + UI) — свяжи всё вместе
+После каждого модуля проверяй, что всё работает.
+
+ТЕСТИРОВАНИЕ
+После реализации:
+
+Создай тестовый релиз с 1 треком (реальный WAV файл) и обложкой
+Сгенерируй XML — выведи в консоль, сравни со структурой sample.xml
+Создай ZIP — проверь структуру (XML в корне, ресурсы в resources/)
+Загрузи в S3 — проверь, что файл появился в бакете
+Сообщи, что готово — мы скажем Tony Li, что отправили test drops
+ВАЖНО: Проверь, что MD5 хэши в XML совпадают с реальными файлами в ZIP.
+ACRCloud будет сверять.
+
+ЧЕГО НЕ ДЕЛАТЬ
+НЕ используй Identify API (HMAC-SHA1, 512KB сэмпл) — это неправильный подход
+НЕ используй ern/43 или ern/42 — только ern/382
+НЕ отправляй файлы напрямую на DSP через этот генератор — это только для ACRCloud
+Существующий ern/43 генератор НЕ ТРОГАЙ — он может пригодиться позже
+КОНТЕКСТ: ПОЧЕМУ ИМЕННО S3 DROPS
+ACRCloud — это наш партнёр по защите контента. Они проверяют треки на дубликаты
+через фингерпринтинг. Но они НЕ работают через REST API для этого. Они принимают
+релизы как "DSP" — через DDEX ERN пакеты, загруженные в их S3 бакет.
+
+Процесс:
+
+Мы создаём DDEX ERN XML (как если бы отправляли релиз на DSP)
+Упаковываем с аудио в ZIP
+Грузим в S3 бакет acrcloud-partners под префикс TajikMusic/
+ACRCloud находит файл, фингерпринтит треки, проверяет дубликаты
+Результат приходит позже (пока вручную от Tony Li, потом автоматизируем)
+Это та же технология, которую используют FUGA, Symphonic, Revelator для работы с ACRCloud.
