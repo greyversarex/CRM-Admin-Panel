@@ -21,7 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   X, CheckCircle2, XCircle, AlertCircle, ShieldAlert, FileMusic, Music2, ScanSearch,
   Image as ImageIcon, Calendar, Globe, Disc3, Hash, Loader2, ExternalLink, Languages,
-  PenTool, Mic, Sliders, ChevronDown, PauseCircle, AlertTriangle, LogOut,
+  PenTool, Mic, Sliders, ChevronDown, PauseCircle, AlertTriangle, LogOut, UploadCloud,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +85,15 @@ async function jget<T>(url: string): Promise<T> {
 async function jpatch<T>(url: string, body: unknown): Promise<T> {
   const r = await fetch(url, {
     method: "PATCH", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.json() as Promise<T>;
+}
+async function jpost<T>(url: string, body: unknown): Promise<T> {
+  const r = await fetch(url, {
+    method: "POST", credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -196,8 +205,8 @@ export function ModerationDetailDialog({
                 <IssuesCard errors={errors} warns={warns} />
               )}
 
-              {/* ACR history */}
-              {q.data.acr.totalChecks > 0 && <AcrCard acr={q.data.acr} />}
+              {/* ACR history + проверка на дубли (S3) */}
+              <AcrCard acr={q.data.acr} releaseId={releaseId} />
 
               {/* Comment */}
               <div>
@@ -552,9 +561,65 @@ function IssuesCard({ errors, warns }: { errors: DetailResponse["issues"]; warns
   );
 }
 
-function AcrCard({ acr }: { acr: DetailResponse["acr"] }) {
+type DropCheck = {
+  id: number; releaseId: number | null; trackId: number | null;
+  engine: string; mode: string | null; status: string;
+  matchedTitle: string | null; matchedArtist: string | null; matchedIsrc: string | null;
+  scannedAt: string; errorMessage: string | null;
+  resultJson: {
+    remotePath?: string; fileCount?: number; totalBytes?: number;
+    messageRef?: string; manualVerdict?: string; verdictNote?: string | null;
+  } | null;
+};
+
+function dropStatusLabel(s: string): string {
+  return ({
+    pending: "Загружено, ждём вердикт",
+    clean: "Уникально (дублей нет)",
+    matched: "Найден дубликат",
+    error: "Ошибка отправки",
+  } as Record<string, string>)[s] ?? s;
+}
+
+function fmtBytes(b?: number): string {
+  if (!b) return "—";
+  const mb = b / 1024 / 1024;
+  return mb < 1 ? `${(b / 1024).toFixed(0)} КБ` : `${mb.toFixed(1)} МБ`;
+}
+
+function AcrCard({ acr, releaseId }: { acr: DetailResponse["acr"]; releaseId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const dropsQ = useQuery({
+    queryKey: ["acr-drops", releaseId],
+    queryFn: () => jget<{ checks: DropCheck[]; configured: boolean }>(`/api/distribution/acr/checks?releaseId=${releaseId}`),
+  });
+  const drops = (dropsQ.data?.checks ?? []).filter((c) => c.engine === "acrcloud_ddex");
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["acr-drops", releaseId] });
+    qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
+  };
+
+  const drop = useMutation({
+    mutationFn: () => jpost(`/api/distribution/acr/drop`, { releaseId }),
+    onSuccess: () => {
+      toast({ title: "Релиз отправлен в ACRCloud", description: "Пакет загружен в хранилище. Вердикт появится позже — зафиксируйте его здесь." });
+      refresh();
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Не удалось отправить", description: e.message }),
+  });
+
+  const verdict = useMutation({
+    mutationFn: (v: { checkId: number; verdict: "unique" | "duplicate" | "processing" }) =>
+      jpost(`/api/distribution/acr/manual-result`, v),
+    onSuccess: () => { toast({ title: "Вердикт сохранён" }); refresh(); },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Не удалось сохранить вердикт", description: e.message }),
+  });
+
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-2">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <h3 className="text-sm font-semibold flex items-center gap-2">
         <ScanSearch className="h-4 w-4" />ACRCloud — {acr.totalChecks} проверок
         <Badge className={
@@ -563,6 +628,7 @@ function AcrCard({ acr }: { acr: DetailResponse["acr"] }) {
           "bg-muted text-muted-foreground"
         } variant="outline">{acr.status}</Badge>
       </h3>
+
       {acr.latest.length > 0 && (
         <div className="text-xs space-y-1">
           {acr.latest.map((c) => (
@@ -576,6 +642,79 @@ function AcrCard({ acr }: { acr: DetailResponse["acr"] }) {
           ))}
         </div>
       )}
+
+      {/* ── Проверка на дубли через S3 (полный DDEX-пакет) ── */}
+      <div className="border-t pt-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-medium flex items-center gap-1.5">
+            <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground" />
+            Проверка на дубли (полный пакет в хранилище ACRCloud)
+          </div>
+          <Button
+            size="sm" variant="outline" className="h-7 gap-1.5"
+            disabled={drop.isPending}
+            onClick={() => drop.mutate()}
+          >
+            {drop.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+            Отправить в ACRCloud
+          </Button>
+        </div>
+
+        {drops.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Релиз ещё не отправляли на проверку дублей.</p>
+        ) : (
+          <div className="space-y-2">
+            {drops.map((c) => (
+              <div key={c.id} className="rounded-md border bg-muted/30 p-2 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  <span className="text-muted-foreground tabular-nums">{new Date(c.scannedAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}</span>
+                  <Badge variant="outline" className={`text-[10px] ${
+                    c.status === "matched" ? "bg-red-500/15 text-red-700 dark:text-red-300" :
+                    c.status === "clean" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
+                    c.status === "error" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
+                    "bg-muted text-muted-foreground"
+                  }`}>{dropStatusLabel(c.status)}</Badge>
+                  {c.resultJson?.fileCount != null && (
+                    <span className="text-muted-foreground">{c.resultJson.fileCount} файл(ов), {fmtBytes(c.resultJson.totalBytes)}</span>
+                  )}
+                </div>
+                {c.errorMessage && <p className="text-[11px] text-red-600 dark:text-red-400 break-words">{c.errorMessage}</p>}
+                {c.status === "matched" && c.matchedTitle && (
+                  <p className="text-[11px] text-muted-foreground">Найдено: {c.matchedTitle}{c.matchedArtist ? ` (${c.matchedArtist})` : ""}</p>
+                )}
+                {c.resultJson?.verdictNote && (
+                  <p className="text-[11px] text-muted-foreground">Заметка: {c.resultJson.verdictNote}</p>
+                )}
+
+                {/* Ручная фиксация вердикта доступна только пока ждём ответ или после ошибки */}
+                {c.status !== "error" && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[11px] text-muted-foreground mr-1">Вердикт ACRCloud:</span>
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
+                      disabled={verdict.isPending}
+                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "unique" })}
+                    >
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />Уникально
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
+                      disabled={verdict.isPending}
+                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "duplicate" })}
+                    >
+                      <XCircle className="h-3 w-3 text-red-600" />Дубликат
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
+                      disabled={verdict.isPending}
+                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "processing" })}
+                    >
+                      <Loader2 className="h-3 w-3" />В обработке
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

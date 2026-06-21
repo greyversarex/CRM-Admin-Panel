@@ -48,6 +48,47 @@ const DEFAULT_PARTY_ID_SENDER = process.env.DDEX_SENDER_PARTY_ID || "PADPIDA-202
 const DEFAULT_PARTY_NAME_SENDER = process.env.DDEX_SENDER_PARTY_NAME || "Tajik Music Distribution";
 const DEFAULT_DEAL_USE_TYPES = ["OnDemandStream", "PermanentDownload"] as const;
 
+/**
+ * Фиксированные значения config для партнёров доставки, «зашитые» в код, чтобы
+ * оператору не нужно было вручную вводить технические параметры (бакет, регион,
+ * DDEX PartyId и т.д.). Значения из таблицы integrations (Настройки → Интеграции)
+ * ВСЕГДА переопределяют эти дефолты — см. getEffectiveIntegrationConfig().
+ * Секреты (ключи доступа) здесь НЕ хранятся — только зашифрованно в
+ * integration_credentials.
+ *
+ * ACRCloud (direct S3 partnership): мы кладём полный DDEX ERN-4.3 пакет
+ * (XML + WAV + cover) в их бакет, ACRCloud добавляет релиз в свою базу
+ * отпечатков для проверки на дубликаты.
+ */
+const PARTNER_DELIVERY_DEFAULTS: Record<string, Record<string, string>> = {
+  acrcloud_ddex: {
+    transport: "s3",
+    region: "us-east-1",
+    bucket: "acrcloud-partners",
+    prefix: "TajikMusic",
+    partyIdSender: "PA-DPIDA-2024053004-T",
+    partyNameSender: "Tajik Music",
+    partyIdRecipient: "PADPIDA2016110503N",
+    partyNameRecipient: "ACRCloud",
+  },
+};
+
+/**
+ * «Эффективный» config интеграции: дефолты из кода (если они есть для данного
+ * кода), поверх которых накладывается config из БД. Значения из БД, введённые
+ * оператором, имеют приоритет; пустые строки/undefined дефолт НЕ затирают.
+ */
+export function getEffectiveIntegrationConfig(
+  code: string,
+  dbConfig: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = { ...(PARTNER_DELIVERY_DEFAULTS[code] ?? {}) };
+  for (const [k, v] of Object.entries(dbConfig ?? {})) {
+    if (v !== null && v !== undefined && String(v).trim() !== "") out[k] = String(v);
+  }
+  return out;
+}
+
 // ── Контекст из БД ───────────────────────────────────────────────────
 
 /**
@@ -236,7 +277,7 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
 
 async function buildPartnerContext(partnerCode: string): Promise<PartnerContext> {
   const integration = await getIntegrationByCode(partnerCode);
-  const cfg = (integration?.config ?? {}) as Record<string, string>;
+  const cfg = getEffectiveIntegrationConfig(partnerCode, integration?.config as Record<string, unknown> | null);
   return {
     code: partnerCode,
     partyIdSender: cfg.partyIdSender || DEFAULT_PARTY_ID_SENDER,
@@ -401,7 +442,7 @@ export async function processMessage(messageId: number): Promise<ProcessMessageR
   }
 
   const integration = await getIntegrationByCode(msg.partnerCode);
-  const cfg = (integration?.config ?? {}) as Record<string, string>;
+  const cfg = getEffectiveIntegrationConfig(msg.partnerCode, integration?.config as Record<string, unknown> | null);
 
   // SAFETY: больше никаких "silent local-fs success".
   // Если интеграция вообще не настроена — fail с понятной ошибкой, чтобы
@@ -503,6 +544,127 @@ export async function processMessage(messageId: number): Promise<ProcessMessageR
     logger.warn({ messageId, batchId: batch.id, err: errorMsg }, "ddex upload failed");
     return { ok: false, messageId, batchId: batch.id, error: errorMsg };
   }
+}
+
+// ── Сервис: ACRCloud Drop (проверка на дубликаты через S3) ───────────
+//
+// Отдельный путь от DSP-доставки: ACRCloud — не магазин, а сервис проверки
+// авторских прав. Мы выкладываем полный DDEX ERN-4.3 пакет (XML + WAV + cover)
+// в их S3-бакет, ACRCloud добавляет релиз в свою базу отпечатков. Поэтому
+// здесь НЕ нужна splits/deal-валидация уровня магазина, НЕ создаются
+// ddex_messages/deliveries и НЕ меняется бизнес-статус релиза. Вердикт
+// («уникально/дубликат») фиксируется отдельно в acr_checks.
+
+export type AcrDropResult = {
+  messageRef: string;
+  batchRef: string;
+  remotePath?: string;
+  uploadedFiles?: string[];
+  fileCount?: number;
+  totalBytes?: number;
+  xmlHash: string;
+};
+
+export async function dropToAcrCloud(releaseId: number): Promise<AcrDropResult> {
+  const PARTNER = "acrcloud_ddex";
+
+  const integration = await getIntegrationByCode(PARTNER);
+  if (!integration) {
+    throw new Error("Интеграция «ACRCloud (DDEX)» не зарегистрирована. Обратитесь к администратору.");
+  }
+  const cfg = getEffectiveIntegrationConfig(PARTNER, integration.config as Record<string, unknown> | null);
+  const credentials = await loadCredentials(integration.id);
+  if (!credentials.access_key_id || !credentials.secret_access_key) {
+    throw new Error("ACRCloud не подключён: введите Access Key ID и Secret Access Key в Настройки → Интеграции.");
+  }
+
+  const release = await buildReleaseContext(releaseId);
+  const partner = await buildPartnerContext(PARTNER);
+
+  // Базовая валидация (без splits): нужен UPC, аудиофайл у КАЖДОГО трека, обложка
+  // и корректные PartyId отправителя/получателя — иначе ACRCloud отклонит пакет.
+  const cover = release.cover;
+  const problems: string[] = [];
+  if (!release.upc) problems.push("у релиза нет UPC");
+  // ACRCloud сверяет каждый трек, а ERN ссылается на ВСЕ треки релиза — поэтому
+  // аудиофайл обязателен у каждого, иначе пакет будет неполным (ResourceList без
+  // соответствующего файла) и проверка на дубли станет недостоверной.
+  if (release.tracks.length === 0) {
+    problems.push("в релизе нет треков");
+  } else {
+    const noAudio = release.tracks.filter((t) => !t.audioFile);
+    if (noAudio.length > 0) {
+      const names = noAudio.map((t) => t.title || `трек №${t.trackNumber}`).join(", ");
+      problems.push(`не ко всем трекам прикреплён аудиофайл (${names})`);
+    }
+  }
+  if (!cover) problems.push("не загружена обложка");
+  if (!partner.partyIdSender) problems.push("не настроен PartyId отправителя");
+  if (!partner.partyIdRecipient) problems.push("не настроен PartyId получателя (ACRCloud)");
+  if (problems.length > 0) {
+    throw new Error(`Релиз не готов к отправке в ACRCloud: ${problems.join("; ")}.`);
+  }
+
+  // Полный ERN 4.3 с дефолтным deal'ом — ACRCloud ожидает структурно полный
+  // NewReleaseMessage, но не коммерчески точные splits.
+  const deal = buildDefaultDeal(release, false);
+  const messageRef = `ACR-${PARTNER}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000).toString(36)}`;
+  const buildInput: BuildErnInput = {
+    release, partner, deal,
+    ernVersion: "4.3",
+    messageType: "NewReleaseMessage",
+    updateIndicator: "OriginalMessage",
+    messageId: messageRef,
+    messageThreadId: messageRef,
+    createdAt: new Date(),
+  };
+  const { xml } = buildErn(buildInput);
+  const xmlHash = createHash("sha256").update(xml).digest("hex");
+
+  const files: TransportFile[] = [
+    { filename: `${messageRef}.xml`, content: { type: "buffer", data: Buffer.from(xml, "utf8") } },
+  ];
+  for (const t of release.tracks) {
+    if (!t.audioFile) continue;
+    files.push({
+      filename: t.audioFile.filename,
+      content: { type: "path", localPath: t.audioFile.source },
+    });
+  }
+  if (cover) {
+    files.push({
+      filename: cover.filename,
+      content: { type: "path", localPath: cover.source },
+    });
+  }
+
+  const transport = getTransport(cfg.transport || "s3");
+  const batchRef = `ACRDROP-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+  const transportCtx = {
+    config: {
+      ...cfg,
+      partnerCode: PARTNER,
+      partyIdSender: partner.partyIdSender,
+      partyIdRecipient: partner.partyIdRecipient,
+    },
+    credentials,
+  };
+
+  const upload = await transport.upload(transportCtx, batchRef, files);
+  logger.info(
+    { releaseId, batchRef, remotePath: upload.remotePath, fileCount: upload.fileCount, totalBytes: upload.totalBytes },
+    "acrcloud drop uploaded",
+  );
+
+  return {
+    messageRef,
+    batchRef,
+    remotePath: upload.remotePath,
+    uploadedFiles: upload.uploadedFiles,
+    fileCount: upload.fileCount,
+    totalBytes: upload.totalBytes,
+    xmlHash,
+  };
 }
 
 // ── Сервис: Ingest Ack ───────────────────────────────────────────────

@@ -11,4 +11,6 @@
 - [Lifecycle status guards atomic](lifecycle-status-guards-atomic.md) — release delete/reopen/takedown/submit must guard source status in the WHERE clause (conditional write), not SELECT-then-mutate-by-id; 0 rows -> 409.
 - [lib/db migrations + concurrency](broma16-migrations-and-concurrency.md) — drizzle journal-tracked migrator (one-shot per DB); for runtime races prefer pg advisory locks / in-process mutex over new constraints.
 - [Generated client params vs server](generated-client-params-vs-server.md) — orval ListXParams (release_id, limit…) may be silently ignored by the Express route; verify server honors a filter before relying on it, and combine filters with scope via and(...).
+- [Integration credentials vs config](integration-credentials-and-config.md) — saveCredentials encrypts EVERY field; partner ServiceDefs list only secret keys, config via PARTNER_DELIVERY_DEFAULTS.
+- [Audit allowlist default-deny](audit-allowlist-default-deny.md) — auditMutation strips fields for entityTypes absent from ENTITY_ALLOWLIST (empty diff); add a Set of non-secret field names.
 - [Broma16 status casing](broma16-status-casing.md) — ROD API returns "OK"/"ok" inconsistently per endpoint; client success check must be case-insensitive or release-types/outlets sync silently fails.

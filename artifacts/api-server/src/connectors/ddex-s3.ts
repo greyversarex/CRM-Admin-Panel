@@ -13,6 +13,7 @@
 
 import type { IConnector, ConnectorContext, ConnectorResult } from "./base";
 import { s3Transport } from "../ddex/transports/s3";
+import { getEffectiveIntegrationConfig } from "../ddex/service";
 
 export function createDdexS3Connector(code: string): IConnector {
   return {
@@ -20,14 +21,13 @@ export function createDdexS3Connector(code: string): IConnector {
     authType: "api_key",
 
     async testConnection(ctx: ConnectorContext): Promise<ConnectorResult> {
-      const transport = (ctx.config.transport as string | undefined) ?? "s3";
+      // Накладываем config из БД на код-дефолты партнёра (bucket/region/prefix
+      // для ACRCloud зашиты в коде), чтобы тест проходил, когда оператор ввёл
+      // только Access Key ID и Secret Access Key.
+      const cfg = getEffectiveIntegrationConfig(code, ctx.config);
+      const transport = cfg.transport || "s3";
       if (transport === "local-fs") {
         return { ok: true, message: "Транспорт local-fs — файлы пишутся в локальную директорию api-server (.ddex-out). Соединение не требуется." };
-      }
-      // Конфиг приходит как Record<string, unknown> — приводим к строкам для транспорта.
-      const cfg: Record<string, string> = {};
-      for (const [k, v] of Object.entries(ctx.config)) {
-        if (v != null) cfg[k] = String(v);
       }
       const r = await s3Transport.test({ config: cfg, credentials: ctx.credentials });
       return { ok: r.ok, message: r.message };

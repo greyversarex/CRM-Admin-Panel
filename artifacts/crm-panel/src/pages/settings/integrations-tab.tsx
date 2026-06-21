@@ -96,6 +96,14 @@ const SERVICES: ServiceDef[] = [
       { key: "host",          label: "Host",          placeholder: "identify-eu-west-1.acrcloud.com" },
     ],
   },
+  {
+    code: "acrcloud_ddex", name: "ACRCloud — проверка на дубли (S3)", category: "analytics", authType: "api_key",
+    description: "Отправка полного релиза (DDEX-пакет: аудио, обложка, метаданные) в хранилище ACRCloud для проверки на дубликаты перед выпуском. Адрес хранилища уже настроен — введите только два ключа доступа, которые выдаёт ACRCloud.",
+    fields: [
+      { key: "access_key_id",     label: "Access Key ID",     required: true, hint: "Ключ доступа к S3-хранилищу от ACRCloud" },
+      { key: "secret_access_key", label: "Secret Access Key", type: "password", required: true, hint: "Секретный ключ доступа к S3-хранилищу от ACRCloud" },
+    ],
+  },
   // Payments
   {
     code: "wise", name: "Wise", category: "payments", authType: "api_key",

@@ -21,7 +21,7 @@ import { z } from "zod";
 import { db, acrChecksTable, releasesTable, tracksTable, rightsConflictsTable, platformSettingsTable, artistsTable, ddexMessagesTable, deliveriesTable, integrationsTable, assetsTable, labelsTable, releaseArtistsTable, releaseDspsTable, type AcrCheckSegment } from "@workspace/db";
 import { eq, desc, and, gte, lte, inArray, sql, count, isNotNull, or, asc } from "drizzle-orm";
 import { getDataScope } from "../lib/auth";
-import { resolveAssetLocalPath } from "../ddex/service";
+import { resolveAssetLocalPath, dropToAcrCloud } from "../ddex/service";
 import * as mm from "music-metadata";
 import { createReadStream } from "node:fs";
 import type { Readable } from "node:stream";
@@ -651,6 +651,128 @@ router.post("/distribution/acr/scan-full", async (req, res): Promise<void> => {
   void auditMutation(req, { action: "acr_scan_full", entityType: "acr_check", entityId: row.id, before: null, after: row });
   void processFullScan(row.id, track.audioUrl, cfg as Required<AcrCloudConfig>, releaseId);
   res.status(202).json(row);
+});
+
+// ── ACRCloud Drop (S3) — отправка полного DDEX-пакета на проверку дублей ────
+//
+// В отличие от acr/scan (быстрый fingerprint через Identify API) здесь мы
+// выкладываем весь релиз (DDEX ERN-4.3 XML + WAV + обложка) в S3-бакет ACRCloud.
+// ACRCloud добавляет релиз в свою базу отпечатков, а вердикт («уникально» /
+// «дубликат») приходит позже вручную — оператор фиксирует его через
+// /distribution/acr/manual-result. Запись ведётся в acr_checks с
+// engine='acrcloud_ddex'. Это НЕ DSP-доставка: бизнес-статус релиза не меняется.
+
+const AcrDropBody = z.object({ releaseId: z.number().int().positive() });
+
+router.post("/distribution/acr/drop", async (req, res): Promise<void> => {
+  const parsed = AcrDropBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+  const { releaseId } = parsed.data;
+  const userId = req.session?.user?.id ?? null;
+
+  const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId));
+  if (!release) { res.status(404).json({ error: "Release not found" }); return; }
+
+  // Без ключей S3 отправлять нечего — отвечаем понятной ошибкой ДО создания
+  // записи, чтобы не плодить пустые error-проверки в истории.
+  const integration = await getIntegrationByCode("acrcloud_ddex");
+  const creds = integration ? await loadCredentials(integration.id) : {};
+  if (!integration || !creds.access_key_id || !creds.secret_access_key) {
+    res.status(400).json({ error: "not_configured", message: "ACRCloud (S3) не подключён: введите Access Key ID и Secret Access Key в Настройки → Интеграции." });
+    return;
+  }
+
+  // Заводим pending-запись заранее, чтобы попытка отправки была видна в истории
+  // даже если загрузка упадёт (тогда переведём её в error).
+  const [row] = await db.insert(acrChecksTable).values({
+    releaseId,
+    engine: "acrcloud_ddex",
+    mode: "ddex_drop",
+    status: "pending",
+    scannedBy: userId,
+  }).returning();
+
+  try {
+    const drop = await dropToAcrCloud(releaseId);
+    const [updated] = await db.update(acrChecksTable).set({
+      resultJson: {
+        kind: "ddex_drop",
+        messageRef: drop.messageRef,
+        batchRef: drop.batchRef,
+        remotePath: drop.remotePath,
+        uploadedFiles: drop.uploadedFiles,
+        fileCount: drop.fileCount,
+        totalBytes: drop.totalBytes,
+        xmlHash: drop.xmlHash,
+      },
+    }).where(eq(acrChecksTable.id, row.id)).returning();
+    void auditMutation(req, { action: "acr_drop", entityType: "acr_check", entityId: row.id, before: row, after: updated });
+    res.status(202).json(updated);
+  } catch (e) {
+    const message = (e as Error).message;
+    const [updated] = await db.update(acrChecksTable).set({
+      status: "error",
+      errorMessage: message.slice(0, 1000),
+    }).where(eq(acrChecksTable.id, row.id)).returning();
+    void auditMutation(req, { action: "acr_drop", entityType: "acr_check", entityId: row.id, before: row, after: updated });
+    logger.warn({ releaseId, err: message }, "acrcloud drop failed");
+    res.status(422).json({ ...updated, error: "drop_failed", message });
+  }
+});
+
+// ── ACRCloud Drop — ручная фиксация вердикта ───────────────────────────────
+//
+// Вердикт ACRCloud по S3-проверке приходит вручную (через их интерфейс/почту).
+// Оператор переносит его в систему: «уникально» → clean, «дубликат» → matched,
+// «в обработке» → pending. Для дубликата можно указать найденный трек/исполнителя.
+
+const AcrManualResultBody = z.object({
+  checkId: z.number().int().positive(),
+  verdict: z.enum(["unique", "duplicate", "processing"]),
+  matchedTitle: z.string().trim().max(500).optional(),
+  matchedArtist: z.string().trim().max(500).optional(),
+  matchedIsrc: z.string().trim().max(50).optional(),
+  note: z.string().trim().max(2000).optional(),
+});
+
+router.post("/distribution/acr/manual-result", async (req, res): Promise<void> => {
+  const parsed = AcrManualResultBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+  const { checkId, verdict, matchedTitle, matchedArtist, matchedIsrc, note } = parsed.data;
+  const userId = req.session?.user?.id ?? null;
+
+  const [check] = await db.select().from(acrChecksTable).where(eq(acrChecksTable.id, checkId));
+  if (!check) { res.status(404).json({ error: "Check not found" }); return; }
+  if (check.engine !== "acrcloud_ddex") {
+    res.status(409).json({ error: "wrong_engine", message: "Ручной вердикт доступен только для проверок ACRCloud (S3)." });
+    return;
+  }
+
+  const status = verdict === "unique" ? "clean" : verdict === "duplicate" ? "matched" : "pending";
+  const prevResult = (check.resultJson ?? {}) as Record<string, unknown>;
+  const [updated] = await db.update(acrChecksTable).set({
+    status,
+    matchedTitle: verdict === "duplicate" ? (matchedTitle ?? null) : null,
+    matchedArtist: verdict === "duplicate" ? (matchedArtist ?? null) : null,
+    matchedIsrc: verdict === "duplicate" ? (matchedIsrc ?? null) : null,
+    errorMessage: null,
+    resultJson: {
+      ...prevResult,
+      manualVerdict: verdict,
+      verdictNote: note ?? null,
+      verdictBy: userId,
+      verdictAt: new Date().toISOString(),
+    },
+  }).where(eq(acrChecksTable.id, checkId)).returning();
+  void auditMutation(req, { action: "acr_manual_result", entityType: "acr_check", entityId: checkId, before: check, after: updated });
+
+  // Вердикт ACRCloud влияет на риск-оценку релиза — пересчитываем её.
+  if (updated.releaseId) {
+    try { await assessAndPersist(updated.releaseId); }
+    catch (e) { logger.warn({ releaseId: updated.releaseId, err: (e as Error).message }, "risk reassess after acr verdict failed"); }
+  }
+
+  res.json(updated);
 });
 
 // ── MusicBrainz ISRC validator ────────────────────────────────────────────

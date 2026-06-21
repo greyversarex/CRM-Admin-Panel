@@ -67,6 +67,14 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
     "insertedRows", "unmatchedRows", "totalRevenue", "currency",
     "idempotencyKey", "createdAt",
   ]),
+  // ACR-проверки (fingerprint Identify + полная S3-проверка на дубли). Важно для
+  // compliance: кто и какой вердикт по возможному дубликату зафиксировал.
+  acr_check: new Set([
+    "id", "releaseId", "trackId", "engine", "mode", "status",
+    "matchedTitle", "matchedArtist", "matchedIsrc", "confidence",
+    "errorMessage", "scannedBy", "scannedAt", "resultJson",
+    "createdAt", "updatedAt",
+  ]),
   // Ручное сопоставление unmatched-строки с треком: критично знать, кто
   // и какую сумму отнёс к какому треку (audit trail для финансовой претензии).
   ingestion_unmatched: new Set([
@@ -227,7 +235,7 @@ export type AuditAction =
   | "approve_l1" | "approve_l2"
   | "send"
   | "bulk_edit"
-  | "acr_scan" | "acr_scan_full" | "musicbrainz_isrc_check"
+  | "acr_scan" | "acr_scan_full" | "acr_drop" | "acr_manual_result" | "musicbrainz_isrc_check"
   | "resolve" | "reopen"
   | "import"
   | "pro_register" | "pro_register_failed" | "pro_register_network_error";
