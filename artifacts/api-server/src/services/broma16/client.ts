@@ -237,7 +237,7 @@ export class Broma16Client {
       const msg = typeof payload.message === "string" ? payload.message : `HTTP ${res.status}`;
       throw new Broma16ApiError(res.status, `Broma16: ${msg}`);
     }
-    if (payload.status && payload.status !== "ok") {
+    if (payload.status && String(payload.status).toLowerCase() !== "ok") {
       const msg = typeof payload.message === "string" ? payload.message : "Broma16 вернул статус != ok";
       throw new Broma16ApiError(res.status, msg);
     }
