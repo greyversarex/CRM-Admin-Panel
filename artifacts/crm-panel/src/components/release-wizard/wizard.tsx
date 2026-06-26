@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetRelease, useCreateRelease, useUpdateRelease,
   useListArtists, useListLabels,
@@ -37,7 +37,7 @@ import { RELEASE_TYPES, GENRES, SUBGENRES, LANGS, COUNTRIES, STEPS, type StepKey
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import { MultiArtistPicker } from "./multi-artist-picker";
-import { DspPickerDialog } from "./dsp-picker";
+import { OutletPickerDialog } from "./dsp-picker";
 import { TrackCard } from "./track-card";
 import { useLang } from "@/lib/i18n";
 
@@ -97,8 +97,17 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
     releaseId ? { release_id: releaseId } : undefined,
     { query: { enabled: releaseId != null } as never },
   );
-  const { data: serverDsps = [] } = useGetReleaseDsps(releaseId!, {
-    query: { enabled: releaseId != null } as never,
+  // Витрины Broma16 (словарь outlet) — выбираются в мастере и сохраняются в
+  // release.broma16DistributionOutlets (пушер передаёт их в Broma16). Это НЕ
+  // release_dsps (прямая DDEX-доставка): отдельный список и отдельный эндпоинт.
+  const { data: serverDsps = [] } = useQuery<string[]>({
+    queryKey: ["release-outlets", releaseId],
+    queryFn: async () => {
+      const res = await fetch(`/api/releases/${releaseId}/distribution-outlets`, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as string[];
+    },
+    enabled: releaseId != null,
   });
   const { data: serverArtists = [] } = useGetReleaseArtists(releaseId!, {
     query: { enabled: releaseId != null } as never,
@@ -163,7 +172,6 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
 
   const createRelease = useCreateRelease();
   const updateRelease = useUpdateRelease();
-  const updateDsps = useUpdateReleaseDsps();
   const updateArtists = useUpdateReleaseArtists();
   const createTrack = useCreateTrack();
   const validate = useValidateReleaseForSubmission();
@@ -179,6 +187,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
     qc.invalidateQueries({ queryKey: getListTracksQueryKey({ release_id: id }) });
     qc.invalidateQueries({ queryKey: getGetReleaseArtistsQueryKey(id) });
     qc.invalidateQueries({ queryKey: getGetReleaseDspsQueryKey(id) });
+    qc.invalidateQueries({ queryKey: ["release-outlets", id] });
   };
 
   // ── STEP 1 SAVE: create or update + sync artists list ──
@@ -268,8 +277,19 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
           cLineYear: form.cLineYear ?? null,
         } as any,
       });
-      // 2. Сохраняем выбор площадок.
-      await updateDsps.mutateAsync({ id: releaseId, data: { dsps } });
+      // 2. Сохраняем выбор витрин Broma16 в release.broma16DistributionOutlets.
+      {
+        const res = await fetch(`/api/releases/${releaseId}/distribution-outlets`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ outlets: dsps }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error((j as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
+      }
       invalidateAll(releaseId);
       return true;
     } catch (e: any) {
@@ -421,8 +441,8 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
           <ChevronLeft className="h-4 w-4 mr-1" /> {t.releaseWizard.back}
         </Button>
         {step !== "submission" ? (
-          <Button onClick={goNext} disabled={createRelease.isPending || updateRelease.isPending || updateDsps.isPending}>
-            {(createRelease.isPending || updateRelease.isPending || updateDsps.isPending)
+          <Button onClick={goNext} disabled={createRelease.isPending || updateRelease.isPending}>
+            {(createRelease.isPending || updateRelease.isPending)
               ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {t.releaseWizard.saving}</>
               : <>{t.releaseWizard.next} <ChevronRight className="h-4 w-4 ml-1" /></>}
           </Button>
@@ -1012,6 +1032,9 @@ function Step3Delivery({
 }) {
   const { t } = useLang();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Карта код→название витрины Broma16, чтобы показывать читаемые имена в чипах.
+  const { options: outletOptions } = useCatalogOptions("outlet", { valueKey: "code" });
+  const labelForOutlet = (code: string) => outletOptions.find((o) => o.value === code)?.label ?? code;
 
   // Режим: World (одна запись "WW") vs Custom (список ISO-кодов).
   const isWorld = territories.length === 1 && territories[0] === "WW";
@@ -1040,7 +1063,7 @@ function Step3Delivery({
             <div className="space-y-3">
               <div className="flex flex-wrap gap-1.5">
                 {dsps.map((c) => (
-                  <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
+                  <Badge key={c} variant="secondary" className="text-xs">{labelForOutlet(c)}</Badge>
                 ))}
               </div>
               <Button variant="outline" onClick={() => setPickerOpen(true)}>
@@ -1106,7 +1129,7 @@ function Step3Delivery({
         </CardContent>
       </Card>
 
-      <DspPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={dsps} onChange={setDsps} />
+      <OutletPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={dsps} onChange={setDsps} />
     </div>
   );
 }

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NewReleaseMessage xmlns:ern="http://ddex.net/xml/ern/43" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" MessageSchemaVersionId="ern/43" LanguageAndScriptCode="en">
+  <MessageHeader>
+    <MessageThreadId>ACR-acrcloud_ddex-mqvjfv3o-ln</MessageThreadId>
+    <MessageId>ACR-acrcloud_ddex-mqvjfv3o-ln</MessageId>
+    <MessageSender>
+      <PartyId>PA-DPIDA-2024053004-T</PartyId>
+      <PartyName>
+        <FullName>Tajik Music</FullName>
+      </PartyName>
+    </MessageSender>
+    <MessageRecipient>
+      <PartyId>PADPIDA2016110503N</PartyId>
+      <PartyName>
+        <FullName>ACRCloud</FullName>
+      </PartyName>
+    </MessageRecipient>
+    <MessageCreatedDateTime>2026-06-26T23:04:15.156Z</MessageCreatedDateTime>
+    <MessageControlType>OriginalMessage</MessageControlType>
+  </MessageHeader>
+  <PartyList>
+    <Party>
+      <PartyReference>P_MAIN_ARTIST</PartyReference>
+      <PartyName>
+        <FullName>Daler Nazarov</FullName>
+      </PartyName>
+    </Party>
+  </PartyList>
+  <ResourceList>
+    <SoundRecording>
+      <ResourceReference>A1</ResourceReference>
+      <Type>MusicalWorkSoundRecording</Type>
+      <ResourceId>
+        <ISRC>TJXXX2600001</ISRC>
+      </ResourceId>
+      <DisplayTitleText>Test Track</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Test Track</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <Duration>PT6S</Duration>
+      <LanguageOfPerformance>tajik</LanguageOfPerformance>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <Genre>
+        <GenreText>Pop</GenreText>
+      </Genre>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_A1</TechnicalResourceDetailsReference>
+        <AudioCodecType>WAV</AudioCodecType>
+        <BitsPerSample>16</BitsPerSample>
+        <SamplingRate UnitOfMeasure="kHz">44.1</SamplingRate>
+        <NumberOfChannels>2</NumberOfChannels>
+        <File>
+          <URI>TJXXX2600001.wav</URI>
+          <HashSum>
+            <HashSum>5f04e6a3c8e5c97e2197e5f242bd57e853bc558f</HashSum>
+            <HashSumAlgorithmType>SHA1</HashSumAlgorithmType>
+          </HashSum>
+        </File>
+      </TechnicalDetails>
+    </SoundRecording>
+    <Image>
+      <ResourceReference>IMG_COVER</ResourceReference>
+      <Type>FrontCoverImage</Type>
+      <ResourceId>
+        <ProprietaryId Namespace="TJM">COVER-1234567890123</ProprietaryId>
+      </ResourceId>
+      <TechnicalDetails>
+        <TechnicalResourceDetailsReference>T_IMG</TechnicalResourceDetailsReference>
+        <File>
+          <URI>cover_1234567890123.jpg</URI>
+          <HashSum>
+            <HashSum>ec89aa82245e254b0362f27c06183a4d7905abd7</HashSum>
+            <HashSumAlgorithmType>SHA1</HashSumAlgorithmType>
+          </HashSum>
+        </File>
+      </TechnicalDetails>
+    </Image>
+  </ResourceList>
+  <ReleaseList>
+    <Release>
+      <ReleaseReference>R0</ReleaseReference>
+      <ReleaseType>Single</ReleaseType>
+      <ReleaseId>
+        <ICPN isEan="false">1234567890123</ICPN>
+      </ReleaseId>
+      <DisplayTitleText>Test Release ACRCloud</DisplayTitleText>
+      <DisplayTitle>
+        <TitleText>Test Release ACRCloud</TitleText>
+      </DisplayTitle>
+      <DisplayArtist SequenceNumber="1">
+        <ArtistPartyReference>P_MAIN_ARTIST</ArtistPartyReference>
+        <DisplayArtistRole>MainArtist</DisplayArtistRole>
+      </DisplayArtist>
+      <Genre>
+        <GenreText>Pop</GenreText>
+      </Genre>
+      <ParentalWarningType>NotExplicit</ParentalWarningType>
+      <OriginalReleaseDate>2026-07-01</OriginalReleaseDate>
+      <OriginalDigitalReleaseDate>2026-07-01</OriginalDigitalReleaseDate>
+      <PLine>
+        <Year>2026</Year>
+        <PLineText>2026 Tajik Music</PLineText>
+      </PLine>
+      <CLine>
+        <Year>2026</Year>
+        <CLineText>2026 Tajik Music</CLineText>
+      </CLine>
+      <ResourceGroup>
+        <Title>
+          <TitleText>Test Release ACRCloud</TitleText>
+        </Title>
+        <ResourceGroupContentItem>
+          <SequenceNumber>1</SequenceNumber>
+          <ReleaseResourceReference>A1</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+        <ResourceGroupContentItem>
+          <ReleaseResourceReference>IMG_COVER</ReleaseResourceReference>
+        </ResourceGroupContentItem>
+      </ResourceGroup>
+    </Release>
+  </ReleaseList>
+  <DealList>
+    <ReleaseDeal>
+      <DealReleaseReference>R0</DealReleaseReference>
+      <Deal>
+        <DealTerms>
+          <CommercialModelType>SubscriptionModel</CommercialModelType>
+          <Usage>
+            <UseType>OnDemandStream</UseType>
+          </Usage>
+          <Usage>
+            <UseType>PermanentDownload</UseType>
+          </Usage>
+          <TerritoryCode>Worldwide</TerritoryCode>
+          <ValidityPeriod>
+            <StartDate>2026-07-01</StartDate>
+          </ValidityPeriod>
+        </DealTerms>
+      </Deal>
+    </ReleaseDeal>
+  </DealList>
+</NewReleaseMessage>

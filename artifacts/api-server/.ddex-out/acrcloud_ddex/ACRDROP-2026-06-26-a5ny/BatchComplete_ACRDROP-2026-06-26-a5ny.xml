@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ftp:FtpAcknowledgementMessage xmlns:ftp="http://ddex.net/xml/ftp/41" MessageSchemaVersionId="ftp/41">
+  <MessageHeader>
+    <MessageId>BC-ACRDROP-2026-06-26-a5ny</MessageId>
+    <MessageSender><PartyId>PA-DPIDA-2024053004-T</PartyId></MessageSender>
+    <MessageRecipient><PartyId>PADPIDA2016110503N</PartyId></MessageRecipient>
+    <MessageCreatedDateTime>2026-06-26T23:04:15.182Z</MessageCreatedDateTime>
+  </MessageHeader>
+  <BatchInformation>
+    <BatchId>ACRDROP-2026-06-26-a5ny</BatchId>
+    <NumberOfFiles>3</NumberOfFiles>
+    <FileName>ACR-acrcloud_ddex-mqvjfv3o-ln.xml</FileName>
+    <FileName>TJXXX2600001.wav</FileName>
+    <FileName>cover_1234567890123.jpg</FileName>
+  </BatchInformation>
+</ftp:FtpAcknowledgementMessage>

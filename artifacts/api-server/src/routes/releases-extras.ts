@@ -13,6 +13,7 @@ import {
 import { getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
+import { getDictionary } from "../services/broma16/dictionaries";
 
 const router = Router();
 
@@ -249,6 +250,58 @@ router.put("/releases/:id/dsps", async (req, res): Promise<void> => {
   res.json(codes);
 });
 
+// ─── Broma16 distribution outlets (словарь outlet) ───────────────────────────
+// Витрины Broma16 (~39 шт, включая локальные площадки вроде TCell). В ОТЛИЧИЕ
+// от /dsps (release_dsps → прямая DDEX-доставка) это коды витрин Broma16,
+// которые сохраняются в release.broma16DistributionOutlets и передаются в
+// Broma16 при пуше (resolveOutletCodes/Шаг 8 в release-pusher.ts). Выбираются
+// в мастере создания релиза.
+router.get("/releases/:id/distribution-outlets", async (req, res): Promise<void> => {
+  const r = await loadReleaseInScope(req, req.params.id);
+  if (r.status !== 200) { res.status(r.status).json({ error: "Forbidden or not found" }); return; }
+  res.json(r.release!.broma16DistributionOutlets ?? []);
+});
+
+router.put("/releases/:id/distribution-outlets", async (req, res): Promise<void> => {
+  const r = await loadReleaseInScope(req, req.params.id);
+  if (r.status !== 200) { res.status(r.status).json({ error: "Forbidden or not found" }); return; }
+  const release = r.release!;
+
+  const scope = getDataScope(req);
+  const lockReason = releaseEditableReason(scope, release.status);
+  if (lockReason) { res.status(409).json({ error: lockReason }); return; }
+
+  const parsed = z.object({ outlets: z.array(z.string()) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const codes = Array.from(new Set(parsed.data.outlets.map((s) => s.trim()).filter(Boolean)));
+
+  // Валидируем против словаря Broma16 outlet: нельзя сохранять код, которого нет
+  // в справочнике, иначе Broma16 отвергнет distribution при пуше.
+  if (codes.length > 0) {
+    const dict = await getDictionary("outlet");
+    if (dict.length > 0) {
+      const valid = new Set<string>();
+      for (const d of dict) { if (d.code) valid.add(d.code); valid.add(d.externalId); }
+      const unknown = codes.filter((c) => !valid.has(c));
+      if (unknown.length > 0) {
+        res.status(400).json({ error: `Неизвестные коды витрин Broma16: ${unknown.join(", ")}` });
+        return;
+      }
+    }
+  }
+
+  await db.update(releasesTable)
+    .set({ broma16DistributionOutlets: codes })
+    .where(eq(releasesTable.id, release.id));
+
+  void auditMutation(req, {
+    action: "update", entityType: "release", entityId: release.id,
+    before: { broma16DistributionOutlets: "previous list" }, after: { broma16DistributionOutlets: codes },
+  });
+
+  res.json(codes);
+});
+
 // ─── Submission validation (dry-run) ────────────────────────────────────────
 type Issue = { section: "release" | "tracks" | "delivery" | "contributors"; field?: string | null; message: string; severity: "error" | "warning" };
 
@@ -355,9 +408,12 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
   }
 
   // ── Delivery ──
-  const dsps = await db.select().from(releaseDspsTable).where(eq(releaseDspsTable.releaseId, release.id));
-  if (dsps.length === 0) {
-    issues.push({ section: "delivery", message: "Выберите хотя бы одну DSP-площадку", severity: "error" });
+  // Витрины выбираются в мастере и хранятся в release.broma16DistributionOutlets
+  // (Broma16 = единственный канал доставки в этом продукте). Раньше проверялся
+  // release_dsps (прямая DDEX-доставка) — но мастер туда больше не пишет.
+  const outlets = (release.broma16DistributionOutlets as string[] | null) ?? [];
+  if (outlets.length === 0) {
+    issues.push({ section: "delivery", message: "Выберите хотя бы одну витрину для дистрибуции", severity: "error" });
   }
   if (!release.territories || (release.territories as string[]).length === 0) {
     issues.push({ section: "delivery", field: "territories", message: "Выберите территории распространения", severity: "error" });

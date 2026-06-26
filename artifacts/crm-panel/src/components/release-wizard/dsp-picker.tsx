@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Search, LayoutGrid, List, HelpCircle, Globe } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { useLang } from "@/lib/i18n";
+import { useCatalogOptions } from "./use-catalog";
 
 const CATEGORY_ORDER = ["streaming", "download", "video", "social", "fingerprinting"];
 
@@ -241,6 +242,119 @@ export function DspPickerDialog({
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <DspPickerInline value={draft} onChange={setDraft} />
+        </div>
+        <DialogFooter className="px-6 py-4 border-t border-border/40">
+          <Button variant="outline" onClick={cancel}>{t.createRelease.cancel}</Button>
+          <Button onClick={apply}>{t.createRelease.save}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Выбор витрин дистрибуции из словаря Broma16 (outlet, ~39 шт), включая
+ * локальные площадки Таджикистана (TCell и др.). В ОТЛИЧИЕ от DspPicker
+ * (каталог dsp_catalog → release_dsps, прямая DDEX-доставка) — здесь коды
+ * витрин Broma16, которые сохраняются в release.broma16DistributionOutlets и
+ * передаются в Broma16 при пуше. Контролируемый: value/onChange — коды витрин.
+ */
+export function OutletPickerInline({
+  value, onChange,
+}: {
+  value: string[];
+  onChange: (codes: string[]) => void;
+}) {
+  const { t } = useLang();
+  const { options, isLoading, fromBroma16 } = useCatalogOptions("outlet", { valueKey: "code" });
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? options.filter((o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
+      : options;
+  }, [options, query]);
+
+  const allCodes = useMemo(() => options.map((o) => o.value), [options]);
+  const allSelected = allCodes.length > 0 && allCodes.every((c) => value.includes(c));
+  const toggle = (code: string) =>
+    onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
+  const toggleAll = () =>
+    onChange(allSelected ? value.filter((c) => !allCodes.includes(c)) : Array.from(new Set([...value, ...allCodes])));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <button type="button" onClick={toggleAll} className="inline-flex items-center gap-2 text-sm">
+          <Checkbox checked={allSelected} className="pointer-events-none" />
+          <span>
+            <span className="font-semibold text-primary">{allSelected ? t.releaseWizard.allLabel : value.length}</span>{" "}
+            {t.releaseWizard.partnersSelectedLabel}
+          </span>
+        </button>
+        {!fromBroma16 && !isLoading && (
+          <span className="text-[11px] text-muted-foreground">{t.releaseWizard.noPartnersFound}</span>
+        )}
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder={t.releaseWizard.searchPartners} className="pl-9 bg-background/40"
+          value={query} onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="text-center text-sm text-muted-foreground py-8">…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {filtered.map((o) => {
+            const checked = value.includes(o.value);
+            return (
+              <button
+                key={o.value} type="button" onClick={() => toggle(o.value)}
+                className={`flex items-center gap-2.5 p-2.5 rounded-md border text-left transition w-full ${checked ? "bg-primary/5 border-primary/40" : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
+              >
+                <Checkbox checked={checked} className="pointer-events-none shrink-0" />
+                <span className="text-sm truncate flex-1">{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Витрины Broma16 — модальная обёртка (мастер создания релиза). */
+export function OutletPickerDialog({
+  open, onOpenChange, value, onChange,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  value: string[];
+  onChange: (codes: string[]) => void;
+}) {
+  const { t } = useLang();
+  const [draft, setDraft] = useState<string[]>(value);
+  useEffect(() => {
+    if (open) setDraft(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, value.join(",")]);
+  const apply = () => { onChange(draft); onOpenChange(false); };
+  const cancel = () => { setDraft(value); onOpenChange(false); };
+  return (
+    <Dialog open={open} onOpenChange={(b) => { if (!b) cancel(); }}>
+      <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
+          <DialogTitle className="text-lg">{t.releaseWizard.partnerSelection}</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <OutletPickerInline value={draft} onChange={setDraft} />
         </div>
         <DialogFooter className="px-6 py-4 border-t border-border/40">
           <Button variant="outline" onClick={cancel}>{t.createRelease.cancel}</Button>
