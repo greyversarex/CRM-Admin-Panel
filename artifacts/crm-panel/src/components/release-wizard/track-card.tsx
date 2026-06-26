@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronDown, ChevronUp, Trash2, Music2, Save, Wand2, Upload, Loader2 } from "lucide-react";
 import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "./types";
+import { useCatalogOptions } from "./use-catalog";
+import { DictionaryCombobox } from "./dictionary-combobox";
 import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
   splitWriterSharesEvenly,
@@ -115,6 +117,17 @@ export function TrackCard({
 
   const subgenresFor = draft.genre ? (SUBGENRES[draft.genre] ?? []) : [];
 
+  // Справочники Broma16 для метаданных трека (с запасными курируемыми списками).
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
+  const countryOpts = useCatalogOptions("country", {
+    valueKey: "code",
+    fallback: COUNTRIES.map((c) => ({ value: c.code, label: c.name })),
+  });
+  const subgenreOpts = genreOpts.fromBroma16
+    ? genreOpts.options
+    : subgenresFor.map((s) => ({ value: s, label: s }));
+
   return (
     <Card className="bg-card/40 border-border/50">
       {/* Заголовок: номер + название + аудио + раскрывашка */}
@@ -213,28 +226,37 @@ export function TrackCard({
           {/* Жанр / Язык / Country / AI / Audio Style / Explicit */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <Field label={t.createRelease.genre}>
-              <Select value={draft.genre ?? ""} onValueChange={(v) => set("genre", v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder={t.releaseWizard.selectPlaceholder} /></SelectTrigger>
-                <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={draft.genre ?? ""}
+                onChange={(v) => { set("genre", v); if (!genreOpts.fromBroma16) set("subgenre", null); }}
+                options={genreOpts.options}
+                placeholder={t.releaseWizard.selectPlaceholder}
+              />
             </Field>
             <Field label={t.releaseWizard.subgenre}>
-              <Select value={draft.subgenre ?? ""} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>{subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={draft.subgenre ?? ""}
+                onChange={(v) => set("subgenre", v)}
+                options={subgenreOpts}
+                placeholder="—"
+                disabled={subgenreOpts.length === 0}
+              />
             </Field>
             <Field label={t.createRelease.metadataLanguage}>
-              <Select value={draft.language ?? ""} onValueChange={(v) => set("language", v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-                <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={draft.language ?? ""}
+                onChange={(v) => set("language", v)}
+                options={langOpts.options}
+                placeholder={t.releaseWizard.selectPlaceholder}
+              />
             </Field>
             <Field label={t.releaseWizard.countryOfRecording}>
-              <Select value={draft.countryOfRecording ?? ""} onValueChange={(v) => set("countryOfRecording", v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={draft.countryOfRecording ?? ""}
+                onChange={(v) => set("countryOfRecording", v)}
+                options={countryOpts.options}
+                placeholder="—"
+              />
             </Field>
             <Field label={t.releaseWizard.audioStyleLabel}>
               <Select value={draft.audioStyle ?? ""} onValueChange={(v) => set("audioStyle", v as Track["audioStyle"])}>
@@ -270,10 +292,12 @@ export function TrackCard({
             </Field>
             {draft.audioStyle === "vocal" && (
               <Field label={t.releaseWizard.vocalLanguage}>
-                <Select value={draft.vocalLanguage ?? ""} onValueChange={(v) => set("vocalLanguage", v)}>
-                  <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>{LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}</SelectContent>
-                </Select>
+                <DictionaryCombobox
+                  value={draft.vocalLanguage ?? ""}
+                  onChange={(v) => set("vocalLanguage", v)}
+                  options={langOpts.options}
+                  placeholder="—"
+                />
               </Field>
             )}
           </div>

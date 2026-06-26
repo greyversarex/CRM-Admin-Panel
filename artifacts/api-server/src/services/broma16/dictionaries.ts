@@ -48,10 +48,13 @@ function pickString(item: RawItem, keys: string[]): string | null {
 function normalizeItem(item: RawItem): { externalId: string; code: string | null; name: string } | null {
   const id = pickString(item, ["id", "value", "external_id"]);
   const code = pickString(item, ["code", "slug", "alias", "key"]);
-  const name = pickString(item, ["name", "title", "label", "value"]);
+  // Broma16 отдаёт человекочитаемые названия в title_ru/title_en/title
+  // (UI русскоязычный → предпочитаем title_ru). Старый разбор брал только
+  // name/title и для жанров/языков/стран ронял name в числовой id.
+  const name = pickString(item, ["title_ru", "title_en", "title", "name", "label", "title_native", "value"]);
   const externalId = id ?? code;
   if (!externalId) return null;
-  return { externalId, code, name: name ?? externalId };
+  return { externalId, code, name: name ?? code ?? externalId };
 }
 
 /** Синхронизирует один словарь. Возвращает количество записей. */
@@ -172,17 +175,23 @@ export async function resolveReleaseTypeId(ourType: string | null | undefined): 
   return RELEASE_TYPE_FALLBACK[key] ?? RELEASE_TYPE_FALLBACK.single;
 }
 
-/** Канонизирует названия жанров по словарю (если он есть). */
+/** Канонизирует жанры к коду Broma16 (его ожидает API в поле genres).
+ *  На вход принимает код, название или id — на выходе всегда код словаря. */
 export async function resolveGenres(names: string[]): Promise<string[]> {
   const input = (names ?? []).map((n) => n.trim()).filter(Boolean);
   if (input.length === 0) return [];
   const dict = await getDictionary("genre");
   if (dict.length === 0) return Array.from(new Set(input));
-  const byName = new Map(dict.map((d) => [norm(d.name), d.name]));
+  const byKey = new Map<string, string>();
+  for (const d of dict) {
+    const canon = d.code ?? d.name;
+    if (d.code) byKey.set(norm(d.code), canon);
+    byKey.set(norm(d.name), canon);
+    byKey.set(norm(d.externalId), canon);
+  }
   const out: string[] = [];
   for (const g of input) {
-    const canon = byName.get(norm(g));
-    out.push(canon ?? g);
+    out.push(byKey.get(norm(g)) ?? g);
   }
   return Array.from(new Set(out));
 }
@@ -224,6 +233,13 @@ export async function resolveLanguageId(code?: string | null): Promise<number> {
   const dict = await getDictionary("language");
   if (dict.length === 0) return 1;
   const key = norm(code ?? "en");
+  // Сначала — точное совпадение по названию/коду словаря (так значение, выбранное
+  // в форме прямо из словаря Broma16, маппится в его id без эвристик).
+  const exact = dict.find((d) => norm(d.name) === key || (d.code ? norm(d.code) === key : false));
+  if (exact) {
+    const id = Number(exact.externalId);
+    if (Number.isFinite(id)) return id;
+  }
   const hints = LANGUAGE_NAME_HINTS[key] ?? [key];
   const match = dict.find((d) => hints.some((h) => norm(d.name).includes(h)));
   if (match) {

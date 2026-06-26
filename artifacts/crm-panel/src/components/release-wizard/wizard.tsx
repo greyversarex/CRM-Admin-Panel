@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 
 import { RELEASE_TYPES, GENRES, SUBGENRES, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
+import { useCatalogOptions } from "./use-catalog";
+import { DictionaryCombobox } from "./dictionary-combobox";
 import { MultiArtistPicker } from "./multi-artist-picker";
 import { DspPickerDialog } from "./dsp-picker";
 import { TrackCard } from "./track-card";
@@ -588,7 +590,24 @@ function Step1Details({
 
   const myArtist = artistsData?.data?.find((a: any) => a.id === user?.artistId);
   const myLabel  = labelsData?.data?.find((l: any) => l.id === user?.labelId);
+
+  // Справочники Broma16: жанры и языки тянутся из интеграции (с запасным
+  // курируемым списком, пока словарь не синхронизирован).
+  const genreOpts = useCatalogOptions("genre", {
+    valueKey: "code",
+    fallback: GENRES.map((g) => ({ value: g, label: g })),
+  });
+  const langOpts = useCatalogOptions("language", {
+    valueKey: "code",
+    fallback: LANGS.map((l) => ({ value: l.value, label: l.label })),
+  });
+  // Поджанр: в Broma16 нет отдельного справочника поджанров — это второй
+  // (необязательный) жанр из того же списка. Пока словарь пуст, оставляем
+  // прежние курируемые поджанры.
   const subgenresFor = form.genre ? (SUBGENRES[form.genre] ?? []) : [];
+  const subgenreOpts = genreOpts.fromBroma16
+    ? genreOpts.options
+    : subgenresFor.map((s) => ({ value: s, label: s }));
 
   // Синхронизируем form.artistId с primary артистом из multi-picker.
   useEffect(() => {
@@ -664,12 +683,12 @@ function Step1Details({
           </div>
           <div className="space-y-1.5">
             <FieldLabel className="text-xs text-muted-foreground">{t.createRelease.metadataLanguage}</FieldLabel>
-            <Select value={form.language} onValueChange={(v) => set("language", v)}>
-              <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <DictionaryCombobox
+              value={form.language}
+              onChange={(v) => set("language", v)}
+              options={langOpts.options}
+              placeholder={t.createRelease.pleaseSelect}
+            />
           </div>
         </div>
 
@@ -741,25 +760,22 @@ function Step1Details({
           </div>
           <div className="space-y-1.5">
             <FieldLabel className="text-xs text-muted-foreground">{t.createRelease.genre}</FieldLabel>
-            <Select value={form.genre} onValueChange={(v) => { set("genre", v); set("subgenre", ""); }}>
-              <SelectTrigger className="bg-background/40 h-10">
-                <SelectValue placeholder={t.createRelease.pleaseSelect} />
-              </SelectTrigger>
-              <SelectContent>
-                {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <DictionaryCombobox
+              value={form.genre}
+              onChange={(v) => { set("genre", v); if (!genreOpts.fromBroma16) set("subgenre", ""); }}
+              options={genreOpts.options}
+              placeholder={t.createRelease.pleaseSelect}
+            />
           </div>
           <div className="space-y-1.5">
             <FieldLabel className="text-xs text-muted-foreground">{t.releaseWizard.subgenre}</FieldLabel>
-            <Select value={form.subgenre} onValueChange={(v) => set("subgenre", v)} disabled={subgenresFor.length === 0}>
-              <SelectTrigger className="bg-background/40 h-10">
-                <SelectValue placeholder={t.createRelease.pleaseSelect} />
-              </SelectTrigger>
-              <SelectContent>
-                {subgenresFor.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <DictionaryCombobox
+              value={form.subgenre}
+              onChange={(v) => set("subgenre", v)}
+              options={subgenreOpts}
+              placeholder={t.createRelease.pleaseSelect}
+              disabled={subgenreOpts.length === 0}
+            />
           </div>
         </div>
 

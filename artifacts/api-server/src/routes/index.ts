@@ -32,6 +32,7 @@ import communicationsRouter from "./communications";
 import automationRouter from "./automation";
 import automationExtrasRouter from "./automation-extras";
 import catalogRouter from "./catalog";
+import catalogDictionaryRouter from "./catalog-dictionary";
 import catalogBulkRouter from "./catalog-bulk";
 import financeExtrasRouter from "./finance-extras";
 import financeExportRouter from "./finance-export";
@@ -84,6 +85,7 @@ router.use(artistsRouter);            // scoped per-route inside
 router.use(labelsRouter);             // GET scoped per-role inside; POST/PUT/DELETE guarded inside
 router.use(releasesRouter);           // scoped per-route inside
 router.use(releasesExtrasRouter);     // /dsp-catalog + /releases/:id/{artists,dsps,validate}
+router.use(catalogDictionaryRouter);  // GET /catalog/dictionary/:type — read-only, все роли (ДО admin-гарда /catalog)
 router.use(releaseFlowRouter);        // Symphonic-flow: /releases/check-upc, /tracks/reusable, reorder, /issues
 router.use(tracksRouter);             // scoped per-route inside
 // Per-route admin guard inside usersRouter so /users/me is accessible to all

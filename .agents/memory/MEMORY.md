@@ -15,3 +15,5 @@
 - [Audit allowlist default-deny](audit-allowlist-default-deny.md) — auditMutation strips fields for entityTypes absent from ENTITY_ALLOWLIST (empty diff); add a Set of non-secret field names.
 - [Broma16 status casing](broma16-status-casing.md) — ROD API returns "OK"/"ok" inconsistently per endpoint; client success check must be case-insensitive or release-types/outlets sync silently fails.
 - [Integration auto-sync on connect](integration-auto-sync-on-connect.md) — connectors pull startup data via IConnector.onConnected (fired on transition→connected), not manual sync; Broma16 syncs dictionaries.
+- [Broma16 dictionary shape & wizard contract](broma16-dictionary-shape.md) — readable names in title_ru/title_en/title (not name); wizard stores Broma16 code for genre/language/country, push resolves to code/id.
+- [/catalog router is admin-guarded](catalog-route-guard.md) — all /catalog/* is adminOnly; role-open read endpoints must mount before that guard in routes/index.ts.
