@@ -16,6 +16,7 @@ import { getConnector } from "../connectors/registry";
 import type { ConnectorContext } from "../connectors/base";
 import { getTransport } from "../ddex/transports";
 import { ingestAck } from "../ddex/service";
+import { logger } from "../lib/logger";
 
 export type IntegrationView = {
   id: number;
@@ -209,6 +210,22 @@ export async function testConnection(integrationCode: string): Promise<{ ok: boo
       lastSyncAt: new Date(),
       lastError: result.ok ? null : result.message,
     }).where(eq(integrationsTable.id, integration.id));
+
+    // После реально проверенного подключения интеграция сама подтягивает свои
+    // стартовые данные (словари/справочники/начальную статистику). Запускаем в
+    // фоне — ответ на тест не ждёт завершения синхронизации. Срабатывает только
+    // на переходе в "connected" (не на повторном тесте уже подключённой
+    // интеграции), чтобы не гонять синхронизацию при каждой проверке.
+    if (nextStatus === "connected" && integration.status !== "connected" && connector.onConnected) {
+      void connector
+        .onConnected(ctx)
+        .catch((e) =>
+          logger.error(
+            { err: e instanceof Error ? e.message : String(e), code: integrationCode },
+            "[integrations] onConnected hook failed",
+          ),
+        );
+    }
 
     return { ok: result.ok, message: result.message, unverified: result.unverified };
   } catch (e) {

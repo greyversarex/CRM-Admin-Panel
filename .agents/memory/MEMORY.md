@@ -14,3 +14,4 @@
 - [Integration credentials vs config](integration-credentials-and-config.md) — saveCredentials encrypts EVERY field; partner ServiceDefs list only secret keys, config via PARTNER_DELIVERY_DEFAULTS.
 - [Audit allowlist default-deny](audit-allowlist-default-deny.md) — auditMutation strips fields for entityTypes absent from ENTITY_ALLOWLIST (empty diff); add a Set of non-secret field names.
 - [Broma16 status casing](broma16-status-casing.md) — ROD API returns "OK"/"ok" inconsistently per endpoint; client success check must be case-insensitive or release-types/outlets sync silently fails.
+- [Integration auto-sync on connect](integration-auto-sync-on-connect.md) — connectors pull startup data via IConnector.onConnected (fired on transition→connected), not manual sync; Broma16 syncs dictionaries.

@@ -60,6 +60,14 @@ export interface IConnector {
   /** Проверка соединения с площадкой. Должна не зависеть от данных. */
   testConnection(ctx: ConnectorContext): Promise<ConnectorResult>;
 
+  /**
+   * Хук после успешного подключения (status стал "connected").
+   * Здесь интеграция сама подтягивает свои стартовые данные — словари,
+   * справочники, начальную статистику — без участия пользователя.
+   * Запускается в фоне (не блокирует ответ на тест). Опционально.
+   */
+  onConnected?(ctx: ConnectorContext): Promise<void>;
+
   /** Забор статистики (стримы, доход) за последние N дней. Опционально. */
   syncStats?(ctx: ConnectorContext, daysBack: number): Promise<{ ok: boolean; rows: StatsRow[]; message?: string }>;
 
