@@ -57,3 +57,4 @@ Thumbs.db
 # and on the VPS — they must never be committed to the repo.
 artifacts/api-server/.local-storage/
 
+.data/
