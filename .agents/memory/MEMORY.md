@@ -18,3 +18,4 @@
 - [Broma16 dictionary shape & wizard contract](broma16-dictionary-shape.md) — readable names in title_ru/title_en/title (not name); wizard stores Broma16 code for genre/language/country, push resolves to code/id.
 - [/catalog router is admin-guarded](catalog-route-guard.md) — all /catalog/* is adminOnly; role-open read endpoints must mount before that guard in routes/index.ts.
 - [Wizard outlets vs release_dsps](wizard-outlets-vs-dsps.md) — wizard picker + submission delivery-validation + Broma16 push use releases.broma16DistributionOutlets (outlet dict, code=null→externalId values); release_dsps is the separate direct-DDEX path.
+- [Local asset storage ephemeral](local-storage-root-ephemeral.md) — LOCAL_STORAGE_ROOT is under /tmp; asset files vanish on container recycle (DB rows survive) → drops fail ENOENT; regenerate+resync sha256/size before re-running.
