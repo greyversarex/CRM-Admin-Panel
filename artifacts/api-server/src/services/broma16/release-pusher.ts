@@ -36,6 +36,30 @@ import {
 } from "./dictionaries";
 import { fetchAssetBytes, buildFileForm } from "./files";
 
+/** Приводит дату (строка из БД или Date) к формату YYYY-MM-DD для Broma16. */
+function toBroma16Date(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length >= 10 ? trimmed.slice(0, 10) : (trimmed || undefined);
+  }
+  return undefined;
+}
+
+/**
+ * Дата создания записи (мастера) для Broma16. На уровне recording это дата
+ * записи трека — Broma16 требует её не позже сегодняшнего дня (релиз может быть
+ * запланирован на будущее, но запись всегда уже существует). Поэтому ограничиваем
+ * дату релиза сегодняшним днём.
+ */
+function toBroma16RecordingDate(releaseDate: unknown): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const rd = toBroma16Date(releaseDate);
+  if (!rd) return today;
+  return rd > today ? today : rd;
+}
+
 export type PushProgress = {
   metadataDone?: number[];
   compositionDone?: number[];
@@ -192,8 +216,11 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     account_id: Number(accountId),
     p_line: release.pLine ?? undefined,
     c_line: release.cLine ?? undefined,
-    date_p_line: release.pLineYear ?? undefined,
-    date_c_line: release.cLineYear ?? undefined,
+    // Broma16 ожидает строки (string_type), а не числовой год.
+    date_p_line: release.pLineYear != null ? String(release.pLineYear) : undefined,
+    date_c_line: release.cLineYear != null ? String(release.cLineYear) : undefined,
+    // created_date обязателен на уровне релиза; формат YYYY-MM-DD.
+    created_date: toBroma16Date(release.releaseDate),
   };
   if (release.upc) releaseBody.ean = release.upc;
   else releaseBody.generate_ean = true;
@@ -248,8 +275,12 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
       main_performer: performerIds,
       featured_artist: [],
       created_country_id: await resolveCountryId(track.countryOfRecording),
-      created_date: release.releaseDate ?? undefined,
+      created_date: toBroma16RecordingDate(release.releaseDate),
     };
+    // Broma16 требует каталожный номер и на уровне записи: наследуем номер релиза,
+    // иначе просим Broma16 сгенерировать (как и для UPC/каталога релиза).
+    if (release.catalogNumber) body.catalog_number = release.catalogNumber;
+    else body.generate_catalog_number = true;
     await client.request("PUT", `/repertoire/release/${broma16ReleaseId}/recording/${recId}`, { body });
     progress.metadataDone.push(track.id);
     await save(progress);

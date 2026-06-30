@@ -127,6 +127,32 @@ export async function fetchAssetBytes(url: string): Promise<AssetBytes> {
   return { buffer, contentType, filename };
 }
 
+// MIME → расширение. Наши ассеты хранятся под UUID без расширения, а Broma16
+// определяет тип файла именно по расширению имени в multipart (иначе отдаёт
+// `file: rule: file_type`). Поэтому перед загрузкой дополняем имя расширением.
+const MIME_EXTENSION: Record<string, string> = {
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/vnd.wave": "wav",
+  "audio/flac": "flac",
+  "audio/x-flac": "flac",
+  "audio/aiff": "aiff",
+  "audio/x-aiff": "aiff",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/tiff": "tiff",
+};
+
+/** Дополняет имя файла расширением по contentType, если его нет. */
+export function ensureFilenameExtension(filename: string, contentType: string): string {
+  const ext = MIME_EXTENSION[contentType.split(";")[0].trim().toLowerCase()];
+  if (!ext) return filename;
+  const base = filename.trim() || "file";
+  return base.toLowerCase().endsWith(`.${ext}`) ? base : `${base}.${ext}`;
+}
+
 /** Готовит FormData с одним файлом (+ доп. поля) для запросов Broma16. */
 export function buildFileForm(
   asset: AssetBytes,
@@ -136,6 +162,7 @@ export function buildFileForm(
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.append(k, String(v));
   const bytes = Uint8Array.from(asset.buffer);
-  form.append(fileField, new Blob([bytes], { type: asset.contentType }), asset.filename);
+  const filename = ensureFilenameExtension(asset.filename, asset.contentType);
+  form.append(fileField, new Blob([bytes], { type: asset.contentType }), filename);
   return form;
 }

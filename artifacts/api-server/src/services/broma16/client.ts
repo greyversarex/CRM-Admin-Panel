@@ -58,6 +58,27 @@ function buildUrl(path: string, query?: RequestOptions["query"]): string {
   return url.toString();
 }
 
+/**
+ * Рекурсивно разворачивает значение поля-ошибки в плоский список строк.
+ * Broma16 по части полей отдаёт не массив строк, а вложенный объект
+ * (например { created_date: { date: ["..."] } } или { message: "..." }),
+ * из-за чего раньше получалось бесполезное "[object Object]".
+ */
+function flattenErrorValue(val: unknown): string[] {
+  if (val == null) return [];
+  if (typeof val === "string") return [val];
+  if (typeof val === "number" || typeof val === "boolean") return [String(val)];
+  if (Array.isArray(val)) return val.flatMap(flattenErrorValue);
+  if (typeof val === "object") {
+    return Object.entries(val as Record<string, unknown>).flatMap(([k, v]) => {
+      const inner = flattenErrorValue(v);
+      // Числовые ключи (индексы массива) не добавляем в префикс.
+      return /^\d+$/.test(k) ? inner : inner.map((m) => `${k}: ${m}`);
+    });
+  }
+  return [String(val)];
+}
+
 /** Превращает 422-тело Broma16 в читаемое сообщение + карту полей. */
 function parseValidationErrors(payload: unknown): { message: string; fields: Record<string, string[]> } {
   const fields: Record<string, string[]> = {};
@@ -66,8 +87,8 @@ function parseValidationErrors(payload: unknown): { message: string; fields: Rec
   const rawErrors = (body.errors ?? body.data ?? {}) as Record<string, unknown>;
   if (rawErrors && typeof rawErrors === "object" && !Array.isArray(rawErrors)) {
     for (const [field, msgs] of Object.entries(rawErrors)) {
-      if (Array.isArray(msgs)) fields[field] = msgs.map((m) => String(m));
-      else if (msgs != null) fields[field] = [String(msgs)];
+      const flat = flattenErrorValue(msgs);
+      fields[field] = flat.length > 0 ? flat : [String(msgs)];
     }
   }
   const parts = Object.entries(fields).map(([f, msgs]) => `${f}: ${msgs.join("; ")}`);
