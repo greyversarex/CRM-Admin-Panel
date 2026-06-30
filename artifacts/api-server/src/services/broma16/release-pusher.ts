@@ -21,6 +21,8 @@ import {
   type Track,
   type Artist,
   type TrackWriter,
+  type TrackPerformer,
+  type TrackProductionMember,
 } from "@workspace/db";
 import { and, asc, eq } from "drizzle-orm";
 import { logger } from "../../lib/logger";
@@ -136,6 +138,20 @@ function buildContributors(track: Track): Contributor[] {
   return [{ title: "Copyright Control", ownership: "100.00", roles: ["C", "A"], controlled_by_submitter: 1 }];
 }
 
+/**
+ * Имя продюсера записи. Broma16 при модерации требует `producer` (или party_id)
+ * на уровне записи. Берём первого участника с ролью продюсера из production,
+ * затем из performers (music_producer).
+ */
+function buildProducer(track: Track): string | undefined {
+  const production = (track.production ?? []) as TrackProductionMember[];
+  const fromProduction = production.find((p) => /producer/i.test(p.role));
+  if (fromProduction?.name) return fromProduction.name;
+  const performers = (track.performers ?? []) as TrackPerformer[];
+  const fromPerformers = performers.find((p) => /producer/i.test(p.role));
+  return fromPerformers?.name || undefined;
+}
+
 async function auditStep(
   releaseId: number,
   step: string,
@@ -190,6 +206,18 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     .where(eq(tracksTable.releaseId, releaseId))
     .orderBy(asc(tracksTable.trackNumber), asc(tracksTable.id));
   if (tracks.length === 0) throw new Broma16ApiError(422, "У релиза нет треков — нечего отправлять");
+
+  // Preflight: Broma16 при модерации требует продюсера (producer/party_id) на
+  // каждой записи. Если данных нет — даём оператору понятную ошибку заранее,
+  // вместо непрозрачной 422 от Broma16 в самом конце пуша.
+  const tracksWithoutProducer = tracks.filter((t) => !buildProducer(t));
+  if (tracksWithoutProducer.length > 0) {
+    const titles = tracksWithoutProducer.map((t) => `«${t.title}»`).join(", ");
+    throw new Broma16ApiError(
+      422,
+      `Не указан продюсер у треков: ${titles}. Добавьте продюсера (раздел Production/Performers) — Broma16 не примет релиз на модерацию без него.`,
+    );
+  }
 
   const client = await createBroma16Client();
   const accountId = await client.getAccountId();
@@ -276,7 +304,16 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
       featured_artist: [],
       created_country_id: await resolveCountryId(track.countryOfRecording),
       created_date: toBroma16RecordingDate(release.releaseDate),
+      // Эти поля Broma16 проверяет при отправке на модерацию (required_without
+      // is_instrumental). Раньше они уходили только в шаге «лирика», который
+      // пропускается у треков без текста, поэтому модерация падала с 422.
+      is_instrumental: track.audioStyle === "instrumental",
+      parental_warning_type: track.isExplicit ? "explicit" : "not_explicit",
+      language: await resolveLanguageId(track.vocalLanguage ?? track.language),
     };
+    // Продюсер записи (или party_id) обязателен при модерации Broma16.
+    const producer = buildProducer(track);
+    if (producer) body.producer = producer;
     // Broma16 требует каталожный номер и на уровне записи: наследуем номер релиза,
     // иначе просим Broma16 сгенерировать (как и для UPC/каталога релиза).
     if (release.catalogNumber) body.catalog_number = release.catalogNumber;
@@ -336,8 +373,11 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   await onStep("distribution");
   const outlets = await resolveOutletCodes(release.broma16DistributionOutlets);
   if (!progress.distributionDone) {
+    // Broma16 ждёт верхнеуровневый список витрин `outlets` (required_unless: update).
+    // `distribution_outlets` — необязательный, только для персональных дат отгрузки
+    // по отдельной договорённости с площадкой, поэтому его не отправляем.
     await client.request("POST", `/repertoire/release/${broma16ReleaseId}/distribution`, {
-      body: { distribution_outlets: outlets, sale_start_date: release.releaseDate ?? undefined },
+      body: { outlets, sale_start_date: toBroma16Date(release.releaseDate) },
     });
     progress.distributionDone = true;
     await save(progress);

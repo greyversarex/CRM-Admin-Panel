@@ -20,8 +20,13 @@ Discovered by walking a real release through `pushReleaseToBroma16` against the 
 - `catalog_number` is **required at recording level** too (`required_without` generate flag). Inherit `release.catalogNumber`, else send `generate_catalog_number: true`.
 - For a **single**, the recording `title` must **equal the release title** (`title: does not match` otherwise). This is a Broma16 business rule, not a code bug.
 
-**distribution (`POST .../distribution`) — UNRESOLVED, needs Broma16 docs:**
-- Sending `distribution_outlets: [code, ...]` (flat array) fails. Broma16 wants `distribution_outlets` as an **array of objects** each `{ outlets: [...], delivery_start_time: ... }`, PLUS a top-level `outlets` field (`required_unless: update`).
-- Exact grouping (one entry with all outlets vs per-outlet) and `delivery_start_time` format are unconfirmed. **Do not guess** — wrong distribution config could mis-deliver real releases. Confirm schema with Broma16 before implementing.
+**distribution (`POST .../distribution`) — RESOLVED:**
+- Send a **top-level `outlets`** array of outlet codes (`required_unless: update`) plus `sale_start_date` (YYYY-MM-DD). That's it — confirmed by a real 200.
+- `distribution_outlets` is the wrong key for the simple case; it's an OPTIONAL array of `{ outlets, delivery_start_time }` objects ONLY for per-outlet personalised ship dates (by separate agreement with the outlet). Omit it normally.
+
+**send-moderate (`POST .../send-moderate`) — final full validation, RESOLVED:**
+- This step re-validates the WHOLE release; missing recording fields surface here as `tracks.N.*`, NOT at the earlier partial PUTs.
+- `parental_warning_type` and `language` are `required_without is_instrumental` (i.e. required for non-instrumental tracks). These were previously sent ONLY inside the optional `lyrics` step, which is skipped for tracks with no lyrics → moderation failed. Fix: send `is_instrumental` + `parental_warning_type` + `language` in the always-run `track_metadata` step.
+- `producer` / `party_id` are mutually-conditional (`required_if; value: empty`): provide EITHER. We send a free-text `producer` name (from `track.production`/`performers`, role producer). No party_id mapping needed. Pre-validate producer presence before pushing (preflight throws a clear RU error) — real catalog items with no producer would otherwise hard-fail at moderation.
 
 **Why:** This is a real production distributor; every release passes through this path. These were genuine bugs blocking ALL pushes, not test-data quirks (except the single-title rule and a bad test UPC).
