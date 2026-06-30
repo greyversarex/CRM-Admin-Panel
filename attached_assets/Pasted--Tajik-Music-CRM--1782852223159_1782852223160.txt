@@ -1,0 +1,72 @@
+Ты работаешь над проектом Tajik Music CRM. Твоя память сброшена, но ВЕСЬ КОД на месте.
+Прочитай, изучи код, и выполни задачи. Не переписывай то, что уже работает — изучай.
+
+КОНТЕКСТ ПРОЕКТА
+Музыкальная дистрибьюторская платформа для таджикского рынка.
+Два главных партнёра, уже интегрированных в код:
+
+Broma16 (ROD API) — ДИСТРИБЬЮТОР
+Base URL: https://api-rod.broma16.com/api ← ВАЖНО: ТОЛЬКО .COM, НЕ .RU!
+(.ru вернёт 404 на создание артиста/релиза)
+Auth: JWT (POST /auth/login → access_token + refresh_token, header X-Access-Token)
+Account ID: 554233 (ПОДКЛЮЧЕНО, авторизация работает)
+Код уже есть: client, dictionaries sync, release pusher, statistics puller
+ACRCloud — ПРОВЕРКА КОНТЕНТА
+НЕ через REST API! Работает через S3 Drops (загрузка DDEX пакетов в бакет)
+S3 бакет: acrcloud-partners, префикс TajikMusic/, регион us-east-1
+Ключи ВВЕДЕНЫ через Settings → Интеграции (access_key_id + secret_access_key)
+Формат: DDEX ERN 4.3 (генератор уже есть в коде, одобрен ACRCloud)
+Код уже есть: ddex-s3 transport, dropToAcrCloud, кнопка в UI
+ЧЕГО НЕТ И НЕ НУЖНО ДЕЛАТЬ
+Видео / VEVO
+Прямая DDEX/SFTP доставка на DSP (это работа Broma16)
+Content ID / YouTube CMS
+Авто-модерация правилами
+Fraud detection
+Stripe/PayPal payouts
+Мультивалютность
+ТЕХНИЧЕСКИЕ ДЕТАЛИ
+DDEX Party ID (мы): PA-DPIDA-2024053004-T
+DDEX Party ID ACRCloud: PADPIDA2016110503N
+Broma16 Account ID: 554233
+Broma16 API URL: https://api-rod.broma16.com/api (НЕ .ru!)
+Тип релиза "Сингл" = release_type_id 51
+Broma16 для некоторых endpoint-ов отвечает status: "OK" заглавными —
+сравнение должно быть регистронезависимое
+Broma16 требует: у каждого трека есть произведение + авторы с долями = 100%,
+минимум 1 автор с ролью C/A/CA
+ACRCloud ключи читаются из БД интеграции (не из .env!)
+Стек: TypeScript monorepo, Express 5, Drizzle ORM, PostgreSQL 16, React 19
+Хранилище файлов: LOCAL_STORAGE_ROOT должен быть на постоянном пути (не /tmp!)
+ЗАДАЧИ
+ЗАДАЧА 1: Проверь домен Broma16
+Проверь что base URL = https://api-rod.broma16.com/api (НЕ .ru!).
+Если стоит .ru — исправь на .com.
+
+ЗАДАЧА 2: Создай тестовый релиз с реальными файлами
+Таблица assets скорее всего пуста. Создай полноценный релиз:
+
+title: "Test Release"
+UPC: 1234567890123
+тип: Сингл
+жанр: из Broma16 словаря
+дата релиза: 2026-07-15
+P-Line / C-Line: заполнить
+1 трек: "Test Track", ISRC TJXXX2600001, реальный WAV (сгенерируй тестовый стерео 44.1kHz/16-bit)
+обложка: JPG минимум 1400x1400 (сгенерируй тестовую)
+Publishing: 1 автор "Test Author", роль CA, доля 100%
+Витрины: Spotify, Apple, Yandex, VK
+ЗАДАЧА 3: Прогони ACRCloud drop
+На тестовом релизе прогони отправку в ACRCloud.
+Подтверди успех (HTTP 202) и дай S3 путь файлов.
+
+ЗАДАЧА 4: Прогони Broma16 push
+Запусти push тестового релиза в Broma16. Следи за всеми 9 шагами.
+На каждом шаге фиксируй: успех / ошибка (точный текст 422).
+Сначала проверь что GET /user/ возвращает заполненный accounts[] (не пустой!).
+
+ОТЧЁТ ПОСЛЕ ВЫПОЛНЕНИЯ
+Домен Broma16: .com подтверждён?
+Тестовый релиз создан? (assets заполнены? publishing есть?)
+ACRCloud drop: успех? (S3 путь)
+Broma16 push: какие шаги прошли? на каком остановился? точные ошибки?

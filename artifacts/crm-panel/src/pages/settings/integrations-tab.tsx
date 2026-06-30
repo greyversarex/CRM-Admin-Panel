@@ -161,7 +161,7 @@ const SERVICES: ServiceDef[] = [
       { key: "email",    label: "Email",  required: true, placeholder: "label@example.com" },
       { key: "password", label: "Пароль", type: "password", required: true },
     ],
-    docsUrl: "https://api-rod.broma16.ru",
+    docsUrl: "https://api-rod.broma16.com",
   },
   {
     code: "apple_music", name: "Apple Music / MusicKit", category: "dsp", authType: "bearer",

@@ -1,7 +1,7 @@
 /**
  * HTTP-клиент Broma16 (ROD API).
  *
- *  - Базовый URL: BROMA16_API_URL (по умолчанию https://api-rod.broma16.ru/api)
+ *  - Базовый URL: BROMA16_API_URL (по умолчанию https://api-rod.broma16.com/api)
  *  - Авторизация: JWT в заголовке X-Access-Token
  *  - При 401 — автоматический refresh (или повторный login) и один ретрай
  *  - Успешный ответ: { status: "ok", data: ... } → возвращаем data
@@ -26,7 +26,7 @@ import {
   setStoredAccountId,
 } from "./credentials";
 
-const DEFAULT_BASE_URL = "https://api-rod.broma16.ru/api";
+const DEFAULT_BASE_URL = "https://api-rod.broma16.com/api";
 const REQUEST_TIMEOUT_MS = 30_000;
 /** За сколько до истечения токена считаем его "пора обновить". */
 const TOKEN_REFRESH_SKEW_MS = 60_000;
