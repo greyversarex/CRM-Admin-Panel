@@ -20,6 +20,7 @@ import {
   type DictionaryType,
 } from "../services/broma16/dictionaries";
 import { syncArtist } from "../services/broma16/artists";
+import { checkReleaseModeration } from "../services/broma16/moderation";
 import {
   requestStatisticsReport,
   checkReportStatus,
@@ -294,6 +295,38 @@ broma16Router.get("/broma16/releases/:id/push", ...staff, async (req, res) => {
     .orderBy(desc(broma16PushJobsTable.createdAt))
     .limit(1);
   res.json({ release, job: job ?? null });
+});
+
+// POST /broma16/releases/:id/check-moderation — ручная проверка статуса модерации
+// в Broma16 (та же логика, что у часового крона, но для одного релиза).
+broma16Router.post("/broma16/releases/:id/check-moderation", ...staff, async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Некорректный id релиза" });
+    return;
+  }
+  const [release] = await db
+    .select({
+      id: releasesTable.id,
+      broma16ReleaseId: releasesTable.broma16ReleaseId,
+    })
+    .from(releasesTable)
+    .where(eq(releasesTable.id, id))
+    .limit(1);
+  if (!release) {
+    res.status(404).json({ error: "Релиз не найден" });
+    return;
+  }
+  if (!release.broma16ReleaseId) {
+    res.status(409).json({ error: "Релиз ещё не отправлен в Broma16 — проверять модерацию нечего." });
+    return;
+  }
+  try {
+    const result = await checkReleaseModeration(id, { userId: req.session?.user?.id ?? null });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
 });
 
 export default broma16Router;

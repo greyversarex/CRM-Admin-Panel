@@ -62,7 +62,8 @@ export type InsertCampaign = typeof campaignsTable.$inferInsert;
 
 // Поддерживаемые события
 // signup | release_uploaded | release_approved | release_rejected |
-// payout_sent | kyc_approved | kyc_rejected | delivery_sent | delivery_acked
+// payout_sent | kyc_approved | kyc_rejected | delivery_sent | delivery_acked |
+// broma16_moderation_approved | broma16_moderation_rejected
 
 export const automationTriggersTable = pgTable("automation_triggers", {
   id: serial("id").primaryKey(),

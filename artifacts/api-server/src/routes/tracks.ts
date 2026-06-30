@@ -102,10 +102,47 @@ router.get("/tracks", async (req, res): Promise<void> => {
   });
 });
 
+/** Есть ли среди вкладчиков (production/performers) хотя бы один продюсер
+ *  с непустым именем. Роль «producer» либо «music_producer» (regex /producer/i)
+ *  — зеркалит buildProducer в release-pusher.ts. */
+function hasNamedContributor(arr: unknown): boolean {
+  return Array.isArray(arr) && arr.some((m) => {
+    if (!m || typeof m !== "object") return false;
+    const name = (m as { name?: unknown }).name;
+    return typeof name === "string" && name.trim() !== "";
+  });
+}
+function trackHasProducer(production: unknown, performers: unknown): boolean {
+  const hasProducerIn = (arr: unknown): boolean =>
+    Array.isArray(arr) && arr.some((m) => {
+      if (!m || typeof m !== "object") return false;
+      const name = (m as { name?: unknown }).name;
+      const role = (m as { role?: unknown }).role;
+      return typeof name === "string" && name.trim() !== "" &&
+        typeof role === "string" && /producer/i.test(role);
+    });
+  return hasProducerIn(production) || hasProducerIn(performers);
+}
+const PRODUCER_REQUIRED_MSG =
+  "Укажите хотя бы одного продюсера (роль «Producer») в разделе Production. Без продюсера релиз не пройдёт модерацию в Broma16.";
+
 router.post("/tracks", async (req, res): Promise<void> => {
   const parsed = CreateTrackBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // Если при создании трека переданы именованные вкладчики, среди них обязан быть
+  // продюсер. Скелеты (мастер заливки аудио, CSV-импорт, «добавить трек») шлют
+  // пустые/отсутствующие production/performers — их не блокируем, продюсер
+  // добавляется позже при редактировании метаданных.
+  const created = parsed.data as Record<string, unknown>;
+  if (
+    (hasNamedContributor(created.production) || hasNamedContributor(created.performers)) &&
+    !trackHasProducer(created.production, created.performers)
+  ) {
+    res.status(400).json({ error: PRODUCER_REQUIRED_MSG });
     return;
   }
 
@@ -187,6 +224,24 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
     }
     if (body.releaseId !== undefined && body.releaseId !== existing.releaseId) {
       res.status(403).json({ error: "Cannot change releaseId" }); return;
+    }
+  }
+
+  // Продюсер обязателен. Если запрос редактирует вкладчиков (в теле присутствует
+  // ключ production или performers — это делает только редактор метаданных трека),
+  // среди них обязан быть продюсер. Частичные обновления без этих ключей (заливка
+  // аудио, массовое изменение жанра/explicit и т.п.) не блокируем.
+  const reqBody = (req.body ?? {}) as Record<string, unknown>;
+  const editsContributors =
+    Object.prototype.hasOwnProperty.call(reqBody, "production") ||
+    Object.prototype.hasOwnProperty.call(reqBody, "performers");
+  if (editsContributors) {
+    const pd = parsed.data as Record<string, unknown>;
+    const production = pd.production ?? existing.production;
+    const performers = pd.performers ?? existing.performers;
+    if (!trackHasProducer(production, performers)) {
+      res.status(400).json({ error: PRODUCER_REQUIRED_MSG });
+      return;
     }
   }
 

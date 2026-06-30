@@ -13,6 +13,7 @@ import { logger } from "../../lib/logger";
 import { getBroma16Credentials } from "./credentials";
 import { syncAllDictionaries } from "./dictionaries";
 import { pullDailyStatistics } from "./statistics";
+import { pollPendingModeration } from "./moderation";
 
 const tasks: ScheduledTask[] = [];
 
@@ -46,6 +47,19 @@ async function runDailyStatistics(): Promise<void> {
   }
 }
 
+async function runModerationPoll(): Promise<void> {
+  if (!(await isConfigured())) {
+    logger.info("[broma16] модерация: пропуск — интеграция не настроена");
+    return;
+  }
+  try {
+    const result = await pollPendingModeration();
+    logger.info({ result }, "[broma16] проверка статусов модерации завершена");
+  } catch (e) {
+    logger.error({ err: (e as Error).message }, "[broma16] сбой проверки статусов модерации");
+  }
+}
+
 export function startBroma16Schedulers(): void {
   // Первичная синхронизация словарей — отложенно, не блокируя старт сервера.
   setTimeout(() => void runDictionarySync("boot"), 15_000).unref();
@@ -56,7 +70,10 @@ export function startBroma16Schedulers(): void {
   // Ежедневно: 00:30 — статистика за вчера.
   tasks.push(cron.schedule("30 0 * * *", () => void runDailyStatistics()));
 
-  logger.info("[broma16] планировщик запущен (словари: weekly, статистика: daily)");
+  // Ежечасно: проверка статусов модерации релизов, ожидающих вердикта Broma16.
+  tasks.push(cron.schedule("0 * * * *", () => void runModerationPoll()));
+
+  logger.info("[broma16] планировщик запущен (словари: weekly, статистика: daily, модерация: hourly)");
 }
 
 export async function stopBroma16Schedulers(): Promise<void> {

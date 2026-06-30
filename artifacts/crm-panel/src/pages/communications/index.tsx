@@ -99,6 +99,8 @@ const EVENTS = [
   { value: "kyc_rejected",     label: "KYC отклонён" },
   { value: "delivery_sent",    label: "DDEX-доставка отправлена" },
   { value: "delivery_acked",   label: "DDEX-доставка подтверждена" },
+  { value: "broma16_moderation_approved", label: "Broma16: модерация одобрена" },
+  { value: "broma16_moderation_rejected", label: "Broma16: модерация отклонена" },
 ];
 
 const RECIPIENTS = [

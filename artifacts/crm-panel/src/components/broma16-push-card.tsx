@@ -148,6 +148,27 @@ export function Broma16PushCard({ releaseId }: { releaseId: number }) {
     },
   });
 
+  const checkModerationMutation = useMutation({
+    mutationFn: () =>
+      apiPost<{ ok: boolean; checked: boolean; changed: boolean; verdict: string; raw: string | null }>(
+        `/api/broma16/releases/${releaseId}/check-moderation`,
+      ),
+    onSuccess: (r) => {
+      const label =
+        r.verdict === "approved" ? "одобрен" : r.verdict === "rejected" ? "отклонён" : "ещё на модерации";
+      toast({
+        title: r.changed ? "Статус модерации обновлён" : "Статус проверен",
+        description: r.changed
+          ? `Релиз ${label}.`
+          : `Текущий статус: ${label}${r.raw ? ` (${r.raw})` : ""}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["broma16-push", releaseId] });
+    },
+    onError: (e) => {
+      toast({ variant: "destructive", title: "Не удалось проверить статус", description: (e as Error).message });
+    },
+  });
+
   const matchesOutlet = (o: OutletEntry, picked: string[]) => {
     const keys = [o.code, o.externalId, o.name].filter(Boolean) as string[];
     return picked.some((p) => keys.some((k) => k.toLowerCase() === p.toLowerCase()));
@@ -302,6 +323,21 @@ export function Broma16PushCard({ releaseId }: { releaseId: number }) {
                 )}
                 {pushLabel}
               </Button>
+              {everPushed && (
+                <Button
+                  variant="outline"
+                  onClick={() => checkModerationMutation.mutate()}
+                  disabled={checkModerationMutation.isPending}
+                  title="Запросить у Broma16 текущий статус модерации релиза"
+                >
+                  {checkModerationMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Проверить статус
+                </Button>
+              )}
               {inFlight && (
                 <span className="text-xs text-muted-foreground">
                   Шаг: {stepLabel(job!.step)}{job!.attempts > 1 ? ` · попытка ${job!.attempts}` : ""}
