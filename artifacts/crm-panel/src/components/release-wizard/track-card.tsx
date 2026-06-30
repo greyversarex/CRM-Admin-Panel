@@ -66,6 +66,17 @@ export function TrackCard({
   const set = <K extends keyof Track>(k: K, v: Track[K]) => setDraft((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
+    const hasProducer =
+      draft.production.some((p) => /producer/i.test(p.role) && p.name.trim()) ||
+      draft.performers.some((p) => /producer/i.test(p.role) && p.name.trim());
+    if (!hasProducer) {
+      toast({
+        title: t.releaseWizard.producerRequiredTitle,
+        description: t.releaseWizard.producerRequiredDesc,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await updateTrack.mutateAsync({
         id: track.id,
