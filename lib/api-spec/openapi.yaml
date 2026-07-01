@@ -2354,7 +2354,7 @@ components:
         catalogNumber:
           type: string
           nullable: true
-          description: Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.
+          description: Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.
         artistId:
           type: integer
         artistName:
@@ -2526,6 +2526,8 @@ components:
         catalogNumber:
           type: string
           nullable: true
+          maxLength: 50
+          description: Внутренний код лейбла в формате `TM######`. Авто-генерируется, если не задан. Broma16 принимает строку до 50 символов.
         coverUrl:
           type: string
           nullable: true

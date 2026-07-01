@@ -15,6 +15,7 @@ import {
   releasesTable,
   tracksTable,
   artistsTable,
+  labelsTable,
   releaseArtistsTable,
   auditLogTable,
   type Release,
@@ -235,6 +236,17 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   // ── Шаг 2: создание / обновление релиза ──────────────────────────
   await onStep("create_release");
   const genres = await resolveGenres(releaseGenres(release, tracks));
+  // Правообладатель (лейбл) для Broma16: имя лейбла, привязанного к релизу.
+  // Для клиентов-лейблов уходит их название; если лейбл не задан — дефолт.
+  let labelName = "Tajik Music";
+  if (release.labelId) {
+    const [label] = await db
+      .select({ name: labelsTable.name })
+      .from(labelsTable)
+      .where(eq(labelsTable.id, release.labelId))
+      .limit(1);
+    if (label?.name?.trim()) labelName = label.name.trim();
+  }
   const releaseBody: Record<string, unknown> = {
     title: release.title,
     subtitle: release.releaseVersion ?? "",
@@ -249,6 +261,8 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     date_c_line: release.cLineYear != null ? String(release.cLineYear) : undefined,
     // created_date обязателен на уровне релиза; формат YYYY-MM-DD.
     created_date: toBroma16Date(release.releaseDate),
+    // Лейбл-правообладатель релиза (из БД), а не захардкоженное имя.
+    label_name: labelName,
   };
   if (release.upc) releaseBody.ean = release.upc;
   else releaseBody.generate_ean = true;

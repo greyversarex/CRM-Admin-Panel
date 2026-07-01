@@ -16,6 +16,10 @@ export interface CreateReleaseBody {
   artistId: number;
   labelId?: number | null;
   upc?: string | null;
+  /**
+   * Внутренний код лейбла в формате `TM######`. Авто-генерируется, если не задан. Broma16 принимает строку до 50 символов.
+   * @maxLength 50
+   */
   catalogNumber?: string | null;
   coverUrl?: string | null;
   genre?: string | null;

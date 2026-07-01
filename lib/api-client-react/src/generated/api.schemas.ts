@@ -107,6 +107,7 @@ export const ReleaseStatus = {
   error: "error",
   takedown_requested: "takedown_requested",
   removed: "removed",
+  parked: "parked",
 } as const;
 
 /**
@@ -154,6 +155,7 @@ export const ReleaseAllowedTransitionsItem = {
   error: "error",
   takedown_requested: "takedown_requested",
   removed: "removed",
+  parked: "parked",
 } as const;
 
 export type ReleaseRiskFactorsItemSeverity =
@@ -189,7 +191,7 @@ export interface Release {
  */
   statusNote?: string | null;
   upc?: string | null;
-  /** Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан. */
+  /** Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан. */
   catalogNumber?: string | null;
   artistId: number;
   artistName: string;
@@ -537,6 +539,10 @@ export interface CreateReleaseBody {
   artistId: number;
   labelId?: number | null;
   upc?: string | null;
+  /**
+   * Внутренний код лейбла в формате `TM######`. Авто-генерируется, если не задан. Broma16 принимает строку до 50 символов.
+   * @maxLength 50
+   */
   catalogNumber?: string | null;
   coverUrl?: string | null;
   genre?: string | null;
@@ -1662,6 +1668,7 @@ export const ListReleasesStatus = {
   error: "error",
   takedown_requested: "takedown_requested",
   removed: "removed",
+  parked: "parked",
 } as const;
 
 export type ListReleasesReleaseType =

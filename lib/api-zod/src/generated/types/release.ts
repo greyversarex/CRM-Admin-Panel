@@ -25,7 +25,7 @@ export interface Release {
  */
   statusNote?: string | null;
   upc?: string | null;
-  /** Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан. */
+  /** Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан. */
   catalogNumber?: string | null;
   artistId: number;
   artistName: string;

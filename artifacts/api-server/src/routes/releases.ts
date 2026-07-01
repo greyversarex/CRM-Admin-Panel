@@ -39,6 +39,27 @@ export function releaseEditableReason(
   return `Релиз в статусе «${status}» закрыт для редактирования. Дождитесь решения модератора или снимите релиз с витрин (Take Down), чтобы вносить правки.`;
 }
 
+// ─── Catalog number generation ──────────────────────────────────────────────
+// Внутренний каталожный номер в формате TM + 6 цифр (TM260001, TM260002…).
+// Следующий = максимальный существующий + 1; старт с TM260001. Broma16 принимает
+// строку до 50 символов, поэтому короткий числовой код всегда валиден.
+const CATALOG_PREFIX = "TM";
+const CATALOG_START = 260001;
+
+async function generateCatalogNumber(): Promise<string> {
+  const rows = await db
+    .select({ catalogNumber: releasesTable.catalogNumber })
+    .from(releasesTable)
+    .where(sql`${releasesTable.catalogNumber} ~ '^TM[0-9]{6}$'`);
+  let maxSeq = CATALOG_START - 1;
+  for (const row of rows) {
+    if (!row.catalogNumber) continue;
+    const seq = Number(row.catalogNumber.slice(CATALOG_PREFIX.length));
+    if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq;
+  }
+  return `${CATALOG_PREFIX}${String(maxSeq + 1).padStart(6, "0")}`;
+}
+
 // ─── Transfer import storage ────────────────────────────────────────────────
 // Persistent (DB-backed) catalog-import jobs. Admin/manager only.
 function serializeTransferImport(row: typeof transferImportsTable.$inferSelect) {
@@ -578,14 +599,24 @@ router.post("/releases", async (req, res): Promise<void> => {
 
   const [release] = await db.insert(releasesTable).values(parsed.data).returning();
 
-  // Auto-generate catalogNumber `CAT{id}` если лейбл не задал явно. Делаем
-  // сразу после INSERT, чтобы id был известен.
+  // Auto-generate catalogNumber в формате TM###### если лейбл не задал свой.
+  // Уникальный индекс на catalog_number защищает от гонок: при конфликте
+  // (двое создали релиз одновременно) повторяем с новым номером.
   if (!release.catalogNumber || !release.catalogNumber.trim()) {
-    const [updated] = await db.update(releasesTable)
-      .set({ catalogNumber: `CAT${release.id}` })
-      .where(eq(releasesTable.id, release.id))
-      .returning();
-    if (updated) release.catalogNumber = updated.catalogNumber;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const candidate = await generateCatalogNumber();
+      try {
+        const [updated] = await db.update(releasesTable)
+          .set({ catalogNumber: candidate })
+          .where(eq(releasesTable.id, release.id))
+          .returning();
+        if (updated) release.catalogNumber = updated.catalogNumber;
+        break;
+      } catch (e) {
+        if (isUniqueViolation(e) && attempt < 5) continue;
+        throw e;
+      }
+    }
   }
 
   // Сразу заносим главного артиста в release_artists (primary, position=0),
@@ -1495,10 +1526,11 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         pendingAudits.push({ action: "create", entityType: "track", entityId: tr.id, before: null, after: { releaseId: release.id } });
       }
 
-      // Авто-нумерация каталога, как в обычном POST /releases.
+      // Авто-нумерация каталога (TM######), как в обычном POST /releases.
       if (!release.catalogNumber || !release.catalogNumber.trim()) {
+        const candidate = await generateCatalogNumber();
         const [updated] = await tx.update(releasesTable)
-          .set({ catalogNumber: `CAT${release.id}` })
+          .set({ catalogNumber: candidate })
           .where(eq(releasesTable.id, release.id))
           .returning();
         if (updated) return updated;

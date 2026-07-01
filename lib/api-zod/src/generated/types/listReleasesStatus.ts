@@ -20,4 +20,5 @@ export const ListReleasesStatus = {
   error: "error",
   takedown_requested: "takedown_requested",
   removed: "removed",
+  parked: "parked",
 } as const;

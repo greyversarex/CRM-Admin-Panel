@@ -221,6 +221,7 @@ export const GetArtistResponse = zod
               "error",
               "takedown_requested",
               "removed",
+              "parked",
             ]),
             statusNote: zod
               .string()
@@ -233,7 +234,7 @@ export const GetArtistResponse = zod
               .string()
               .nullish()
               .describe(
-                "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+                "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
               ),
             artistId: zod.number(),
             artistName: zod.string(),
@@ -319,6 +320,7 @@ export const GetArtistResponse = zod
                   "error",
                   "takedown_requested",
                   "removed",
+                  "parked",
                 ]),
               )
               .describe(
@@ -680,6 +682,7 @@ export const ListReleasesQueryParams = zod.object({
       "error",
       "takedown_requested",
       "removed",
+      "parked",
     ])
     .optional(),
   artist_id: zod.coerce.number().optional(),
@@ -717,6 +720,7 @@ export const ListReleasesResponse = zod.object({
         "error",
         "takedown_requested",
         "removed",
+        "parked",
       ]),
       statusNote: zod
         .string()
@@ -729,7 +733,7 @@ export const ListReleasesResponse = zod.object({
         .string()
         .nullish()
         .describe(
-          "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+          "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
         ),
       artistId: zod.number(),
       artistName: zod.string(),
@@ -813,6 +817,7 @@ export const ListReleasesResponse = zod.object({
             "error",
             "takedown_requested",
             "removed",
+            "parked",
           ]),
         )
         .describe(
@@ -864,6 +869,8 @@ export const ListReleasesResponse = zod.object({
 /**
  * @summary Create a new release
  */
+export const createReleaseBodyCatalogNumberMax = 50;
+
 export const createReleaseBodyIsExplicitDefault = false;
 export const createReleaseBodyIsCompilationDefault = false;
 export const createReleaseBodyIsVariousArtistsDefault = false;
@@ -877,7 +884,13 @@ export const CreateReleaseBody = zod.object({
   artistId: zod.number(),
   labelId: zod.number().nullish(),
   upc: zod.string().nullish(),
-  catalogNumber: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .max(createReleaseBodyCatalogNumberMax)
+    .nullish()
+    .describe(
+      "Внутренний код лейбла в формате `TM######`. Авто-генерируется, если не задан. Broma16 принимает строку до 50 символов.",
+    ),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
   subgenre: zod.string().nullish(),
@@ -953,6 +966,7 @@ export const GetReleaseResponse = zod
       "error",
       "takedown_requested",
       "removed",
+      "parked",
     ]),
     statusNote: zod
       .string()
@@ -965,7 +979,7 @@ export const GetReleaseResponse = zod
       .string()
       .nullish()
       .describe(
-        "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+        "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
       ),
     artistId: zod.number(),
     artistName: zod.string(),
@@ -1049,6 +1063,7 @@ export const GetReleaseResponse = zod
           "error",
           "takedown_requested",
           "removed",
+          "parked",
         ]),
       )
       .describe(
@@ -1206,6 +1221,8 @@ export const UpdateReleaseParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const updateReleaseBodyCatalogNumberMax = 50;
+
 export const updateReleaseBodyIsExplicitDefault = false;
 export const updateReleaseBodyIsCompilationDefault = false;
 export const updateReleaseBodyIsVariousArtistsDefault = false;
@@ -1219,7 +1236,13 @@ export const UpdateReleaseBody = zod.object({
   artistId: zod.number(),
   labelId: zod.number().nullish(),
   upc: zod.string().nullish(),
-  catalogNumber: zod.string().nullish(),
+  catalogNumber: zod
+    .string()
+    .max(updateReleaseBodyCatalogNumberMax)
+    .nullish()
+    .describe(
+      "Внутренний код лейбла в формате `TM######`. Авто-генерируется, если не задан. Broma16 принимает строку до 50 символов.",
+    ),
   coverUrl: zod.string().nullish(),
   genre: zod.string().nullish(),
   subgenre: zod.string().nullish(),
@@ -1282,6 +1305,7 @@ export const UpdateReleaseResponse = zod.object({
     "error",
     "takedown_requested",
     "removed",
+    "parked",
   ]),
   statusNote: zod
     .string()
@@ -1294,7 +1318,7 @@ export const UpdateReleaseResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+      "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
     ),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -1374,6 +1398,7 @@ export const UpdateReleaseResponse = zod.object({
         "error",
         "takedown_requested",
         "removed",
+        "parked",
       ]),
     )
     .describe(
@@ -1566,6 +1591,7 @@ export const SubmitReleaseForReviewResponse = zod.object({
     "error",
     "takedown_requested",
     "removed",
+    "parked",
   ]),
   statusNote: zod
     .string()
@@ -1578,7 +1604,7 @@ export const SubmitReleaseForReviewResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+      "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
     ),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -1660,6 +1686,7 @@ export const SubmitReleaseForReviewResponse = zod.object({
         "error",
         "takedown_requested",
         "removed",
+        "parked",
       ]),
     )
     .describe(
@@ -1750,6 +1777,7 @@ export const UpdateReleaseStatusResponse = zod.object({
     "error",
     "takedown_requested",
     "removed",
+    "parked",
   ]),
   statusNote: zod
     .string()
@@ -1762,7 +1790,7 @@ export const UpdateReleaseStatusResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+      "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
     ),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -1844,6 +1872,7 @@ export const UpdateReleaseStatusResponse = zod.object({
         "error",
         "takedown_requested",
         "removed",
+        "parked",
       ]),
     )
     .describe(
@@ -1922,6 +1951,7 @@ export const ImportReleaseByUpcResponse = zod.object({
     "error",
     "takedown_requested",
     "removed",
+    "parked",
   ]),
   statusNote: zod
     .string()
@@ -1934,7 +1964,7 @@ export const ImportReleaseByUpcResponse = zod.object({
     .string()
     .nullish()
     .describe(
-      "Внутренний код лейбла, авто-генерится как `CAT{id}` если не задан.",
+      "Внутренний код лейбла в формате `TM######` (TM260001, TM260002…). Авто-генерируется, если не задан.",
     ),
   artistId: zod.number(),
   artistName: zod.string(),
@@ -2016,6 +2046,7 @@ export const ImportReleaseByUpcResponse = zod.object({
         "error",
         "takedown_requested",
         "removed",
+        "parked",
       ]),
     )
     .describe(
