@@ -330,7 +330,7 @@ router.post("/tracks/:id/transcribe-lyrics", async (req, res): Promise<void> => 
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY ?? process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
   if (!apiKey) {
     res.status(503).json({ error: "OPENAI_API_KEY is not configured. Add it to the server secrets and restart." });
     return;
