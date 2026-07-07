@@ -4,15 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { KpiCard } from "@/components/ui/kpi-card";
 import {
   useGetDashboardSummary,
-  useGetDashboardRevenueByMonth,
   useGetDashboardRecentActivity,
-  useGetDashboardTopArtists,
   useGetDashboardReleasesByStatus
 } from "@workspace/api-client-react";
 import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library, Search, MoreVertical, ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from "lucide-react";
 import {
   TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
-  TopArtistsCard, RoyaltySummaryCard, ArtistsStatsTableCard, UgcSummaryCard,
+  TopArtistsCard, RoyaltySummaryCard, ArtistsStatsTableCard,
+  PerformanceOverviewCard, PlaylistPlacementsCard, UgcMapCard, UsersRankingCard,
 } from "@/components/dashboard-sections";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,19 +30,15 @@ function EmptyChart({ message }: { message: string }) {
 
 export default function Dashboard() {
   const { data: summary } = useGetDashboardSummary();
-  const { data: revenueData } = useGetDashboardRevenueByMonth();
   const { data: activityData } = useGetDashboardRecentActivity();
-  const { data: topArtistsData } = useGetDashboardTopArtists();
   const { data: statusData } = useGetDashboardReleasesByStatus();
   const { t } = useLang();
   const d = t.dashboard;
   const { user } = useAuth();
   const role = user?.role ?? "admin";
 
-  const revenue = revenueData ?? [];
   const status = statusData ?? [];
   const activity = activityData ?? [];
-  const topArtists = topArtistsData ?? [];
 
   const totalRevenue = summary?.totalRevenue ?? 0;
   const totalStreams = summary?.totalStreams ?? 0;
@@ -148,85 +143,8 @@ export default function Dashboard() {
         {(role === "admin" || role === "manager") && <OpsKpiRow />}
         {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
-        {/* ── Charts row ── */}
-        <div className="grid gap-4 lg:grid-cols-7">
-          <Card className="col-span-4 card-surface border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">{d.revenue_overview}</CardTitle>
-              <CardDescription className="text-[12px]">{d.revenue_subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="pl-1">
-              <div className="h-[280px] w-full">
-                {revenue.length === 0 ? (
-                  <EmptyChart message={d.empty_revenue} />
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={revenue} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorDsp" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="colorPub" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} dy={8} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "10px", fontSize: "12px", boxShadow: "0 8px 20px rgba(0,0,0,0.4)" }}
-                        itemStyle={{ color: "hsl(var(--foreground))" }}
-                        formatter={(v: number) => [`$${v.toLocaleString()}`, ""]}
-                      />
-                      <Area type="monotone" dataKey="dspRevenue" name="DSP Revenue" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorDsp)" dot={false} />
-                      <Area type="monotone" dataKey="publishingRevenue" name="Publishing" stroke="hsl(var(--chart-2))" strokeWidth={2} fillOpacity={1} fill="url(#colorPub)" dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Top Artists */}
-          <Card className="col-span-3 card-surface border-border/60 flex flex-col">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">{d.top_artists}</CardTitle>
-              <CardDescription className="text-[12px]">{d.top_artists_subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-auto px-4">
-              {topArtists.length === 0 ? (
-                <EmptyChart message={d.empty_top_artists} />
-              ) : (
-                <div className="space-y-1">
-                  {topArtists.map((artist, i) => (
-                    <div key={artist.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1 transition-colors cursor-default">
-                      <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
-                      <Avatar className="h-8 w-8 border border-border/50 shrink-0">
-                        <AvatarImage src={artist.imageUrl || ""} alt={artist.name} />
-                        <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-bold">
-                          {artist.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium truncate">{artist.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{(artist.totalStreams / 1000).toFixed(0)}K streams</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[12px] font-semibold">${artist.revenue.toLocaleString()}</p>
-                        <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${artist.trend > 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                          {artist.trend > 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-                          {artist.trend > 0 ? "+" : ""}{artist.trend}%
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* ── Performance overview (Streams / Revenue toggle) + DSP list ── */}
+        <PerformanceOverviewCard />
 
         {/* ── Bottom row ── */}
         <div className="grid gap-4 lg:grid-cols-7">
@@ -300,7 +218,7 @@ export default function Dashboard() {
         </div>
 
         {/* ══ Расширенные виджеты (реальные данные из API, scoped по роли в бекенде) ══ */}
-        {(role === "admin" || role === "manager" || role === "label") && (
+        {(role === "admin" || role === "manager" || role === "label" || role === "artist") && (
           <>
             {/* Streams donut + Top Territories */}
             <div className="grid gap-4 lg:grid-cols-5 items-start">
@@ -327,12 +245,19 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* UGC widget — реальные данные из ugc_metrics, scoped по треков-владению */}
-            <UgcSummaryCard />
+            {/* Плейлисты (для лейбла/артиста в приоритете) + UGC карта активности */}
+            <div className="grid gap-4 lg:grid-cols-5 items-start">
+              <div className="lg:col-span-2">
+                <PlaylistPlacementsCard />
+              </div>
+              <div className="lg:col-span-3">
+                <UgcMapCard />
+              </div>
+            </div>
 
-            {/* Таблица артистов — только админ/менеджер, лейблу не нужна
-                агрегированная сводка по чужим артистам. */}
+            {/* Таблица артистов + рейтинг пользователей — только админ/менеджер */}
             {(role === "admin" || role === "manager") && <ArtistsStatsTableCard />}
+            {(role === "admin" || role === "manager") && <UsersRankingCard />}
 
             {(role === "admin" || role === "manager") && (
               <div className="space-y-4 pt-2">

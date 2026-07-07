@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, artistsTable, labelsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable } from "@workspace/db";
+import { db, artistsTable, labelsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable, playlistStatsTable, ugcMetricsTable } from "@workspace/db";
 import { count, sum, eq, desc, gte, sql, and, inArray, between, isNotNull } from "drizzle-orm";
 import { getDataScope, type DataScope } from "../lib/auth";
 
@@ -843,6 +843,188 @@ router.get("/dashboard/publishing-kpis", async (req, res): Promise<void> => {
     royalties: parseFloat(royalties?.s ?? "0"),
     totalWorks: totalWorks?.c ?? 0,
   });
+});
+
+/**
+ * Streams by month — реальные стримы + доход из usage_reports за 12 месяцев.
+ * Питает главный график дашборда (переключатель Стримы / Доход).
+ * period в usage_reports — текст "YYYY-MM-DD" или "YYYY-MM"; группируем по первым 7 символам.
+ */
+router.get("/dashboard/streams-by-month", async (req, res): Promise<void> => {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const now = new Date();
+  const scope = getDataScope(req);
+  const scopedArtistIds = await resolveScopedArtistIds(scope);
+  const usageS = usageScope(scopedArtistIds);
+  if (usageS === false) { res.json([]); return; }
+
+  // Начало периода — первое число месяца 11 месяцев назад (лексикографическое сравнение текста работает для ISO-дат).
+  const startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const rows = await db.select({
+    ym: sql<string>`substring(${usageReportsTable.period} from 1 for 7)`,
+    streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+    revenue: sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
+  })
+    .from(usageReportsTable)
+    .where(withCond(gte(usageReportsTable.period, startKey), usageS))
+    .groupBy(sql`substring(${usageReportsTable.period} from 1 for 7)`);
+
+  const streamMap = new Map(rows.map((r) => [r.ym, Number(r.streams)]));
+  const revMap = new Map(rows.map((r) => [r.ym, parseFloat(r.revenue)]));
+
+  const result = [];
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthLabel = `${months[date.getMonth()]} '${String(date.getFullYear()).slice(-2)}`;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    result.push({
+      month: monthLabel,
+      streams: streamMap.get(key) ?? 0,
+      revenue: parseFloat((revMap.get(key) ?? 0).toFixed(2)),
+    });
+  }
+  res.json(result);
+});
+
+/**
+ * Playlist placements — плейлисты, куда попали релизы (playlist_stats).
+ * Scope: admin/manager — все; label — по labelId; artist — по artistId.
+ */
+router.get("/dashboard/playlist-placements", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const conds: any[] = [];
+  if (!scope.fullAccess) {
+    if (scope.role === "label") {
+      if (scope.labelId == null) { res.json([]); return; }
+      conds.push(eq(playlistStatsTable.labelId, scope.labelId));
+    } else if (scope.role === "artist") {
+      if (scope.artistId == null) { res.json([]); return; }
+      conds.push(eq(playlistStatsTable.artistId, scope.artistId));
+    } else {
+      res.json([]); return;
+    }
+  }
+
+  const rows = await db.select({
+    id: playlistStatsTable.id,
+    playlistName: playlistStatsTable.playlistName,
+    dsp: playlistStatsTable.dsp,
+    followers: playlistStatsTable.followers,
+    streams: playlistStatsTable.streams,
+    trendPct: playlistStatsTable.trendPct,
+    lastUpdated: playlistStatsTable.lastUpdated,
+  })
+    .from(playlistStatsTable)
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(playlistStatsTable.streams))
+    .limit(20);
+
+  res.json(rows.map((r) => ({
+    id: r.id,
+    playlistName: r.playlistName,
+    dsp: r.dsp,
+    followers: r.followers,
+    streams: r.streams,
+    trendPct: r.trendPct,
+    lastUpdated: r.lastUpdated.toISOString(),
+  })));
+});
+
+/**
+ * UGC time series — динамика по дням (просмотры / видео / лайки) + разбивка по платформам.
+ * Данные из ugc_metrics. Scope через треки артистов (как в ugc-summary).
+ * Примечание: у ugc_metrics нет колонки "время просмотра", поэтому третий ряд — лайки (вовлечённость).
+ */
+router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const artistIds = await resolveScopedArtistIds(scope);
+  const conds: any[] = [];
+  if (artistIds !== null) {
+    if (artistIds.length === 0) { res.json({ series: [], byPlatform: [] }); return; }
+    const trackRows = await db.select({ id: tracksTable.id }).from(tracksTable)
+      .where(inArray(tracksTable.artistId, artistIds));
+    const trackIds = trackRows.map((r) => r.id);
+    if (trackIds.length === 0) { res.json({ series: [], byPlatform: [] }); return; }
+    conds.push(inArray(ugcMetricsTable.trackId, trackIds));
+  }
+  const where = conds.length ? and(...conds) : undefined;
+
+  const series = await db.select({
+    day: sql<string>`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`,
+    views: sql<string>`coalesce(sum(${ugcMetricsTable.views}), 0)`,
+    videos: sql<string>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)`,
+    likes: sql<string>`coalesce(sum(${ugcMetricsTable.likes}), 0)`,
+  })
+    .from(ugcMetricsTable)
+    .where(where)
+    .groupBy(sql`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`)
+    .orderBy(sql`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`);
+
+  const byPlatform = await db.select({
+    platform: ugcMetricsTable.platform,
+    views: sql<string>`coalesce(sum(${ugcMetricsTable.views}), 0)`,
+    videos: sql<string>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)`,
+    likes: sql<string>`coalesce(sum(${ugcMetricsTable.likes}), 0)`,
+    shares: sql<string>`coalesce(sum(${ugcMetricsTable.shares}), 0)`,
+  })
+    .from(ugcMetricsTable)
+    .where(where)
+    .groupBy(ugcMetricsTable.platform);
+
+  res.json({
+    series: series.map((s) => ({
+      day: s.day,
+      views: Number(s.views),
+      videos: Number(s.videos),
+      likes: Number(s.likes),
+    })),
+    byPlatform: byPlatform.map((p) => ({
+      platform: p.platform,
+      views: Number(p.views),
+      videos: Number(p.videos),
+      likes: Number(p.likes),
+      shares: Number(p.shares),
+    })),
+  });
+});
+
+/**
+ * Users ranking (admin/manager only) — таблица пользователей для дашборда.
+ * Реальные данные из users: аватар, имя, роль, статус, дата регистрации, последний вход.
+ * Сортировка: сначала по последней активности, затем по дате регистрации.
+ */
+router.get("/dashboard/users-ranking", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) { res.status(403).json({ error: "admin_only" }); return; }
+
+  const rows = await db.select({
+    id: usersTable.id,
+    name: usersTable.name,
+    email: usersTable.email,
+    role: usersTable.role,
+    status: usersTable.status,
+    avatarUrl: usersTable.avatarUrl,
+    country: usersTable.country,
+    lastLoginAt: usersTable.lastLoginAt,
+    createdAt: usersTable.createdAt,
+  })
+    .from(usersTable)
+    .orderBy(desc(usersTable.lastLoginAt), desc(usersTable.createdAt))
+    .limit(12);
+
+  res.json(rows.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    status: u.status,
+    avatarUrl: u.avatarUrl ?? null,
+    country: u.country ?? null,
+    lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+    createdAt: u.createdAt.toISOString(),
+  })));
 });
 
 export default router;
