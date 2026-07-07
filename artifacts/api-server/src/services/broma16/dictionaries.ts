@@ -175,8 +175,55 @@ export async function resolveReleaseTypeId(ourType: string | null | undefined): 
   return RELEASE_TYPE_FALLBACK[key] ?? RELEASE_TYPE_FALLBACK.single;
 }
 
+/**
+ * Региональные/локальные жанры (тадж., перс., узб., ЦА), которых нет в словаре
+ * Broma16 напрямую. Значение — упорядоченный список подстрок названий жанров
+ * Broma16, которые пробуем найти в словаре (первое совпадение выигрывает).
+ * Если ничего не подошло — общий фоллбэк «World» (см. WORLD_FALLBACK_HINTS).
+ */
+const REGIONAL_GENRE_HINTS: Record<string, string[]> = {
+  "falak": ["folk", "world"],
+  "фалак": ["folk", "world"],
+  "shashmaqom": ["classical", "world", "folk"],
+  "shashmakom": ["classical", "world", "folk"],
+  "shashmaqam": ["classical", "world", "folk"],
+  "шашмаком": ["classical", "world", "folk"],
+  "maqom": ["classical", "world", "folk"],
+  "maqam": ["classical", "world", "folk"],
+  "маком": ["classical", "world", "folk"],
+  "persian": ["world", "pop"],
+  "persian pop": ["pop", "world"],
+  "персидская": ["world", "pop"],
+  "иранская": ["world", "pop"],
+  "tajik": ["world", "folk", "pop"],
+  "tajik pop": ["pop", "world"],
+  "tajik folk": ["folk", "world"],
+  "таджикская": ["world", "folk", "pop"],
+  "uzbek": ["world", "folk", "pop"],
+  "uzbek pop": ["pop", "world"],
+  "узбекская": ["world", "folk", "pop"],
+  "dutar": ["folk", "world"],
+  "дутар": ["folk", "world"],
+  "tanbur": ["folk", "world"],
+  "танбур": ["folk", "world"],
+  "ghazal": ["world", "folk"],
+  "газель": ["world", "folk"],
+  "ruboi": ["world", "folk"],
+  "рубаи": ["world", "folk"],
+  "national": ["world", "folk"],
+  "народная": ["folk", "world"],
+  "этно": ["world", "folk"],
+  "ethnic": ["world", "folk"],
+};
+
+/** Подстроки для поиска общего жанра «World» в словаре Broma16 (фоллбэк). */
+const WORLD_FALLBACK_HINTS = ["world", "этно", "этническ", "мировая"];
+
 /** Канонизирует жанры к коду Broma16 (его ожидает API в поле genres).
- *  На вход принимает код, название или id — на выходе всегда код словаря. */
+ *  На вход принимает код, название или id — на выходе всегда код словаря.
+ *  Региональные жанры (Falak, Shashmaqom, персидские/узбекские и т.п.), которых
+ *  нет в словаре Broma16, маппятся на ближайший эквивалент; если и он не найден —
+ *  на общий «World», чтобы не отправлять в Broma16 несуществующий код жанра. */
 export async function resolveGenres(names: string[]): Promise<string[]> {
   const input = (names ?? []).map((n) => n.trim()).filter(Boolean);
   if (input.length === 0) return [];
@@ -189,9 +236,30 @@ export async function resolveGenres(names: string[]): Promise<string[]> {
     byKey.set(norm(d.name), canon);
     byKey.set(norm(d.externalId), canon);
   }
+  // Ищет в словаре первую запись, чьё название содержит одну из подсказок.
+  const findByNameHints = (hints: string[]): string | null => {
+    for (const h of hints) {
+      const hn = norm(h);
+      const match = dict.find((d) => norm(d.name).includes(hn));
+      if (match) return match.code ?? match.name;
+    }
+    return null;
+  };
+  const worldCanon = findByNameHints(WORLD_FALLBACK_HINTS);
+
   const out: string[] = [];
   for (const g of input) {
-    out.push(byKey.get(norm(g)) ?? g);
+    // 1) Прямое совпадение по коду/названию/id словаря.
+    const direct = byKey.get(norm(g));
+    if (direct) { out.push(direct); continue; }
+    // 2) Региональный жанр → ближайший эквивалент из словаря.
+    const hints = REGIONAL_GENRE_HINTS[norm(g)];
+    const mapped = hints ? findByNameHints(hints) : null;
+    if (mapped) { out.push(mapped); continue; }
+    // 3) Общий фоллбэк «World», если он есть в словаре.
+    if (worldCanon) { out.push(worldCanon); continue; }
+    // 4) Крайний случай: словарь без «World» — оставляем как есть.
+    out.push(g);
   }
   return Array.from(new Set(out));
 }

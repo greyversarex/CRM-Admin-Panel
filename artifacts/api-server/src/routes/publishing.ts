@@ -3,6 +3,9 @@ import { db, publishingWorksTable, tracksTable, releasesTable, artistsTable } fr
 import { count, eq, desc, and, or, ilike, inArray, type SQL } from "drizzle-orm";
 import { CreatePublishingWorkBody, UpdatePublishingWorkBody, GetPublishingWorkParams, UpdatePublishingWorkParams } from "@workspace/api-zod";
 import { getDataScope } from "../lib/auth";
+import { auditMutation } from "../lib/audit";
+import { pushCompositionToBroma16 } from "../services/broma16/composition-pusher";
+import { sendBroma16Error } from "./broma16";
 
 const router = Router();
 
@@ -258,6 +261,55 @@ router.put("/publishing/works/:id", async (req, res): Promise<void> => {
   }
 
   res.json(formatWork(work));
+});
+
+// POST /publishing/works/:id/push-broma16 — издательский режим: регистрирует
+// произведение (composition) в Broma16 без фонограмм/обложки/площадок.
+// Только admin/manager (отправка в ROD — служебное действие).
+router.post("/publishing/works/:id/push-broma16", async (req, res): Promise<void> => {
+  const params = GetPublishingWorkParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const scope = getDataScope(req);
+  if (!scope.fullAccess) {
+    res.status(403).json({ error: "Только администратор или менеджер может отправлять произведения в Broma16" });
+    return;
+  }
+
+  const [existing] = await db.select().from(publishingWorksTable).where(eq(publishingWorksTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Произведение не найдено" });
+    return;
+  }
+
+  // Защита от повторной отправки: авторы в Broma16 добавляются, а не заменяются,
+  // поэтому повторный пуш уже отправленного произведения может продублировать доли.
+  if (existing.broma16Status === "submitted") {
+    res.status(409).json({
+      error: "Это произведение уже отправлено в Broma16. Повторная отправка продублировала бы авторов.",
+      code: "already_submitted",
+    });
+    return;
+  }
+
+  try {
+    const result = await pushCompositionToBroma16(params.data.id);
+    const [updated] = await db.select().from(publishingWorksTable).where(eq(publishingWorksTable.id, params.data.id));
+    void auditMutation(req, {
+      action: "broma16_push",
+      entityType: "publishing_work",
+      entityId: params.data.id,
+      before: existing,
+      after: updated ?? null,
+    });
+    res.json(formatWork(updated ?? existing));
+    void result;
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
 });
 
 export default router;

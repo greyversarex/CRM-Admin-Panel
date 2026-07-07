@@ -14,7 +14,7 @@
  */
 
 import { and, eq, isNotNull } from "drizzle-orm";
-import { db, releasesTable, auditLogTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, auditLogTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { createBroma16Client } from "./client";
 import { fireTriggerAndForget } from "../triggers";
@@ -149,6 +149,88 @@ async function applyVerdict(rel: PendingRelease, verdict: "approved" | "rejected
   logger.info({ releaseId: rel.id, verdict, raw, nextStatus }, "[broma16] модерация: получен вердикт");
 }
 
+/** Достаёт первое строковое значение из объекта по списку вероятных ключей. */
+function pickString(obj: Record<string, unknown> | null | undefined, keys: string[]): string | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+/**
+ * Считывает коды, присвоенные Broma16 (ISRC у записей, UPC/каталожный № у релиза),
+ * и сохраняет их у нас, НЕ перетирая уже заполненные значения. Broma16 присваивает
+ * коды при отправке (generate_isrc/generate_upc/generate_catalog_number), поэтому
+ * читаем при каждом успешном опросе — как только код появился, он попадёт в нашу БД.
+ * Ошибки парсинга/записи не должны ломать основной цикл модерации — логируем и идём дальше.
+ */
+async function readBackAssignedCodes(releaseId: number, data: unknown): Promise<void> {
+  try {
+    if (!data || typeof data !== "object") return;
+    const rel = data as Record<string, unknown>;
+    // Иногда payload может быть завёрнут в { release: {...} } / { data: {...} }.
+    const relObj =
+      (rel.release && typeof rel.release === "object" ? (rel.release as Record<string, unknown>) : null) ??
+      (rel.data && typeof rel.data === "object" ? (rel.data as Record<string, unknown>) : null) ??
+      rel;
+
+    // ── Коды уровня релиза: UPC и каталожный номер ──
+    const upc = pickString(relObj, ["upc", "ean", "barcode"]);
+    const catalog = pickString(relObj, ["catalog_number", "catalogNumber"]);
+    const relPatch: Record<string, string> = {};
+    if (upc) relPatch.upc = upc;
+    if (catalog) relPatch.catalogNumber = catalog;
+    if (Object.keys(relPatch).length > 0) {
+      // Обновляем только пустые поля, чтобы не перетереть введённые вручную коды.
+      const [cur] = await db
+        .select({ upc: releasesTable.upc, catalogNumber: releasesTable.catalogNumber })
+        .from(releasesTable)
+        .where(eq(releasesTable.id, releaseId))
+        .limit(1);
+      const finalPatch: Record<string, string> = {};
+      if (relPatch.upc && !cur?.upc?.trim()) finalPatch.upc = relPatch.upc;
+      if (relPatch.catalogNumber && !cur?.catalogNumber?.trim()) finalPatch.catalogNumber = relPatch.catalogNumber;
+      if (Object.keys(finalPatch).length > 0) {
+        await db.update(releasesTable).set(finalPatch).where(eq(releasesTable.id, releaseId));
+        logger.info({ releaseId, ...finalPatch }, "[broma16] read-back: сохранены коды релиза");
+      }
+    }
+
+    // ── ISRC уровня записи: сопоставляем по broma16RecordingId ──
+    const recs = relObj.recordings;
+    if (Array.isArray(recs) && recs.length > 0) {
+      // Карта broma16RecordingId → isrc из ответа Broma16.
+      const isrcByRecId = new Map<number, string>();
+      for (const r of recs) {
+        if (!r || typeof r !== "object") continue;
+        const ro = r as Record<string, unknown>;
+        const recId = typeof ro.id === "number" ? ro.id : Number(ro.id);
+        const isrc = pickString(ro, ["isrc"]);
+        if (Number.isFinite(recId) && isrc) isrcByRecId.set(recId, isrc);
+      }
+      if (isrcByRecId.size > 0) {
+        const ourTracks = await db
+          .select({ id: tracksTable.id, isrc: tracksTable.isrc, recId: tracksTable.broma16RecordingId })
+          .from(tracksTable)
+          .where(eq(tracksTable.releaseId, releaseId));
+        for (const t of ourTracks) {
+          if (t.recId == null) continue;
+          if (t.isrc && t.isrc.trim()) continue; // не перетираем существующий ISRC
+          const assigned = isrcByRecId.get(t.recId);
+          if (assigned) {
+            await db.update(tracksTable).set({ isrc: assigned }).where(eq(tracksTable.id, t.id));
+            logger.info({ releaseId, trackId: t.id, isrc: assigned }, "[broma16] read-back: сохранён ISRC трека");
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, releaseId }, "[broma16] read-back кодов не удался (не критично)");
+  }
+}
+
 /**
  * Проверяет модерацию одного релиза. Возвращает результат проверки.
  * Бросает при сетевых/конфигурационных ошибках Broma16 (для ручного эндпоинта).
@@ -178,6 +260,11 @@ export async function checkReleaseModeration(
 
   const client = await createBroma16Client();
   const data = await client.request<unknown>("GET", `/repertoire/release/${rel.broma16ReleaseId}`);
+
+  // Считываем коды, присвоенные Broma16 (ISRC/UPC/каталожный №), при каждом успешном
+  // опросе — независимо от вердикта модерации. Не критично для основного цикла.
+  await readBackAssignedCodes(rel.id, data);
+
   const { verdict, raw } = deriveModerationVerdict(data);
 
   if (verdict === "pending") {

@@ -3,7 +3,7 @@
  * При отсутствии credentials в Settings → Publishing → PRO — показывает понятное предупреждение.
  */
 import { useEffect, useState, useCallback } from "react";
-import { Send, RefreshCw } from "lucide-react";
+import { Send, RefreshCw, Radio, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,8 @@ interface Work {
   bmi: boolean;
   songtrust: boolean;
   mlcSongCode: string | null;
+  broma16CompositionId?: string | null;
+  broma16Status?: string | null;
 }
 
 const PROS = ["ascap", "bmi", "songtrust", "mlc"] as const;
@@ -31,12 +33,13 @@ export function RegistrationTab() {
   const [loading, setLoading] = useState(false);
   const [workId, setWorkId] = useState("");
   const [pro, setPro] = useState<string>("ascap");
+  const [pushingId, setPushingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await adminApi<{ works: Work[] } | Work[]>("/api/publishing/works?limit=50");
-      setWorks(Array.isArray(r) ? r : (r.works ?? []));
+      const r = await adminApi<{ data?: Work[]; works?: Work[] } | Work[]>("/api/publishing/works?limit=50");
+      setWorks(Array.isArray(r) ? r : (r.data ?? r.works ?? []));
     } catch (e) { toast({ title: "Ошибка", description: String((e as Error).message), variant: "destructive" }); }
     setLoading(false);
   }, []);
@@ -49,6 +52,18 @@ export function RegistrationTab() {
       toast({ title: `Отправлено в ${pro.toUpperCase()}` });
       await load();
     } catch (e) { toast({ title: "Ошибка регистрации", description: String((e as Error).message), variant: "destructive" }); }
+  };
+
+  const pushToBroma16 = async (id: number) => {
+    setPushingId(id);
+    try {
+      await adminApi(`/api/publishing/works/${id}/push-broma16`, { method: "POST" });
+      toast({ title: "Отправлено в Broma16", description: "Произведение зарегистрировано в издательском режиме." });
+      await load();
+    } catch (e) {
+      toast({ title: "Ошибка отправки в Broma16", description: String((e as Error).message), variant: "destructive" });
+    }
+    setPushingId(null);
   };
 
   return (
@@ -86,7 +101,7 @@ export function RegistrationTab() {
         {works.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground text-center">Нет работ.</div>
         ) : works.map((w) => (
-          <div key={w.id} className="p-3 flex items-center justify-between" data-testid={`row-work-${w.id}`}>
+          <div key={w.id} className="p-3 flex items-center justify-between gap-3" data-testid={`row-work-${w.id}`}>
             <div className="text-sm">
               <div className="font-medium">#{w.id} · {w.title}{w.iswc ? ` · ISWC ${w.iswc}` : ""}</div>
               <div className="text-xs text-muted-foreground flex gap-1 flex-wrap mt-1">
@@ -95,8 +110,26 @@ export function RegistrationTab() {
                 {w.bmi && <Badge variant="default">BMI</Badge>}
                 {w.songtrust && <Badge variant="default">Songtrust</Badge>}
                 {w.mlcSongCode && <Badge variant="default">MLC: {w.mlcSongCode}</Badge>}
+                {w.broma16Status && (
+                  <Badge variant={w.broma16Status === "submitted" ? "default" : "secondary"}>
+                    Broma16: {w.broma16Status === "submitted" ? "отправлено" : "в очереди"}
+                    {w.broma16CompositionId ? ` #${w.broma16CompositionId}` : ""}
+                  </Badge>
+                )}
               </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void pushToBroma16(w.id)}
+              disabled={pushingId === w.id || w.broma16Status === "submitted"}
+              data-testid={`button-broma16-push-${w.id}`}
+            >
+              {pushingId === w.id
+                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                : <Radio className="h-4 w-4 mr-1" />}
+              {w.broma16Status === "submitted" ? "Отправлено" : "В Broma16"}
+            </Button>
           </div>
         ))}
       </div>

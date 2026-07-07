@@ -19,6 +19,9 @@ export const publishingWorksTable = pgTable("publishing_works", {
   songtrust: boolean("songtrust").notNull().default(false),
   ascap: boolean("ascap").notNull().default(false),
   bmi: boolean("bmi").notNull().default(false),
+  // Broma16 (ROD) издательский режим: id произведения и статус отправки.
+  broma16CompositionId: text("broma16_composition_id"),
+  broma16Status: text("broma16_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

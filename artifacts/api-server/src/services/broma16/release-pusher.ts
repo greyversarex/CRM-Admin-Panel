@@ -331,6 +331,10 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     // иначе просим Broma16 сгенерировать (как и для UPC/каталога релиза).
     if (release.catalogNumber) body.catalog_number = release.catalogNumber;
     else body.generate_catalog_number = true;
+    // ISRC: если у трека уже есть свой код — передаём его, иначе просим Broma16
+    // сгенерировать. Присвоенный код читаем обратно после модерации (см. moderation.ts).
+    if (track.isrc) body.isrc = track.isrc;
+    else body.generate_isrc = true;
     await client.request("PUT", `/repertoire/release/${broma16ReleaseId}/recording/${recId}`, { body });
     progress.metadataDone.push(track.id);
     await save(progress);

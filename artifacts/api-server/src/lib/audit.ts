@@ -120,6 +120,11 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
   manager_permission: new Set([
     "key", "enabled", "updatedBy", "updatedAt",
   ]),
+  publishing_work: new Set([
+    "id", "title", "iswc", "isrc", "trackId", "writers", "publisher",
+    "territory", "registeredWith", "mlcSongCode", "songtrust", "ascap", "bmi",
+    "broma16CompositionId", "broma16Status", "status", "createdAt", "updatedAt",
+  ]),
 };
 
 // Nested-blocklist: применяется на ЛЮБОЙ глубине внутри jsonb-полей. Даже если
@@ -238,7 +243,8 @@ export type AuditAction =
   | "acr_scan" | "acr_scan_full" | "acr_drop" | "acr_manual_result" | "musicbrainz_isrc_check"
   | "resolve" | "reopen"
   | "import"
-  | "pro_register" | "pro_register_failed" | "pro_register_network_error";
+  | "pro_register" | "pro_register_failed" | "pro_register_network_error"
+  | "broma16_push";
 
 export interface AuditOptions {
   action: AuditAction;
