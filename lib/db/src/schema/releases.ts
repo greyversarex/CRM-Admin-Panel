@@ -43,6 +43,8 @@ export const releasesTable = pgTable("releases", {
   releaseTime: text("release_time"),
   /** Оригинальная дата первого выхода (для перевыпусков/каталога). YYYY-MM-DD. */
   originalReleaseDate: text("original_release_date"),
+  /** Релиз импортирован через Transfer Track (перенос каталога). В Broma16 уходит isTransferRelease=true. */
+  isTransfer: boolean("is_transfer").notNull().default(false),
   /** Дата старта предзаказа / pre-save. YYYY-MM-DD. */
   preorderDate: text("preorder_date"),
   language: text("language"),

@@ -268,6 +268,8 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   else releaseBody.generate_ean = true;
   if (release.catalogNumber) releaseBody.catalog_number = release.catalogNumber;
   else releaseBody.generate_catalog_number = true;
+  // Перенос каталога: документированный флаг Broma16 (регулирует особенности переноса).
+  if (release.isTransfer) releaseBody.isTransferRelease = true;
 
   let broma16ReleaseId = release.broma16ReleaseId ?? null;
   if (broma16ReleaseId) {
