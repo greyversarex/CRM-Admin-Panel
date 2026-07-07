@@ -597,7 +597,16 @@ router.post("/releases", async (req, res): Promise<void> => {
     }
   }
 
-  const [release] = await db.insert(releasesTable).values(parsed.data).returning();
+  let release;
+  try {
+    [release] = await db.insert(releasesTable).values(parsed.data).returning();
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      res.status(409).json({ error: `Каталожный номер «${parsed.data.catalogNumber}» уже используется другим релизом. Укажите другой или оставьте поле пустым для автоприсвоения.` });
+      return;
+    }
+    throw e;
+  }
 
   // Auto-generate catalogNumber в формате TM###### если лейбл не задал свой.
   // Уникальный индекс на catalog_number защищает от гонок: при конфликте
@@ -695,7 +704,16 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     }
   }
 
-  const [release] = await db.update(releasesTable).set(parsed.data).where(eq(releasesTable.id, params.data.id)).returning();
+  let release;
+  try {
+    [release] = await db.update(releasesTable).set(parsed.data).where(eq(releasesTable.id, params.data.id)).returning();
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      res.status(409).json({ error: `Каталожный номер «${(parsed.data as Record<string, unknown>).catalogNumber}» уже используется другим релизом. Укажите другой номер.` });
+      return;
+    }
+    throw e;
+  }
   if (!release) {
     res.status(404).json({ error: "Release not found" });
     return;

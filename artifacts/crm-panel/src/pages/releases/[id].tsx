@@ -715,6 +715,7 @@ function EditDetailsForm({
     genre:        release.genre ?? "",
     releaseDate:  release.releaseDate ? String(release.releaseDate).slice(0, 10) : "",
     upc:          release.upc ?? "",
+    catalogNumber: (release as any).catalogNumber ?? "",
     pLine:        release.pLine ?? "",
     cLine:        release.cLine ?? "",
     isExplicit:   !!release.isExplicit,
@@ -765,6 +766,7 @@ function EditDetailsForm({
       genre:       form.genre || null,
       releaseDate: form.releaseDate || null,
       upc:         form.upc.trim() || null,
+      catalogNumber: form.catalogNumber.trim() || null,
       pLine:       form.pLine.trim() || null,
       cLine:       form.cLine.trim() || null,
       isExplicit:  form.isExplicit,
@@ -841,6 +843,18 @@ function EditDetailsForm({
           <Input type="date" value={form.releaseDate} onChange={(e) => set("releaseDate", e.target.value)} className="bg-background/40" />
         </FormField>
       </div>
+
+      <FormField label="Каталожный № (необязательно)">
+        <Input
+          value={form.catalogNumber}
+          onChange={(e) => set("catalogNumber", e.target.value)}
+          placeholder="TM260001"
+          className="bg-background/40 font-mono"
+        />
+        <p className="text-[11px] text-muted-foreground/80 mt-1">
+          Оставьте пустым — присвоится автоматически (TM######). Передаётся в Broma16.
+        </p>
+      </FormField>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormField label="℗ Строка">

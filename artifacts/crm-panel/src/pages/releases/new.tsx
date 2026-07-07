@@ -68,6 +68,7 @@ export default function CreateRelease() {
   const [labelId, setLabelId]           = useState<number | null>(null);
   const [genre, setGenre]               = useState("");
   const [subgenre, setSubgenre]         = useState("");
+  const [catalogNumber, setCatalogNumber] = useState("");
   const [cLineYear, setCLineYear]       = useState<number | "">(CURRENT_YEAR);
   const [cLine, setCLine]               = useState("");
   const [pLineYear, setPLineYear]       = useState<number | "">(CURRENT_YEAR);
@@ -210,6 +211,7 @@ export default function CreateRelease() {
           language: language || undefined,
           genre: genre || undefined,
           subgenre: subgenre || undefined,
+          catalogNumber: catalogNumber.trim() || undefined,
           cLine: cLine.trim() || undefined,
           cLineYear: cLineYear === "" ? undefined : Number(cLineYear),
           pLine: pLine.trim() || undefined,
@@ -615,10 +617,10 @@ export default function CreateRelease() {
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.catalogNumber}</FieldLabel>
               <Input
-                value=""
-                readOnly
+                value={catalogNumber}
+                onChange={e => setCatalogNumber(e.target.value)}
                 placeholder={L.autoAssigned}
-                className="bg-muted/20 cursor-not-allowed text-muted-foreground font-mono"
+                className="bg-background/40 font-mono"
               />
               <p className="text-[11px] text-muted-foreground">{L.catalogHint}</p>
             </div>

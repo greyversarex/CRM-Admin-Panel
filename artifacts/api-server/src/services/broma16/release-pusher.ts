@@ -313,7 +313,6 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
       title: track.title,
       subtitle: track.trackVersion ?? "",
       genres: trackGenres,
-      isrc: track.isrc ?? undefined,
       main_performer: performerIds,
       featured_artist: [],
       created_country_id: await resolveCountryId(track.countryOfRecording),
