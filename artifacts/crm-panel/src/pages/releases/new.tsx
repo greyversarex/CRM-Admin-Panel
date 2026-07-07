@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
@@ -402,17 +402,39 @@ export default function CreateRelease() {
                   >
                     {pickerArtists.length > 0 ? (
                       <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-                        {pickerArtists.map(a => (
-                          <span
-                            key={a.artistId}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-primary/15 text-primary border border-primary/25"
-                          >
-                            {a.name}
-                            {a.role === "primary" && (
-                              <span className="text-[9px] opacity-60 font-normal">primary</span>
-                            )}
-                          </span>
-                        ))}
+                        {pickerArtists.map(a => {
+                          const chipLocked = user?.role === "artist" && a.artistId === user?.artistId;
+                          return (
+                            <span
+                              key={a.artistId}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-primary/15 text-primary border border-primary/25"
+                            >
+                              {a.name}
+                              {a.role === "primary" && (
+                                <span className="text-[9px] opacity-60 font-normal">primary</span>
+                              )}
+                              {!chipLocked && (
+                                <span
+                                  role="button"
+                                  tabIndex={-1}
+                                  aria-label={`Убрать ${a.name}`}
+                                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setReleaseArtists(prev =>
+                                      prev.filter(r => r.artistId !== a.artistId)
+                                        .map((r, i) => ({ ...r, position: i }))
+                                    );
+                                  }}
+                                  className="ml-0.5 -mr-0.5 rounded-sm p-0.5 hover:bg-primary/25 cursor-pointer"
+                                >
+                                  <X className="h-3 w-3" />
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
                       </div>
                     ) : (
                       <span className="text-foreground/40">{L.selectArtist}</span>
