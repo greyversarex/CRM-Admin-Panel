@@ -123,6 +123,15 @@ export const ListArtistsResponse = zod.object({
       labelName: zod.string().nullish(),
       spotifyId: zod.string().nullish(),
       appleId: zod.string().nullish(),
+      broma16Outlets: zod
+        .array(
+          zod.object({
+            outletId: zod.number(),
+            outletName: zod.string(),
+            idOutletUser: zod.string(),
+          }),
+        )
+        .nullish(),
       socialLinks: zod.object({}).passthrough().nullish(),
       status: zod.string(),
       totalReleases: zod.number(),
@@ -153,6 +162,15 @@ export const CreateArtistBody = zod.object({
   labelId: zod.number().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  broma16Outlets: zod
+    .array(
+      zod.object({
+        outletId: zod.number(),
+        outletName: zod.string(),
+        idOutletUser: zod.string(),
+      }),
+    )
+    .nullish(),
   socialLinks: zod.object({}).passthrough().nullish(),
   status: zod
     .enum(["active", "inactive"])
@@ -190,6 +208,15 @@ export const GetArtistResponse = zod
     labelName: zod.string().nullish(),
     spotifyId: zod.string().nullish(),
     appleId: zod.string().nullish(),
+    broma16Outlets: zod
+      .array(
+        zod.object({
+          outletId: zod.number(),
+          outletName: zod.string(),
+          idOutletUser: zod.string(),
+        }),
+      )
+      .nullish(),
     socialLinks: zod.object({}).passthrough().nullish(),
     status: zod.string(),
     totalReleases: zod.number(),
@@ -490,6 +517,15 @@ export const UpdateArtistBody = zod.object({
   labelId: zod.number().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  broma16Outlets: zod
+    .array(
+      zod.object({
+        outletId: zod.number(),
+        outletName: zod.string(),
+        idOutletUser: zod.string(),
+      }),
+    )
+    .nullish(),
   socialLinks: zod.object({}).passthrough().nullish(),
   status: zod
     .enum(["active", "inactive"])
@@ -509,6 +545,15 @@ export const UpdateArtistResponse = zod.object({
   labelName: zod.string().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  broma16Outlets: zod
+    .array(
+      zod.object({
+        outletId: zod.number(),
+        outletName: zod.string(),
+        idOutletUser: zod.string(),
+      }),
+    )
+    .nullish(),
   socialLinks: zod.object({}).passthrough().nullish(),
   status: zod.string(),
   totalReleases: zod.number(),

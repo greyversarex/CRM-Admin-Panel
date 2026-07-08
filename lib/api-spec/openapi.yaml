@@ -2126,6 +2126,17 @@ components:
       required: [status, count]
 
     # ==================== ARTISTS ====================
+    Broma16OutletRef:
+      type: object
+      properties:
+        outletId:
+          type: integer
+        outletName:
+          type: string
+        idOutletUser:
+          type: string
+      required: [outletId, outletName, idOutletUser]
+
     Artist:
       type: object
       properties:
@@ -2162,6 +2173,11 @@ components:
         appleId:
           type: string
           nullable: true
+        broma16Outlets:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/Broma16OutletRef"
         socialLinks:
           type: object
           nullable: true
@@ -2235,6 +2251,11 @@ components:
         appleId:
           type: string
           nullable: true
+        broma16Outlets:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/Broma16OutletRef"
         socialLinks:
           type: object
           nullable: true

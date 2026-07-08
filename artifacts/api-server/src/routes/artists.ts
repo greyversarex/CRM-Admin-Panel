@@ -13,6 +13,7 @@ import { sendMailAndForget } from "../lib/mail";
 import { logger } from "../lib/logger";
 import { createNotification } from "../services/notifications";
 import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
+import { getDictionary } from "../services/broma16/dictionaries";
 
 const router = Router();
 
@@ -118,6 +119,7 @@ router.get("/artists", async (req, res): Promise<void> => {
     labelId: artistsTable.labelId,
     spotifyId: artistsTable.spotifyId,
     appleId: artistsTable.appleId,
+    broma16Outlets: artistsTable.broma16Outlets,
     socialLinks: artistsTable.socialLinks,
     status: artistsTable.status,
     createdAt: artistsTable.createdAt,
@@ -181,6 +183,23 @@ router.post("/artists", requireRole("admin", "manager", "label"), async (req, re
     updatedAt: artist.updatedAt.toISOString(),
   });
 });
+
+// Справочник витрин Broma16 (для выпадающего списка в карточке артиста).
+router.get(
+  "/artists/meta/outlets",
+  requireRole("admin", "manager", "label"),
+  async (_req, res): Promise<void> => {
+    const rows = await getDictionary("outlet");
+    const items = rows
+      .filter((r) => /^\d+$/.test(String(r.externalId)))
+      .map((r) => ({
+        externalId: String(r.externalId),
+        code: r.code ?? null,
+        name: r.name || String(r.externalId),
+      }));
+    res.json({ items });
+  },
+);
 
 router.get("/artists/:id", async (req, res): Promise<void> => {
   const params = GetArtistParams.safeParse(req.params);

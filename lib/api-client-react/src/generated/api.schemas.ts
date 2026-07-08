@@ -62,6 +62,12 @@ export interface StatusCount {
   count: number;
 }
 
+export interface Broma16OutletRef {
+  outletId: number;
+  outletName: string;
+  idOutletUser: string;
+}
+
 export type ArtistSocialLinks = { [key: string]: unknown } | null;
 
 export interface Artist {
@@ -77,6 +83,7 @@ export interface Artist {
   labelName?: string | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: ArtistSocialLinks;
   status: string;
   totalReleases: number;
@@ -456,6 +463,7 @@ export interface CreateArtistBody {
   labelId?: number | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: CreateArtistBodySocialLinks;
   status?: CreateArtistBodyStatus;
 }

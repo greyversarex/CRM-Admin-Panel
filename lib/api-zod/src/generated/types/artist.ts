@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArtistSocialLinks } from "./artistSocialLinks";
+import type { Broma16OutletRef } from "./broma16OutletRef";
 
 export interface Artist {
   id: number;
@@ -20,6 +21,7 @@ export interface Artist {
   labelName?: string | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: ArtistSocialLinks;
   status: string;
   totalReleases: number;

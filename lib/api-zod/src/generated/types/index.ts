@@ -16,6 +16,7 @@ export * from "./assetKind";
 export * from "./assetWithDownload";
 export * from "./balance";
 export * from "./balanceEntityType";
+export * from "./broma16OutletRef";
 export * from "./confirmAssetBody";
 export * from "./confirmAssetBodyAudioProfile";
 export * from "./confirmAssetBodyKind";

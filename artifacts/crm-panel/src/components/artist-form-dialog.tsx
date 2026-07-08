@@ -24,8 +24,15 @@ import {
   useCreateArtist, useUpdateArtist, useListLabels,
   getListArtistsQueryKey, getGetArtistQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+
+/** Строка динамического списка "площадка + ID артиста на ней". */
+export interface Broma16OutletRow {
+  outletId: number;
+  outletName: string;
+  idOutletUser: string;
+}
 
 export interface ArtistFormValues {
   id?: number;
@@ -36,8 +43,7 @@ export interface ArtistFormValues {
   imageUrl?: string | null;
   phone?: string | null;
   labelId?: number | null;
-  spotifyId?: string | null;
-  appleId?: string | null;
+  broma16Outlets?: Broma16OutletRow[] | null;
   status?: "active" | "inactive";
 }
 
@@ -56,8 +62,7 @@ const EMPTY: ArtistFormValues = {
   imageUrl: "",
   phone: "",
   labelId: null,
-  spotifyId: "",
-  appleId: "",
+  broma16Outlets: [],
   status: "active",
 };
 
@@ -78,7 +83,9 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
 
   useEffect(() => {
     if (open) {
-      setForm(initial ? { ...EMPTY, ...initial } : { ...EMPTY, labelId: isLabel ? user?.labelId ?? null : null });
+      setForm(initial
+        ? { ...EMPTY, ...initial, broma16Outlets: (initial.broma16Outlets ?? []).map((o) => ({ ...o })) }
+        : { ...EMPTY, labelId: isLabel ? user?.labelId ?? null : null });
       setCreateAccount(false);
       setInviteEmail("");
       setPhotoFile(null);
@@ -142,6 +149,32 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const labelsQ = useListLabels({ limit: 200 });
   const labels = labelsQ.data?.data ?? [];
 
+  // Справочник витрин Broma16 (39 площадок). Доступен admin/manager/label.
+  const outletOptionsQ = useQuery({
+    queryKey: ["broma16-outlet-options"],
+    enabled: open,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const r = await fetch("/api/artists/meta/outlets", { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return (await r.json()) as { items: Array<{ externalId: string; code: string | null; name: string }> };
+    },
+  });
+  const outletOptions = outletOptionsQ.data?.items ?? [];
+
+  const addOutlet = () =>
+    setForm((s) => ({
+      ...s,
+      broma16Outlets: [...(s.broma16Outlets ?? []), { outletId: 0, outletName: "", idOutletUser: "" }],
+    }));
+  const removeOutlet = (idx: number) =>
+    setForm((s) => ({ ...s, broma16Outlets: (s.broma16Outlets ?? []).filter((_, i) => i !== idx) }));
+  const updateOutlet = (idx: number, patch: Partial<Broma16OutletRow>) =>
+    setForm((s) => ({
+      ...s,
+      broma16Outlets: (s.broma16Outlets ?? []).map((r, i) => (i === idx ? { ...r, ...patch } : r)),
+    }));
+
   const queryClient = useQueryClient();
   const createM = useCreateArtist();
   const updateM = useUpdateArtist();
@@ -176,8 +209,9 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
       imageUrl: uploadedImageUrl ?? (form.imageUrl?.trim() || null),
       phone: form.phone?.trim() || null,
       labelId: isLabel ? user?.labelId ?? null : (form.labelId ?? null),
-      spotifyId: form.spotifyId?.trim() || null,
-      appleId: form.appleId?.trim() || null,
+      broma16Outlets: (form.broma16Outlets ?? [])
+        .filter((o) => o.outletId > 0 && o.idOutletUser.trim() !== "")
+        .map((o) => ({ outletId: o.outletId, outletName: o.outletName, idOutletUser: o.idOutletUser.trim() })),
       status: form.status ?? "active",
     };
     try {
@@ -358,25 +392,66 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="art-spotify">Spotify Artist ID</Label>
-              <Input
-                id="art-spotify"
-                value={form.spotifyId ?? ""}
-                onChange={(e) => setField("spotifyId", e.target.value)}
-                placeholder="3WrFJ7ztbogyGnTHbHJFl2"
-              />
+          <div className="grid gap-1.5">
+            <Label>ID артиста на площадках</Label>
+            <p className="text-xs text-muted-foreground">
+              Укажите ID артиста на витринах (Spotify, Apple Music, Яндекс.Музыка и др.). Эти ID
+              передаются дистрибьютору Broma16 при отправке релизов.
+            </p>
+            <div className="space-y-2">
+              {(form.broma16Outlets ?? []).map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Select
+                    value={row.outletId ? String(row.outletId) : ""}
+                    onValueChange={(v) => {
+                      const opt = outletOptions.find((o) => o.externalId === v);
+                      updateOutlet(idx, { outletId: Number(v), outletName: opt?.name ?? "" });
+                    }}
+                  >
+                    <SelectTrigger className="w-[210px] shrink-0">
+                      <SelectValue placeholder="Выберите площадку" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outletOptions.map((o) => (
+                        <SelectItem key={o.externalId} value={o.externalId}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    className="flex-1"
+                    value={row.idOutletUser}
+                    onChange={(e) => updateOutlet(idx, { idOutletUser: e.target.value })}
+                    placeholder="ID артиста на площадке"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => removeOutlet(idx)}
+                    aria-label="Удалить площадку"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {(form.broma16Outlets ?? []).length === 0 && (
+                <p className="text-xs text-muted-foreground">Пока не добавлено ни одной площадки.</p>
+              )}
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="art-apple">Apple Music ID</Label>
-              <Input
-                id="art-apple"
-                value={form.appleId ?? ""}
-                onChange={(e) => setField("appleId", e.target.value)}
-                placeholder="123456789"
-              />
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              onClick={addOutlet}
+              disabled={outletOptions.length === 0}
+            >
+              + Добавить площадку
+            </Button>
+            {outletOptionsQ.isError && (
+              <p className="text-xs text-destructive">Не удалось загрузить список площадок.</p>
+            )}
           </div>
 
           <div className="grid gap-1.5">

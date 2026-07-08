@@ -5,6 +5,7 @@
  * Music Distribution CRM API
  * OpenAPI spec version: 0.1.0
  */
+import type { Broma16OutletRef } from "./broma16OutletRef";
 import type { CreateArtistBodySocialLinks } from "./createArtistBodySocialLinks";
 import type { CreateArtistBodyStatus } from "./createArtistBodyStatus";
 
@@ -18,6 +19,7 @@ export interface CreateArtistBody {
   labelId?: number | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: CreateArtistBodySocialLinks;
   status?: CreateArtistBodyStatus;
 }

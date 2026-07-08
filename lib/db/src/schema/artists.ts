@@ -3,6 +3,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { labelsTable } from "./labels";
 
+/** id артиста на конкретной витрине Broma16 (соответствует outlets[].id_outlet_user). */
+export type Broma16OutletRef = {
+  outletId: number;
+  outletName: string;
+  idOutletUser: string;
+};
+
 export const artistsTable = pgTable("artists", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -27,6 +34,8 @@ export const artistsTable = pgTable("artists", {
   ipn: text("ipn"),
   /** ISNI артиста. */
   isni: text("isni"),
+  /** id артиста на витринах (Spotify/Apple/…): передаётся в Broma16 как массив outlets. */
+  broma16Outlets: jsonb("broma16_outlets").$type<Broma16OutletRef[]>(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

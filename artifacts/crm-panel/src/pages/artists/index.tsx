@@ -155,8 +155,7 @@ export function ArtistsPanel() {
                                     imageUrl: artist.imageUrl,
                                     phone: artist.phone,
                                     labelId: artist.labelId,
-                                    spotifyId: artist.spotifyId,
-                                    appleId: artist.appleId,
+                                    broma16Outlets: artist.broma16Outlets ?? [],
                                     status: artist.status as "active" | "inactive",
                                   });
                                   setDialogOpen(true);

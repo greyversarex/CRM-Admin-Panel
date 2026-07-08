@@ -13,7 +13,39 @@ import { eq } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { Broma16ApiError } from "./errors";
 import { createBroma16Client, type Broma16Client } from "./client";
-import { resolveArtistOutlets } from "./dictionaries";
+import { getDictionary } from "./dictionaries";
+
+type ArtistOutletPayload = { outlet: string; outlet_id: number; id_outlet_user: string };
+
+/**
+ * Собирает массив outlets артиста для Broma16 из сохранённого списка
+ * broma16Outlets (динамический список площадка + id артиста, задаётся в карточке).
+ * Каждый элемент: { outlet (название), outlet_id (id витрины Broma16),
+ * id_outlet_user (id артиста на витрине) }. Пустые/некорректные строки пропускаем.
+ * outlet_id сверяем со справочником витрин Broma16, название витрины берём из
+ * справочника (не доверяем присланному клиентом outletName).
+ */
+async function buildArtistOutlets(artist: Artist): Promise<ArtistOutletPayload[]> {
+  const list = artist.broma16Outlets ?? [];
+  if (list.length === 0) return [];
+  const dict = await getDictionary("outlet");
+  const nameById = new Map<number, string>();
+  for (const d of dict) {
+    const idNum = Number(d.externalId);
+    if (Number.isFinite(idNum)) nameById.set(idNum, d.name || String(d.externalId));
+  }
+  const out: ArtistOutletPayload[] = [];
+  const seen = new Set<number>();
+  for (const o of list) {
+    const outletId = Number(o?.outletId);
+    const idOutletUser = (o?.idOutletUser ?? "").trim();
+    if (!Number.isFinite(outletId) || outletId <= 0 || idOutletUser === "") continue;
+    if (!nameById.has(outletId) || seen.has(outletId)) continue;
+    seen.add(outletId);
+    out.push({ outlet: nameById.get(outletId)!, outlet_id: outletId, id_outlet_user: idOutletUser });
+  }
+  return out;
+}
 
 function normName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -65,8 +97,8 @@ async function createArtist(accountId: string, artist: Artist, client: Broma16Cl
   }
   if (artist.ipiNameNumber) body.ipi_name_number = artist.ipiNameNumber;
   if (artist.isni) body.isni = artist.isni;
-  // id артиста на витринах (Spotify/Apple) → массив outlets Broma16.
-  const outlets = await resolveArtistOutlets({ spotifyId: artist.spotifyId, appleId: artist.appleId });
+  // id артиста на витринах (динамический список) → массив outlets Broma16.
+  const outlets = await buildArtistOutlets(artist);
   if (outlets.length > 0) {
     body.outlets = outlets;
     logger.info({ artistId: artist.id, name: artist.name, outlets }, "[broma16] артисту переданы id витрин (outlets)");
@@ -117,7 +149,7 @@ async function pushArtistOutlets(
   broma16ArtistId: string,
   client: Broma16Client,
 ): Promise<void> {
-  const outlets = await resolveArtistOutlets({ spotifyId: artist.spotifyId, appleId: artist.appleId });
+  const outlets = await buildArtistOutlets(artist);
   if (outlets.length === 0) return;
   const parts = artist.name.trim().split(/\s+/);
   const body: Record<string, unknown> = { name: artist.name.trim(), outlets };

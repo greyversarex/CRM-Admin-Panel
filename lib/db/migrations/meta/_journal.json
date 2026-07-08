@@ -169,6 +169,13 @@
       "when": 1783100000000,
       "tag": "0023_release_is_transfer",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0024_artist_broma16_outlets",
+      "breakpoints": true
     }
   ]
 }

@@ -1,20 +1,17 @@
 ---
-name: Broma16 artist outlets (showcase IDs)
-description: How Spotify/Apple Artist IDs are sent to Broma16 when creating/syncing an artist.
+name: Broma16 artist outlets (dynamic list)
+description: How artist→Broma16 outlet IDs are stored, migrated, and sent; pitfalls when editing this path.
 ---
 
-Artist showcase IDs (Spotify/Apple) go to Broma16 via the artist object's `outlets`
-array (POST create + PUT "Update author"). Each item: `{ outlet (name), outlet_id
-(int from dictionaries/outlets), id_outlet_user (the artist's ID on that showcase),
-site? }`. `id_outlet_user` is the Spotify/Apple Artist ID.
+# Broma16 artist outlets
 
-**Why name-based mapping:** the Broma16 `outlet` dictionary rows have an EMPTY `code`
-column; only `name` + numeric `externalId` are usable. So map our keys by name hint,
-not code: Spotify → "Spotify" (outlet_id 6140); Apple → "Apple Music, iTunes"
-(outlet_id 49803). Outlets absent from the synced dict are skipped, never guessed.
+Artist "ID на площадках" is a **dynamic list**, not the old fixed spotifyId/appleId pair.
 
-**How to apply:** create path (createArtist) embeds outlets in the POST body.
-Manual re-sync (syncArtist) always does a best-effort PUT of outlets afterward
-(idempotent; also covers artists that were found remotely by name-search, where
-outlets were never sent at create). Release-push path (ensureArtistSynced early
-return) is intentionally left unchanged to avoid per-push PUT overhead.
+- Stored in `artists.broma16_outlets` (jsonb) as `Broma16OutletRef[] {outletId:number, outletName:string, idOutletUser:string}`. Legacy `spotify_id`/`apple_id` columns are **kept** (non-destructive backup); do not drop them.
+- Dropdown options come from `GET /api/artists/meta/outlets` (requireRole admin/manager/label) → `getDictionary("outlet")`. The frontend uses a **raw `fetch`**, not the generated orval client, so this endpoint is intentionally **not in openapi.yaml**.
+- `getDictionary("outlet")` returns already-normalized `{externalId, code, name}` — there is **no** titleRu/titleEn/title on the returned rows (those exist only in the raw Broma16 payload inside `normalizeItem`). Use `.name`.
+- Outlet dictionary rows have an **empty `code`**; the numeric Broma16 outlet id lives in `externalId` (e.g. Spotify "6140", Apple "49803"). Select value = externalId string; store `outletId` as number.
+
+**Why (server-side hardening):** `buildArtistOutlets` in `services/broma16/artists.ts` re-validates every `outletId` against `getDictionary("outlet")`, drops unknown/duplicate ids, and derives `outlet` (name) from the dictionary — it does **not** trust the client-sent `outletName`. Keep it async; both `createArtist` and `pushArtistOutlets` await it.
+
+**Dev migrator is broken (pre-existing, not this feature's bug):** the dev DB was created via `drizzle-kit push`, so `__drizzle_migrations` is untracked and the migrator replays the journal from scratch and dies on old non-idempotent `0011` (`deliveries ADD COLUMN attempts`). Apply new migrations to **dev** directly via SQL. New migration files must still be idempotent (`ADD COLUMN IF NOT EXISTS`, backfill only `WHERE ... IS NULL`) — prod's migrator history is tracked and applies them cleanly.
