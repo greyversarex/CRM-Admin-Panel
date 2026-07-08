@@ -33,7 +33,7 @@ import {
   ListMusic, Send, Loader2, Settings2, MapPin, Calendar, Globe, Upload, ImageIcon,
 } from "lucide-react";
 
-import { RELEASE_TYPES, GENRES, SUBGENRES, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
+import { RELEASE_TYPES, GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import { MultiArtistPicker } from "./multi-artist-picker";
@@ -616,19 +616,19 @@ function Step1Details({
   // курируемым списком, пока словарь не синхронизирован).
   const genreOpts = useCatalogOptions("genre", {
     valueKey: "code",
-    fallback: GENRES.map((g) => ({ value: g, label: g })),
+    fallback: GENRE_OPTIONS,
+    extra: GENRE_OPTIONS,
   });
   const langOpts = useCatalogOptions("language", {
     valueKey: "code",
     fallback: LANGS.map((l) => ({ value: l.value, label: l.label })),
   });
-  // Поджанр: в Broma16 нет отдельного справочника поджанров — это второй
-  // (необязательный) жанр из того же списка. Пока словарь пуст, оставляем
-  // прежние курируемые поджанры.
-  const subgenresFor = form.genre ? (SUBGENRES[form.genre] ?? []) : [];
-  const subgenreOpts = genreOpts.fromBroma16
-    ? genreOpts.options
-    : subgenresFor.map((s) => ({ value: s, label: s }));
+  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
+  const subgenreOpts = useCatalogOptions("genre", {
+    valueKey: "code",
+    fallback: GENRE_OPTIONS,
+    extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS],
+  }).options;
 
   // Синхронизируем form.artistId с primary артистом из multi-picker.
   useEffect(() => {
@@ -783,7 +783,7 @@ function Step1Details({
             <FieldLabel className="text-xs text-muted-foreground">{t.createRelease.genre}</FieldLabel>
             <DictionaryCombobox
               value={form.genre}
-              onChange={(v) => { set("genre", v); if (!genreOpts.fromBroma16) set("subgenre", ""); }}
+              onChange={(v) => set("genre", v)}
               options={genreOpts.options}
               placeholder={t.createRelease.pleaseSelect}
             />
@@ -795,7 +795,6 @@ function Step1Details({
               onChange={(v) => set("subgenre", v)}
               options={subgenreOpts}
               placeholder={t.createRelease.pleaseSelect}
-              disabled={subgenreOpts.length === 0}
             />
           </div>
         </div>

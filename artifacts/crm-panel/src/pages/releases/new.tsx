@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
+import { GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { CoverUploader } from "@/components/asset-uploader";
@@ -83,14 +83,10 @@ export default function CreateRelease() {
   const createArtistMut = useCreateArtist();
 
   // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
-  const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
-  const subgenreOpts = genreOpts.fromBroma16 ? genreOpts.options : subgenresFor.map((s) => ({ value: s, label: s }));
-  useEffect(() => {
-    if (genreOpts.fromBroma16) return;
-    if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre("");
-  }, [genre, genreOpts.fromBroma16]);
+  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
+  const subgenreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS] }).options;
 
   const { data: artistsData } = useListArtists({ limit: 200, page: 1 } as never);
   const artists = useMemo(() => artistsData?.data ?? [], [artistsData]);
@@ -574,7 +570,7 @@ export default function CreateRelease() {
               <FieldLabel className="text-sm">{L.genre}</FieldLabel>
               <DictionaryCombobox
                 value={genre}
-                onChange={(v) => { setGenre(v); if (!genreOpts.fromBroma16) setSubgenre(""); }}
+                onChange={setGenre}
                 options={genreOpts.options}
                 placeholder={L.pleaseSelect}
               />
@@ -586,7 +582,6 @@ export default function CreateRelease() {
                 onChange={setSubgenre}
                 options={subgenreOpts}
                 placeholder={L.pleaseSelect}
-                disabled={subgenreOpts.length === 0}
               />
             </div>
           </div>

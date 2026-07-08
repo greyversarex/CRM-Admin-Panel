@@ -30,6 +30,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { GENRE_OPTIONS } from "@/components/release-wizard/types";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -49,7 +50,6 @@ import { toast } from "@/hooks/use-toast";
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
 
 // Те же справочники, что в /releases/new — единый источник.
-const META_GENRES = ["Pop", "Dance Pop", "Tajik Folk", "Hip Hop", "Rock", "Electronic", "R&B", "Classical", "Jazz", "World"];
 const META_LANGS: Array<{ value: string; label: string }> = [
   { value: "Tajik",   label: "Таджикский" },
   { value: "Russian", label: "Русский" },
@@ -698,7 +698,7 @@ function EditDetailsForm({
   const updateRelease = useUpdateRelease();
   const updateArtists = useUpdateReleaseArtists();
   // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: META_GENRES.map((g) => ({ value: g, label: g })) });
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const { data: serverArtists } = useGetReleaseArtists(release.id);
   // Локальный список артистов релиза. Синхронизируем один раз, когда придёт
@@ -2522,7 +2522,7 @@ function MultiEditTracksDialog({
 }) {
   const updateTrack = useUpdateTrack();
   // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: META_GENRES.map((g) => ({ value: g, label: g })) });
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());

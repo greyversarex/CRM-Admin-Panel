@@ -3,7 +3,7 @@
 // Секции: Audio Details, Track Details, Display Artists, Contributors,
 //         Genre/Subgenre, Recording Year/Country, Audio Style, Explicit Status.
 // Кнопки: Cancel | Save | Save & Next Track
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,7 +44,7 @@ import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
   splitWriterSharesEvenly,
 } from "@/components/release-wizard/contributors-editor";
-import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "@/components/release-wizard/types";
+import { GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
@@ -305,15 +305,11 @@ export default function TrackEditPage() {
   }, [track?.id, track?.updatedAt]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })) });
-  const subgenreOptions = useMemo(
-    () => (genreOpts.fromBroma16
-      ? genreOpts.options
-      : (f?.genre ? (SUBGENRES[f.genre] ?? []).map((s) => ({ value: s, label: s })) : [])),
-    [f?.genre, genreOpts.fromBroma16, genreOpts.options],
-  );
+  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
+  const subgenreOptions = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS] }).options;
 
   // ── Clip time helpers ──
   const clipMm = f ? String(Math.floor(f.clipStartSeconds / 60)).padStart(2, "0") : "00";
@@ -777,7 +773,7 @@ export default function TrackEditPage() {
                 <Label className="text-sm text-muted-foreground">Genre</Label>
                 <DictionaryCombobox
                   value={f.genre || ""}
-                  onChange={(v) => setF({ ...f, genre: v, subgenre: genreOpts.fromBroma16 ? f.subgenre : "" })}
+                  onChange={(v) => setF({ ...f, genre: v })}
                   options={[{ value: "", label: "— Not selected" }, ...genreOpts.options]}
                   placeholder="Please select"
                 />
@@ -787,9 +783,8 @@ export default function TrackEditPage() {
                 <DictionaryCombobox
                   value={f.subgenre || ""}
                   onChange={(v) => setF({ ...f, subgenre: v })}
-                  options={subgenreOptions.length ? [{ value: "", label: "— Not selected" }, ...subgenreOptions] : []}
-                  placeholder={subgenreOptions.length === 0 ? "Select genre first" : "Please select"}
-                  disabled={subgenreOptions.length === 0}
+                  options={[{ value: "", label: "— Not selected" }, ...subgenreOptions]}
+                  placeholder="Please select"
                 />
               </div>
             </div>
