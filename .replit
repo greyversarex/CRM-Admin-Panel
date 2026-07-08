@@ -30,10 +30,6 @@ args = "Start application"
 task = "workflow.run"
 args = "typecheck"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "API Server"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -43,7 +39,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=8080 pnpm --filter @workspace/api-server run dev & pnpm --filter @workspace/crm-panel run dev"
+args = "pnpm --filter @workspace/db run migrate && (PORT=8080 pnpm --filter @workspace/api-server run dev & pnpm --filter @workspace/crm-panel run dev)"
 waitForPort = 5000
 
 [[workflows.workflow]]
