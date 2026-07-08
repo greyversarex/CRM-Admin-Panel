@@ -850,7 +850,7 @@ function EditDetailsForm({
           className="bg-background/40 font-mono"
         />
         <p className="text-[11px] text-muted-foreground/80 mt-1">
-          Оставьте пустым — присвоится автоматически (TM######). Передаётся в Broma16.
+          Оставьте пустым — присвоится автоматически (TM######). Передаётся дистрибьютору при отправке.
         </p>
       </FormField>
 

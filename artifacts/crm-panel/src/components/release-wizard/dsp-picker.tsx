@@ -252,12 +252,48 @@ export function DspPickerDialog({
   );
 }
 
+// Категории площадок дистрибуции для группировки «по назначению» на странице
+// «Выбор площадок». Ключи совпадают с t.releaseWizard.dspCategories.
+const OUTLET_CATEGORY_ORDER = ["streaming", "video", "social", "ringtone", "fingerprinting", "other"];
+
+// Идентификатор площадки → категория. Значение опции равно этому идентификатору
+// (в справочнике у площадок нет отдельного кода, поэтому используется id).
+const OUTLET_CATEGORY: Record<string, string> = {
+  // Стриминг и магазины
+  "6140": "streaming", "49803": "streaming", "6157": "streaming", "22025": "streaming",
+  "25240": "streaming", "329": "streaming", "22023": "streaming", "106551": "streaming",
+  "35141": "streaming", "425775": "streaming", "511702": "streaming", "516188": "streaming",
+  "516181": "streaming", "41259": "streaming", "173993": "streaming", "516338": "streaming",
+  "25437": "streaming", "25438": "streaming", "1018521": "streaming", "626396": "streaming",
+  "626402": "streaming", "1407384": "streaming", "37197": "streaming", "6139": "streaming",
+  "554234": "streaming", "764128": "streaming", "-1": "streaming", "-2": "streaming",
+  // Видео
+  "21859": "video", "436356": "video", "510125": "video", "792408": "video",
+  // Соцсети и UGC
+  "526258": "social", "1407523": "social",
+  // Рингтоны и гудки
+  "1216": "ringtone", "49856": "ringtone", "2588": "ringtone",
+  // Распознавание контента
+  "510131": "fingerprinting", "516342": "fingerprinting",
+};
+
+function categorizeOutlet(value: string, label: string): string {
+  const mapped = OUTLET_CATEGORY[value];
+  if (mapped) return mapped;
+  const n = label.toLowerCase();
+  if (/gudok|goodok|гудок|ringback|jingle|privet/.test(n)) return "ringtone";
+  if (/acr|audible magic|fingerprint/.test(n)) return "fingerprinting";
+  if (/content id/.test(n)) return "video";
+  if (/youtube|tiktok|kuaishou|dou\s?yin/.test(n)) return "video";
+  if (/facebook|instagram|oculus|servo|snap/.test(n)) return "social";
+  return "other";
+}
+
 /**
- * Выбор витрин дистрибуции из словаря Broma16 (outlet, ~39 шт), включая
- * локальные площадки Таджикистана (TCell и др.). В ОТЛИЧИЕ от DspPicker
- * (каталог dsp_catalog → release_dsps, прямая DDEX-доставка) — здесь коды
- * витрин Broma16, которые сохраняются в release.broma16DistributionOutlets и
- * передаются в Broma16 при пуше. Контролируемый: value/onChange — коды витрин.
+ * Выбор площадок дистрибуции, сгруппированных по назначению (стриминг, видео,
+ * соцсети, рингтоны, распознавание, прочее). Контролируемый: value/onChange —
+ * идентификаторы выбранных площадок. Используется на странице «Доступность
+ * релиза» и в мастере создания релиза.
  */
 export function OutletPickerInline({
   value, onChange,
@@ -266,7 +302,7 @@ export function OutletPickerInline({
   onChange: (codes: string[]) => void;
 }) {
   const { t } = useLang();
-  const { options, isLoading, fromBroma16 } = useCatalogOptions("outlet", { valueKey: "code" });
+  const { options, isLoading } = useCatalogOptions("outlet", { valueKey: "code" });
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -276,26 +312,41 @@ export function OutletPickerInline({
       : options;
   }, [options, query]);
 
+  const grouped = useMemo(() => {
+    const m = new Map<string, { value: string; label: string }[]>();
+    for (const o of filtered) {
+      const cat = categorizeOutlet(o.value, o.label);
+      if (!m.has(cat)) m.set(cat, []);
+      m.get(cat)!.push(o);
+    }
+    return Array.from(m.entries()).sort((a, b) => {
+      const ia = OUTLET_CATEGORY_ORDER.indexOf(a[0]);
+      const ib = OUTLET_CATEGORY_ORDER.indexOf(b[0]);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    });
+  }, [filtered]);
+
   const allCodes = useMemo(() => options.map((o) => o.value), [options]);
   const allSelected = allCodes.length > 0 && allCodes.every((c) => value.includes(c));
   const toggle = (code: string) =>
     onChange(value.includes(code) ? value.filter((c) => c !== code) : [...value, code]);
-  const toggleAll = () =>
+  const toggleEverything = () =>
     onChange(allSelected ? value.filter((c) => !allCodes.includes(c)) : Array.from(new Set([...value, ...allCodes])));
+  const toggleGroup = (codes: string[]) => {
+    const allOn = codes.every((c) => value.includes(c));
+    onChange(allOn ? value.filter((c) => !codes.includes(c)) : Array.from(new Set([...value, ...codes])));
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button type="button" onClick={toggleAll} className="inline-flex items-center gap-2 text-sm">
+        <button type="button" onClick={toggleEverything} className="inline-flex items-center gap-2 text-sm">
           <Checkbox checked={allSelected} className="pointer-events-none" />
           <span>
             <span className="font-semibold text-primary">{allSelected ? t.releaseWizard.allLabel : value.length}</span>{" "}
             {t.releaseWizard.partnersSelectedLabel}
           </span>
         </button>
-        {!fromBroma16 && !isLoading && (
-          <span className="text-[11px] text-muted-foreground">{t.releaseWizard.noPartnersFound}</span>
-        )}
       </div>
 
       <div className="relative">
@@ -308,20 +359,38 @@ export function OutletPickerInline({
 
       {isLoading ? (
         <div className="text-center text-sm text-muted-foreground py-8">…</div>
-      ) : filtered.length === 0 ? (
+      ) : grouped.length === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {filtered.map((o) => {
-            const checked = value.includes(o.value);
+        <div className="space-y-6">
+          {grouped.map(([cat, items]) => {
+            const codes = items.map((i) => i.value);
+            const allOn = codes.length > 0 && codes.every((c) => value.includes(c));
+            const title = t.releaseWizard.dspCategories[cat as keyof typeof t.releaseWizard.dspCategories] ?? cat;
             return (
-              <button
-                key={o.value} type="button" onClick={() => toggle(o.value)}
-                className={`flex items-center gap-2.5 p-2.5 rounded-md border text-left transition w-full ${checked ? "bg-primary/5 border-primary/40" : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
-              >
-                <Checkbox checked={checked} className="pointer-events-none shrink-0" />
-                <span className="text-sm truncate flex-1">{o.label}</span>
-              </button>
+              <div key={cat}>
+                <h4 className="text-sm font-semibold mb-2">
+                  {title} <span className="text-muted-foreground font-normal">{items.length}</span>
+                </h4>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2.5 cursor-pointer w-fit">
+                  <Checkbox checked={allOn} onCheckedChange={() => toggleGroup(codes)} />
+                  {t.releaseWizard.selectAllPartners}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {items.map((o) => {
+                    const checked = value.includes(o.value);
+                    return (
+                      <button
+                        key={o.value} type="button" onClick={() => toggle(o.value)}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-md border text-left transition w-full ${checked ? "bg-primary/5 border-primary/40" : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
+                      >
+                        <Checkbox checked={checked} className="pointer-events-none shrink-0" />
+                        <span className="text-sm truncate flex-1">{o.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

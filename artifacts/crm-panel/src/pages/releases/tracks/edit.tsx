@@ -351,7 +351,7 @@ export default function TrackEditPage() {
     if (!hasProducer) {
       toast({
         title: "Укажите продюсера",
-        description: "Добавьте хотя бы одного продюсера (роль «Producer») в разделе Production & Engineering. Без продюсера релиз не пройдёт модерацию в Broma16.",
+        description: "Добавьте хотя бы одного продюсера (роль «Producer») в разделе Production & Engineering. Без продюсера релиз не пройдёт модерацию.",
         variant: "destructive",
       });
       return false;
@@ -757,7 +757,7 @@ export default function TrackEditPage() {
             <div className="space-y-3">
               <div>
                 <h4 className="text-sm font-semibold">Production &amp; Engineering <span className="text-rose-400 font-normal">— обязательно</span></h4>
-                <p className="text-[11px] text-muted-foreground">Укажите хотя бы одного продюсера (роль «Producer»). Без продюсера релиз не пройдёт модерацию в Broma16.</p>
+                <p className="text-[11px] text-muted-foreground">Укажите хотя бы одного продюсера (роль «Producer»). Без продюсера релиз не пройдёт модерацию.</p>
               </div>
               <ProductionEditor hideTitle value={f.production} onChange={(v) => setF({ ...f, production: v })} />
             </div>
