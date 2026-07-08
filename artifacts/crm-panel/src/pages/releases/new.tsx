@@ -23,6 +23,7 @@ import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus, X }
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
+import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { CoverUploader } from "@/components/asset-uploader";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -80,8 +81,14 @@ export default function CreateRelease() {
   const [quickArtistName, setQuickArtistName] = useState("");
   const createArtistMut = useCreateArtist();
 
+  // Жанры из справочника Broma16 (≈280); при недоступности — курируемый фолбэк.
+  const genreOpts = useCatalogOptions("genre", { fallback: GENRES.map((g) => ({ value: g, label: g })) });
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
-  useEffect(() => { if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre(""); }, [genre]);
+  const subgenreOpts = genreOpts.fromBroma16 ? genreOpts.options : subgenresFor.map((s) => ({ value: s, label: s }));
+  useEffect(() => {
+    if (genreOpts.fromBroma16) return;
+    if (subgenre && !subgenresFor.includes(subgenre)) setSubgenre("");
+  }, [genre, genreOpts.fromBroma16]);
 
   const { data: artistsData } = useListArtists({ limit: 200, page: 1 } as never);
   const artists = useMemo(() => artistsData?.data ?? [], [artistsData]);
@@ -564,19 +571,19 @@ export default function CreateRelease() {
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.genre}</FieldLabel>
-              <Select value={genre} onValueChange={setGenre}>
+              <Select value={genre} onValueChange={(v) => { setGenre(v); if (!genreOpts.fromBroma16) setSubgenre(""); }}>
                 <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
                 <SelectContent>
-                  {GENRES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  {genreOpts.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.subgenres}</FieldLabel>
-              <Select value={subgenre} onValueChange={setSubgenre} disabled={subgenresFor.length === 0}>
+              <Select value={subgenre} onValueChange={setSubgenre} disabled={subgenreOpts.length === 0}>
                 <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
                 <SelectContent>
-                  {subgenresFor.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {subgenreOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

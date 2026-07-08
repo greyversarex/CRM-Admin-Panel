@@ -16,4 +16,6 @@ Broma16 dictionary API items have: `id` (numeric), `code` (meaningful short valu
 - Subgenre has no Broma16 equivalent → it's an optional second genre from the same genre list (not sent at push).
 - Fallback: when the dictionary is empty (integration not synced), the combobox falls back to the curated constants in `release-wizard/types.ts` so release creation is never blocked. The combobox also preserves an unknown current value (legacy releases) so old hardcoded values still display.
 
+**Two release-create forms exist and drift:** the step wizard (`release-wizard/wizard.tsx`) and the quick-create page (`pages/releases/new.tsx`). Catalog dropdowns (genre/subgenre/language/country) must use `useCatalogOptions` in BOTH. `new.tsx` historically shipped hardcoded `GENRES`/`SUBGENRES` while the wizard already used the dictionary — if a user reports "only ~13 genres", check which form they're on before assuming the endpoint is broken.
+
 **How to apply:** any new metadata field that maps to a Broma16 dictionary should follow this pattern — load via the catalog endpoint, store the code, resolve to id/code at push.
