@@ -57,7 +57,7 @@ export function CatalogAssetsPanel({ initialKindOverride }: { initialKindOverrid
       const r = await fetch(`/api/assets?${params}`, { credentials: "same-origin" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      setItems(j.assets ?? j.items ?? []);
+      setItems(Array.isArray(j) ? j : (j.assets ?? j.items ?? []));
     } catch (e) {
       toast({ title: "Ошибка", description: String((e as Error).message), variant: "destructive" });
     } finally { setLoading(false); }

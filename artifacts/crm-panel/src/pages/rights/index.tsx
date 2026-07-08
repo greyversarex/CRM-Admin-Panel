@@ -711,17 +711,21 @@ export default function RightsManagement() {
             <AlertTriangle className="h-3.5 w-3.5" /> Конфликты
             {openConflicts > 0 && <Badge variant="secondary" className="text-[10px] px-1.5 h-4 bg-rose-500/20 text-rose-400">{openConflicts}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="dsp-deals" className="gap-1.5">
-            <Handshake className="h-3.5 w-3.5" /> Договоры с DSP
-          </TabsTrigger>
-          <TabsTrigger value="content-id" className="gap-1.5">
-            <Youtube className="h-3.5 w-3.5" /> Content ID
-          </TabsTrigger>
-          <TabsTrigger value="territories" className="gap-1.5">
-            <Globe className="h-3.5 w-3.5" /> Территории
-          </TabsTrigger>
-          <TabsTrigger value="freeze" className="gap-1.5">Заморозка</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5">История</TabsTrigger>
+          {isAdmin && (
+            <>
+              <TabsTrigger value="dsp-deals" className="gap-1.5">
+                <Handshake className="h-3.5 w-3.5" /> Договоры с DSP
+              </TabsTrigger>
+              <TabsTrigger value="content-id" className="gap-1.5">
+                <Youtube className="h-3.5 w-3.5" /> Content ID
+              </TabsTrigger>
+              <TabsTrigger value="territories" className="gap-1.5">
+                <Globe className="h-3.5 w-3.5" /> Территории
+              </TabsTrigger>
+              <TabsTrigger value="freeze" className="gap-1.5">Заморозка</TabsTrigger>
+              <TabsTrigger value="history" className="gap-1.5">История</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         {/* ── TAB: Holders ──────────────────────────────────────────────── */}
@@ -883,11 +887,15 @@ export default function RightsManagement() {
           )}
         </TabsContent>
 
-        <TabsContent value="dsp-deals"  className="mt-4"><DspDealsTab /></TabsContent>
-        <TabsContent value="content-id" className="mt-4"><ContentIdTab /></TabsContent>
-        <TabsContent value="territories" className="mt-4"><TerritoriesTab /></TabsContent>
-        <TabsContent value="freeze" className="mt-4"><FreezeTab /></TabsContent>
-        <TabsContent value="history" className="mt-4"><HistoryTab /></TabsContent>
+        {isAdmin && (
+          <>
+            <TabsContent value="dsp-deals"  className="mt-4"><DspDealsTab /></TabsContent>
+            <TabsContent value="content-id" className="mt-4"><ContentIdTab /></TabsContent>
+            <TabsContent value="territories" className="mt-4"><TerritoriesTab /></TabsContent>
+            <TabsContent value="freeze" className="mt-4"><FreezeTab /></TabsContent>
+            <TabsContent value="history" className="mt-4"><HistoryTab /></TabsContent>
+          </>
+        )}
       </Tabs>
 
       <HolderDialog

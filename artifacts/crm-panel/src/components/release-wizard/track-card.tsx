@@ -22,15 +22,7 @@ import {
   splitWriterSharesEvenly,
 } from "./contributors-editor";
 import { useLang } from "@/lib/i18n";
-
-/** Создаёт заглушечный, но валидный ISRC «XX-AAA-YY-NNNNN». Сервер примет
- *  любой 12-символьный код. Полноценная регистрация в Soundscan у нас вне
- *  скоупа — это удобство для самиздата. */
-function generateIsrc(): string {
-  const yy = String(new Date().getFullYear()).slice(-2);
-  const nnnnn = String(Math.floor(Math.random() * 100000)).padStart(5, "0");
-  return `TJ-CTM-${yy}-${nnnnn}`.replace(/-/g, "");
-}
+import { generateIsrcCode } from "@/lib/codes";
 
 export function TrackCard({
   track, releaseId, expanded, onExpandToggle,
@@ -64,6 +56,20 @@ export function TrackCard({
   };
 
   const set = <K extends keyof Track>(k: K, v: Track[K]) => setDraft((p) => ({ ...p, [k]: v }));
+
+  const [isrcBusy, setIsrcBusy] = useState(false);
+  const genIsrc = async () => {
+    setIsrcBusy(true);
+    try {
+      const { code, warning } = await generateIsrcCode();
+      set("isrc", code);
+      if (warning) toast({ title: "ISRC", description: warning });
+    } catch (e: any) {
+      toast({ title: "Ошибка", description: e?.message ?? "", variant: "destructive" });
+    } finally {
+      setIsrcBusy(false);
+    }
+  };
 
   const save = async () => {
     const hasProducer =
@@ -201,7 +207,7 @@ export function TrackCard({
                   <Input value={draft.isrc ?? ""} onChange={(e) => set("isrc", e.target.value)}
                     placeholder="TJCTM2500001" className="bg-background/40 font-mono" />
                   <Button type="button" variant="outline" size="icon" title={t.releaseWizard.generateIsrcTitle}
-                    onClick={() => set("isrc", generateIsrc())}><Wand2 className="h-4 w-4" /></Button>
+                    disabled={isrcBusy} onClick={() => void genIsrc()}><Wand2 className="h-4 w-4" /></Button>
                 </div>
               </Field>
               <Field label={t.releaseWizard.iswcLabel}>

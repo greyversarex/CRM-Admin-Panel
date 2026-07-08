@@ -32,6 +32,7 @@ import communicationsRouter from "./communications";
 import automationRouter from "./automation";
 import automationExtrasRouter from "./automation-extras";
 import catalogRouter from "./catalog";
+import catalogCodesRouter from "./catalog-codes";
 import catalogDictionaryRouter from "./catalog-dictionary";
 import catalogBulkRouter from "./catalog-bulk";
 import financeExtrasRouter from "./finance-extras";
@@ -171,6 +172,9 @@ router.use(communicationsChannelsRouter);     // Telegram + WhatsApp send/test (
 router.use("/automation", adminOnly, requireManagerPermission("automation_audit"));
 router.use(automationRouter);
 router.use(automationExtrasRouter);           // Payment automation rules (admin-only выше)
+// ISRC-генератор доступен ВСЕМ аутентифицированным (артист/лейбл в мастере релиза) —
+// монтируется ДО admin-гарда /catalog ниже, иначе не-админ получит 403.
+router.use(catalogCodesRouter);
 router.use("/catalog", adminOnly, requireManagerPermission("catalog"));
 router.use(catalogRouter);
 router.use(catalogBulkRouter);                // POST /catalog/bulk-edit (admin-only выше)

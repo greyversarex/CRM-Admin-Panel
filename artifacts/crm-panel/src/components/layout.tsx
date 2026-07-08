@@ -58,7 +58,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     try { localStorage.setItem("theme", darkMode ? "dark" : "light"); } catch { /* ignore */ }
   }, [darkMode]);
-  const accountNumber = "28301";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -154,7 +153,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold leading-tight truncate">{user?.name ?? "Tajik Music"}</p>
-                      <p className="text-[11px] text-muted-foreground">Account# {accountNumber}</p>
+                      <p className="text-[11px] text-muted-foreground">Account# {user?.id ?? "—"}</p>
                     </div>
                   </div>
 

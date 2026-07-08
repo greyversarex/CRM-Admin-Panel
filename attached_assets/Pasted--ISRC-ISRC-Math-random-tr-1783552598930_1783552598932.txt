@@ -1,0 +1,49 @@
+ПОЧИНИ ISRC — ИСПОЛЬЗУЙ СЕРВЕРНЫЙ ГЕНЕРАТОР
+Сейчас: ISRC генерируется клиентским Math.random() в track-card.tsx
+Должно: использовать серверный POST /api/catalog/codes/isrc
+
+Что нужно:
+
+Удали клиентскую генерацию Math.random() в:
+components/release-wizard/track-card.tsx:29-33
+pages/releases/tracks/edit.tsx:62
+При нажатии кнопки генерации ISRC → вызывай POST /api/catalog/codes/isrc
+Серверный генератор уже существует (catalog.ts:193) — использует его
+Проверь что код реально записывается в трек
+=====================================================
+ЗАДАЧА 3: РЕШИ РАССИНХРОНЫ ДОСТУПА
+Сейчас несколько страниц доступны ролям по URL, но бэк возвращает 403.
+Реши КАЖДЫЙ рассинхрон:
+
+3.1 /delivery (артист видит в меню → 403)
+Артисту НЕ нужна страница доставки (это админская функция)
+УБЕРИ /delivery из меню артиста (artistNavGroups)
+ИЛИ: скрой пункт если роль не admin/manager
+3.2 /rights (лейбл/артист видят вкладки → 403)
+Вкладки dsp-deals, content-id, territories, freeze, history закрыты на бэке
+СКРОЙ эти вкладки для label/artist (условный рендер TabsTrigger по роли)
+Оставь только holders и conflicts (если они работают для label/artist)
+3.3 /catalog/codes (label видит → 403)
+УБЕРИ label из ROUTE_ROLES для /catalog/codes
+ИЛИ вынеси codes-роут из-под adminOnly
+3.4 Publishing → "В Broma16" (label видит → 403)
+СКРОЙ кнопку push-broma16 для роли label
+Она должна быть только для admin/manager
+3.5 /finance/unmatched (отсутствует в ROUTE_ROLES)
+ДОБАВЬ /finance/unmatched в ROUTE_ROLES: [admin, manager]
+=====================================================
+ЗАДАЧА 4: ПОЧИНИ КОНТРАКТ ASSETS
+Сейчас: фронт ждёт j.assets/j.items, бэк отдаёт голый массив
+Что нужно:
+
+В assets.ts (frontend) — используй Array.isArray(j) ? j : (j.assets ?? j.items ?? [])
+ИЛИ оберни ответ сервера в { assets: [...] }
+Проверь что список ассетов и вкладка "Видео" работают
+=====================================================
+ЗАДАЧА 5: УБЕРИ ХАРДКОД ACCOUNT NUMBER
+Сейчас: layout.tsx:61 — const accountNumber = "28301" (один для всех)
+Что нужно:
+
+УБЕРИ хардкод accountNumber
+Либо возьми реальный ID из user (API /auth/me)
+Либо просто убери строку "Account# ..." из UI

@@ -48,6 +48,7 @@ import { GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES } from "@/components/
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
+import { generateIsrcCode } from "@/lib/codes";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function fmtDuration(s: number | null | undefined): string {
@@ -55,12 +56,6 @@ function fmtDuration(s: number | null | undefined): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-function generateIsrc(): string {
-  const yy = String(new Date().getFullYear()).slice(-2);
-  const nnnnn = String(Math.floor(Math.random() * 100000)).padStart(5, "0");
-  return `TJ-CTM-${yy}-${nnnnn}`.replace(/-/g, "");
 }
 
 // ─── Form state ──────────────────────────────────────────────────────────
@@ -299,6 +294,19 @@ export default function TrackEditPage() {
   );
 
   const [f, setF] = useState<FormState | null>(null);
+  const [isrcBusy, setIsrcBusy] = useState(false);
+  const genIsrc = async () => {
+    setIsrcBusy(true);
+    try {
+      const { code, warning } = await generateIsrcCode();
+      setF((prev) => (prev ? { ...prev, isrc: code } : prev));
+      if (warning) toast({ title: "ISRC", description: warning });
+    } catch (e: any) {
+      toast({ title: "Ошибка", description: e?.message ?? "", variant: "destructive" });
+    } finally {
+      setIsrcBusy(false);
+    }
+  };
   const [isTranscribing, setIsTranscribing] = useState(false);
   useEffect(() => {
     if (track) setF(trackToForm(track));
@@ -554,7 +562,7 @@ export default function TrackEditPage() {
                     className="font-mono min-w-0"
                   />
                   <Button type="button" size="sm" className="shrink-0"
-                    onClick={() => setF({ ...f, isrc: generateIsrc() })}>
+                    disabled={isrcBusy} onClick={() => void genIsrc()}>
                     Generate ISRC
                   </Button>
                 </div>

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { adminApi } from "@/lib/admin-api";
+import { useAuth } from "@/lib/auth";
 
 interface Work {
   id: number;
@@ -34,6 +35,9 @@ export function RegistrationTab() {
   const [workId, setWorkId] = useState("");
   const [pro, setPro] = useState<string>("ascap");
   const [pushingId, setPushingId] = useState<number | null>(null);
+  const { user } = useAuth();
+  // «В Broma16» — только admin/manager: пуш композиций в ROD гардится теми же ролями на бэке.
+  const canPushBroma16 = user?.role === "admin" || user?.role === "manager";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,18 +122,20 @@ export function RegistrationTab() {
                 )}
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void pushToBroma16(w.id)}
-              disabled={pushingId === w.id || w.broma16Status === "submitted"}
-              data-testid={`button-broma16-push-${w.id}`}
-            >
-              {pushingId === w.id
-                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                : <Radio className="h-4 w-4 mr-1" />}
-              {w.broma16Status === "submitted" ? "Отправлено" : "В Broma16"}
-            </Button>
+            {canPushBroma16 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void pushToBroma16(w.id)}
+                disabled={pushingId === w.id || w.broma16Status === "submitted"}
+                data-testid={`button-broma16-push-${w.id}`}
+              >
+                {pushingId === w.id
+                  ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  : <Radio className="h-4 w-4 mr-1" />}
+                {w.broma16Status === "submitted" ? "Отправлено" : "В Broma16"}
+              </Button>
+            )}
           </div>
         ))}
       </div>

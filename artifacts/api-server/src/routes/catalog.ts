@@ -190,14 +190,9 @@ export async function generateUpc(): Promise<{ code: string; warning?: string }>
   return result;
 }
 
-router.post("/catalog/codes/isrc", async (_req, res) => {
-  try {
-    const { code, warning } = await generateIsrc();
-    res.json({ code, warning });
-  } catch (e) {
-    res.status(409).json({ error: "isrc_generation_failed", message: (e as Error).message });
-  }
-});
+// POST /catalog/codes/isrc перенесён в routes/catalog-codes.ts (монтируется ДО
+// admin-гарда /catalog), чтобы артист/лейбл получали настоящий ISRC в мастере релиза.
+// generateIsrc() ниже остаётся экспортируемой и используется тем роутером.
 
 router.post("/catalog/codes/upc", async (_req, res) => {
   try {
