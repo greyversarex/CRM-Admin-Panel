@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { Broma16ApiError } from "./errors";
 import { createBroma16Client, type Broma16Client } from "./client";
+import { resolveArtistOutlets } from "./dictionaries";
 
 function normName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -64,6 +65,12 @@ async function createArtist(accountId: string, artist: Artist, client: Broma16Cl
   }
   if (artist.ipiNameNumber) body.ipi_name_number = artist.ipiNameNumber;
   if (artist.isni) body.isni = artist.isni;
+  // id артиста на витринах (Spotify/Apple) → массив outlets Broma16.
+  const outlets = await resolveArtistOutlets({ spotifyId: artist.spotifyId, appleId: artist.appleId });
+  if (outlets.length > 0) {
+    body.outlets = outlets;
+    logger.info({ artistId: artist.id, name: artist.name, outlets }, "[broma16] артисту переданы id витрин (outlets)");
+  }
   const data = await client.request<unknown>("POST", `/account/${accountId}/artist/`, { body });
   const id =
     (data && typeof data === "object" ? pickArtistId(data as Record<string, unknown>) : null) ??
@@ -98,6 +105,37 @@ export async function ensureArtistSynced(
   return broma16Id;
 }
 
+/**
+ * Досылает/обновляет id витрин (outlets) у существующего в Broma16 артиста
+ * через PUT «Update author». Best-effort: ошибку логируем, но не роняем синк
+ * (артист уже создан, id витрин — дополнение). Идемпотентно: повторная отправка
+ * тех же outlets безопасна.
+ */
+async function pushArtistOutlets(
+  artist: Artist,
+  accountId: string,
+  broma16ArtistId: string,
+  client: Broma16Client,
+): Promise<void> {
+  const outlets = await resolveArtistOutlets({ spotifyId: artist.spotifyId, appleId: artist.appleId });
+  if (outlets.length === 0) return;
+  const parts = artist.name.trim().split(/\s+/);
+  const body: Record<string, unknown> = { name: artist.name.trim(), outlets };
+  if (parts.length > 1) {
+    body.first_name = parts[0];
+    body.last_name = parts.slice(1).join(" ");
+  }
+  if (artist.ipiNameNumber) body.ipi_name_number = artist.ipiNameNumber;
+  if (artist.isni) body.isni = artist.isni;
+  try {
+    await client.request<unknown>("PUT", `/account/${accountId}/artist/${broma16ArtistId}/`, { body });
+    logger.info({ artistId: artist.id, broma16ArtistId, outlets }, "[broma16] обновлены id витрин артиста (outlets)");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "ошибка";
+    logger.warn({ artistId: artist.id, broma16ArtistId, err: msg }, "[broma16] не удалось обновить id витрин артиста");
+  }
+}
+
 /** Синхронизирует артиста по нашему id (для роутов/ручного запуска). */
 export async function syncArtist(artistId: number): Promise<{ artistId: number; broma16ArtistId: string }> {
   const [artist] = await db.select().from(artistsTable).where(eq(artistsTable.id, artistId)).limit(1);
@@ -105,5 +143,9 @@ export async function syncArtist(artistId: number): Promise<{ artistId: number; 
   const client = await createBroma16Client();
   const accountId = await client.getAccountId();
   const broma16ArtistId = await ensureArtistSynced(artist, accountId, client);
+  // Досылаем актуальные id витрин. Покрывает и артиста, найденного поиском в
+  // Broma16 (у него outlets ещё не отправлялись). Для только что созданного —
+  // идемпотентный повтор тех же значений. Best-effort: не роняет синк.
+  await pushArtistOutlets(artist, accountId, broma16ArtistId, client);
   return { artistId, broma16ArtistId };
 }
