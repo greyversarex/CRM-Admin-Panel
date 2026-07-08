@@ -25,3 +25,10 @@ those routes directly. List-only scoping is a false sense of isolation.
   changed, the new track must also be in scope (block cross-scope reassignment).
 - Publishing routes are mounted for admin/manager/label only (not artist), so the
   helper only needs to handle the `label` role for non-fullAccess.
+
+**Stale-comment trap:** the mount site in `routes/index.ts` still carries an old
+comment saying per-label scoping is NOT implemented (needs a `label_id` column).
+That comment is FALSE — scoping is enforced in the `publishing.ts` handlers. Trust
+the handler, not the mount comment. (This stale comment caused a wrong "label sees
+all works / data leak" finding in an audit; verify handler behavior before
+repeating it.)
