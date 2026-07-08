@@ -45,6 +45,8 @@ import {
   splitWriterSharesEvenly,
 } from "@/components/release-wizard/contributors-editor";
 import { GENRES, SUBGENRES, LANGS, COUNTRIES } from "@/components/release-wizard/types";
+import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -302,9 +304,15 @@ export default function TrackEditPage() {
     if (track) setF(trackToForm(track));
   }, [track?.id, track?.updatedAt]);
 
+  // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
+  const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })) });
   const subgenreOptions = useMemo(
-    () => (f?.genre ? SUBGENRES[f.genre] ?? [] : []),
-    [f?.genre],
+    () => (genreOpts.fromBroma16
+      ? genreOpts.options
+      : (f?.genre ? (SUBGENRES[f.genre] ?? []).map((s) => ({ value: s, label: s })) : [])),
+    [f?.genre, genreOpts.fromBroma16, genreOpts.options],
   );
 
   // ── Clip time helpers ──
@@ -678,14 +686,12 @@ export default function TrackEditPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Metadata Language</Label>
-                <Select value={f.language || "none"}
-                  onValueChange={(v) => setF({ ...f, language: v === "none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Not specified</SelectItem>
-                    {LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DictionaryCombobox
+                  value={f.language || ""}
+                  onChange={(v) => setF({ ...f, language: v })}
+                  options={[{ value: "", label: "— Not specified" }, ...langOpts.options]}
+                  placeholder="Select language"
+                />
               </div>
             </div>
             </div>
@@ -769,28 +775,22 @@ export default function TrackEditPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Genre</Label>
-                <Select value={f.genre || "none"}
-                  onValueChange={(v) => setF({ ...f, genre: v === "none" ? "" : v, subgenre: "" })}>
-                  <SelectTrigger><SelectValue placeholder="Please select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Not selected</SelectItem>
-                    {GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DictionaryCombobox
+                  value={f.genre || ""}
+                  onChange={(v) => setF({ ...f, genre: v, subgenre: genreOpts.fromBroma16 ? f.subgenre : "" })}
+                  options={[{ value: "", label: "— Not selected" }, ...genreOpts.options]}
+                  placeholder="Please select"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Subgenres</Label>
-                <Select value={f.subgenre || "none"}
-                  onValueChange={(v) => setF({ ...f, subgenre: v === "none" ? "" : v })}
-                  disabled={subgenreOptions.length === 0}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={subgenreOptions.length === 0 ? "Select genre first" : "Please select"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Not selected</SelectItem>
-                    {subgenreOptions.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DictionaryCombobox
+                  value={f.subgenre || ""}
+                  onChange={(v) => setF({ ...f, subgenre: v })}
+                  options={subgenreOptions.length ? [{ value: "", label: "— Not selected" }, ...subgenreOptions] : []}
+                  placeholder={subgenreOptions.length === 0 ? "Select genre first" : "Please select"}
+                  disabled={subgenreOptions.length === 0}
+                />
               </div>
             </div>
             </div>
@@ -816,14 +816,12 @@ export default function TrackEditPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">Country of Recording</Label>
-                <Select value={f.countryOfRecording || "none"}
-                  onValueChange={(v) => setF({ ...f, countryOfRecording: v === "none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Select a Country of Recording" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Not specified</SelectItem>
-                    {COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name} ({c.code})</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <DictionaryCombobox
+                  value={f.countryOfRecording || ""}
+                  onChange={(v) => setF({ ...f, countryOfRecording: v })}
+                  options={[{ value: "", label: "— Not specified" }, ...countryOpts.options]}
+                  placeholder="Select a Country of Recording"
+                />
               </div>
             </div>
             </div>
@@ -894,19 +892,14 @@ export default function TrackEditPage() {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Vocal Language</Label>
-                  <Select
-                    value={f.vocalLanguage || ""}
-                    onValueChange={(v) => setF({ ...f, vocalLanguage: v })}
-                  >
-                    <SelectTrigger className="w-72 bg-background/40">
-                      <SelectValue placeholder="Select a Language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGS.map((l) => (
-                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-72">
+                    <DictionaryCombobox
+                      value={f.vocalLanguage || ""}
+                      onChange={(v) => setF({ ...f, vocalLanguage: v })}
+                      options={langOpts.options}
+                      placeholder="Select a Language"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-3">

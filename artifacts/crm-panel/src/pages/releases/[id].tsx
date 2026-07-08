@@ -29,6 +29,8 @@ import { WaveformPlayer } from "@/components/waveform-player";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
+import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -55,6 +57,7 @@ const META_LANGS: Array<{ value: string; label: string }> = [
   { value: "Persian", label: "Персидский" },
   { value: "Uzbek",   label: "Узбекский" },
   { value: "Arabic",  label: "Арабский" },
+  { value: "Turkish", label: "Турецкий" },
 ];
 const META_RELEASE_TYPES: Array<{ value: string; label: string }> = [
   { value: "single",      label: "Сингл" },
@@ -694,6 +697,9 @@ function EditDetailsForm({
 }) {
   const updateRelease = useUpdateRelease();
   const updateArtists = useUpdateReleaseArtists();
+  // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: META_GENRES.map((g) => ({ value: g, label: g })) });
+  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const { data: serverArtists } = useGetReleaseArtists(release.id);
   // Локальный список артистов релиза. Синхронизируем один раз, когда придёт
   // ответ сервера, пока пользователь его не правил.
@@ -810,12 +816,8 @@ function EditDetailsForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormField label="Язык метаданных">
-          <Select value={form.language} onValueChange={(v) => set("language", v)}>
-            <SelectTrigger className="bg-background/40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {META_LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <DictionaryCombobox value={form.language} onChange={(v) => set("language", v)} options={langOpts.options} placeholder="—" />
+
         </FormField>
         <FormField label="Тип релиза">
           <Select value={form.releaseType} onValueChange={(v) => set("releaseType", v as typeof form.releaseType)}>
@@ -829,12 +831,8 @@ function EditDetailsForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <FormField label="Жанр">
-          <Select value={form.genre || undefined} onValueChange={(v) => set("genre", v)}>
-            <SelectTrigger className="bg-background/40"><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              {META_GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <DictionaryCombobox value={form.genre || ""} onChange={(v) => set("genre", v)} options={genreOpts.options} placeholder="—" />
+
         </FormField>
         <FormField label="UPC (необязательно)">
           <Input value={form.upc} onChange={(e) => set("upc", e.target.value)} placeholder="195502855390" className="bg-background/40 font-mono" />
@@ -919,19 +917,17 @@ function EditDetailsForm({
         )}
         {form.translations.map((tr, i) => (
           <div key={i} className="grid grid-cols-1 sm:grid-cols-[160px_1fr_160px_auto] gap-2 items-start">
-            <Select
+            <DictionaryCombobox
               value={tr.language || ""}
-              onValueChange={(v) => setForm((p) => {
+              onChange={(v) => setForm((p) => {
                 const next = [...p.translations];
                 next[i] = { ...next[i], language: v };
                 return { ...p, translations: next };
               })}
-            >
-              <SelectTrigger className="bg-background/60 h-9 text-sm"><SelectValue placeholder="Язык" /></SelectTrigger>
-              <SelectContent>
-                {META_LANGS.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+              options={langOpts.options}
+              placeholder="Язык"
+              className="bg-background/60 h-9 text-sm"
+            />
             <Input
               value={tr.title}
               onChange={(e) => setForm((p) => {
@@ -2525,6 +2521,9 @@ function MultiEditTracksDialog({
   onSaved: () => void;
 }) {
   const updateTrack = useUpdateTrack();
+  // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: META_GENRES.map((g) => ({ value: g, label: g })) });
+  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [genre, setGenre] = useState<string>("");
@@ -2636,25 +2635,21 @@ function MultiEditTracksDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel className="text-xs">Жанр</FieldLabel>
-              <Select value={genre || "none"} onValueChange={(v) => setGenre(v === "none" ? "" : v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— не менять</SelectItem>
-                  {META_GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={genre}
+                onChange={setGenre}
+                options={[{ value: "", label: "— не менять" }, ...genreOpts.options]}
+                placeholder="— не менять"
+              />
             </div>
             <div>
               <FieldLabel className="text-xs">Язык метаданных</FieldLabel>
-              <Select value={language || "none"} onValueChange={(v) => setLanguage(v === "none" ? "" : v)}>
-                <SelectTrigger className="bg-background/40"><SelectValue placeholder="— не менять" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— не менять</SelectItem>
-                  {["Tajik","Russian","English","Persian","Uzbek","Arabic","Turkish"].map((l) => (
-                    <SelectItem key={l} value={l}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={language}
+                onChange={setLanguage}
+                options={[{ value: "", label: "— не менять" }, ...langOpts.options]}
+                placeholder="— не менять"
+              />
             </div>
             <div>
               <FieldLabel className="text-xs">Explicit</FieldLabel>

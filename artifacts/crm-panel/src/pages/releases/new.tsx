@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GENRES, SUBGENRES, LANGS } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { CoverUploader } from "@/components/asset-uploader";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -81,8 +82,9 @@ export default function CreateRelease() {
   const [quickArtistName, setQuickArtistName] = useState("");
   const createArtistMut = useCreateArtist();
 
-  // Жанры из справочника Broma16 (≈280); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
+  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
   const subgenreOpts = genreOpts.fromBroma16 ? genreOpts.options : subgenresFor.map((s) => ({ value: s, label: s }));
   useEffect(() => {
@@ -340,12 +342,12 @@ export default function CreateRelease() {
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.metadataLanguage}</FieldLabel>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {LANGS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={language}
+                onChange={setLanguage}
+                options={langOpts.options}
+                placeholder={L.pleaseSelect}
+              />
             </div>
           </div>
 
@@ -361,14 +363,13 @@ export default function CreateRelease() {
               <div key={i} className="grid grid-cols-[140px_1fr_160px_32px] gap-2 items-end bg-muted/10 border border-border/40 rounded-lg p-3">
                 <div className="space-y-1">
                   <FieldLabel className="text-sm text-muted-foreground">{L.langLabel}</FieldLabel>
-                  <Select value={tr.language} onValueChange={v => updateTranslation(i, { language: v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      {LANGS.filter(l => l.value !== language).map(l => (
-                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DictionaryCombobox
+                    value={tr.language}
+                    onChange={v => updateTranslation(i, { language: v })}
+                    options={langOpts.options.filter(l => l.value !== language)}
+                    placeholder="—"
+                    className="h-9 text-sm bg-background/40"
+                  />
                 </div>
                 <div className="space-y-1">
                   <FieldLabel className="text-sm text-muted-foreground">{L.titleLabel}</FieldLabel>
@@ -571,21 +572,22 @@ export default function CreateRelease() {
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.genre}</FieldLabel>
-              <Select value={genre} onValueChange={(v) => { setGenre(v); if (!genreOpts.fromBroma16) setSubgenre(""); }}>
-                <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
-                <SelectContent>
-                  {genreOpts.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={genre}
+                onChange={(v) => { setGenre(v); if (!genreOpts.fromBroma16) setSubgenre(""); }}
+                options={genreOpts.options}
+                placeholder={L.pleaseSelect}
+              />
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.subgenres}</FieldLabel>
-              <Select value={subgenre} onValueChange={setSubgenre} disabled={subgenreOpts.length === 0}>
-                <SelectTrigger><SelectValue placeholder={L.pleaseSelect} /></SelectTrigger>
-                <SelectContent>
-                  {subgenreOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <DictionaryCombobox
+                value={subgenre}
+                onChange={setSubgenre}
+                options={subgenreOpts}
+                placeholder={L.pleaseSelect}
+                disabled={subgenreOpts.length === 0}
+              />
             </div>
           </div>
 

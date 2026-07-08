@@ -26,6 +26,8 @@ import {
   GENRES, SUBGENRES, COUNTRIES, DISPLAY_ARTIST_ROLES,
   WRITER_ROLES, PERFORMER_ROLES, PRODUCTION_ROLES,
 } from "@/components/release-wizard/types";
+import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -440,6 +442,7 @@ function NewValueExplicit({ tracks, updateFn, onApplied }: NewValueProps) {
 function NewValueCountry({ tracks, updateFn, onApplied }: NewValueProps) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: c.name })) });
   const apply = async () => {
     if (!value) return; setBusy(true);
     const r = await applyToAll(tracks, updateFn, () => ({ countryOfRecording: value }));
@@ -450,10 +453,7 @@ function NewValueCountry({ tracks, updateFn, onApplied }: NewValueProps) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Country</Label>
-        <Select value={value} onValueChange={setValue}>
-          <SelectTrigger><SelectValue placeholder="Select a Country" /></SelectTrigger>
-          <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
-        </Select>
+        <DictionaryCombobox value={value} onChange={setValue} options={countryOpts.options} placeholder="Select a Country" />
       </div>
       <Button className="w-full" disabled={!value || busy} onClick={apply}>
         {busy && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />} Add to All Tracks
@@ -522,7 +522,9 @@ function NewValueGenre({ tracks, updateFn, onApplied }: NewValueProps) {
   const [genre, setGenre] = useState("");
   const [subgenre, setSubgenre] = useState("");
   const [busy, setBusy] = useState(false);
+  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRES.map((g) => ({ value: g, label: g })) });
   const subgenresFor = genre ? (SUBGENRES[genre] ?? []) : [];
+  const subgenreOpts = genreOpts.fromBroma16 ? genreOpts.options : subgenresFor.map((s) => ({ value: s, label: s }));
   const apply = async () => {
     if (!genre) return; setBusy(true);
     const r = await applyToAll(tracks, updateFn, () => ({ genre, subgenre: subgenre || null }));
@@ -533,18 +535,12 @@ function NewValueGenre({ tracks, updateFn, onApplied }: NewValueProps) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Primary Genre</Label>
-        <Select value={genre} onValueChange={(v) => { setGenre(v); setSubgenre(""); }}>
-          <SelectTrigger><SelectValue placeholder="Select a Genre" /></SelectTrigger>
-          <SelectContent>{GENRES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-        </Select>
+        <DictionaryCombobox value={genre} onChange={(v) => { setGenre(v); if (!genreOpts.fromBroma16) setSubgenre(""); }} options={genreOpts.options} placeholder="Select a Genre" />
       </div>
-      {subgenresFor.length > 0 && (
+      {subgenreOpts.length > 0 && (
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Secondary Genre</Label>
-          <Select value={subgenre} onValueChange={setSubgenre}>
-            <SelectTrigger><SelectValue placeholder="Select a Genre" /></SelectTrigger>
-            <SelectContent>{subgenresFor.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-          </Select>
+          <DictionaryCombobox value={subgenre} onChange={setSubgenre} options={subgenreOpts} placeholder="Select a Genre" />
         </div>
       )}
       <Button className="w-full" disabled={!genre || busy} onClick={apply}>
