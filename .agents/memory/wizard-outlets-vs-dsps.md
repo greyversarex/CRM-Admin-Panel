@@ -16,12 +16,14 @@ The release model has **two unrelated** distribution-target stores:
 
 **How to apply:** when touching outlet/DSP selection, decide which channel you mean. Wizard + Broma16 push + submission-delivery-validation = `broma16DistributionOutlets`. Direct DDEX = `release_dsps`. Keep them in sync only if a feature genuinely needs both.
 
-## Broma16 send is admin-only (status stays moderator-visible)
-The Broma16 push **send** action is **admin-only** — both the UI control and `POST /broma16/releases/:id/push` (`requireRole("admin")`). The status view (`GET .../push`) and `POST .../check-moderation` remain **admin+manager** so moderators still see and re-check moderation state. Frontend: card rendered for `isModeratorRole` (admin||manager); send button gated on `user.role === "admin"`.
+## Broma16 send is admin-only (managers see a read-only status indicator)
+The Broma16 push **send** action is **admin-only**. On the **release detail page** it is a compact control in the actions row (NOT a standalone card): a small status chip (moderation/queue/error) shown to admin+manager, plus a **«Дистрибуция» button visible only to admins** that opens a modal. The modal holds ALL detail — Broma16 ID, moderation status, last-push time, errors, the outlet picker (seeded from `broma16DistributionOutlets`), «Отправить», and «Проверить статус». Managers get ONLY the read-only chip — no send button, no check button.
 
-**Why:** dispatching a release to real DSPs is a high-stakes action the product restricts to admins, while moderation *visibility* must stay open to managers.
+Backend guards: `POST /broma16/releases/:id/push` = `requireRole("admin")` (adminOnly). `GET .../push` (status) and `POST .../check-moderation` stay `...staff` (admin+manager) — so **UI exposure ≠ backend guard here**: the check-moderation route still accepts managers, the UI just no longer surfaces it to them (moderation also auto-syncs hourly).
 
-**How to apply:** don't "unify" push perms back to admin+manager. Keep send=admin and status/check=admin+manager in lockstep on both sides (frontend `isAdmin` vs `isModeratorRole`, backend `adminOnly` vs `staff`).
+**Why:** dispatching a release to real DSPs is high-stakes → admin-only; managers still need at-a-glance moderation visibility but not the actions. The big always-visible card felt like clutter on non-approved releases (empty fields), so it was collapsed to a button+chip.
+
+**How to apply:** keep send/modal admin-only (`isAdmin`), chip for `isModeratorRole`. Don't "restore" a manager-facing check-status button assuming it's missing — that was intentionally moved into the admin modal. Don't tighten the check-moderation backend guard to admin-only just because the UI hides it from managers.
 
 ## Broma16 outlet dictionary shape gotcha
 Broma16 `outlet` dict rows have **`code = null`** for ~all entries; only `externalId` + `name` are populated (e.g. `{externalId:"49803", code:null, name:"Apple Music, iTunes"}`). So `useCatalogOptions("outlet", {valueKey:"code"})` yields **externalId** as the stored value (code ?? externalId). Server validation of outlet codes must accept **code OR externalId**, and `resolveOutletCodes` resolves by code/name/externalId — all consistent. TCell's externalId is `-1`.

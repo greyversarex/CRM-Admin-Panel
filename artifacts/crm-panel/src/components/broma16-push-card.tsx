@@ -1,19 +1,23 @@
 /**
- * Панель дистрибуции релиза в Broma16 (ROD).
+ * Управление дистрибуцией релиза в Broma16 (ROD) — компактный контрол в блоке
+ * действий на странице релиза.
  *
- * Карточку (статус интеграции: Broma16 ID, статус модерации, время последней
- * отправки, ошибку, прогресс фоновой задачи) видят admin и manager. Саму
- * ОТПРАВКУ на дистрибуцию выполняет ТОЛЬКО администратор: кнопка «Дистрибуция»
- * открывает модальное окно с выбором площадок (предзаполнены из ранее выбранных
- * витрин релиза — release.broma16DistributionOutlets), где админ может поправить
- * набор и отправить. Отправка доступна только для одобренного релиза
- * (status === "approved"). Пока задача в очереди/выполняется — статус
- * опрашивается каждые 4 сек.
+ * Раньше это была большая карточка со статусом. Теперь на странице остаётся
+ * только компактный индикатор статуса модерации/отправки, а у администратора —
+ * кнопка «Дистрибуция», открывающая модалку. Внутри модалки: статус (Broma16 ID,
+ * статус модерации, время последней отправки, ошибки доставки), выбор площадок
+ * (предзаполнен из ранее выбранных витрин релиза — release.broma16DistributionOutlets)
+ * с кнопкой «Отправить», и «Проверить статус».
+ *
+ * Права: контрол монтируется для admin+manager (гейт на странице релиза).
+ * Кнопку отправки и модалку видит/использует ТОЛЬКО администратор; менеджер
+ * видит лишь компактный индикатор статуса. Отправка доступна только для
+ * одобренного релиза (status === "approved"; совпадает с проверкой на бэке).
+ * Пока задача в очереди/выполняется — статус опрашивается каждые 4 сек.
  */
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +27,7 @@ import {
 import { OutletPickerInline } from "@/components/release-wizard/dsp-picker";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { useAuth } from "@/lib/auth";
-import { Send, RefreshCw, Radio, Loader2, CheckCircle2, AlertTriangle, Clock, Lock } from "lucide-react";
+import { Send, RefreshCw, Radio, Loader2, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 // ── Типы ответов API ───────────────────────────────────────────────
@@ -99,7 +103,7 @@ function ModerationBadge({ status }: { status: string | null }) {
   return <Badge variant="outline" className={`text-[10px] ${tone}`}>{status}</Badge>;
 }
 
-export function Broma16PushCard({
+export function Broma16DistributionControl({
   releaseId, releaseStatus,
 }: {
   releaseId: number;
@@ -124,8 +128,12 @@ export function Broma16PushCard({
   const job = statusQuery.data?.job ?? null;
   const release = statusQuery.data?.release ?? null;
   const inFlight = job?.status === "queued" || job?.status === "processing";
-  const savedOutlets = release?.broma16DistributionOutlets ?? [];
-  const outletCount = savedOutlets.length;
+  const everPushed = Boolean(release?.broma16ReleaseId) || Boolean(job);
+  const hasError = Boolean(release?.broma16LastError) || job?.status === "failed";
+  const outletCount = release?.broma16DistributionOutlets?.length ?? 0;
+  const pushedAt = release?.broma16PushedAt
+    ? new Date(release.broma16PushedAt).toLocaleString("ru-RU")
+    : null;
 
   // ── Модалка выбора площадок (только админ). Черновик заполняется сохранённым
   // набором витрин при каждом открытии; словарь нужен, чтобы при отправке
@@ -186,170 +194,166 @@ export function Broma16PushCard({
     },
   });
 
-  const everPushed = Boolean(release?.broma16ReleaseId) || Boolean(job);
-  const hasError = Boolean(release?.broma16LastError) || job?.status === "failed";
-
-  const pushedAt = release?.broma16PushedAt
-    ? new Date(release.broma16PushedAt).toLocaleString("ru-RU")
-    : null;
+  // ── Компактный индикатор статуса для блока действий (виден обоим ролям, когда
+  // есть что показать). Детали — в модалке (у админа).
+  let statusChip: React.ReactNode = null;
+  if (statusQuery.isLoading) {
+    statusChip = null;
+  } else if (inFlight) {
+    statusChip = (
+      <Badge variant="outline" className="text-[10px] gap-1 text-indigo-300 bg-indigo-500/10 border-indigo-500/20">
+        <Loader2 className="h-3 w-3 animate-spin" /> {stepLabel(job!.step)}
+      </Badge>
+    );
+  } else if (hasError) {
+    statusChip = (
+      <Badge variant="outline" className="text-[10px] gap-1 text-rose-400 bg-rose-500/10 border-rose-500/20">
+        <AlertTriangle className="h-3 w-3" /> Ошибка отправки
+      </Badge>
+    );
+  } else if (release?.broma16ModerationStatus) {
+    // Badge рендерит <div>, поэтому обёртка тоже <div> (div-в-span невалиден).
+    statusChip = (
+      <div className="inline-flex items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Дистрибуция:</span>
+        <ModerationBadge status={release.broma16ModerationStatus} />
+      </div>
+    );
+  } else if (release?.broma16ReleaseId) {
+    statusChip = (
+      <Badge variant="outline" className="text-[10px] gap-1 text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
+        <CheckCircle2 className="h-3 w-3" /> Отправлено
+      </Badge>
+    );
+  }
 
   return (
-    <Card className="bg-card/50 backdrop-blur border-border/50">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Radio className="h-4 w-4 text-primary" /> Отправка в Broma16
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          {inFlight && (
-            <Badge variant="outline" className="text-[10px] gap-1 text-indigo-300 bg-indigo-500/10 border-indigo-500/20">
-              <Loader2 className="h-3 w-3 animate-spin" /> {stepLabel(job!.step)}
-            </Badge>
+    <>
+      {isAdmin && (
+        <Button
+          variant="outline"
+          className="bg-card border-violet-500/30 text-violet-200 hover:bg-violet-500/10"
+          onClick={() => setModalOpen(true)}
+          disabled={!canSend || inFlight || statusQuery.isLoading}
+          title={!canSend ? "Доступно после одобрения релиза (статус «approved»)" : undefined}
+        >
+          {inFlight ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : hasError ? (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          ) : (
+            <Radio className="mr-2 h-4 w-4" />
           )}
-          {!inFlight && job?.status === "success" && (
-            <Badge variant="outline" className="text-[10px] gap-1 text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
-              <CheckCircle2 className="h-3 w-3" /> Отправлено
-            </Badge>
-          )}
-          {!inFlight && job?.status === "failed" && (
-            <Badge variant="outline" className="text-[10px] gap-1 text-rose-400 bg-rose-500/10 border-rose-500/20">
-              <AlertTriangle className="h-3 w-3" /> Ошибка
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
+          {inFlight ? "Отправляется…" : "Дистрибуция"}
+        </Button>
+      )}
 
-      <CardContent className="space-y-4">
-        {statusQuery.isLoading ? (
-          <Skeleton className="h-20 w-full" />
-        ) : statusQuery.error ? (
-          <div className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-md px-3 py-2">
-            Не удалось загрузить статус: {(statusQuery.error as Error).message}
-          </div>
-        ) : (
-          <>
-            {/* Текущее состояние релиза в Broma16 */}
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Broma16 ID</div>
-                <div className="font-mono">{release?.broma16ReleaseId ?? "—"}</div>
-              </div>
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Статус модерации</div>
-                <div>{release?.broma16ModerationStatus ? <ModerationBadge status={release.broma16ModerationStatus} /> : "—"}</div>
-              </div>
-              {pushedAt && (
-                <div className="col-span-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" /> Последняя отправка: {pushedAt}
-                </div>
-              )}
-            </div>
+      {statusChip}
 
-            {/* Сводка витрин. Изменить набор можно при отправке (модалка) или в
-                разделе «Выбор площадок». */}
-            <div className="text-xs text-muted-foreground">
-              {outletCount > 0 ? (
-                <>Витрин к отправке: <span className="font-medium text-foreground/80">{outletCount}</span>. Набор можно изменить при отправке или в разделе «Выбор площадок».</>
-              ) : (
-                <>Площадки не выбраны — при отправке уйдёт базовый набор витрин. Выбрать можно при отправке или в разделе «Выбор площадок».</>
-              )}
-            </div>
-
-            {(release?.broma16LastError || job?.lastError) && (
-              <div className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-md px-3 py-2 break-words">
-                <span className="font-medium">Ошибка отправки:</span> {release?.broma16LastError ?? job?.lastError}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 pt-1 flex-wrap">
-              {isAdmin ? (
-                <Button
-                  onClick={() => setModalOpen(true)}
-                  disabled={!canSend || inFlight}
-                  className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
-                  title={!canSend ? "Доступно после одобрения релиза" : undefined}
-                >
-                  {inFlight ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : hasError ? (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
-                  {inFlight ? "Отправляется…" : "Дистрибуция"}
-                </Button>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Lock className="h-3.5 w-3.5" /> Отправку на дистрибуцию выполняет администратор.
-                </span>
-              )}
-
-              {everPushed && (
-                <Button
-                  variant="outline"
-                  onClick={() => checkModerationMutation.mutate()}
-                  disabled={checkModerationMutation.isPending}
-                  title="Запросить у Broma16 текущий статус модерации релиза"
-                >
-                  {checkModerationMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Проверить статус
-                </Button>
-              )}
-              {inFlight && (
-                <span className="text-xs text-muted-foreground">
-                  Шаг: {stepLabel(job!.step)}{job!.attempts > 1 ? ` · попытка ${job!.attempts}` : ""}
-                </span>
-              )}
-            </div>
-
-            {isAdmin && !canSend && (
-              <p className="text-xs text-muted-foreground">
-                Отправка на дистрибуцию станет доступна после одобрения релиза (статус «approved»).
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-
-      {/* ── Модалка «Дистрибуция» — только админ выбирает площадки и отправляет. */}
+      {/* ── Модалка «Дистрибуция» — только админ: статус + выбор площадок + отправка. */}
       {isAdmin && (
         <Dialog open={modalOpen} onOpenChange={(b) => { if (!sendMutation.isPending) setModalOpen(b); }}>
           <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col p-0 gap-0">
             <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
               <DialogTitle className="text-lg flex items-center gap-2">
-                <Radio className="h-4 w-4 text-primary" /> Отправка на дистрибуцию
+                <Radio className="h-4 w-4 text-primary" /> Отправка в Broma16
               </DialogTitle>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                 Площадки уже отмечены — из выбранных при создании релиза. Проверьте набор и при
-                необходимости измените, затем нажмите «Отправить» — релиз уйдёт в Broma16.
+                необходимости измените, затем нажмите «Отправить» — релиз уйдёт на дистрибуцию.
               </p>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <OutletPickerInline value={draft} onChange={setDraft} />
+
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+              {statusQuery.isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : statusQuery.error ? (
+                <div className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-md px-3 py-2">
+                  Не удалось загрузить статус дистрибуции: {(statusQuery.error as Error).message}. Обновите
+                  страницу и попробуйте снова — отправка пока недоступна.
+                </div>
+              ) : (
+                <>
+                  {/* Текущее состояние релиза в Broma16 */}
+                  <div className="grid grid-cols-2 gap-3 text-sm rounded-lg border border-border/40 bg-card/40 p-4">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Broma16 ID</div>
+                      <div className="font-mono">{release?.broma16ReleaseId ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Статус модерации</div>
+                      <div>{release?.broma16ModerationStatus ? <ModerationBadge status={release.broma16ModerationStatus} /> : "—"}</div>
+                    </div>
+                    {pushedAt && (
+                      <div className="col-span-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" /> Последняя отправка: {pushedAt}
+                      </div>
+                    )}
+                    {everPushed && (
+                      <div className="col-span-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => checkModerationMutation.mutate()}
+                          disabled={checkModerationMutation.isPending}
+                          title="Запросить у Broma16 текущий статус модерации релиза"
+                        >
+                          {checkModerationMutation.isPending ? (
+                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                          )}
+                          Проверить статус
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {(release?.broma16LastError || job?.lastError) && (
+                    <div className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-md px-3 py-2 break-words">
+                      <span className="font-medium">Ошибка отправки:</span> {release?.broma16LastError ?? job?.lastError}
+                    </div>
+                  )}
+
+                  {/* Выбор площадок */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Площадки (витрины)</span>
+                      <span className="text-xs text-muted-foreground">
+                        Пусто → уйдёт базовый набор витрин
+                      </span>
+                    </div>
+                    <OutletPickerInline value={draft} onChange={setDraft} />
+                  </div>
+                </>
+              )}
             </div>
-            <DialogFooter className="px-6 py-4 border-t border-border/40">
-              <Button variant="outline" onClick={() => setModalOpen(false)} disabled={sendMutation.isPending}>
-                Отмена
-              </Button>
-              <Button
-                onClick={onSend}
-                disabled={sendMutation.isPending || inFlight}
-                className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
-              >
-                {sendMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                Отправить{draft.length ? ` (${draft.length})` : ""}
-              </Button>
+
+            <DialogFooter className="px-6 py-4 border-t border-border/40 sm:justify-between">
+              <div className="text-xs text-muted-foreground self-center">
+                {outletCount > 0 ? `Сохранено витрин: ${outletCount}` : "Площадки ещё не выбирались"}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setModalOpen(false)} disabled={sendMutation.isPending}>
+                  Отмена
+                </Button>
+                <Button
+                  onClick={onSend}
+                  disabled={sendMutation.isPending || inFlight || statusQuery.isLoading || !!statusQuery.error}
+                  className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95"
+                >
+                  {sendMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  Отправить{draft.length ? ` (${draft.length})` : ""}
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
-    </Card>
+    </>
   );
 }

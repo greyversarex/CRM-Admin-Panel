@@ -44,7 +44,7 @@ import { Switch as SwitchUI } from "@/components/ui/switch";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AcrTrackModal } from "@/components/acr-track-modal";
-import { Broma16PushCard } from "@/components/broma16-push-card";
+import { Broma16DistributionControl } from "@/components/broma16-push-card";
 import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
@@ -636,10 +636,6 @@ export default function ReleaseDetail() {
           onEdit={() => setLocation(`/releases/${id}/splitshare`)}
         />
 
-        {/* ── Broma16 (ROD) — отправка на дистрибуцию. Карточку (статус) видят
-            admin+manager; саму отправку выполняет только admin (внутри карточки). */}
-        {isModeratorRole && <Broma16PushCard releaseId={id} releaseStatus={release.status} />}
-
         {/* ── Terms + submit / actions ─────────────────────────────────────── */}
         <div className="space-y-3 pt-1">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -649,6 +645,11 @@ export default function ReleaseDetail() {
           </p>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Broma16 (ROD): кнопка «Дистрибуция» (admin) + индикатор статуса
+                  (admin+manager). Сама отправка — в модалке внутри контрола. */}
+              {isModeratorRole && (
+                <Broma16DistributionControl releaseId={id} releaseStatus={release.status} />
+              )}
               {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
                 <Button
                   variant="outline"
