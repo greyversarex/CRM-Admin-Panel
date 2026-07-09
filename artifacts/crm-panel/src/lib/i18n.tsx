@@ -284,6 +284,7 @@ const translations = {
       selectAllPartners: "Select All Partners",
       noPartnersFound: "No partners found.",
       partnerNotConnected: "This partner is not yet connected for delivery. Contact your administrator to enable it.",
+      outletsUnavailable: "Outlets appear here once the Broma16 integration is connected — only platforms you can actually deliver to.",
       dspCategories: {
         streaming: "Streaming",
         download: "Download Stores",
@@ -1885,6 +1886,7 @@ const translations = {
       selectAllPartners: "Выбрать все площадки",
       noPartnersFound: "Площадки не найдены.",
       partnerNotConnected: "Эта площадка ещё не подключена для доставки. Обратитесь к администратору, чтобы её включить.",
+      outletsUnavailable: "Площадки появятся здесь после подключения интеграции Broma16 — только те, куда действительно можно отправить релиз.",
       dspCategories: {
         streaming: "Стриминг",
         download: "Магазины загрузок",

@@ -4,17 +4,18 @@
 // секциями —
 //   1) Release Timeline  — дата релиза + расширенные настройки (время, UTC);
 //   2) Territory Rights   — переключатель «Весь мир» (World Wide);
-//   3) Partner Selection  — выбор DSP-площадок через DspPickerDialog.
+//   3) Partner Selection  — выбор витрин Broma16 через OutletPickerInline.
 // Все правки держатся локально и сохраняются ОДНОЙ кнопкой «Сохранить»:
 //   • дата/время/территории → PUT /releases/:id (полный набор полей, иначе бэк
 //     делает set(parsed.data) и сбрасывает zod-default поля);
-//   • площадки → PUT /releases/:id/dsps (отдельный эндпоинт), только если их меняли.
+//   • витрины → PUT /releases/:id/distribution-outlets (реальный канал Broma16,
+//     а не мёртвый release_dsps), только если их меняли.
 import { useParams, useLocation } from "wouter";
 import { useState, useEffect, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  useGetRelease, useUpdateRelease, useGetReleaseDsps, useUpdateReleaseDsps,
-  getGetReleaseQueryKey, getGetReleaseDspsQueryKey,
+  useGetRelease, useUpdateRelease,
+  getGetReleaseQueryKey,
   type ReleaseDetail, type CreateReleaseBody,
 } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
@@ -25,7 +26,8 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label as FieldLabel } from "@/components/ui/label";
-import { DspPickerInline } from "@/components/release-wizard/dsp-picker";
+import { OutletPickerInline } from "@/components/release-wizard/dsp-picker";
+import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { COUNTRIES, countryName } from "@/lib/countries";
 import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
@@ -135,8 +137,36 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   const [, setLocation] = useLocation();
   const { lang } = useLang();
   const updateRelease = useUpdateRelease();
-  const updateDsps = useUpdateReleaseDsps();
-  const { data: serverDsps = [] } = useGetReleaseDsps(release.id);
+  // Витрины Broma16 (release.broma16DistributionOutlets) — реальный канал
+  // доставки. Читаем/сохраняем через /releases/:id/distribution-outlets
+  // (тот же эндпоинт, что и мастер), а НЕ release_dsps (мёртвый DDEX-путь).
+  const { data: serverDsps = [] } = useQuery<string[]>({
+    queryKey: ["release-outlets", release.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/releases/${release.id}/distribution-outlets`, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as string[];
+    },
+  });
+  // Словарь витрин Broma16 — нужен, чтобы при сохранении отсеять устаревшие
+  // коды, которых уже нет в словаре (иначе PUT вернёт 400 и заблокирует
+  // сохранение). Тот же кэш react-query, что и в пикере, — лишнего запроса нет.
+  const { options: outletOptions } = useCatalogOptions("outlet", { valueKey: "code" });
+  const updateOutlets = useMutation({
+    mutationFn: async (outlets: string[]) => {
+      const res = await fetch(`/api/releases/${release.id}/distribution-outlets`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outlets }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); msg = (j?.error as string) ?? msg; } catch { /* noop */ }
+        throw new Error(msg);
+      }
+    },
+  });
 
   const backToRelease = () => setLocation(`/releases/${release.id}`);
 
@@ -174,7 +204,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverDsps.join(",")]);
 
-  const saving = updateRelease.isPending || updateDsps.isPending;
+  const saving = updateRelease.isPending || updateOutlets.isPending;
 
   const onSave = async () => {
     const data: CreateReleaseBody = {
@@ -202,11 +232,19 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
     try {
       await updateRelease.mutateAsync({ id: release.id, data });
       if (dspTouched.current) {
-        await updateDsps.mutateAsync({ id: release.id, data: { dsps } });
+        // Словарь загружен → шлём только известные коды (устаревшие/недоставляемые
+        // отбрасываем, чтобы не ловить 400 и не блокировать сохранение). Пока
+        // словарь не загружен — шлём как есть (пикер в этот момент ничего не даёт
+        // переключить, так что touched тут не станет true на пустом словаре).
+        const known = new Set(outletOptions.map((o) => o.value));
+        const outletsToSave = outletOptions.length > 0 ? dsps.filter((c) => known.has(c)) : dsps;
+        await updateOutlets.mutateAsync(outletsToSave);
       }
       await Promise.all([
         qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(release.id) }),
-        qc.invalidateQueries({ queryKey: getGetReleaseDspsQueryKey(release.id) }),
+        qc.invalidateQueries({ queryKey: ["release-outlets", release.id] }),
+        // Освежаем карточку «Отправка в Broma16» (она показывает счётчик витрин).
+        qc.invalidateQueries({ queryKey: ["broma16-push", release.id] }),
       ]);
       toast({ title: "Доступность сохранена", description: "Дата, территории и площадки обновлены." });
       backToRelease();
@@ -350,16 +388,16 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
           </div>
           {showPartners ? (
             <div className="pt-2 border-t border-border/40">
-              <DspPickerInline
+              <OutletPickerInline
                 value={dsps}
                 onChange={(codes) => { dspTouched.current = true; setDsps(codes); }}
               />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Нажмите «Показать площадки», чтобы выбрать DSP и магазины для
-              дистрибуции этого релиза. Доступны только подключённые к доставке
-              площадки.
+              Нажмите «Показать площадки», чтобы выбрать витрины Broma16 для
+              дистрибуции этого релиза. Показаны только реально доступные
+              площадки — те, куда можно отправить релиз после подключения Broma16.
             </p>
           )}
         </CardContent>

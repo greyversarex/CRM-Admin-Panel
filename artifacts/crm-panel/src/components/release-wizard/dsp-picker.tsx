@@ -359,6 +359,11 @@ export function OutletPickerInline({
 
       {isLoading ? (
         <div className="text-center text-sm text-muted-foreground py-8">…</div>
+      ) : options.length === 0 ? (
+        <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-3 leading-relaxed">
+          <HelpCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{t.releaseWizard.outletsUnavailable}</span>
+        </div>
       ) : grouped.length === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-8">{t.releaseWizard.noPartnersFound}</div>
       ) : (
