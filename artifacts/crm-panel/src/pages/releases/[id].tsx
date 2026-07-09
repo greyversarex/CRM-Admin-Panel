@@ -43,7 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch as SwitchUI } from "@/components/ui/switch";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AcrTrackModal } from "@/components/acr-track-modal";
+import { AcrMatchesModal } from "@/components/acr-matches-modal";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
 import { toast } from "@/hooks/use-toast";
 
@@ -128,6 +128,7 @@ export default function ReleaseDetail() {
   const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
   const [bulkCount, setBulkCount] = useState("1");
   const [isBulkCreating, setIsBulkCreating] = useState(false);
+  const [acrTrackId, setAcrTrackId] = useState<number | null>(null);
   // Инлайн-режим редактирования метаданных карточки Release Details.
   // Включается кнопкой «Edit Release» для черновика (без диалога/смены статуса).
   const [metaEditing, setMetaEditing] = useState(false);
@@ -570,12 +571,32 @@ export default function ReleaseDetail() {
             acrChecks={releaseAcrChecks.filter(c => c.trackId === t.id)}
             acrConfigured={releaseAcrConfigured}
             isModeratorRole={!!isModeratorRole}
+            onOpenAcr={setAcrTrackId}
           />
         ))}
         {(release.tracks ?? []).length === 0 && (
           <div className="text-sm text-muted-foreground py-8 text-center border border-dashed border-border/50 rounded-lg">
             No tracks yet — add the first one below.
           </div>
+        )}
+
+        {/* Релиз-уровневая модалка распознавания ACRCloud (открывается по иконкам треков) */}
+        {isModeratorRole && acrTrackId !== null && (
+          <AcrMatchesModal
+            releaseId={id}
+            initialTrackId={acrTrackId}
+            tracks={(release.tracks ?? []).map((t, i) => {
+              const da = Array.isArray((t as any).displayArtists) ? (t as any).displayArtists : [];
+              const primary = da.find((d: any) => d.role === "primary")?.name as string | undefined;
+              return {
+                id: t.id,
+                title: t.title || `Track ${i + 1}`,
+                artist: primary ?? (release as any).artistName ?? "—",
+                trackNumber: i + 1,
+              };
+            })}
+            onClose={() => setAcrTrackId(null)}
+          />
         )}
 
         {/* Create New Track */}
@@ -1134,10 +1155,9 @@ function TrackField({ label, value, chip }: { label: string; value: React.ReactN
 type TrackAcrCheck = { id: number; trackId: number | null; status: string; matchedTitle: string | null; scannedAt: string };
 
 function TrackRow({
-  t, index, release, onChange, acrChecks = [], acrConfigured = false, isModeratorRole = false,
-}: { t: Track; index: number; release: any; onChange: () => void; acrChecks?: TrackAcrCheck[]; acrConfigured?: boolean; isModeratorRole?: boolean }) {
+  t, index, release, onChange, acrChecks = [], acrConfigured = false, isModeratorRole = false, onOpenAcr,
+}: { t: Track; index: number; release: any; onChange: () => void; acrChecks?: TrackAcrCheck[]; acrConfigured?: boolean; isModeratorRole?: boolean; onOpenAcr: (trackId: number) => void }) {
   const deleteTrack = useDeleteTrack();
-  const [acrOpen, setAcrOpen] = useState(false);
   const latestAcr = acrChecks.length > 0 ? acrChecks[0] : null;
   const displayArtists: Array<{ name: string; role: string }> = Array.isArray((t as any).displayArtists) ? (t as any).displayArtists : [];
   const primaries  = displayArtists.filter(d => d.role === "primary");
@@ -1175,7 +1195,7 @@ function TrackRow({
             <>
               {latestAcr?.status === "matched" && (
                 <button
-                  onClick={() => setAcrOpen(true)}
+                  onClick={() => onOpenAcr(t.id)}
                   title="ACR: совпадение найдено — нажмите для деталей"
                   className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors shrink-0"
                 >
@@ -1183,7 +1203,7 @@ function TrackRow({
                 </button>
               )}
               <button
-                onClick={() => setAcrOpen(true)}
+                onClick={() => onOpenAcr(t.id)}
                 title={latestAcr ? `ACRCloud: ${latestAcr.status}` : "ACRCloud: нет проверок"}
                 className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors shrink-0 ${
                   latestAcr?.status === "clean"
@@ -1300,16 +1320,6 @@ function TrackRow({
         )}
       </CardContent>
     </Card>
-
-    {/* ACR Track Modal */}
-    {acrOpen && (
-      <AcrTrackModal
-        releaseId={release.id}
-        trackId={t.id}
-        trackTitle={t.title || `Track ${index + 1}`}
-        onClose={() => setAcrOpen(false)}
-      />
-    )}
   </>
   );
 }

@@ -25,3 +25,4 @@
 - [Broma16 artist outlets](broma16-artist-outlets.md) — artist IDs are a dynamic broma16_outlets jsonb list (all 39 outlets), not fixed spotify/apple; meta/outlets uses raw fetch (not in openapi); server re-validates outletId vs dict.
 - [Transfer Track import](transfer-track-import.md) — Spotify simplified tracks lack ISRC (batch /tracks?ids=); synthetic SPOTIFY-<id> UPC not persisted as real; paginate album tracks; fail-open; releases.isTransfer→Broma16 isTransferRelease.
 - [Broma16 composition push](broma16-composition-push.md) — publishing-only path (composition→contributors→step completed); /contributors ADDS not upserts, so guard re-push once submitted (409) to avoid duplicate authors.
+- [ACR matches data contract](acr-matches-data-contract.md) — resultJson differs sample (raw metadata.music[]) vs full (enriched top_match); Array/object-guard before map; segment time from offset_ms not pct; degrade when empty/unconfigured.

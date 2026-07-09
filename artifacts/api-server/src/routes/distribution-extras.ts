@@ -288,6 +288,15 @@ function safeUrl(u: string): string {
   }
 }
 
+/** Имена артистов из массива {name} — устойчиво к нестандартным формам ответа. */
+function acrArtistNames(v: unknown): string | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const names = v
+    .map((a) => (a && typeof a === "object" ? (a as { name?: unknown }).name : undefined))
+    .filter((n): n is string => typeof n === "string" && n.trim() !== "");
+  return names.length ? names.join(", ") : undefined;
+}
+
 async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<AcrCloudConfig>): Promise<void> {
   const startedAt = Date.now();
   const safeAudioUrl = safeUrl(audioUrl);
@@ -329,12 +338,12 @@ async function processAcrCheck(checkId: number, audioUrl: string, cfg: Required<
     const enrichedResult = { ...r.result, _scan_meta: scanMeta };
 
     const status = r.result["status"] as { code?: number; msg?: string } | undefined;
-    const metadata = r.result["metadata"] as { music?: Array<Record<string, unknown>> } | undefined;
-    const musicMatches = metadata?.music ?? [];
+    const metadata = r.result["metadata"] as { music?: unknown } | undefined;
+    const musicMatches = Array.isArray(metadata?.music) ? (metadata!.music as Array<Record<string, unknown>>) : [];
 
     if (status?.code === 0 && musicMatches.length > 0) {
       const top = musicMatches[0];
-      const artists = (top["artists"] as Array<{ name?: string }> | undefined)?.map((a) => a.name).filter(Boolean).join(", ");
+      const artists = acrArtistNames(top["artists"]);
       const album = top["album"] as { name?: string } | undefined;
       const externalIds = top["external_ids"] as { isrc?: string } | undefined;
       await db.update(acrChecksTable).set({
@@ -524,7 +533,11 @@ async function processFullScan(checkId: number, audioUrl: string, cfg: Required<
     const plans = planSegments(totalBytes);
 
     const segments: AcrCheckSegment[] = [];
-    let topMatch: { title?: string; artist?: string; isrc?: string; score: number } | null = null;
+    let topMatch: {
+      title?: string; artist?: string; isrc?: string; score: number;
+      label?: string; album?: string; upc?: string; releaseDate?: string;
+      foundOn?: string[]; sampleBeginMs?: number; sampleEndMs?: number;
+    } | null = null;
     let matchedCount = 0;
     let errorCount = 0;
 
@@ -544,18 +557,30 @@ async function processFullScan(checkId: number, audioUrl: string, cfg: Required<
           continue;
         }
         const status = r.result["status"] as { code?: number; msg?: string } | undefined;
-        const md = r.result["metadata"] as { music?: Array<Record<string, unknown>> } | undefined;
-        const matches = md?.music ?? [];
+        const md = r.result["metadata"] as { music?: unknown } | undefined;
+        const matches = Array.isArray(md?.music) ? (md!.music as Array<Record<string, unknown>>) : [];
         if (status?.code === 0 && matches.length > 0) {
           matchedCount++;
           const top = matches[0];
-          const artists = (top["artists"] as Array<{ name?: string }> | undefined)?.map((a) => a.name).filter(Boolean).join(", ");
-          const externalIds = top["external_ids"] as { isrc?: string } | undefined;
+          const artists = acrArtistNames(top["artists"]);
+          const externalIds = top["external_ids"] as { isrc?: string; upc?: string } | undefined;
+          const albumObj = top["album"] as { name?: string } | undefined;
+          const extMetaFull = top["external_metadata"] as Record<string, unknown> | undefined;
+          const foundOn = Object.keys(extMetaFull ?? {}).filter((k) => k !== "_scan_meta");
           const score = typeof top["score"] === "number" ? top["score"] : 0;
           const matchedTitle = typeof top["title"] === "string" ? top["title"] : undefined;
           const matchedArtist = artists || undefined;
           const matchedIsrc = externalIds?.isrc;
-          if (!topMatch || score > topMatch.score) topMatch = { title: matchedTitle, artist: matchedArtist, isrc: matchedIsrc, score };
+          if (!topMatch || score > topMatch.score) topMatch = {
+            title: matchedTitle, artist: matchedArtist, isrc: matchedIsrc, score,
+            label: typeof top["label"] === "string" ? (top["label"] as string) : undefined,
+            album: albumObj?.name,
+            upc: externalIds?.upc,
+            releaseDate: typeof top["release_date"] === "string" ? (top["release_date"] as string) : undefined,
+            foundOn: foundOn.length ? foundOn : undefined,
+            sampleBeginMs: typeof top["sample_begin_time_offset_ms"] === "number" ? (top["sample_begin_time_offset_ms"] as number) : undefined,
+            sampleEndMs: typeof top["sample_end_time_offset_ms"] === "number" ? (top["sample_end_time_offset_ms"] as number) : undefined,
+          };
           segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "matched", score, matchedTitle, matchedArtist, matchedIsrc, tookMs: took });
         } else if (status?.code === 1001) {
           segments.push({ index: i, startPct: p.startPct, endPct: p.endPct, startBytes: p.startBytes, endBytes: p.endBytes, status: "clean", tookMs: took });
