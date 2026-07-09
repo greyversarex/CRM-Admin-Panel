@@ -636,8 +636,9 @@ export default function ReleaseDetail() {
           onEdit={() => setLocation(`/releases/${id}/splitshare`)}
         />
 
-        {/* ── Broma16 (ROD) — отправка на дистрибуцию (admin/manager) ───────── */}
-        {isModeratorRole && <Broma16PushCard releaseId={id} />}
+        {/* ── Broma16 (ROD) — отправка на дистрибуцию. Карточку (статус) видят
+            admin+manager; саму отправку выполняет только admin (внутри карточки). */}
+        {isModeratorRole && <Broma16PushCard releaseId={id} releaseStatus={release.status} />}
 
         {/* ── Terms + submit / actions ─────────────────────────────────────── */}
         <div className="space-y-3 pt-1">

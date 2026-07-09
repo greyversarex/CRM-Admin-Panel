@@ -33,6 +33,9 @@ import { logger } from "../lib/logger";
 
 const broma16Router: IRouter = Router();
 const staff = [requireRole("admin", "manager"), requireManagerPermission("distribution")];
+// Сама отправка релиза на дистрибуцию — только администратор. Статус и проверку
+// модерации по-прежнему видят и admin, и manager (staff).
+const adminOnly = [requireRole("admin")];
 
 const DICT_TYPES: DictionaryType[] = ["genre", "language", "release_type", "outlet", "country"];
 
@@ -218,7 +221,7 @@ broma16Router.post("/broma16/statistics/sync", ...staff, async (req, res) => {
 // outlet); сохраняем их в релиз перед постановкой в очередь, чтобы пушер взял
 // именно их.
 const pushBodySchema = z.object({ outlets: z.array(z.string()).optional() });
-broma16Router.post("/broma16/releases/:id/push", ...staff, async (req, res) => {
+broma16Router.post("/broma16/releases/:id/push", ...adminOnly, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) {
     res.status(400).json({ error: "Некорректный id релиза" });
