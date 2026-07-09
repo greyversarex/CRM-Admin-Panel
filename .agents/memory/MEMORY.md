@@ -26,4 +26,5 @@
 - [Transfer Track import](transfer-track-import.md) — Spotify simplified tracks lack ISRC (batch /tracks?ids=); synthetic SPOTIFY-<id> UPC not persisted as real; paginate album tracks; fail-open; releases.isTransfer→Broma16 isTransferRelease.
 - [Broma16 composition push](broma16-composition-push.md) — publishing-only path (composition→contributors→step completed); /contributors ADDS not upserts, so guard re-push once submitted (409) to avoid duplicate authors.
 - [Test release for ACR/Broma16](acr-broma16-test-release.md) — iTunes preview clips = real fingerprint-matchable audio; storage_key/object_path convention, /issues completeness gate, status=approved gates both sends.
+- [ACRCloud S3 drops only](acr-s3-drops-only.md) — dedup runs ONLY via partner S3 DDEX-drop; never use/suggest Identify API; drop results are manual (pending is correct), auto-ingest TBD from ACRCloud.
 - [ACR matches data contract](acr-matches-data-contract.md) — resultJson differs sample (raw metadata.music[]) vs full (enriched top_match); Array/object-guard before map; segment time from offset_ms not pct; degrade when empty/unconfigured.
