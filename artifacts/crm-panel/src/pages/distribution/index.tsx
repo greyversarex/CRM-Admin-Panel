@@ -18,13 +18,12 @@ import {
   Plus, Download, Ban, RotateCw,
 } from "lucide-react";
 import { useListReleases, useListIntegrations, type Integration } from "@workspace/api-client-react";
-import { AcrTab } from "./acr-tab";
 import { DisputesTab } from "./disputes-tab";
 import { ModerationTab } from "./moderation-tab";
 import { DspStatusTab } from "./dsp-status-tab";
 import { TakedownsTab } from "./takedowns-tab";
 import { ScheduledTab } from "./scheduled-tab";
-import { ShieldCheck, Radio, Calendar, ScanSearch, AlertOctagon } from "lucide-react";
+import { ShieldCheck, Radio, Calendar, AlertOctagon } from "lucide-react";
 
 // ─── Типы DDEX (фронтовые DTO; соответствуют artifacts/api-server/src/routes/ddex.ts)
 
@@ -501,7 +500,6 @@ export default function Distribution() {
             <TabsTrigger value="dsp-status" data-testid="tab-dsp-status"><Radio className="w-4 h-4 mr-2" />Статус площадок</TabsTrigger>
             <TabsTrigger value="scheduled" data-testid="tab-scheduled"><Calendar className="w-4 h-4 mr-2" />Запланированные</TabsTrigger>
             <TabsTrigger value="takedowns" data-testid="tab-takedowns"><Ban className="w-4 h-4 mr-2" />Снятия</TabsTrigger>
-            <TabsTrigger value="acr" data-testid="tab-acr"><ScanSearch className="w-4 h-4 mr-2" />ACRCloud</TabsTrigger>
             <TabsTrigger value="disputes" data-testid="tab-disputes"><AlertOctagon className="w-4 h-4 mr-2" />Споры</TabsTrigger>
             <TabsTrigger value="messages" data-testid="tab-messages"><FileCode2 className="w-4 h-4 mr-2" />DDEX-сообщения</TabsTrigger>
             <TabsTrigger value="batches" data-testid="tab-batches"><Layers className="w-4 h-4 mr-2" />Батчи</TabsTrigger>
@@ -695,10 +693,6 @@ export default function Distribution() {
                 <ManualAckTester onIngested={refreshAll} />
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="acr" className="space-y-4">
-            <Card><CardContent className="pt-6"><AcrTab /></CardContent></Card>
           </TabsContent>
 
           <TabsContent value="disputes" className="space-y-4">

@@ -88,15 +88,6 @@ const SERVICES: ServiceDef[] = [
   },
   // Analytics
   {
-    code: "acrcloud", name: "ACRCloud", category: "analytics", authType: "api_key",
-    description: "Распознавание аудио на UGC-платформах (YouTube, TikTok, Instagram). Защита прав на треки.",
-    fields: [
-      { key: "access_key",    label: "Access Key",    required: true },
-      { key: "access_secret", label: "Access Secret", type: "password", required: true },
-      { key: "host",          label: "Host",          placeholder: "identify-eu-west-1.acrcloud.com" },
-    ],
-  },
-  {
     code: "acrcloud_ddex", name: "ACRCloud — проверка на дубли (S3)", category: "analytics", authType: "api_key",
     description: "Отправка полного релиза (DDEX-пакет: аудио, обложка, метаданные) в хранилище ACRCloud для проверки на дубликаты перед выпуском. Адрес хранилища уже настроен — введите только два ключа доступа, которые выдаёт ACRCloud.",
     fields: [

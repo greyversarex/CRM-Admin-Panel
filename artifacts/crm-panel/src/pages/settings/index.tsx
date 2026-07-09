@@ -1557,9 +1557,6 @@ export default function Settings() {
             <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               <ActivityIcon className="h-3.5 w-3.5" />Активность
             </TabsTrigger>
-            <TabsTrigger value="acrcloud" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
-              ACRCloud
-            </TabsTrigger>
             <TabsTrigger value="pros" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5 text-xs">
               PRO (ASCAP/BMI/…)
             </TabsTrigger>
@@ -1584,7 +1581,6 @@ export default function Settings() {
           <TabsContent value="audit" className="mt-4"><TabAudit /></TabsContent>
           <TabsContent value="activity" className="mt-4"><TabActivity /></TabsContent>
           {/* channels tab hidden */}
-          <TabsContent value="acrcloud" className="mt-4"><TabAcrcloud /></TabsContent>
           <TabsContent value="pros" className="mt-4"><TabPros /></TabsContent>
           <TabsContent value="manager-perms" className="mt-4"><TabManagerPermissions /></TabsContent>
         </Tabs>
@@ -1602,42 +1598,7 @@ export default function Settings() {
 
 void Webhook;
 
-// ─── New Tabs (ACRCloud / PRO) ─────────────────────────────────
-
-function TabAcrcloud() {
-  const [form, setForm] = useState({ host: "identify-eu-west-1.acrcloud.com", accessKey: "", accessSecret: "" });
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/settings/acrcloud", { credentials: "same-origin" });
-        if (r.ok) { const d = await r.json(); if (d.value) setForm((p) => ({ ...p, ...d.value })); }
-      } catch { /* noop */ }
-    })();
-  }, []);
-  const save = async () => {
-    setSaving(true);
-    try {
-      await fetch("/api/settings/acrcloud", {
-        method: "PUT", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      toast({ title: "Сохранено" });
-    } finally { setSaving(false); }
-  };
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">ACRCloud — учётные данные</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div><Label>Host</Label><Input value={form.host} onChange={(e) => setForm((p) => ({ ...p, host: e.target.value }))} data-testid="input-acr-host" /></div>
-        <div><Label>Access Key</Label><Input value={form.accessKey} onChange={(e) => setForm((p) => ({ ...p, accessKey: e.target.value }))} data-testid="input-acr-key" /></div>
-        <div><Label>Access Secret</Label><Input type="password" value={form.accessSecret} onChange={(e) => setForm((p) => ({ ...p, accessSecret: e.target.value }))} data-testid="input-acr-secret" /></div>
-        <Button onClick={() => void save()} disabled={saving} data-testid="button-save-acr">Сохранить</Button>
-      </CardContent>
-    </Card>
-  );
-}
+// ─── New Tabs (PRO) ─────────────────────────────────
 
 function TabPros() {
   const [form, setForm] = useState({
