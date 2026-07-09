@@ -65,6 +65,16 @@ The application is built as a monorepo using `pnpm workspaces` and Node.js 24, T
 -   **Build System**: esbuild for backend, Vite for frontend.
 -   **Migrations**: Drizzle versioned, idempotent migrations.
 
+## Running on Replit
+
+The project is registered as three artifacts, each with its own managed workflow (these replaced the earlier manual `Start application` / `API Server` workflows, which can be ignored/stopped):
+
+-   **Music Distribution CRM** (`artifacts/crm-panel`) — React/Vite frontend, workflow `artifacts/crm-panel: web`.
+-   **API Server** (`artifacts/api-server`) — Express backend on port 8080, workflow `artifacts/api-server: API Server`. Runs DB migrations, then starts the server plus background workers (delivery, fraud-engine, payment automation, Broma16 push/schedulers).
+-   **Canvas** (`artifacts/mockup-sandbox`) — isolated component preview sandbox, workflow `artifacts/mockup-sandbox: Component Preview Server`.
+
+`pnpm run typecheck` is registered as the `typecheck` validation workflow and passes cleanly.
+
 ## External Dependencies
 
 -   **PostgreSQL**: Primary database.
