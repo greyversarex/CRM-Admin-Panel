@@ -1277,8 +1277,12 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
   const issues: { code: string; severity: "error" | "warning"; message: string; trackId?: number }[] = [];
   if (!release.upc) issues.push({ code: "missing_upc", severity: "error", message: "UPC не указан" });
   if (!release.releaseDate) issues.push({ code: "missing_release_date", severity: "error", message: "Дата релиза не указана" });
-  if (!coverAsset) issues.push({ code: "missing_cover", severity: "error", message: "Обложка не загружена" });
-  else if (coverAsset.sizeBytes < 200_000) issues.push({ code: "small_cover", severity: "warning", message: "Обложка возможно меньше 3000×3000 (файл < 200 КБ)" });
+  // Обложка считается загруженной, если есть asset-строка ЛИБО заполнен
+  // release.coverUrl. Broma16-доставка берёт файл именно из coverUrl, поэтому
+  // наличие URL — достаточное доказательство, иначе получаем ложную ошибку
+  // «Обложка не загружена» при реально прикреплённом файле.
+  if (!coverAsset && !release.coverUrl) issues.push({ code: "missing_cover", severity: "error", message: "Обложка не загружена" });
+  else if (coverAsset && coverAsset.sizeBytes < 200_000) issues.push({ code: "small_cover", severity: "warning", message: "Обложка возможно меньше 3000×3000 (файл < 200 КБ)" });
   if (!releaseArtists.length) issues.push({ code: "no_artists", severity: "error", message: "Не указаны primary-артисты релиза" });
   if (tracks.length === 0) issues.push({ code: "no_tracks", severity: "error", message: "В релизе нет треков" });
 
@@ -1286,8 +1290,17 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
     if (!t.isrc) issues.push({ code: "missing_isrc", severity: "error", message: `Track ${t.trackNumber ?? "?"}: ISRC не указан`, trackId: t.id });
     const audio = audioByTrack.get(t.id);
     const ck = checkTrackAudio(audio);
-    if (ck.missing) issues.push({ code: "missing_audio", severity: "error", message: `Track ${t.trackNumber ?? "?"}: аудио-файл не загружен`, trackId: t.id });
-    else {
+    if (ck.missing) {
+      // Нет asset-строки с тех. метаданными. Если при этом заполнен
+      // track.audioUrl — файл всё-таки прикреплён (Broma16 доставит его из
+      // audioUrl), поэтому это не «не загружен», а лишь невозможность проверить
+      // спецификации формата.
+      if (!t.audioUrl) {
+        issues.push({ code: "missing_audio", severity: "error", message: `Track ${t.trackNumber ?? "?"}: аудио-файл не загружен`, trackId: t.id });
+      } else {
+        issues.push({ code: "audio_specs_unverified", severity: "warning", message: `Track ${t.trackNumber ?? "?"}: файл прикреплён, но не удалось проверить спецификации (WAV/FLAC, ≥16-bit / ≥44.1 kHz)`, trackId: t.id });
+      }
+    } else {
       if (!ck.checks.format)     issues.push({ code: "non_lossless",     severity: "error",   message: `Track ${t.trackNumber ?? "?"}: формат не lossless (${audio?.mimeType ?? "—"})`,        trackId: t.id });
       if (!ck.checks.sampleRate) issues.push({ code: "low_sample_rate",  severity: "warning", message: `Track ${t.trackNumber ?? "?"}: sample rate ${audio?.sampleRateHz ?? "?"} Hz (требуется ≥ ${REQ.minSampleRate})`, trackId: t.id });
       if (!ck.checks.bitDepth)   issues.push({ code: "low_bit_depth",    severity: "warning", message: `Track ${t.trackNumber ?? "?"}: bit depth ${audio?.bitDepth ?? "?"} (требуется ≥ ${REQ.minBitDepth})`,         trackId: t.id });
