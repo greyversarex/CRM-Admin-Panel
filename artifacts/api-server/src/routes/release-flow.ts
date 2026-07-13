@@ -225,9 +225,14 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
   }
 
   // Delivery
+  // Площадки выбираются либо через классический release_dsps (устаревший пикер),
+  // либо через мастер Broma16 (release.broma16DistributionOutlets) — второй способ
+  // сейчас единственный доступный в UI, поэтому обязательно учитываем его здесь,
+  // иначе релиз с выбранными витринами Broma16 будет ложно блокироваться.
   const dsps = await db.select({ code: releaseDspsTable.dspCode })
     .from(releaseDspsTable).where(eq(releaseDspsTable.releaseId, id));
-  if (dsps.length === 0)
+  const broma16Outlets = (release as any).broma16DistributionOutlets as string[] | null;
+  if (dsps.length === 0 && (!broma16Outlets || broma16Outlets.length === 0))
     issues.push({ section: "delivery", field: "dsps", message: "Не выбрано ни одной DSP-площадки.", severity: "error" });
   if (!release.territories || (Array.isArray(release.territories) && release.territories.length === 0))
     issues.push({ section: "delivery", field: "territories", message: "Не выбрана ни одна территория релиза.", severity: "error" });

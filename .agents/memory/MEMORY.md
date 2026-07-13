@@ -29,3 +29,4 @@
 - [ACRCloud S3 drops only](acr-s3-drops-only.md) — dedup runs ONLY via partner S3 DDEX-drop; never use/suggest Identify API; drop results are manual (pending is correct), auto-ingest TBD from ACRCloud.
 - [ACR matches data contract](acr-matches-data-contract.md) — resultJson differs sample (raw metadata.music[]) vs full (enriched top_match); Array/object-guard before map; segment time from offset_ms not pct; degrade when empty/unconfigured.
 - [Artifact vs legacy workflow ports](artifact-vs-legacy-workflow-ports.md) — legacy custom workflow can fail port-detection even when healthy if .replit also declares that service as an artifact; restart the `artifacts/<name>: ...` workflow instead.
+- [Release readiness DSP check bug](release-readiness-dsp-check-bug.md) — issues check required release_dsps rows but wizard only writes broma16DistributionOutlets; fixed to accept either; split #N = row id, per-track shares.
