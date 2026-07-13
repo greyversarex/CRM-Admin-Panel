@@ -248,8 +248,15 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
     issues.push({ section: "contributors", field: "splits", message: "Не настроены доли (SplitShare). Без них роялти распределяются 100% владельцу релиза.", severity: "warning" });
   for (const s of splits) {
     if (Array.isArray(s.participants)) {
-      const total = (s.participants as any[]).reduce((sum, p) => sum + (Number(p?.share) || 0), 0);
-      if (Math.abs(total - 100) > 0.01) {
+      // Участники сплита хранятся с полем percentage (в устаревших записях
+      // могло встречаться share) — учитываем оба, иначе сумма всегда 0%.
+      const total = (s.participants as any[]).reduce((sum, p) => sum + (Number(p?.percentage ?? p?.share) || 0), 0);
+      if (total === 0) {
+        // Сплит создан, но доли не заданы — трактуем как «не настроено»:
+        // роялти уходят владельцу релиза 100% (как и при полном отсутствии
+        // сплитов). Не блокируем отправку, только предупреждаем.
+        issues.push({ section: "contributors", field: `split:${s.id}`, message: `Доли для split #${s.id} не заданы — по умолчанию роялти уйдут владельцу релиза на 100%. Настройте SplitShare, если доход нужно разделить.`, severity: "warning" });
+      } else if (Math.abs(total - 100) > 0.01) {
         issues.push({ section: "contributors", field: `split:${s.id}`, message: `Сумма долей в split #${s.id} = ${total}% (должна быть 100%).`, severity: "error" });
       }
     }
