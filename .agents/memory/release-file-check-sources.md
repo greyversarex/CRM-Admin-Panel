@@ -13,7 +13,9 @@ A release's cover and each track's audio have TWO storage references that must s
 - Broma16 push (services/broma16/release-pusher.ts + files.ts) → delivers from `release.coverUrl` / `track.audioUrl` (does NOT need the assets table).
 - DDEX/SFTP delivery (ddex/service.ts) → strict on the `assets` table; missing rows = null cover/audio in the package (business-validator flags invalid).
 
-**Consequence:** a release whose files are attached only via coverUrl/audioUrl (transfer/import, or an upload path that didn't create/link asset rows) passes the pre-submit check and delivers fine to Broma16, but Auto QC falsely reports "Обложка/аудио не загружен". Fixed Auto QC to treat a populated coverUrl/audioUrl as valid presence (missing-asset-but-URL-present → downgraded to a "specs unverified" warning, not a hard error). UPC/ISRC "не указан" are legit — they're identifier codes, separate from files.
+**Consequence:** a release whose files are attached only via coverUrl/audioUrl (transfer/import, or an upload path that didn't create/link asset rows) passes the pre-submit check and delivers fine to Broma16, but Auto QC falsely reports "Обложка/аудио не загружен". Fixed Auto QC to treat a populated coverUrl/audioUrl as valid presence (missing-asset-but-URL-present → downgraded to a "specs unverified" warning, not a hard error).
+
+**UPC/ISRC are assigned by the distributor (Broma16), not by us.** They are issued at/after push and sync back into our release/track rows. So a missing UPC/ISRC before delivery is EXPECTED — Auto QC must treat missing_upc/missing_isrc as warnings (informational), never blocking errors. (Per label owner: "Брома поставит сама, потом у нас появятся".)
 
 **Why:** the assets table and the URL fields can legitimately diverge, and the actual delivery method (Broma16) only needs the URL fields, so QC must not hard-block on asset-row absence when the URL is present.
 

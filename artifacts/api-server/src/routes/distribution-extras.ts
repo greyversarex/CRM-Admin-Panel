@@ -1275,7 +1275,9 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
 
   // ── Auto QC issues ─────────────────────────────────────────────────────
   const issues: { code: string; severity: "error" | "warning"; message: string; trackId?: number }[] = [];
-  if (!release.upc) issues.push({ code: "missing_upc", severity: "error", message: "UPC не указан" });
+  // UPC/ISRC присваивает дистрибьютор (Broma16) при отправке и возвращает их
+  // нам обратно, поэтому до отправки их отсутствие — не ошибка, а информация.
+  if (!release.upc) issues.push({ code: "missing_upc", severity: "warning", message: "UPC не указан (будет присвоен Broma16 после отправки)" });
   if (!release.releaseDate) issues.push({ code: "missing_release_date", severity: "error", message: "Дата релиза не указана" });
   // Обложка считается загруженной, если есть asset-строка ЛИБО заполнен
   // release.coverUrl. Broma16-доставка берёт файл именно из coverUrl, поэтому
@@ -1287,7 +1289,7 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
   if (tracks.length === 0) issues.push({ code: "no_tracks", severity: "error", message: "В релизе нет треков" });
 
   for (const t of tracks) {
-    if (!t.isrc) issues.push({ code: "missing_isrc", severity: "error", message: `Track ${t.trackNumber ?? "?"}: ISRC не указан`, trackId: t.id });
+    if (!t.isrc) issues.push({ code: "missing_isrc", severity: "warning", message: `Track ${t.trackNumber ?? "?"}: ISRC не указан (будет присвоен Broma16 после отправки)`, trackId: t.id });
     const audio = audioByTrack.get(t.id);
     const ck = checkTrackAudio(audio);
     if (ck.missing) {
