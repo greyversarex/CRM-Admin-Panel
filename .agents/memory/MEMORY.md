@@ -31,3 +31,4 @@
 - [Artifact vs legacy workflow ports](artifact-vs-legacy-workflow-ports.md) — legacy custom workflow can fail port-detection even when healthy if .replit also declares that service as an artifact; restart the `artifacts/<name>: ...` workflow instead.
 - [Release readiness DSP check bug](release-readiness-dsp-check-bug.md) — issues check required release_dsps rows but wizard only writes broma16DistributionOutlets; fixed to accept either; split #N = row id, per-track shares.
 - [Release file/QC validators read inconsistent sources](release-file-check-sources.md) — assets table vs coverUrl/audioUrl; Broma16 delivers from URLs, DDEX needs assets rows; Auto QC must accept URL presence.
+- [Audio/cover pool assets need objectPath fallback](audio-cover-pool-resolution.md) — stereo-upload pages pool assets with track_id=null, linked only via track.audioUrl/release.coverUrl; every delivery/QC reader must fall back to objectPath or files look missing.

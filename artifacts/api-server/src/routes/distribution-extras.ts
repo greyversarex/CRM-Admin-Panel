@@ -936,6 +936,7 @@ router.get("/distribution/moderation", async (req, res): Promise<void> => {
   const trackRows = await db.select({
     releaseId: tracksTable.releaseId,
     trackId:   tracksTable.id,
+    audioUrl:  tracksTable.audioUrl,
   }).from(tracksTable).where(inArray(tracksTable.releaseId, releaseIds));
   const trackIds = trackRows.map((t) => t.trackId);
 
@@ -944,6 +945,18 @@ router.get("/distribution/moderation", async (req, res): Promise<void> => {
         .where(and(inArray(assetsTable.trackId, trackIds), eq(assetsTable.kind, "audio")))
     : [];
   const tracksWithAudio = new Set(audioAssets.map((a) => a.trackId).filter((x): x is number => x != null));
+  // Fallback: аудио может быть связано через track.audioUrl (файл из "пула"
+  // ассетов с track_id=null) — добираем такие треки по objectPath, чтобы счётчик
+  // withAudio совпадал с тем, что реально уйдёт в доставку.
+  const listFallbackUrls = trackRows.filter((t) => !tracksWithAudio.has(t.trackId) && t.audioUrl).map((t) => t.audioUrl as string);
+  if (listFallbackUrls.length > 0) {
+    const poolAudio = await db.select({ objectPath: assetsTable.objectPath }).from(assetsTable)
+      .where(and(inArray(assetsTable.objectPath, listFallbackUrls), eq(assetsTable.kind, "audio")));
+    const poolPaths = new Set(poolAudio.map((a) => a.objectPath));
+    for (const t of trackRows) {
+      if (!tracksWithAudio.has(t.trackId) && t.audioUrl && poolPaths.has(t.audioUrl)) tracksWithAudio.add(t.trackId);
+    }
+  }
 
   const trackStatsByRelease = new Map<number, { total: number; withAudio: number }>();
   for (const t of trackRows) {
@@ -1233,11 +1246,18 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
     .from(releaseDspsTable)
     .where(eq(releaseDspsTable.releaseId, releaseId))).map((r) => r.code);
 
-  // Cover asset
-  const [coverAsset] = await db.select().from(assetsTable)
+  // Cover asset. Сначала по releaseId; если строки нет — обложку загрузили в
+  // "пул" (release_id=null) и связали через release.coverUrl — добираем по
+  // objectPath, иначе ложно показываем «обложка не загружена».
+  let [coverAsset] = await db.select().from(assetsTable)
     .where(and(eq(assetsTable.releaseId, releaseId), inArray(assetsTable.kind, ["cover", "image"])))
     .orderBy(desc(assetsTable.createdAt))
     .limit(1);
+  if (!coverAsset && release.coverUrl) {
+    [coverAsset] = await db.select().from(assetsTable)
+      .where(and(eq(assetsTable.objectPath, release.coverUrl), inArray(assetsTable.kind, ["cover", "image"])))
+      .limit(1);
+  }
 
   // Tracks + audio assets
   const tracks = await db.select().from(tracksTable)
@@ -1251,6 +1271,23 @@ router.get("/distribution/moderation/:releaseId/details", async (req, res): Prom
     : [];
   const audioByTrack = new Map<number, typeof audioAssets[number]>();
   for (const a of audioAssets) if (a.trackId != null && !audioByTrack.has(a.trackId)) audioByTrack.set(a.trackId, a);
+  // Fallback: трек может ссылаться на аудио из "пула" через track.audioUrl, при
+  // этом строка ассета имеет track_id=null. Добираем такие ассеты по objectPath,
+  // иначе трек с реально выбранным файлом ошибочно показывался бы как «нет аудио».
+  const missingAudioUrls = tracks
+    .filter((t) => !audioByTrack.has(t.id) && t.audioUrl)
+    .map((t) => t.audioUrl as string);
+  if (missingAudioUrls.length) {
+    const poolAudio = await db.select().from(assetsTable)
+      .where(and(inArray(assetsTable.objectPath, missingAudioUrls), eq(assetsTable.kind, "audio")));
+    const byPath = new Map(poolAudio.map((a) => [a.objectPath, a]));
+    for (const t of tracks) {
+      if (!audioByTrack.has(t.id) && t.audioUrl) {
+        const a = byPath.get(t.audioUrl);
+        if (a) audioByTrack.set(t.id, a);
+      }
+    }
+  }
 
   // ACR checks по релизу (история, последние 50)
   const acrChecks = await db.select().from(acrChecksTable)

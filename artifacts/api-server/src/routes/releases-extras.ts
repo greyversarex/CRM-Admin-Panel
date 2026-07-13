@@ -337,9 +337,16 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
 
   // Cover: проверяем что обложка реально загружена в storage (asset row),
   // а не просто что URL-строка непустая. Это синхронно с DDEX-валидатором.
-  const [coverAsset] = await db.select().from(assetsTable)
+  let [coverAsset] = await db.select().from(assetsTable)
     .where(and(eq(assetsTable.releaseId, release.id), eq(assetsTable.kind, "cover")))
     .limit(1);
+  // Fallback: обложка может лежать в "пуле" ассетов (release_id=null) и быть
+  // связана через release.coverUrl — добираем по objectPath.
+  if (!coverAsset && release.coverUrl) {
+    [coverAsset] = await db.select().from(assetsTable)
+      .where(and(eq(assetsTable.objectPath, release.coverUrl), eq(assetsTable.kind, "cover")))
+      .limit(1);
+  }
   if (!coverAsset) {
     issues.push({ section: "release", field: "coverUrl", message: "Загрузите обложку (jpg/png, минимум 3000×3000)", severity: "error" });
   }
@@ -364,6 +371,17 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
           .where(and(inArray(assetsTable.trackId, trackIds), eq(assetsTable.kind, "audio")))
       : [];
     const tracksWithAudio = new Set(audioAssets.map((a) => a.trackId).filter((x): x is number => x != null));
+    // Fallback: аудио может быть связано с треком через track.audioUrl (файл из
+    // "пула" ассетов с track_id=null). Проверяем наличие ассета по objectPath.
+    const fallbackAudioUrls = tracks.filter((t) => !tracksWithAudio.has(t.id) && t.audioUrl).map((t) => t.audioUrl as string);
+    if (fallbackAudioUrls.length > 0) {
+      const poolAudio = await db.select({ objectPath: assetsTable.objectPath }).from(assetsTable)
+        .where(and(inArray(assetsTable.objectPath, fallbackAudioUrls), eq(assetsTable.kind, "audio")));
+      const poolPaths = new Set(poolAudio.map((a) => a.objectPath));
+      for (const t of tracks) {
+        if (!tracksWithAudio.has(t.id) && t.audioUrl && poolPaths.has(t.audioUrl)) tracksWithAudio.add(t.id);
+      }
+    }
 
     const isrcSeen = new Map<string, number>(); // isrc → first track id, для детекта дублей
     for (const t of tracks) {

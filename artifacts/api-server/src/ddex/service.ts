@@ -157,9 +157,17 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
   // ВАЖНО: assets-таблица использует kind="cover" (см. routes/assets.ts:188 mimePrefix
   // и schema). Раньше здесь ошибочно искался kind="image" — поэтому DDEX-валидатор
   // всегда возвращал COVER_MISSING даже при загруженной обложке.
-  const [coverAsset] = await db.select().from(assetsTable)
+  // Обложку ищем сначала по releaseId. Если строки нет — обложку загрузили в
+  // "пул" ассетов и связали через release.coverUrl (track_id/release_id на самой
+  // строке ассета может быть null) — добираем ассет по objectPath из coverUrl.
+  let [coverAsset] = await db.select().from(assetsTable)
     .where(and(eq(assetsTable.releaseId, releaseId), eq(assetsTable.kind, "cover")))
     .limit(1);
+  if (!coverAsset && release.coverUrl) {
+    [coverAsset] = await db.select().from(assetsTable)
+      .where(and(eq(assetsTable.objectPath, release.coverUrl), eq(assetsTable.kind, "cover")))
+      .limit(1);
+  }
 
   const cover: ResourceFile | null = coverAsset
     ? {
@@ -174,9 +182,18 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
   // Audio assets per track
   const trackContexts: TrackContext[] = [];
   for (const t of tracks) {
-    const [audioAsset] = await db.select().from(assetsTable)
+    // Аудио ищем сначала по trackId. Если ассет загружен в "пул" релиза
+    // (track_id=null) и связан с треком только через track.audioUrl (файл выбран
+    // из выпадающего списка) — добираем ассет по objectPath. Без этого трек с
+    // реально прикреплённым файлом считался бы «без аудио», и ACR/DDEX падали бы.
+    let [audioAsset] = await db.select().from(assetsTable)
       .where(and(eq(assetsTable.trackId, t.id), eq(assetsTable.kind, "audio")))
       .limit(1);
+    if (!audioAsset && t.audioUrl) {
+      [audioAsset] = await db.select().from(assetsTable)
+        .where(and(eq(assetsTable.objectPath, t.audioUrl), eq(assetsTable.kind, "audio")))
+        .limit(1);
+    }
 
     const audioFile: ResourceFile | null = audioAsset
       ? {
