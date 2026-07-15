@@ -1,0 +1,51 @@
+root@ubuntu:/var/www/tajikmusic# pm2 logs
+[TAILING] Tailing last 15 lines for [all] processes (change the value with --lines option)
+/root/.pm2/pm2.log last 15 lines:
+PM2        | 2026-07-13T23:22:15: PM2 log: Process with pid 931618 still alive after 1600ms, sending it SIGKILL now...
+PM2        | 2026-07-13T23:22:16: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGKILL]
+PM2        | 2026-07-13T23:22:16: PM2 log: pid=931618 msg=process killed
+PM2        | 2026-07-13T23:22:16: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-07-13T23:22:16: PM2 log: App [tajikmusic-api:0] online
+PM2        | 2026-07-14T11:04:28: PM2 log: [PM2] This PM2 is not UP TO DATE
+PM2        | 2026-07-14T11:04:28: PM2 log: [PM2] Upgrade to version 7.0.3
+PM2        | 2026-07-15T11:04:28: PM2 log: [PM2] This PM2 is not UP TO DATE
+PM2        | 2026-07-15T11:04:28: PM2 log: [PM2] Upgrade to version 7.0.3
+PM2        | 2026-07-15T11:45:57: PM2 log: Stopping app:tajikmusic-api id:0
+PM2        | 2026-07-15T11:45:57: PM2 log: pid=932318 msg=failed to kill - retrying in 100ms
+PM2        | 2026-07-15T11:45:57: PM2 log: App [tajikmusic-api:0] exited with code [0] via signal [SIGINT]
+PM2        | 2026-07-15T11:45:57: PM2 log: pid=932318 msg=process killed
+PM2        | 2026-07-15T11:45:58: PM2 log: App [tajikmusic-api:0] starting in -fork mode-
+PM2        | 2026-07-15T11:45:58: PM2 log: App [tajikmusic-api:0] online
+
+/var/log/tajikmusic/api-error.log last 15 lines:
+0|tajikmus | 2026-05-11 18:17:26:     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|tajikmus | 2026-05-11 18:17:26:     at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19
+0|tajikmus | 2026-05-11 18:17:26:     at file:///var/www/tajikmusic/artifacts/api-server/src/routes/auth.ts:92:18
+0|tajikmus | 2026-05-11 18:17:32: Error: Failed query: select "id", "name", "email", "password_hash", "role", "status", "block_reason", "avatar_url", "artist_id", "label_id", "phone", "address", "country", "region", "city", "zip_code", "about", "dsp_profiles", "social_links", "last_login_at", "failed_login_attempts", "locked_until", "kyc_status", "kyc_completed_at", "bank_name", "bank_account_number", "bank_swift", "bank_iban", "bank_holder_name", "bank_country", "tax_id", "tax_country", "tax_form_type", "created_at", "updated_at" from "users" where "users"."email" = $1
+0|tajikmus | 2026-05-11 18:17:32: params: admin@tajikmusic.com
+0|tajikmus | 2026-05-11 18:17:32:     at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+0|tajikmus | 2026-05-11 18:17:32:     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|tajikmus | 2026-05-11 18:17:32:     at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19
+0|tajikmus | 2026-05-11 18:17:32:     at file:///var/www/tajikmusic/artifacts/api-server/src/routes/auth.ts:92:18
+0|tajikmus | 2026-05-11 18:18:47: Error: Failed query: select "id", "name", "email", "password_hash", "role", "status", "block_reason", "avatar_url", "artist_id", "label_id", "phone", "address", "country", "region", "city", "zip_code", "about", "dsp_profiles", "social_links", "last_login_at", "failed_login_attempts", "locked_until", "kyc_status", "kyc_completed_at", "bank_name", "bank_account_number", "bank_swift", "bank_iban", "bank_holder_name", "bank_country", "tax_id", "tax_country", "tax_form_type", "created_at", "updated_at" from "users" where "users"."email" = $1
+0|tajikmus | 2026-05-11 18:18:47: params: admin@tajikmusic.com
+0|tajikmus | 2026-05-11 18:18:47:     at NodePgPreparedQuery.queryWithCache (file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/pg-core/session.ts:73:11)
+0|tajikmus | 2026-05-11 18:18:47:     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|tajikmus | 2026-05-11 18:18:47:     at file:///var/www/tajikmusic/node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/src/node-postgres/session.ts:154:19
+0|tajikmus | 2026-05-11 18:18:47:     at file:///var/www/tajikmusic/artifacts/api-server/src/routes/auth.ts:92:18
+
+/var/log/tajikmusic/api-out.log last 15 lines:
+0|tajikmus | time":1784119417091,"pid":972210,"hostname":"ubuntu","req":{"id":31,"method":"GET","url":"/api/settings/general"},"res":{"statusCode":200},"responseTime":10,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:43:37: {"level":30,"time":1784119417198,"pid":972210,"hostname":"ubuntu","req":{"id":32,"method":"GET","url":"/api/integrations"},"res":{"statusCode":200},"responseTime":19,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:43:38: {"level":30,"time":1784119418186,"pid":972210,"hostname":"ubuntu","req":{"id":34,"method":"GET","url":"/api/storage/objects/uploads/559996a2-b0f0-436c-a631-77afc40f3c2d"},"res":{"statusCode":200},"responseTime":22,"msg":"request aborted"}
+0|tajikmus | 2026-07-15 12:43:39: {"level":30,"time":1784119419248,"pid":972210,"hostname":"ubuntu","req":{"id":35,"method":"GET","url":"/api/users/avatars/2f9dc109-404f-4020-8b08-d55af1fed0d0"},"res":{"statusCode":200},"responseTime":11,"msg":"request aborted"}
+0|tajikmus | 2026-07-15 12:43:39: {"level":30,"time":1784119419344,"pid":972210,"hostname":"ubuntu","req":{"id":36,"method":"GET","url":"/api/users/avatars/679587f9-b8d4-4a23-ad07-6b4fd48a87a1"},"res":{"statusCode":200},"responseTime":8,"msg":"request aborted"}
+0|tajikmus | 2026-07-15 12:43:39: {"level":30,"time":1784119419716,"pid":972210,"hostname":"ubuntu","req":{"id":37,"method":"GET","url":"/api/users/avatars/101c6ddc-b2cb-4406-bba1-8ce4b95e7b8f"},"res":{"statusCode":200},"responseTime":21,"msg":"request aborted"}
+0|tajikmus | 2026-07-15 12:43:42: {"level":30,"time":1784119422142,"pid":972210,"hostname":"ubuntu","req":{"id":38,"method":"GET","url":"/api/integrations"},"res":{"statusCode":304},"responseTime":18,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:05: {"level":30,"time":1784119445328,"pid":972210,"hostname":"ubuntu","req":{"id":39,"method":"GET","url":"/api/notifications/unread-count"},"res":{"statusCode":304},"responseTime":9,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:33: {"level":30,"time":1784119473701,"pid":972210,"hostname":"ubuntu","req":{"id":40,"method":"GET","url":"/api/notifications/unread-count"},"res":{"statusCode":304},"responseTime":37,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:42: {"level":30,"time":1784119482531,"pid":972210,"hostname":"ubuntu","req":{"id":41,"method":"GET","url":"/api/notifications/unread-count"},"res":{"statusCode":304},"responseTime":11,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:44: {"level":30,"time":1784119484872,"pid":972210,"hostname":"ubuntu","req":{"id":42,"method":"POST","url":"/api/integrations/spotify/register"},"res":{"statusCode":201},"responseTime":25,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:44: {"level":30,"time":1784119484995,"pid":972210,"hostname":"ubuntu","req":{"id":43,"method":"POST","url":"/api/integrations/spotify/credentials"},"res":{"statusCode":200},"responseTime":18,"msg":"request completed"}
+0|tajikmus | 2026-07-15 12:44:45: {"level":30,"time":1784119485308,"pid":972210,"hostname":"ubuntu","req":{"id":44,"method":"POST","url":"/api/integrations/spotify/test"},"res":{"statusCode":400},"responseTime":224,"msg":"request completed"}
+
