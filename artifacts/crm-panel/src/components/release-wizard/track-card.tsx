@@ -14,7 +14,7 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, Trash2, Music2, Save, Wand2, Upload, Loader2 } from "lucide-react";
 import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
-import { GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES } from "./types";
+import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES } from "./types";
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import {
@@ -133,14 +133,11 @@ export function TrackCard({
   };
 
   // Справочники Broma16 для метаданных трека (с запасными курируемыми списками).
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const countryOpts = useCatalogOptions("country", {
     valueKey: "code",
     fallback: COUNTRIES.map((c) => ({ value: c.code, label: c.name })),
   });
-  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
-  const subgenreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS] }).options;
 
   return (
     <Card className="bg-card/40 border-border/50">
@@ -242,8 +239,8 @@ export function TrackCard({
             <Field label={t.createRelease.genre}>
               <DictionaryCombobox
                 value={draft.genre ?? ""}
-                onChange={(v) => set("genre", v)}
-                options={genreOpts.options}
+                onChange={(v) => setDraft((p) => ({ ...p, genre: v, subgenre: (SUBGENRES[v] ?? []).includes(p.subgenre ?? "") ? p.subgenre : null }))}
+                options={genreOptionsWith(draft.genre)}
                 placeholder={t.releaseWizard.selectPlaceholder}
               />
             </Field>
@@ -251,7 +248,7 @@ export function TrackCard({
               <DictionaryCombobox
                 value={draft.subgenre ?? ""}
                 onChange={(v) => set("subgenre", v)}
-                options={subgenreOpts}
+                options={subgenreOptionsFor(draft.genre, draft.subgenre)}
                 placeholder="—"
               />
             </Field>

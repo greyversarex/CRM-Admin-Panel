@@ -100,6 +100,33 @@ export const SUBGENRES: Record<string, string[]> = {
 
 export const GENRE_OPTIONS: Array<{ value: string; label: string }> = GENRES.map((g) => ({ value: g, label: g }));
 
+/**
+ * Опции жанров (68 из справочника документа). Если у записи уже сохранён жанр,
+ * которого нет в списке (напр. старое значение из каталога Broma16), он
+ * добавляется первым, чтобы не пропасть из выпадающего списка.
+ */
+export function genreOptionsWith(current?: string | null): Array<{ value: string; label: string }> {
+  if (current && !(GENRES as readonly string[]).includes(current)) {
+    return [{ value: current, label: current }, ...GENRE_OPTIONS];
+  }
+  return GENRE_OPTIONS;
+}
+
+/**
+ * Поджанры ТОЛЬКО выбранного жанра (иерархия из документа). Если жанр не выбран —
+ * пустой список. Уже сохранённый поджанр добавляется, чтобы не пропасть из списка.
+ */
+export function subgenreOptionsFor(
+  genre?: string | null,
+  current?: string | null,
+): Array<{ value: string; label: string }> {
+  const base = (genre && SUBGENRES[genre] ? SUBGENRES[genre] : []).map((s) => ({ value: s, label: s }));
+  if (current && !base.some((o) => o.value === current)) {
+    return [{ value: current, label: current }, ...base];
+  }
+  return base;
+}
+
 export const SUBGENRE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "2 Tone Ska", label: "2 Tone Ska" }, { value: "A Cappella", label: "A Cappella" }, { value: "Acid Jazz", label: "Acid Jazz" }, { value: "Acid Techno", label: "Acid Techno" },
   { value: "Acoustic Blues", label: "Acoustic Blues" }, { value: "Acoustic Easy Listening", label: "Acoustic Easy Listening" }, { value: "Acoustic Folk", label: "Acoustic Folk" }, { value: "Acoustic Instrumental", label: "Acoustic Instrumental" },

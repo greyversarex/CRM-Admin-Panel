@@ -33,7 +33,7 @@ import {
   ListMusic, Send, Loader2, Settings2, MapPin, Calendar, Globe, Upload, ImageIcon,
 } from "lucide-react";
 
-import { RELEASE_TYPES, GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
+import { RELEASE_TYPES, SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import { MultiArtistPicker } from "./multi-artist-picker";
@@ -612,23 +612,12 @@ function Step1Details({
   const myArtist = artistsData?.data?.find((a: any) => a.id === user?.artistId);
   const myLabel  = labelsData?.data?.find((l: any) => l.id === user?.labelId);
 
-  // Справочники Broma16: жанры и языки тянутся из интеграции (с запасным
-  // курируемым списком, пока словарь не синхронизирован).
-  const genreOpts = useCatalogOptions("genre", {
-    valueKey: "code",
-    fallback: GENRE_OPTIONS,
-    extra: GENRE_OPTIONS,
-  });
+  // Язык — справочник Broma16 (с запасным курируемым списком). Жанры и поджанры
+  // берутся из иерархии документа (GENRES → SUBGENRES), а не из каталога Broma16.
   const langOpts = useCatalogOptions("language", {
     valueKey: "code",
     fallback: LANGS.map((l) => ({ value: l.value, label: l.label })),
   });
-  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
-  const subgenreOpts = useCatalogOptions("genre", {
-    valueKey: "code",
-    fallback: GENRE_OPTIONS,
-    extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS],
-  }).options;
 
   // Синхронизируем form.artistId с primary артистом из multi-picker.
   useEffect(() => {
@@ -783,8 +772,8 @@ function Step1Details({
             <FieldLabel className="text-xs text-muted-foreground">{t.createRelease.genre}</FieldLabel>
             <DictionaryCombobox
               value={form.genre}
-              onChange={(v) => set("genre", v)}
-              options={genreOpts.options}
+              onChange={(v) => setForm((p) => ({ ...p, genre: v, subgenre: (SUBGENRES[v] ?? []).includes(p.subgenre) ? p.subgenre : "" }))}
+              options={genreOptionsWith(form.genre)}
               placeholder={t.createRelease.pleaseSelect}
             />
           </div>
@@ -793,7 +782,7 @@ function Step1Details({
             <DictionaryCombobox
               value={form.subgenre}
               onChange={(v) => set("subgenre", v)}
-              options={subgenreOpts}
+              options={subgenreOptionsFor(form.genre, form.subgenre)}
               placeholder={t.createRelease.pleaseSelect}
             />
           </div>

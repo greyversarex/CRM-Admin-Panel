@@ -30,7 +30,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
-import { GENRE_OPTIONS } from "@/components/release-wizard/types";
+import { genreOptionsWith } from "@/components/release-wizard/types";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -720,8 +720,7 @@ function EditDetailsForm({
 }) {
   const updateRelease = useUpdateRelease();
   const updateArtists = useUpdateReleaseArtists();
-  // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
+  // Язык — справочник Broma16; жанр берётся из иерархии документа.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const { data: serverArtists } = useGetReleaseArtists(release.id);
   // Локальный список артистов релиза. Синхронизируем один раз, когда придёт
@@ -854,7 +853,7 @@ function EditDetailsForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <FormField label="Жанр">
-          <DictionaryCombobox value={form.genre || ""} onChange={(v) => set("genre", v)} options={genreOpts.options} placeholder="—" />
+          <DictionaryCombobox value={form.genre || ""} onChange={(v) => set("genre", v)} options={genreOptionsWith(form.genre)} placeholder="—" />
 
         </FormField>
         <FormField label="UPC (необязательно)">
@@ -2533,8 +2532,7 @@ function MultiEditTracksDialog({
   onSaved: () => void;
 }) {
   const updateTrack = useUpdateTrack();
-  // Справочники Broma16 (жанр/язык); при недоступности — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
+  // Язык — справочник Broma16; жанр берётся из иерархии документа.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -2650,7 +2648,7 @@ function MultiEditTracksDialog({
               <DictionaryCombobox
                 value={genre}
                 onChange={setGenre}
-                options={[{ value: "", label: "— не менять" }, ...genreOpts.options]}
+                options={[{ value: "", label: "— не менять" }, ...genreOptionsWith(genre)]}
                 placeholder="— не менять"
               />
             </div>

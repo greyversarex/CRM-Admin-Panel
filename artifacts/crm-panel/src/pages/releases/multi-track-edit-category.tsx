@@ -23,7 +23,7 @@ import {
   ArrowLeft, ChevronDown, ChevronUp, Loader2, Plus, Trash2,
 } from "lucide-react";
 import {
-  GENRE_OPTIONS, SUBGENRE_OPTIONS, COUNTRIES, DISPLAY_ARTIST_ROLES,
+  SUBGENRES, subgenreOptionsFor, genreOptionsWith, COUNTRIES, DISPLAY_ARTIST_ROLES,
   WRITER_ROLES, PERFORMER_ROLES, PRODUCTION_ROLES,
 } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
@@ -522,9 +522,8 @@ function NewValueGenre({ tracks, updateFn, onApplied }: NewValueProps) {
   const [genre, setGenre] = useState("");
   const [subgenre, setSubgenre] = useState("");
   const [busy, setBusy] = useState(false);
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
-  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
-  const subgenreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS] }).options;
+  // Поджанры зависят от выбранного жанра (иерархия из документа).
+  const subgenreOpts = subgenreOptionsFor(genre, subgenre);
   const apply = async () => {
     if (!genre) return; setBusy(true);
     const r = await applyToAll(tracks, updateFn, () => ({ genre, subgenre: subgenre || null }));
@@ -535,7 +534,7 @@ function NewValueGenre({ tracks, updateFn, onApplied }: NewValueProps) {
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Primary Genre</Label>
-        <DictionaryCombobox value={genre} onChange={setGenre} options={genreOpts.options} placeholder="Select a Genre" />
+        <DictionaryCombobox value={genre} onChange={(v) => { setGenre(v); if (!(SUBGENRES[v] ?? []).includes(subgenre)) setSubgenre(""); }} options={genreOptionsWith(genre)} placeholder="Select a Genre" />
       </div>
       {subgenreOpts.length > 0 && (
         <div className="space-y-1.5">

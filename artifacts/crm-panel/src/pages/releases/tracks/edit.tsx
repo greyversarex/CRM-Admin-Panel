@@ -44,7 +44,7 @@ import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
   splitWriterSharesEvenly,
 } from "@/components/release-wizard/contributors-editor";
-import { GENRE_OPTIONS, SUBGENRE_OPTIONS, LANGS, COUNTRIES } from "@/components/release-wizard/types";
+import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
@@ -313,11 +313,8 @@ export default function TrackEditPage() {
   }, [track?.id, track?.updatedAt]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
-  const genreOpts = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: GENRE_OPTIONS });
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })) });
-  // Поджанр: единый список «жанры + сабжанры» (Broma16 + кастомные), с поиском.
-  const subgenreOptions = useCatalogOptions("genre", { valueKey: "code", fallback: GENRE_OPTIONS, extra: [...GENRE_OPTIONS, ...SUBGENRE_OPTIONS] }).options;
 
   // ── Clip time helpers ──
   const clipMm = f ? String(Math.floor(f.clipStartSeconds / 60)).padStart(2, "0") : "00";
@@ -781,8 +778,8 @@ export default function TrackEditPage() {
                 <Label className="text-sm text-muted-foreground">Genre</Label>
                 <DictionaryCombobox
                   value={f.genre || ""}
-                  onChange={(v) => setF({ ...f, genre: v })}
-                  options={[{ value: "", label: "— Not selected" }, ...genreOpts.options]}
+                  onChange={(v) => setF({ ...f, genre: v, subgenre: (SUBGENRES[v] ?? []).includes(f.subgenre) ? f.subgenre : "" })}
+                  options={[{ value: "", label: "— Not selected" }, ...genreOptionsWith(f.genre)]}
                   placeholder="Please select"
                 />
               </div>
@@ -791,7 +788,7 @@ export default function TrackEditPage() {
                 <DictionaryCombobox
                   value={f.subgenre || ""}
                   onChange={(v) => setF({ ...f, subgenre: v })}
-                  options={[{ value: "", label: "— Not selected" }, ...subgenreOptions]}
+                  options={[{ value: "", label: "— Not selected" }, ...subgenreOptionsFor(f.genre, f.subgenre)]}
                   placeholder="Please select"
                 />
               </div>
