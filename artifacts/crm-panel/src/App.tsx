@@ -20,7 +20,6 @@ import CreateRelease from "@/pages/releases/new";
 import EditRelease from "@/pages/releases/edit";
 import TrackEditPage from "@/pages/releases/tracks/edit";
 import AudioUploadPage from "@/pages/releases/tracks/audio-upload";
-import BulkUploadReleases from "@/pages/releases/bulk";
 import ReleaseAvailability from "@/pages/releases/availability";
 import ReleaseSplitShare from "@/pages/releases/splitshare";
 import MultiTrackEdit from "@/pages/releases/multi-track-edit";
@@ -123,7 +122,6 @@ function Router() {
       <ProtectedRoute path="/distribution"   component={Distribution} />
       <ProtectedRoute path="/releases"                  component={Releases} />
       <ProtectedRoute path="/releases/new"              component={CreateRelease} />
-      <ProtectedRoute path="/releases/bulk"             component={BulkUploadReleases} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
       <ProtectedRoute path="/catalog/import"            component={CatalogImport} />
