@@ -302,7 +302,10 @@ let _spotifyToken: { value: string; expiresAt: number } | null = null;
 async function getSpotifyToken(cfg: SpotifyConfig): Promise<string> {
   if (!cfg.clientId || !cfg.clientSecret) throw new SpotifyNotConfiguredError();
   if (_spotifyToken && _spotifyToken.expiresAt > Date.now() + 60_000) return _spotifyToken.value;
-  const basic = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64");
+  // Убираем лишние пробелы/переводы строк при копировании ключей (иначе 400 invalid_client).
+  const clientId = cfg.clientId.trim();
+  const clientSecret = cfg.clientSecret.trim();
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   let resp: Response;
   try {
     resp = await fetch("https://accounts.spotify.com/api/token", {
