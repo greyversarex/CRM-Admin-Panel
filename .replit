@@ -28,6 +28,10 @@ args = "Start application"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
+args = "API Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
 args = "typecheck"
 
 [[workflows.workflow]]
@@ -92,3 +96,7 @@ LOCAL_STORAGE_ROOT = "/home/runner/workspace/.data/uploads"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
