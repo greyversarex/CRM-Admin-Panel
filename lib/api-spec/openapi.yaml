@@ -2636,7 +2636,7 @@ components:
           type: string
         source:
           type: string
-          enum: [spotify, apple, musicbrainz]
+          enum: [spotify, apple, musicbrainz, deezer]
           default: spotify
       required: [upc]
 

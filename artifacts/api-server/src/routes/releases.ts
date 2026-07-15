@@ -1426,7 +1426,7 @@ interface ImportedReleaseData {
   coverUrl: string | null;
   releaseDate: string | null;
   tracks: { title: string; trackNumber: number; isrc: string | null }[];
-  source: "spotify" | "musicbrainz";
+  source: "spotify" | "musicbrainz" | "deezer";
 }
 
 // Поиск релиза в Spotify по UPC: search?q=upc:<upc>&type=album → /albums/<id>.
@@ -1559,6 +1559,62 @@ async function fetchReleaseFromMusicBrainzByUpc(upc: string): Promise<ImportedRe
   };
 }
 
+// Поиск релиза в Deezer по UPC (публичный API, без ключей и без Premium).
+// Deezer отдаёт ISRC прямо в /album/{id}/tracks, поэтому N+1 запросов не нужно.
+async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedReleaseData | null> {
+  const albRes = await fetch(`https://api.deezer.com/album/upc:${encodeURIComponent(upc)}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!albRes.ok) throw new Error(`Deezer album ${albRes.status}`);
+  const alb = await albRes.json() as {
+    id?: number;
+    title?: string;
+    upc?: string;
+    label?: string;
+    release_date?: string;
+    cover_xl?: string;
+    cover_big?: string;
+    artist?: { name?: string };
+    error?: { type?: string; message?: string };
+  };
+  // Deezer возвращает HTTP 200 с телом {error:{...}}, когда релиз не найден.
+  if (!alb || alb.error || !alb.id) return null;
+
+  const tracks: { title: string; trackNumber: number; isrc: string | null }[] = [];
+  let next: string | null = `https://api.deezer.com/album/${alb.id}/tracks?limit=100`;
+  let guard = 0;
+  while (next && guard < 10) {
+    guard++;
+    // SSRF-защита: следуем только по next-ссылкам самого Deezer, ничего иного.
+    if (!next.startsWith("https://api.deezer.com/")) break;
+    const tRes: Response = await fetch(next, { signal: AbortSignal.timeout(15_000) });
+    if (!tRes.ok) break;
+    const tj = await tRes.json() as {
+      data?: { title?: string; track_position?: number; isrc?: string }[];
+      next?: string;
+    };
+    for (const t of tj.data ?? []) {
+      tracks.push({
+        title: t.title ?? "",
+        trackNumber: t.track_position ?? tracks.length + 1,
+        isrc: t.isrc ?? null,
+      });
+    }
+    next = tj.next ?? null;
+  }
+
+  return {
+    upc: alb.upc || upc,
+    title: alb.title ?? "Unknown release",
+    artist: alb.artist?.name ?? "Unknown artist",
+    label: alb.label ?? null,
+    coverUrl: alb.cover_xl ?? alb.cover_big ?? null,
+    releaseDate: alb.release_date ?? null,
+    tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null }],
+    source: "deezer",
+  };
+}
+
 // Импорт релиза по UPC из внешних каталогов (Spotify / MusicBrainz). Создаёт
 // в БД реальные записи artist/label/release/tracks в одной транзакции. Источник
 // "apple" не поддерживается (требует Apple Music API partner-токена) и
@@ -1571,8 +1627,8 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
     res.status(400).json({ error: "invalid_upc", message: "Укажите корректный UPC/EAN (8–14 цифр)." });
     return;
   }
-  const source: "spotify" | "apple" | "musicbrainz" =
-    sourceRaw === "apple" || sourceRaw === "musicbrainz" ? sourceRaw : "spotify";
+  const source: "spotify" | "apple" | "musicbrainz" | "deezer" =
+    sourceRaw === "apple" || sourceRaw === "musicbrainz" || sourceRaw === "deezer" ? sourceRaw : "spotify";
 
   // Idempotency: не создаём дубль, если релиз с таким UPC уже есть.
   const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
@@ -1605,6 +1661,11 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         // Если в Spotify не нашлось — добираем из MusicBrainz.
         if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
       }
+    } else if (source === "deezer") {
+      // Deezer — бесплатный публичный каталог (без ключей и Premium).
+      // Если в Deezer не нашлось — запасной вариант MusicBrainz.
+      data = await fetchReleaseFromDeezerByUpc(upc);
+      if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
     } else {
       // musicbrainz / apple → MusicBrainz
       data = await fetchReleaseFromMusicBrainzByUpc(upc);
@@ -1650,7 +1711,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         labelId,
         coverUrl: found.coverUrl,
         releaseDate: found.releaseDate,
-        statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : "MusicBrainz"}`,
+        statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : found.source === "deezer" ? "Deezer" : "MusicBrainz"}`,
       }).returning();
       pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 

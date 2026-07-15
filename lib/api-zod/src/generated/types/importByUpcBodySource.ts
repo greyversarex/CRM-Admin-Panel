@@ -13,4 +13,5 @@ export const ImportByUpcBodySource = {
   spotify: "spotify",
   apple: "apple",
   musicbrainz: "musicbrainz",
+  deezer: "deezer",
 } as const;

@@ -38,6 +38,8 @@ export default function NewImport() {
   const [result, setResult] = useState<SpotifySearchResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [labelId, setLabelId] = useState<string>("none");
+  // Источник для импорта по UPC. Deezer и MusicBrainz бесплатны (без ключей/Premium).
+  const [upcSource, setUpcSource] = useState<"spotify" | "deezer" | "musicbrainz">("spotify");
 
   const labelName = labelId !== "none" ? labels?.data.find((l) => String(l.id) === labelId)?.name ?? null : null;
   const labelMismatch = !!labelName && result && result.releases.some((r) => r.label && r.label !== labelName);
@@ -53,7 +55,7 @@ export default function NewImport() {
 
   const handleImportUpc = async () => {
     try {
-      const created = await importByUpc.mutateAsync({ data: { upc: compactInput, source: "spotify" } });
+      const created = await importByUpc.mutateAsync({ data: { upc: compactInput, source: upcSource } });
       queryClient.invalidateQueries({ queryKey: getListTransferImportsQueryKey() });
       toast({
         title: tt.toast_upc_imported,
@@ -186,6 +188,20 @@ export default function NewImport() {
                 {importByUpc.isPending ? tt.importing_upc : searching ? tt.searching : isUpcInput ? tt.import_upc_btn : tt.find_artist}
               </Button>
             </div>
+            {isUpcInput && (
+              <div className="flex items-center gap-2 pt-1">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">{tt.source_label}</label>
+                <Select value={upcSource} onValueChange={(v) => setUpcSource(v as "spotify" | "deezer" | "musicbrainz")}>
+                  <SelectTrigger className="bg-background/40 h-8 w-56 text-xs" data-testid="select-upc-source"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deezer">{tt.source_deezer}</SelectItem>
+                    <SelectItem value="spotify">{tt.source_spotify}</SelectItem>
+                    <SelectItem value="musicbrainz">{tt.source_musicbrainz}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-muted-foreground">{tt.source_hint}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 

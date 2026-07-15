@@ -1966,7 +1966,7 @@ export const importReleaseByUpcBodySourceDefault = `spotify`;
 export const ImportReleaseByUpcBody = zod.object({
   upc: zod.string(),
   source: zod
-    .enum(["spotify", "apple", "musicbrainz"])
+    .enum(["spotify", "apple", "musicbrainz", "deezer"])
     .default(importReleaseByUpcBodySourceDefault),
 });
 
