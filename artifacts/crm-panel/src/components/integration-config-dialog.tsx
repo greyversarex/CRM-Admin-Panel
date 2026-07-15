@@ -59,7 +59,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); msg = j?.error ?? msg; } catch { /* noop */ }
+    try { const j = await res.json(); msg = j?.error ?? j?.message ?? msg; } catch { /* noop */ }
     throw new Error(msg);
   }
   if (res.status === 204) return undefined as T;

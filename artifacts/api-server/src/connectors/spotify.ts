@@ -28,7 +28,14 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<{
   });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`Spotify auth failed (${res.status}): ${txt}`);
+    let hint = txt;
+    try {
+      const j = JSON.parse(txt) as { error?: string; error_description?: string };
+      if (j?.error === "invalid_client") hint = "неверный Client ID или Client Secret (проверьте, что скопированы полностью, без пробелов, и секрет актуальный)";
+      else if (j?.error_description) hint = j.error_description;
+      else if (j?.error) hint = j.error;
+    } catch { /* оставляем сырой текст */ }
+    throw new Error(`Spotify отклонил ключи (HTTP ${res.status}): ${hint}`);
   }
   const json = await res.json() as { access_token: string; expires_in: number };
   return { token: json.access_token, expiresIn: json.expires_in };
