@@ -24,6 +24,27 @@ best-effort fetch into a map before the per-item tx; on any failure fall back to
 placeholder tracks (count-based generic titles). Import correctness does not depend
 on Spotify.
 
+## Genre + subgenre mapping on import
+UPC import maps source genre strings to the CRM hierarchy (GENRES→SUBGENRES), setting
+BOTH genre and subgenre. `mapSourceGenre` returns `{genre, subgenre}`: per source name
+in order, checks parent-genre → alias → subgenre; first name that matches anything wins;
+within a name a parent match beats a subgenre match. Subgenre matches come only from a
+paired reverse index, so subgenre is never inconsistent with genre.
+- **CRM_SUBGENRES in releases.ts is a hand-copy of frontend SUBGENRES (types.ts) and MUST
+  stay byte-identical** (same as CRM_GENRES). A verify script diffs both literals — keep them in lockstep.
+- Ambiguous subgenres under multiple parents (e.g. "Deep House" in Electronic AND House)
+  resolve **first-wins by CRM_SUBGENRES key order** → Electronic/Deep House. Valid & deterministic.
+- **Coverage reality:** Deezer/MusicBrainz only emit broad PARENT genres, so subgenre stays
+  null from them. Subgenre auto-fill effectively needs **Spotify** (granular artist tags like
+  "deep house", "tajik pop"). Spotify search 403 in dev = connector not authorized (env, not code).
+
+## Contributors/authors NOT importable from Spotify/Deezer
+Spotify & Deezer public APIs expose only performing artists, never songwriters/composers/
+lyricists. Sources that DO: MusicBrainz (via work→artist rels, free/keyless, partial &
+weak for Central-Asian catalog), Apple Music API (composerName; needs Apple Developer acct
++ MusicKit JWT key), TIDAL API (full credits; needs TIDAL dev creds), Genius (messy). So
+"import contributors" is blocked on choosing one of those + its credentials.
+
 ## isTransferRelease flag
 `releases.isTransfer` (boolean) is set true on transfer-imported releases. In the
 Broma16 release push (step 2 releaseBody) it maps to the documented Broma16 boolean

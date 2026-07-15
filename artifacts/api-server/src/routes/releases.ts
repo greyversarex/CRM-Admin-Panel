@@ -1427,6 +1427,8 @@ interface ImportedReleaseData {
   releaseDate: string | null;
   /** Жанр, приведённый к списку жанров CRM (или null, если сопоставить не удалось). */
   genre: string | null;
+  /** Поджанр из иерархии CRM (если источник дал распознаваемый поджанр), иначе null. */
+  subgenre: string | null;
   /** Тип релиза из источника (single/album/ep/compilation), если он его сообщает. */
   releaseType: "single" | "album" | "ep" | "compilation" | null;
   tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[];
@@ -1493,18 +1495,109 @@ const GENRE_ALIAS_BY_CANON = new Map(
   Object.entries(GENRE_ALIASES).map(([k, v]) => [canonicalGenre(k), v]),
 );
 
-// Сопоставляет список названий жанров из источника с жанром CRM.
-// Возвращает первый уверенно распознанный жанр либо null.
-function mapSourceGenre(names: (string | null | undefined)[]): string | null {
+// Поджанры CRM (должны совпадать с SUBGENRES в crm-panel/.../release-wizard/types.ts).
+// Импорт сопоставляет названия жанров из источника (Deezer/Spotify) к этой иерархии:
+// если строка источника — это поджанр, выставляем и жанр-родитель, и сам поджанр.
+const CRM_SUBGENRES: Record<string, string[]> = {
+  "Pop": ["Dance Pop", "Teen Pop", "Synth Pop", "Electropop", "Indie Pop", "Dream Pop", "Art Pop", "Pop Rock", "Pop Folk", "Pop Funk", "Acoustic Pop", "Europop", "French Pop", "German Pop", "Russian Pop", "Korean Pop", "Japanese Pop"],
+  "Rock": ["Alternative Rock", "Hard Rock", "Soft Rock", "Classic Rock", "Progressive Rock", "Indie Rock", "Garage Rock", "Folk Rock", "Symphonic Rock", "Space Rock", "Blues Rock", "Rap Rock", "Slow Rock", "Arena Rock", "Southern Rock"],
+  "Hip-Hop / Rap": ["Rap", "Hip-Hop", "Trap", "Drill", "Gangsta Rap", "Conscious Rap", "Alternative Rap", "Underground Rap", "Boom Bap", "East Coast Rap", "West Coast Rap", "Latin Rap", "Christian Rap", "Russian Rap", "Trap Soul", "Mumble Rap"],
+  "R&B / Soul": ["Contemporary R&B", "Soul", "Neo Soul", "Rhythmic Soul", "Funk", "Motown", "Afro Soul"],
+  "Dance": ["Dance Pop", "Eurodance", "Club Dance", "Electronic Dance", "Progressive Dance", "Vocal Dance", "Latin Dance", "Disco Dance", "Freestyle", "Hi-NRG", "Italo Dance", "Big Room", "Tropical Dance", "Electro Dance", "Urban Dance", "Dancehall", "Deep Dance", "Afro Dance", "Pop Dance", "Remix Dance", "Dance EDM", "EDM", "House Dance", "Tech Dance"],
+  "Electronic": ["EDM", "Electro", "Electronica", "Electro House", "Electropop", "Electro Folk", "Breakbeat", "Acid Techno", "Techno", "House", "Trance", "Dubstep", "Drum & Bass", "Pop", "Jungle", "Drumstep", "Progressive House", "Deep House", "Tech House", "Future House", "Bass House", "Hardstyle", "Electro Pop", "Electro Rock", "IDM", "Experimental Electronic", "Digital Pop", "Synthwave", "Future Bass", "Chill Electronic"],
+  "House": ["Deep House", "Tech House", "Progressive House", "Bass House", "Afro House", "Club House", "Vocal House", "French House", "Euro House", "Future House", "Tropical House"],
+  "Techno": ["Minimal Techno", "Detroit Techno", "Acid Techno", "Industrial Techno", "Hard Techno", "Melodic Techno", "Peak Time Techno", "Progr"],
+  "Trance": ["Hard Trance", "Progressive Trance", "Psytrance", "Uplifting Trance", "Vocal Trance"],
+  "Drum & Bass": ["Liquid DnB", "Neurofunk", "Jungle", "Jump Up", "Darkstep", "Drumstep", "Atmospheric DnB"],
+  "Dubstep": ["Brostep", "Melodic Dubstep", "Chill Dubstep", "Heavy Dubstep", "Future Dubstep", "Experimental Dubstep"],
+  "Lo-Fi": ["Lo-Fi Hip-Hop", "Chillhop", "Study Beats", "Jazzhop", "Ambient Lo-Fi", "Lo-Fi Chill"],
+  "Indie": ["Indie Pop", "Indie Rock", "Indie Folk", "Indie Dance", "Indie Electronic", "Indie Alternative", "Bedroom Pop", "Lo-Fi Indie"],
+  "Alternative": ["Alternative Rock", "Alternative Pop", "Alternative Hip-Hop", "Alternative Metal", "Indie Alternative", "Experimental Alternative", "Post Alternative"],
+  "Jazz": ["Smooth Jazz", "Vocal Jazz", "Bebop", "Swing", "Big Band", "Acid Jazz", "Latin Jazz", "Jazz Fusion", "Contemporary Jazz", "Free Jazz"],
+  "Blues": ["Blues Rock", "Delta Blues", "Chicago Blues", "Acoustic Blues", "Modern Blues", "Electric Blues"],
+  "Country": ["Country Pop", "Country Rock", "Traditional Country", "Bluegrass", "Modern Country", "Folk Country", "Americana Country"],
+  "Folk": ["Folk Rock", "Indie Folk", "Traditional Folk", "Acoustic Folk", "Celtic Folk", "Modern Folk", "World Folk"],
+  "Classical": ["Baroque", "Romantic Classical", "Modern Classical", "Orchestral", "Chamber Music", "Piano Classical", "Symphony", "Minimal Classical"],
+  "Opera": ["Classical Opera", "Modern Opera", "Crossover Opera", "Vocal Opera", "Symphonic Opera"],
+  "Instrumental": ["Instrumental Pop", "Instrumental Rock", "Piano Instrumental", "Cinematic Instrumental", "Acoustic Instrumental", "Ambient Instrumental"],
+  "New Age": ["Meditation Music", "Healing Music", "Spiritual New Age", "Nature Sounds", "Relaxation Music", "Yoga Music"],
+  "Ambient": ["Dark Ambient", "Space Ambient", "Drone Ambient", "Cinematic Ambient", "Chill Ambient", "Minimal Ambient"],
+  "Easy Listening": ["Soft Pop", "Lounge Music", "Background Music", "Romantic Easy Listening", "Acoustic Easy Listening"],
+  "Funk": ["Funk Rock", "Jazz Funk", "Disco Funk", "Pop Funk", "Afro Funk", "Electro Funk"],
+  "Disco": ["Classic Disco", "Nu Disco", "Disco Pop", "Funk Disco", "Italo Disco"],
+  "Punk": ["Punk Rock", "Pop Punk", "Hardcore Punk", "Post Punk", "Ska Punk", "Indie Punk"],
+  "Metal": ["Heavy Metal", "Death Metal", "Black Metal", "Power Metal", "Progressive Metal", "Nu Metal", "Alternative Metal"],
+  "Reggae": ["Roots Reggae", "Dub Reggae", "Dancehall", "Reggae Fusion", "Lovers Rock"],
+  "Ska": ["Traditional Ska", "Ska Punk", "2 Tone Ska", "Reggae Ska Fusion"],
+  "Latin": ["Latin Pop", "Latin Urban", "Latin Trap", "Latin Rock", "Salsa", "Bachata", "Reggaeton", "Latin Jazz", "Merengue"],
+  "Afrobeat": ["Afro Pop", "Afro House", "Afro Fusion", "Afro Dance", "Afro Trap", "Afro Soul", "Afro Hip-Hop"],
+  "Afrobeats": ["Afro Pop", "Afro House", "Afro Fusion", "Afro Dance", "Afro Trap", "Afro Soul", "Afro Hip-Hop"],
+  "Gospel": ["Contemporary Gospel", "Traditional Gospel", "Gospel Choir", "Urban Gospel", "Christian Gospel"],
+  "Religious": ["Spiritual Music", "Devotional Music", "Islamic Nasheed", "Mantra Music", "Sacred Music"],
+  "Christian": ["Christian Pop", "Christian Rock", "Christian Rap", "Worship Music", "Praise Music"],
+  "Traditional": ["Ethnic Traditional", "Regional Traditional", "Folk Traditional", "Ceremonial Music", "Heritage Music"],
+  "World Music": ["World Fusion", "Ethnic Fusion", "Global Beats", "Traditional World", "Modern World Fusion"],
+  "Soundtrack": ["Film Score", "TV Soundtrack", "Trailer Music", "Game Soundtrack", "Cinematic Score", "Background Score"],
+  "Anime": ["Anime OST", "Anime Pop", "Anime Rock", "Anime Instrumental", "J-Anime Fusion"],
+  "Bollywood": ["Bollywood Pop", "Bollywood Soundtrack", "Bollywood Dance", "Bollywood Romantic", "Bollywood Classical Fusion"],
+  "Experimental": ["Avant-Garde", "Noise Music", "Experimental Electronic", "Experimental Rock", "Sound Art", "Minimal Experimental"],
+  "Vocal": ["Male Vocal", "Female Vocal", "Duet", "Choir", "A Cappella", "Vocal Pop", "Vocal Jazz", "Vocal House", "Opera Vocal"],
+  "Singer/Songwriter": ["Acoustic Singer/Songwriter", "Indie Singer/Songwriter", "Folk Singer/Songwriter", "Pop Singer/Songwriter", "Emotional Ballads", "Storytelling Songs"],
+  "Audiobook": ["Fiction Audiobook", "Non-Fiction Audiobook", "Educational Audiobook", "Self-Help Audiobook", "Biography Audiobook", "Story Audiobook"],
+  "Spoken Word": ["Poetry", "Speech", "Storytelling", "Performance Poetry", "Political Speech", "Motivational Speech"],
+  "Comedy": ["Stand-up Comedy", "Sketch Comedy", "Satire", "Parody", "Comedy Story", "Improvisation"],
+  "Karaoke": ["Pop Karaoke", "Rock Karaoke", "Classic Karaoke", "Instrumental Karaoke", "Party Karaoke", "Regional Karaoke"],
+  "Children's Music": ["Nursery Rhymes", "Educational Songs", "Lullabies", "Cartoon Songs", "Kids Pop", "Kids Folk"],
+  "Holiday": ["Christmas Music", "New Year Music", "Ramadan Music", "Eid Music", "Easter Music", "Valentine’s Day Music", "Halloween Music", "National Holiday Music"],
+  "Arabic": ["Arabic Pop", "Arabic Folk", "Arabic Traditional", "Arabic Classical", "Arabic Dance", "Arabic Rock", "Arabic Hip-Hop", "Arabic Rap", "Arabic R&B", "Arabic Electronic", "Khaliji", "Levantine", "Egyptian Pop", "Egyptian Rap", "Egyptian Hip-Hop", "Egyptian Rock", "Maghrebi", "Rai", "Bedouin", "Mahraganat"],
+  "African": ["Afrobeat", "Afrobeats", "Afro Pop", "Afro House", "Afro Soul", "Highlife", "Amapiano", "Soukous", "Afro Jazz", "Afro Fusion"],
+  "Indian": ["Bollywood", "Indian Pop", "Indian Classical", "Bhangra", "Tamil Pop", "Telugu Pop", "Punjabi Folk", "Filmi", "Devotional", "Indian Fusion"],
+  "Punjabi": ["Punjabi Pop", "Punjabi Folk", "Bhangra", "Punjabi Rap", "Punjabi Romantic", "Punjabi Hip-Hop", "Gurbani", "Punjabi Remix"],
+  "Chinese": ["C-Pop", "Mandopop", "Cantopop", "Chinese Folk", "Chinese Classical", "Chinese Hip-Hop", "Chinese Rock", "Chinese Indie", "Chinese Traditional", "Chinese EDM"],
+  "Japanese": ["J-Pop", "J-Rock", "Anime Music", "Vocaloid", "Japanese Hip-Hop", "City Pop", "Japanese Folk", "Enka", "Japanese EDM", "Japanese Indie"],
+  "Korean": ["K-Pop", "K-Hip-Hop", "K-R&B", "K-Indie", "K-Rock", "K-Ballad", "Korean EDM", "Korean Folk", "Korean Trap", "Korean Dance"],
+  "Brazilian": ["Sertanejo", "Funk Carioca", "MPB (Música Popular Brasileira)", "Brazilian Pop", "Samba", "Bossa Nova", "Pagode", "Brazilian Hip-Hop", "Brazilian Funk", "Forró"],
+  "Persian": ["Persian Pop", "Persian Traditional", "Persian Classical", "Persian Folk", "Persian Rock", "Persian Rap", "Persian Dance", "Persian Instrumental", "Persian Dari", "Persian Hip-Hop", "Persian R&B"],
+  "Afghan": ["Afghan Pop", "Afghan Traditional", "Afghan Folk", "Dari Music", "Pashto Music", "Afghan Rap", "Afghan Rock", "Afghan Dance", "Afghan Classical", "Afghan Hip-Hop", "Afghan Instrumental"],
+  "Tajik": ["Tajik Pop", "Tajik Folk", "Tajik Traditional", "Falak", "Shashmaqom", "Pamiri", "Badakhshani", "Tajik Dance", "Tajik Rap", "Tajik Hip-Hop", "Tajik Rock", "Tajik Instrumental", "Tajik Classical", "Tajik Wedding", "Tajik Modern", "Tajik Acoustic", "Tajik Vocal", "Tajik Duet", "Tajik Children's", "Tajik Music"],
+  "Uzbek": ["Uzbek Pop", "Uzbek Folk", "Uzbek Traditional", "Uzbek Classical", "Uzbek Dance", "Uzbek Rock", "Uzbek Rap", "Uzbek Hip-Hop", "Uzbek Trap", "Uzbek Modern", "Uzbek Indie", "Uzbek Instrumental", "Uzbek Wedding Music", "Uzbek Religious", "Uzbek Spiritual"],
+  "Kazakh": ["Kazakh Pop", "Kazakh Folk", "Kazakh Traditional", "Kazakh Dance", "Kazakh Rock", "Kazakh Hip-Hop", "Kazakh Rap", "Kazakh Instrumental", "Kazakh Modern Folk", "Kazakh Classical Folk"],
+  "Kyrgyz": ["Kyrgyz Pop", "Kyrgyz Folk", "Kyrgyz Traditional", "Kyrgyz Dance", "Kyrgyz Rock", "Kyrgyz Hip-Hop", "Kyrgyz Rap", "Kyrgyz Instrumental", "Kyrgyz Modern Folk", "Kyrgyz Ethnic"],
+  "Turkmen": ["Turkmen Pop", "Turkmen Folk", "Turkmen Traditional", "Turkmen Dance", "Turkmen Rock", "Turkmen Instrumental", "Turkmen Modern Folk", "Turkmen Ethnic", "Turkmen Classical Folk", "Turkmen Spiritual"],
+  "Turkish": ["Turkish Pop", "Turkish Folk", "Turkish Rock", "Turkish Classical", "Turkish Dance", "Turkish Rap", "Turkish Hip-Hop", "Turkish Trap", "Turkish Drill", "Turkish Arabesque", "Turkish Alternative", "Turkish Indie", "Turkish Electronic", "Turkish House", "Turkish Deep House", "Turkish Techno", "Turkish Trance", "Turkish Rap Pop (Hybrid)", "Turkish Instrumental", "Turkish Traditional", "Turkish Wedding Music", "Anatolian Rock", "Anatolian Folk", "Sufi Music"],
+  "Central Asian": ["Central Asian Pop", "Central Asian Folk", "Central Asian Traditional", "Central Asian Dance", "Central Asian Rock", "Central Asian Hip-Hop", "Central Asian Rap", "Central Asian Electronic", "Central Asian House", "Central Asian Instrumental", "Central Asian Classical", "Central Asian Jazz", "Central Asian Fusion", "Central Asian Modern", "Central Asian Spiritual", "Central Asian Wedding Music", "Central Asian Chill", "Central Asian Experimental"],
+  "Other": [],
+};
+
+// Обратный индекс поджанр → {жанр, поджанр}. Один поджанр может встречаться под
+// несколькими жанрами (напр. "Deep House" в House и Electronic) — берём первый
+// по порядку CRM_SUBGENRES, чтобы результат был детерминированным.
+const SUBGENRE_BY_CANON = (() => {
+  const m = new Map<string, { genre: string; subgenre: string }>();
+  for (const [genre, subs] of Object.entries(CRM_SUBGENRES)) {
+    for (const sub of subs) {
+      const c = canonicalGenre(sub);
+      if (c && !m.has(c)) m.set(c, { genre, subgenre: sub });
+    }
+  }
+  return m;
+})();
+
+// Сопоставляет список названий жанров из источника с жанром + поджанром CRM.
+// Идёт по названиям в порядке релевантности (источник отдаёт самое точное первым)
+// и берёт первое, что удалось распознать. Внутри одного названия приоритет у
+// родительского жанра; если это не жанр, а поджанр — возвращаем жанр + поджанр.
+function mapSourceGenre(names: (string | null | undefined)[]): { genre: string | null; subgenre: string | null } {
   for (const raw of names) {
     const n = (raw ?? "").trim();
     if (!n) continue;
     const c = canonicalGenre(n);
     if (!c) continue;
-    if (CRM_GENRE_BY_CANON.has(c)) return CRM_GENRE_BY_CANON.get(c)!;
-    if (GENRE_ALIAS_BY_CANON.has(c)) return GENRE_ALIAS_BY_CANON.get(c)!;
+    if (CRM_GENRE_BY_CANON.has(c)) return { genre: CRM_GENRE_BY_CANON.get(c)!, subgenre: null };
+    if (GENRE_ALIAS_BY_CANON.has(c)) return { genre: GENRE_ALIAS_BY_CANON.get(c)!, subgenre: null };
+    if (SUBGENRE_BY_CANON.has(c)) return SUBGENRE_BY_CANON.get(c)!;
   }
-  return null;
+  return { genre: null, subgenre: null };
 }
 
 // Приводит строку типа релиза из источника к enum CRM.
@@ -1553,7 +1646,7 @@ async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise
     label: aj.label ?? null,
     coverUrl: aj.images?.[0]?.url ?? null,
     releaseDate: aj.release_date ?? null,
-    genre: mapSourceGenre(aj.genres ?? []),
+    ...mapSourceGenre(aj.genres ?? []),
     releaseType: normalizeReleaseType(aj.album_type),
     tracks: tracks.length > 0 ? tracks : [{ title: aj.name, trackNumber: 1, isrc: null, explicit: false }],
     source: "spotify",
@@ -1643,6 +1736,7 @@ async function fetchReleaseFromMusicBrainzByUpc(upc: string): Promise<ImportedRe
     coverUrl: null,
     releaseDate: r.releaseDate,
     genre: null,
+    subgenre: null,
     releaseType: null,
     tracks: r.tracks.length > 0
       ? r.tracks.map((t) => ({ title: t.title, trackNumber: t.trackNumber, isrc: t.isrc, explicit: false }))
@@ -1705,7 +1799,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     label: alb.label ?? null,
     coverUrl: alb.cover_xl ?? alb.cover_big ?? null,
     releaseDate: alb.release_date ?? null,
-    genre: mapSourceGenre((alb.genres?.data ?? []).map((g) => g.name)),
+    ...mapSourceGenre((alb.genres?.data ?? []).map((g) => g.name)),
     releaseType: normalizeReleaseType(alb.record_type),
     tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null, explicit: false }],
     source: "deezer",
@@ -1812,6 +1906,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         coverUrl: found.coverUrl,
         releaseDate: found.releaseDate,
         genre: found.genre ?? undefined,
+        subgenre: found.subgenre ?? undefined,
         isExplicit: releaseExplicit,
         statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : found.source === "deezer" ? "Deezer" : "MusicBrainz"}`,
       }).returning();
@@ -1824,6 +1919,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         trackNumber: t.trackNumber ?? idx + 1,
         isrc: t.isrc,
         genre: found.genre ?? undefined,
+        subgenre: found.subgenre ?? undefined,
         isExplicit: t.explicit,
         explicitStatus: t.explicit ? "explicit" : "non_explicit",
       }));
