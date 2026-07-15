@@ -1425,8 +1425,93 @@ interface ImportedReleaseData {
   label: string | null;
   coverUrl: string | null;
   releaseDate: string | null;
-  tracks: { title: string; trackNumber: number; isrc: string | null }[];
+  /** Жанр, приведённый к списку жанров CRM (или null, если сопоставить не удалось). */
+  genre: string | null;
+  /** Тип релиза из источника (single/album/ep/compilation), если он его сообщает. */
+  releaseType: "single" | "album" | "ep" | "compilation" | null;
+  tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[];
   source: "spotify" | "musicbrainz" | "deezer";
+}
+
+// Жанры CRM (должны совпадать с GENRES в crm-panel/.../release-wizard/types.ts).
+// Значение genre в БД должно быть ИМЕННО из этого списка, иначе выпадающий список
+// в мастере покажет пусто. Импорт сопоставляет названия жанров из источника
+// (Deezer/Spotify) к этому списку; при неуверенном совпадении жанр не выставляется.
+const CRM_GENRES: string[] = [
+  "Pop", "Rock", "Hip-Hop / Rap", "R&B / Soul", "Dance", "Electronic",
+  "House", "Techno", "Trance", "Drum & Bass", "Dubstep", "Lo-Fi",
+  "Indie", "Alternative", "Jazz", "Blues", "Country", "Folk",
+  "Classical", "Opera", "Instrumental", "New Age", "Ambient", "Easy Listening",
+  "Funk", "Disco", "Punk", "Metal", "Reggae", "Ska",
+  "Latin", "Afrobeat", "Afrobeats", "Gospel", "Religious", "Christian",
+  "Traditional", "World Music", "Soundtrack", "Anime", "Bollywood", "Experimental",
+  "Vocal", "Singer/Songwriter", "Audiobook", "Spoken Word", "Comedy", "Karaoke",
+  "Children's Music", "Holiday", "Arabic", "African", "Indian", "Punjabi",
+  "Chinese", "Japanese", "Korean", "Brazilian", "Persian", "Afghan",
+  "Tajik", "Uzbek", "Kazakh", "Kyrgyz", "Turkmen", "Turkish",
+  "Central Asian", "Other",
+];
+
+// Псевдонимы жанров внешних каталогов → жанр CRM. Ключи в нижнем регистре.
+const GENRE_ALIASES: Record<string, string> = {
+  "rap/hip hop": "Hip-Hop / Rap",
+  "rap": "Hip-Hop / Rap",
+  "hip hop": "Hip-Hop / Rap",
+  "hip-hop": "Hip-Hop / Rap",
+  "r&b": "R&B / Soul",
+  "rnb": "R&B / Soul",
+  "soul & funk": "R&B / Soul",
+  "soul": "R&B / Soul",
+  "electro": "Electronic",
+  "electronic": "Electronic",
+  "films/games": "Soundtrack",
+  "film/games": "Soundtrack",
+  "soundtracks": "Soundtrack",
+  "latin music": "Latin",
+  "latino": "Latin",
+  "world": "World Music",
+  "world music": "World Music",
+  "african music": "African",
+  "asian music": "World Music",
+  "brazilian music": "Brazilian",
+  "kids": "Children's Music",
+  "children": "Children's Music",
+  "traditional mexicano": "Latin",
+  "singer & songwriter": "Singer/Songwriter",
+  "singer-songwriter": "Singer/Songwriter",
+};
+
+// Канонизация названия жанра: нижний регистр + удаление всех разделителей и
+// пунктуации, чтобы "R&B", "R & B", "Hip-Hop / Rap", "hip hop rap" и т.п.
+// сопоставлялись стабильно, независимо от пробелов/дефисов/слэшей/амперсандов.
+function canonicalGenre(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+const CRM_GENRE_BY_CANON = new Map(CRM_GENRES.map((g) => [canonicalGenre(g), g]));
+const GENRE_ALIAS_BY_CANON = new Map(
+  Object.entries(GENRE_ALIASES).map(([k, v]) => [canonicalGenre(k), v]),
+);
+
+// Сопоставляет список названий жанров из источника с жанром CRM.
+// Возвращает первый уверенно распознанный жанр либо null.
+function mapSourceGenre(names: (string | null | undefined)[]): string | null {
+  for (const raw of names) {
+    const n = (raw ?? "").trim();
+    if (!n) continue;
+    const c = canonicalGenre(n);
+    if (!c) continue;
+    if (CRM_GENRE_BY_CANON.has(c)) return CRM_GENRE_BY_CANON.get(c)!;
+    if (GENRE_ALIAS_BY_CANON.has(c)) return GENRE_ALIAS_BY_CANON.get(c)!;
+  }
+  return null;
+}
+
+// Приводит строку типа релиза из источника к enum CRM.
+function normalizeReleaseType(raw: string | null | undefined): ImportedReleaseData["releaseType"] {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "single" || v === "album" || v === "ep" || v === "compilation") return v;
+  return null;
 }
 
 // Поиск релиза в Spotify по UPC: search?q=upc:<upc>&type=album → /albums/<id>.
@@ -1446,16 +1531,19 @@ async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise
     name: string;
     label?: string;
     release_date?: string;
+    album_type?: string;
+    genres?: string[];
     external_ids?: { upc?: string };
     images?: { url: string }[];
     artists?: { name: string }[];
-    tracks?: { items?: { name: string; track_number: number; external_ids?: { isrc?: string } }[] };
+    tracks?: { items?: { name: string; track_number: number; explicit?: boolean; external_ids?: { isrc?: string } }[] };
   };
 
   const tracks = (aj.tracks?.items ?? []).map((tr, idx) => ({
     title: tr.name,
     trackNumber: tr.track_number ?? idx + 1,
     isrc: tr.external_ids?.isrc ?? null,
+    explicit: !!tr.explicit,
   }));
 
   return {
@@ -1465,7 +1553,9 @@ async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise
     label: aj.label ?? null,
     coverUrl: aj.images?.[0]?.url ?? null,
     releaseDate: aj.release_date ?? null,
-    tracks: tracks.length > 0 ? tracks : [{ title: aj.name, trackNumber: 1, isrc: null }],
+    genre: mapSourceGenre(aj.genres ?? []),
+    releaseType: normalizeReleaseType(aj.album_type),
+    tracks: tracks.length > 0 ? tracks : [{ title: aj.name, trackNumber: 1, isrc: null, explicit: false }],
     source: "spotify",
   };
 }
@@ -1552,9 +1642,11 @@ async function fetchReleaseFromMusicBrainzByUpc(upc: string): Promise<ImportedRe
     label: r.label,
     coverUrl: null,
     releaseDate: r.releaseDate,
+    genre: null,
+    releaseType: null,
     tracks: r.tracks.length > 0
-      ? r.tracks.map((t) => ({ title: t.title, trackNumber: t.trackNumber, isrc: t.isrc }))
-      : [{ title: r.title, trackNumber: 1, isrc: null }],
+      ? r.tracks.map((t) => ({ title: t.title, trackNumber: t.trackNumber, isrc: t.isrc, explicit: false }))
+      : [{ title: r.title, trackNumber: 1, isrc: null, explicit: false }],
     source: "musicbrainz",
   };
 }
@@ -1572,15 +1664,17 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     upc?: string;
     label?: string;
     release_date?: string;
+    record_type?: string;
     cover_xl?: string;
     cover_big?: string;
     artist?: { name?: string };
+    genres?: { data?: { name?: string }[] };
     error?: { type?: string; message?: string };
   };
   // Deezer возвращает HTTP 200 с телом {error:{...}}, когда релиз не найден.
   if (!alb || alb.error || !alb.id) return null;
 
-  const tracks: { title: string; trackNumber: number; isrc: string | null }[] = [];
+  const tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[] = [];
   let next: string | null = `https://api.deezer.com/album/${alb.id}/tracks?limit=100`;
   let guard = 0;
   while (next && guard < 10) {
@@ -1590,7 +1684,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     const tRes: Response = await fetch(next, { signal: AbortSignal.timeout(15_000) });
     if (!tRes.ok) break;
     const tj = await tRes.json() as {
-      data?: { title?: string; track_position?: number; isrc?: string }[];
+      data?: { title?: string; track_position?: number; isrc?: string; explicit_lyrics?: boolean }[];
       next?: string;
     };
     for (const t of tj.data ?? []) {
@@ -1598,6 +1692,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
         title: t.title ?? "",
         trackNumber: t.track_position ?? tracks.length + 1,
         isrc: t.isrc ?? null,
+        explicit: !!t.explicit_lyrics,
       });
     }
     next = tj.next ?? null;
@@ -1610,7 +1705,9 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     label: alb.label ?? null,
     coverUrl: alb.cover_xl ?? alb.cover_big ?? null,
     releaseDate: alb.release_date ?? null,
-    tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null }],
+    genre: mapSourceGenre((alb.genres?.data ?? []).map((g) => g.name)),
+    releaseType: normalizeReleaseType(alb.record_type),
+    tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null, explicit: false }],
     source: "deezer",
   };
 }
@@ -1701,7 +1798,10 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
       const artist = await findOrCreateArtist(tx, found.artist, labelId);
       if (artist.created && artist.row) pendingAudits.push({ action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist.row });
 
-      const releaseType = found.tracks.length > 1 ? "album" : "single";
+      // Тип релиза: сначала из источника, иначе по количеству треков.
+      const releaseType = found.releaseType ?? (found.tracks.length > 1 ? "album" : "single");
+      // Explicit на уровне релиза — true, если хотя бы один трек explicit.
+      const releaseExplicit = found.tracks.some((t) => t.explicit);
       const [release] = await tx.insert(releasesTable).values({
         title: found.title,
         releaseType,
@@ -1711,6 +1811,8 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         labelId,
         coverUrl: found.coverUrl,
         releaseDate: found.releaseDate,
+        genre: found.genre ?? undefined,
+        isExplicit: releaseExplicit,
         statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : found.source === "deezer" ? "Deezer" : "MusicBrainz"}`,
       }).returning();
       pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
@@ -1721,6 +1823,9 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         artistId: artist.id,
         trackNumber: t.trackNumber ?? idx + 1,
         isrc: t.isrc,
+        genre: found.genre ?? undefined,
+        isExplicit: t.explicit,
+        explicitStatus: t.explicit ? "explicit" : "non_explicit",
       }));
       const inserted = await tx.insert(tracksTable).values(trackRows).returning({ id: tracksTable.id });
       for (const tr of inserted) {
