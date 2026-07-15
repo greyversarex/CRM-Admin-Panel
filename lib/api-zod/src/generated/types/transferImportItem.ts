@@ -13,6 +13,8 @@ export interface TransferImportItem {
   label?: string | null;
   tracks: number;
   coverUrl?: string | null;
+  releaseDate?: string | null;
+  explicit?: boolean;
   success: boolean;
   releaseId?: number | null;
   errorReason?: string | null;

@@ -40,6 +40,7 @@ import {
   Hash,
   ArrowRightLeft,
   XCircle,
+  FileUp,
 } from "lucide-react";
 
 type NavItem = {
@@ -74,6 +75,7 @@ const adminNavGroups: NavGroup[] = [
     managerKey: "catalog",
     items: [
       { nameKey: "catalog_hub", href: "/catalog", icon: Library, iconColor: "text-emerald-400" },
+      { nameKey: "catalog_import", href: "/catalog/import", icon: FileUp, iconColor: "text-emerald-400" },
     ],
   },
   {

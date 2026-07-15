@@ -34,6 +34,7 @@ import Labels from "@/pages/labels";
 import CRM from "@/pages/crm";
 import Finance from "@/pages/finance";
 import FinanceImport from "@/pages/finance/import";
+import CatalogImport from "@/pages/catalog/import";
 import FinanceUnmatched from "@/pages/finance/unmatched";
 import Royalties from "@/pages/royalties";
 import Splits from "@/pages/splits";
@@ -125,6 +126,7 @@ function Router() {
       <ProtectedRoute path="/releases/bulk"             component={BulkUploadReleases} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
+      <ProtectedRoute path="/catalog/import"            component={CatalogImport} />
       <ProtectedRoute path="/releases/:id/availability"          component={ReleaseAvailability} />
       <ProtectedRoute path="/releases/:id/splitshare"           component={ReleaseSplitShare} />
       <ProtectedRoute path="/releases/:id/edit"                 component={EditRelease} />

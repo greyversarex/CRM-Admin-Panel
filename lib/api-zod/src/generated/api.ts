@@ -2168,6 +2168,8 @@ export const ListTransferImportsResponseItem = zod.object({
       label: zod.string().nullish(),
       tracks: zod.number(),
       coverUrl: zod.string().nullish(),
+      releaseDate: zod.string().nullish(),
+      explicit: zod.boolean().optional(),
       success: zod.boolean(),
       releaseId: zod.number().nullish(),
       errorReason: zod.string().nullish(),
@@ -2193,6 +2195,8 @@ export const CreateTransferImportBody = zod.object({
       label: zod.string().nullish(),
       tracks: zod.number(),
       coverUrl: zod.string().nullish(),
+      releaseDate: zod.string().nullish(),
+      explicit: zod.boolean().optional(),
       success: zod.boolean(),
       releaseId: zod.number().nullish(),
       errorReason: zod.string().nullish(),
@@ -2220,6 +2224,12 @@ export const SpotifySearchReleasesResponse = zod.object({
       tracks: zod.number(),
       coverUrl: zod.string().nullish(),
       releaseDate: zod.string().nullish(),
+      alreadyInCatalog: zod
+        .boolean()
+        .optional()
+        .describe(
+          "true, если релиз с таким UPC уже есть в нашем каталоге (дубликат — переносить повторно нельзя).",
+        ),
     }),
   ),
 });

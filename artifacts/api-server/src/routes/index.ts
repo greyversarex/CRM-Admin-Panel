@@ -35,6 +35,7 @@ import catalogRouter from "./catalog";
 import catalogCodesRouter from "./catalog-codes";
 import catalogDictionaryRouter from "./catalog-dictionary";
 import catalogBulkRouter from "./catalog-bulk";
+import catalogMetadataImportRouter from "./catalog-metadata-import";
 import financeExtrasRouter from "./finance-extras";
 import financeExportRouter from "./finance-export";
 import distributionExtrasRouter from "./distribution-extras";
@@ -178,6 +179,7 @@ router.use(catalogCodesRouter);
 router.use("/catalog", adminOnly, requireManagerPermission("catalog"));
 router.use(catalogRouter);
 router.use(catalogBulkRouter);                // POST /catalog/bulk-edit (admin-only выше)
+router.use(catalogMetadataImportRouter);      // /catalog/metadata-import/* + /catalog/metadata-aliases (admin-only выше)
 // Manager permissions API — admin-only, гарды внутри router'а (требуется именно admin, не "admin|manager").
 router.use(managerPermissionsRouter);
 

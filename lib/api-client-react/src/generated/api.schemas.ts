@@ -638,6 +638,8 @@ export interface TransferImportItem {
   label?: string | null;
   tracks: number;
   coverUrl?: string | null;
+  releaseDate?: string | null;
+  explicit?: boolean;
   success: boolean;
   releaseId?: number | null;
   errorReason?: string | null;
@@ -671,6 +673,8 @@ export interface SpotifyReleaseResult {
   tracks: number;
   coverUrl?: string | null;
   releaseDate?: string | null;
+  /** true, если релиз с таким UPC уже есть в нашем каталоге (дубликат — переносить повторно нельзя). */
+  alreadyInCatalog?: boolean;
 }
 
 export interface SpotifySearchResult {

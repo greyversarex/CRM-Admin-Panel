@@ -47,6 +47,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/admin/audit":    ["admin", "manager"],
   "/rights":         ["admin", "manager", "label", "artist"],
   "/catalog":            ["admin", "manager"],
+  "/catalog/import":     ["admin", "manager"],
   "/catalog/assets":     ["admin", "manager"],
   "/catalog/duplicates": ["admin", "manager"],
   "/catalog/codes":      ["admin", "manager"],
@@ -66,6 +67,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
  */
 export const ROUTE_MANAGER_PERMISSION_KEY: Record<string, ManagerPermissionKey> = {
   "/catalog":            "catalog",
+  "/catalog/import":     "catalog",
   "/catalog/assets":     "catalog",
   "/catalog/duplicates": "catalog",
   "/catalog/codes":      "catalog",

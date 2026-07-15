@@ -14,4 +14,6 @@ export interface SpotifyReleaseResult {
   tracks: number;
   coverUrl?: string | null;
   releaseDate?: string | null;
+  /** true, если релиз с таким UPC уже есть в нашем каталоге (дубликат — переносить повторно нельзя). */
+  alreadyInCatalog?: boolean;
 }

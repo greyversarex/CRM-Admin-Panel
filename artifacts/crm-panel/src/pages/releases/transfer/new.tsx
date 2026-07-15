@@ -86,7 +86,8 @@ export default function NewImport() {
     try {
       const r = await spotifySearchReleases({ query: trimmedInput });
       setResult(r);
-      setSelected(new Set(r.releases.slice(0, 2).map((rel) => rel.upc)));
+      // Не выбираем автоматически дубликаты (уже есть в каталоге).
+      setSelected(new Set(r.releases.filter((rel) => !rel.alreadyInCatalog).slice(0, 2).map((rel) => rel.upc)));
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
       const isNotConfigured = String(e?.response?.data?.error ?? "") === "spotify_not_configured";
@@ -102,8 +103,10 @@ export default function NewImport() {
 
   const toggleAll = (on: boolean) => {
     if (!result) return;
-    setSelected(on ? new Set(result.releases.map((r) => r.upc)) : new Set());
+    // «Выбрать все» пропускает дубликаты — их переносить повторно нельзя.
+    setSelected(on ? new Set(result.releases.filter((r) => !r.alreadyInCatalog).map((r) => r.upc)) : new Set());
   };
+  const selectableCount = result ? result.releases.filter((r) => !r.alreadyInCatalog).length : 0;
 
   const handleImport = async () => {
     if (!result || selected.size === 0) return;
@@ -116,6 +119,7 @@ export default function NewImport() {
         label: labelName ?? r.label ?? null,
         tracks: r.tracks,
         coverUrl: r.coverUrl ?? null,
+        releaseDate: r.releaseDate ?? null,
         success: true,
       }));
     try {
@@ -226,7 +230,7 @@ export default function NewImport() {
                 <div className="flex items-center justify-between p-3 border-b border-border/40">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
-                      checked={selected.size === result.releases.length}
+                      checked={selectableCount > 0 && selected.size === selectableCount}
                       onCheckedChange={(v) => toggleAll(!!v)}
                       data-testid="checkbox-select-all"
                     />
@@ -253,9 +257,9 @@ export default function NewImport() {
                         const checked = selected.has(r.upc);
                         const mismatch = !!labelName && r.label && r.label !== labelName;
                         return (
-                          <tr key={r.upc} className={cn("hover:bg-accent/20", checked && "bg-primary/5")} data-testid={`row-release-${r.upc}`}>
+                          <tr key={r.upc} className={cn("hover:bg-accent/20", checked && "bg-primary/5", r.alreadyInCatalog && "opacity-50")} data-testid={`row-release-${r.upc}`}>
                             <td className="px-3 py-2">
-                              <Checkbox checked={checked} onCheckedChange={(v) => {
+                              <Checkbox checked={checked} disabled={r.alreadyInCatalog} onCheckedChange={(v) => {
                                 const next = new Set(selected);
                                 if (v) next.add(r.upc); else next.delete(r.upc);
                                 setSelected(next);
@@ -268,6 +272,9 @@ export default function NewImport() {
                                   : <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />}
                               </div>
                               {r.title}
+                              {r.alreadyInCatalog && (
+                                <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">{tt.already_in_catalog}</span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-muted-foreground">{r.artist}</td>
                             <td className="px-3 py-2 text-muted-foreground">

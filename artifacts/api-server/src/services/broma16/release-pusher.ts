@@ -264,7 +264,11 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     // Лейбл-правообладатель релиза (из БД), а не захардкоженное имя.
     label_name: labelName,
   };
+  // Перенос каталога (isTransfer): НИКОГДА не генерируем новый UPC — только
+  // оригинальный. Иначе DSP не свяжут релиз со старой записью и обнулят стримы,
+  // плейлисты и статистику. Нет оригинального кода → блокируем отправку.
   if (release.upc) releaseBody.ean = release.upc;
+  else if (release.isTransfer) throw new Broma16ApiError(422, "Перенос каталога: у релиза нет оригинального UPC. Заполните оригинальный UPC перед отправкой — при переносе нельзя создавать новый код, иначе потеряются стримы и статистика.");
   else releaseBody.generate_ean = true;
   if (release.catalogNumber) releaseBody.catalog_number = release.catalogNumber;
   else releaseBody.generate_catalog_number = true;
@@ -335,7 +339,10 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     else body.generate_catalog_number = true;
     // ISRC: если у трека уже есть свой код — передаём его, иначе просим Broma16
     // сгенерировать. Присвоенный код читаем обратно после модерации (см. moderation.ts).
+    // Перенос каталога (isTransfer): НИКОГДА не генерируем новый ISRC — только
+    // оригинальный, иначе теряются стримы трека на DSP. Нет кода → блокируем отправку.
     if (track.isrc) body.isrc = track.isrc;
+    else if (release.isTransfer) throw new Broma16ApiError(422, `Перенос каталога: у трека «${track.title}» нет оригинального ISRC. Заполните оригинальный ISRC перед отправкой — при переносе нельзя создавать новый код, иначе потеряются стримы.`);
     else body.generate_isrc = true;
     await client.request("PUT", `/repertoire/release/${broma16ReleaseId}/recording/${recId}`, { body });
     progress.metadataDone.push(track.id);

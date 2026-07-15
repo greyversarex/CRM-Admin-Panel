@@ -29,3 +29,23 @@ on Spotify.
 Broma16 release push (step 2 releaseBody) it maps to the documented Broma16 boolean
 `isTransferRelease=true`. **Why:** Broma16 needs to know a release is a catalog
 transfer (not a fresh release) to handle it correctly on their side.
+
+## Bulk catalog import (Excel/CSV, any distributor)
+Endpoint family `/catalog/metadata-import/{preview,commit}` + `/catalog/metadata-aliases`
+(mounted AFTER the `/catalog` admin guard). Learnable column dictionary
+`metadata_field_aliases` (alias stored normalized = lowercase/alphanumeric/single-space;
+`source=''` = universal, else distributor-specific; source-specific overrides universal
+overrides BUILTIN_ALIASES). Rows are track-level → grouped into releases by UPC (else
+title+artist). Frontend uses raw `fetch` FormData (not orval), re-runs preview on every
+mapping change.
+
+**Every imported release is `isTransfer=true`** → the no-new-UPC/ISRC rule applies, so
+the safety gate must block (severity `error`, not warning) any transfer that would need a
+fabricated code: `missing_upc`, `missing_isrc` (per track), and `isrc_exists`/`upc_exists`
+duplicates. **Why:** deferring these to delivery time lets invalid drafts be created;
+catch them at import. A warning-level ISRC check silently lets duplicates through.
+
+**Artist find-or-create during import MUST be label-scoped** (`and(ilike(name), eq(labelId, chosenLabel))`).
+**Why:** a global case-insensitive name match binds the new release to a same-named
+artist owned by ANOTHER label = cross-tenant data-isolation breach (artist-scoped views
+key off `artistId`). Same trap applies to any bulk-create that resolves artists by name.

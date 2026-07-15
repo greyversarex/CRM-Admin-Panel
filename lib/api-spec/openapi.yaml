@@ -2712,6 +2712,11 @@ components:
         coverUrl:
           type: string
           nullable: true
+        releaseDate:
+          type: string
+          nullable: true
+        explicit:
+          type: boolean
         success:
           type: boolean
         releaseId:
@@ -2774,6 +2779,11 @@ components:
         releaseDate:
           type: string
           nullable: true
+        alreadyInCatalog:
+          type: boolean
+          description: >-
+            true, если релиз с таким UPC уже есть в нашем каталоге
+            (дубликат — переносить повторно нельзя).
       required: [upc, title, artist, tracks]
 
     PaginatedReleases:

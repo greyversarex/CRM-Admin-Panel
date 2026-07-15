@@ -389,7 +389,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
   // Best-effort: подтягиваем реальные треки (с оригинальными ISRC) из Spotify для
   // каждого импортируемого релиза. Если Spotify не настроен/недоступен — импорт
   // продолжается с плейсхолдерами (импорт НЕ должен падать из-за Spotify).
-  const realTracksByUpc = new Map<string, { title: string; trackNumber: number; isrc: string | null }[]>();
+  const realTracksByUpc = new Map<string, { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[]>();
   try {
     const spotifyToken = await getSpotifyToken(await loadSpotifyConfig());
     for (const i of parsed.data.items) {
@@ -438,6 +438,11 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
           artistId: artist.id,
           labelId,
           coverUrl: i.coverUrl ?? null,
+          // Дата релиза из Spotify (text-колонка, частичные даты «2020» допустимы).
+          // Без неё авто-QC даёт ошибку «дата не указана».
+          releaseDate: i.releaseDate ?? null,
+          // Explicit на уровне релиза — true, если хотя бы один трек explicit.
+          isExplicit: (realTracks?.some((t) => t.explicit)) ?? false,
           // Помечаем как перенос каталога → в Broma16 уйдёт isTransferRelease=true.
           isTransfer: true,
           statusNote: parsed.data.spotifyArtistName
@@ -446,7 +451,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
         }).returning();
         itemAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
-        let trackRows: { title: string; releaseId: number; artistId: number; trackNumber: number; isrc?: string | null }[];
+        let trackRows: { title: string; releaseId: number; artistId: number; trackNumber: number; isrc?: string | null; isExplicit?: boolean }[];
         if (realTracks && realTracks.length > 0) {
           trackRows = realTracks.slice(0, 100).map((t, idx) => ({
             title: t.title,
@@ -454,6 +459,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
             artistId: artist.id,
             trackNumber: t.trackNumber ?? idx + 1,
             isrc: t.isrc ?? null,
+            isExplicit: t.explicit ?? false,
           }));
         } else {
           const trackCount = Math.max(1, Math.min(i.tracks ?? 1, 50));
@@ -591,11 +597,22 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
       })
     );
 
+    // Дедупликация (spec: не показывать релизы, уже существующие в нашем каталоге).
+    // Помечаем релизы, чей РЕАЛЬНЫЙ UPC уже есть в базе, флагом alreadyInCatalog,
+    // чтобы фронтенд не выбирал их автоматически и подсветил как дубликат.
+    const realUpcs = releases.map((r) => r.upc).filter((u): u is string => !!u && !u.startsWith("SPOTIFY-"));
+    const existingUpcs = new Set<string>();
+    if (realUpcs.length > 0) {
+      const existRows = await db.select({ upc: releasesTable.upc }).from(releasesTable).where(inArray(releasesTable.upc, realUpcs));
+      for (const row of existRows) if (row.upc) existingUpcs.add(row.upc);
+    }
+    const releasesWithDedup = releases.map((r) => ({ ...r, alreadyInCatalog: existingUpcs.has(r.upc) }));
+
     res.json({
       artistId,
       artistName: aj.name,
       artistImage: aj.images?.[0]?.url ?? null,
-      releases,
+      releases: releasesWithDedup,
     });
   } catch (e: any) {
     res.status(502).json({ error: "spotify_error", message: e?.message ?? "Spotify request failed" });
@@ -1471,7 +1488,7 @@ async function resolveSpotifyAlbumId(token: string, upc: string): Promise<string
 async function fetchTransferTracks(
   token: string,
   upc: string,
-): Promise<{ title: string; trackNumber: number; isrc: string | null }[] | null> {
+): Promise<{ title: string; trackNumber: number; isrc: string | null; explicit: boolean }[] | null> {
   const albumId = await resolveSpotifyAlbumId(token, upc);
   if (!albumId) return null;
 
@@ -1481,7 +1498,7 @@ async function fetchTransferTracks(
   let nextUrl: string | null = `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=50`;
   while (nextUrl) {
     const ar: Response = await fetch(nextUrl, { headers: authHeader });
-    if (!ar.ok) return simplified.length > 0 ? finalizeTransferTracks(simplified, new Map()) : null;
+    if (!ar.ok) return simplified.length > 0 ? finalizeTransferTracks(simplified, new Map<string, { isrc: string | null; explicit: boolean }>()) : null;
     const aj = await ar.json() as {
       items?: { id: string; name: string; track_number: number }[];
       next?: string | null;
@@ -1491,28 +1508,32 @@ async function fetchTransferTracks(
   }
   if (simplified.length === 0) return null;
 
-  // ISRC догружаем батчами по 50 через /tracks?ids= для ВСЕХ собранных треков.
-  const isrcById = new Map<string, string | null>();
+  // ISRC + explicit догружаем батчами по 50 через /tracks?ids= для ВСЕХ треков.
+  const metaById = new Map<string, { isrc: string | null; explicit: boolean }>();
   const allIds = simplified.map((t) => t.id).filter(Boolean);
   for (let i = 0; i < allIds.length; i += 50) {
     const chunk = allIds.slice(i, i + 50);
     const tr = await fetch(`https://api.spotify.com/v1/tracks?ids=${chunk.join(",")}`, { headers: authHeader });
     if (!tr.ok) continue; // частичная неудача — оставляем isrc=null для этого батча
-    const tj = await tr.json() as { tracks?: { id: string; external_ids?: { isrc?: string } }[] };
-    for (const t of tj.tracks ?? []) isrcById.set(t.id, t.external_ids?.isrc ?? null);
+    const tj = await tr.json() as { tracks?: { id: string; explicit?: boolean; external_ids?: { isrc?: string } }[] };
+    for (const t of tj.tracks ?? []) metaById.set(t.id, { isrc: t.external_ids?.isrc ?? null, explicit: !!t.explicit });
   }
-  return finalizeTransferTracks(simplified, isrcById);
+  return finalizeTransferTracks(simplified, metaById);
 }
 
 function finalizeTransferTracks(
   simplified: { id: string; name: string; track_number: number }[],
-  isrcById: Map<string, string | null>,
-): { title: string; trackNumber: number; isrc: string | null }[] {
-  return simplified.map((t, idx) => ({
-    title: t.name,
-    trackNumber: t.track_number ?? idx + 1,
-    isrc: isrcById.get(t.id) ?? null,
-  }));
+  metaById: Map<string, { isrc: string | null; explicit: boolean }>,
+): { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[] {
+  return simplified.map((t, idx) => {
+    const meta = metaById.get(t.id);
+    return {
+      title: t.name,
+      trackNumber: t.track_number ?? idx + 1,
+      isrc: meta?.isrc ?? null,
+      explicit: meta?.explicit ?? false,
+    };
+  });
 }
 
 // Поиск релиза в MusicBrainz по штрихкоду (публичный API, без авторизации).

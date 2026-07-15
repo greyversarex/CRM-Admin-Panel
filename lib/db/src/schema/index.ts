@@ -24,6 +24,7 @@ export * from "./notifications";
 export * from "./kyc_documents";
 export * from "./support";
 export * from "./transfer_imports";
+export * from "./metadata_field_aliases";
 export * from "./rights_holders";
 export * from "./rights_conflicts";
 export * from "./platform_settings";
