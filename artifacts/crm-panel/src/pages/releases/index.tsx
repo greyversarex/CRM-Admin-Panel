@@ -175,7 +175,7 @@ export function ReleasesPanel() {
               </Button>
             )}
             {!isArtist && !isLabel && (
-              <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/bulk")} data-testid="button-upload-csv">
+              <Button variant="outline" className="bg-card" onClick={() => setLocation("/catalog/import")} data-testid="button-upload-csv">
                 <Upload className="mr-2 h-4 w-4" />
                 {t.releases.upload_csv}
               </Button>
