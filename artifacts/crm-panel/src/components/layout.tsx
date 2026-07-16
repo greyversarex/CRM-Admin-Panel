@@ -153,7 +153,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold leading-tight truncate">{user?.name ?? "Tajik Music"}</p>
-                      <p className="text-[11px] text-muted-foreground">Account# {user?.id ?? "—"}</p>
+                      <p className="text-[11px] text-muted-foreground">Account# {user?.id != null ? 10000 + user.id : "—"}</p>
                     </div>
                   </div>
 

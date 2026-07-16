@@ -21,7 +21,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
@@ -263,15 +264,16 @@ export default function CreateRelease() {
 
         <div className="space-y-6">
 
-          {/* ── Cover Art ────────────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg inline-flex items-center gap-1.5">
+          {/* Единый блок: Cover Art + Release Details + Primary Artists + Metadata & Rights */}
+          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm">
+            <CardContent className="p-6 space-y-8">
+
+            {/* ── Cover Art ────────────────────────────────────────────────── */}
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold inline-flex items-center gap-1.5">
                 {L.coverArt}
                 <InfoTip text={L.coverArtTip} />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0">
+              </h2>
             <div className="flex gap-6 items-start">
               <div className="shrink-0 w-52">
                 <CoverUploader value={coverUrl || null} onChange={p => setCoverUrl(p ?? "")} attach={false} />
@@ -300,15 +302,13 @@ export default function CreateRelease() {
                 </RadioGroup>
               </div>
             </div>
-            </CardContent>
-          </Card>
+            </section>
 
-          {/* ── Release Details ──────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">{L.releaseDetails}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-6">
+            <Separator className="bg-border/50" />
+
+            {/* ── Release Details ──────────────────────────────────────────── */}
+            <section className="space-y-6">
+              <h2 className="text-lg font-semibold">{L.releaseDetails}</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel htmlFor="title" className="text-sm">{L.releaseTitle}</FieldLabel>
@@ -378,18 +378,16 @@ export default function CreateRelease() {
               </div>
             ))}
           </div>
-            </CardContent>
-          </Card>
+            </section>
 
-          {/* ── Primary Artists ──────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg inline-flex items-center gap-1.5">
+            <Separator className="bg-border/50" />
+
+            {/* ── Primary Artists ──────────────────────────────────────────── */}
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold inline-flex items-center gap-1.5">
                 {L.primaryArtists}
                 <InfoTip text={L.primaryArtistsTip} />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-3">
+              </h2>
               <Popover open={isVariousArtists ? false : artistOpen} onOpenChange={v => { if (!isVariousArtists) setArtistOpen(v); }}>
                 <PopoverTrigger asChild>
                   <Button
@@ -544,15 +542,13 @@ export default function CreateRelease() {
                   <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
                 </span>
               </label>
-            </CardContent>
-          </Card>
+            </section>
 
-          {/* ── Metadata & Rights ────────────────────────────────────────── */}
-          <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">{L.metadataRights}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-6">
+            <Separator className="bg-border/50" />
+
+            {/* ── Metadata & Rights ────────────────────────────────────────── */}
+            <section className="space-y-6">
+              <h2 className="text-lg font-semibold">{L.metadataRights}</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.upc}</FieldLabel>
@@ -681,6 +677,7 @@ export default function CreateRelease() {
               </div>
             </div>
           </div>
+            </section>
             </CardContent>
           </Card>
 
