@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, platformSettingsTable, releaseArtistsTable, releaseDspsTable, type TransferImportItem } from "@workspace/db";
+import { db, releasesTable, tracksTable, artistsTable, labelsTable, deliveriesTable, transferImportsTable, platformSettingsTable, releaseArtistsTable, releaseDspsTable, metadataCacheTable, type TransferImportItem } from "@workspace/db";
 import { count, eq, desc, and, sql, ilike, or, inArray, asc } from "drizzle-orm";
 import {
   CreateReleaseBody, UpdateReleaseBody, GetReleaseParams, UpdateReleaseParams,
@@ -15,6 +15,8 @@ import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { assessAndPersist, LABEL_STRIKE_BLOCK_THRESHOLD } from "../services/risk-engine";
 import { lookupReleaseByBarcode } from "../services/musicbrainz";
+import { itunesLookupByUpc, itunesHighResCover, parseItunesCopyright } from "../services/itunes";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -1433,6 +1435,20 @@ interface ImportedReleaseData {
   releaseType: "single" | "album" | "ep" | "compilation" | null;
   tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[];
   source: "spotify" | "musicbrainz" | "deezer";
+  /** ℗ фонографический копирайт — из iTunes Search API. */
+  pLine: string | null;
+  /** © авторский копирайт — из iTunes Search API. */
+  cLine: string | null;
+  /** Идентификаторы внешних источников (для записи в кэш). */
+  _ids?: {
+    spotifyAlbumId?: string;
+    spotifyArtistId?: string;
+    deezerAlbumId?: string;
+    musicbrainzMbid?: string;
+    itunesCollectionId?: string;
+  };
+  _rawSource?: unknown;
+  _rawItunes?: unknown;
 }
 
 // Жанры CRM (должны совпадать с GENRES в crm-panel/.../release-wizard/types.ts).
@@ -1650,6 +1666,10 @@ async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise
     releaseType: normalizeReleaseType(aj.album_type),
     tracks: tracks.length > 0 ? tracks : [{ title: aj.name, trackNumber: 1, isrc: null, explicit: false }],
     source: "spotify",
+    pLine: null,
+    cLine: null,
+    _ids: { spotifyAlbumId: albumId, spotifyArtistId: aj.artists?.[0] ? undefined : undefined },
+    _rawSource: aj,
   };
 }
 
@@ -1742,6 +1762,10 @@ async function fetchReleaseFromMusicBrainzByUpc(upc: string): Promise<ImportedRe
       ? r.tracks.map((t) => ({ title: t.title, trackNumber: t.trackNumber, isrc: t.isrc, explicit: false }))
       : [{ title: r.title, trackNumber: 1, isrc: null, explicit: false }],
     source: "musicbrainz",
+    pLine: null,
+    cLine: null,
+    _ids: { musicbrainzMbid: r.mbid },
+    _rawSource: r,
   };
 }
 
@@ -1803,6 +1827,10 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     releaseType: normalizeReleaseType(alb.record_type),
     tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null, explicit: false }],
     source: "deezer",
+    pLine: null,
+    cLine: null,
+    _ids: { deezerAlbumId: alb.id != null ? String(alb.id) : undefined },
+    _rawSource: alb,
   };
 }
 
@@ -1810,6 +1838,110 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
 // в БД реальные записи artist/label/release/tracks в одной транзакции. Источник
 // "apple" не поддерживается (требует Apple Music API partner-токена) и
 // прозрачно деградирует на MusicBrainz.
+/** TTL кэша метаданных — 30 дней. */
+const METADATA_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Обогащает ImportedReleaseData данными из iTunes Search API:
+ *   - pLine / cLine (copyright)
+ *   - обложка высокого разрешения (600×600), если у источника нет или низкое качество
+ *   - жанр (резервный вариант)
+ *
+ * Никогда не бросает и не блокирует основной поток — при ошибке iTunes
+ * data остаётся без изменений.
+ */
+async function enrichWithItunes(
+  data: ImportedReleaseData,
+  upc: string,
+): Promise<{ enriched: ImportedReleaseData; itunesRaw: unknown }> {
+  const result = await itunesLookupByUpc(upc);
+  if (result.kind !== "found") return { enriched: data, itunesRaw: null };
+
+  const it = result.data;
+  const { pLine, cLine } = parseItunesCopyright(it.copyright);
+
+  // Обложка: Deezer уже даёт 500px (cover_xl), Spotify — ~640px. iTunes 600px.
+  // Используем iTunes только если источник не дал обложку.
+  const cover = data.coverUrl ?? itunesHighResCover(it.artworkUrl100);
+
+  // Жанр: только если источник его не распознал.
+  let genre = data.genre;
+  if (!genre && it.primaryGenreName) {
+    const mapped = mapSourceGenre([it.primaryGenreName]);
+    genre = mapped.genre;
+  }
+
+  return {
+    enriched: {
+      ...data,
+      pLine: pLine ?? data.pLine,
+      cLine: cLine ?? data.cLine,
+      coverUrl: cover,
+      genre,
+      _ids: {
+        ...data._ids,
+        itunesCollectionId: it.collectionId != null ? String(it.collectionId) : undefined,
+      },
+      _rawItunes: result.raw,
+    } as ImportedReleaseData,
+    itunesRaw: result.raw,
+  };
+}
+
+/**
+ * Сохраняет метаданные релиза в кэш (upsert). Неблокирующий вызов —
+ * ошибки логируются, но не прерывают основной поток.
+ */
+function writeMetadataCache(data: ImportedReleaseData, upc: string): void {
+  db.insert(metadataCacheTable).values({
+    upc,
+    spotifyAlbumId: data._ids?.spotifyAlbumId,
+    spotifyArtistId: data._ids?.spotifyArtistId,
+    deezerAlbumId: data._ids?.deezerAlbumId,
+    musicbrainzMbid: data._ids?.musicbrainzMbid,
+    itunesCollectionId: data._ids?.itunesCollectionId,
+    artistName: data.artist,
+    albumName: data.title,
+    labelName: data.label,
+    pLine: data.pLine,
+    cLine: data.cLine,
+    coverUrl: data.coverUrl,
+    genre: data.genre,
+    releaseDate: data.releaseDate,
+    releaseType: data.releaseType,
+    tracks: data.tracks,
+    sourceUsed: data.source,
+    rawSource: data._rawSource ?? null,
+    rawItunes: data._rawItunes ?? null,
+    fetchedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: metadataCacheTable.upc,
+    set: {
+      spotifyAlbumId: data._ids?.spotifyAlbumId,
+      spotifyArtistId: data._ids?.spotifyArtistId,
+      deezerAlbumId: data._ids?.deezerAlbumId,
+      musicbrainzMbid: data._ids?.musicbrainzMbid,
+      itunesCollectionId: data._ids?.itunesCollectionId,
+      artistName: data.artist,
+      albumName: data.title,
+      labelName: data.label,
+      pLine: data.pLine,
+      cLine: data.cLine,
+      coverUrl: data.coverUrl,
+      genre: data.genre,
+      releaseDate: data.releaseDate,
+      releaseType: data.releaseType,
+      tracks: data.tracks,
+      sourceUsed: data.source,
+      rawSource: data._rawSource ?? null,
+      rawItunes: data._rawItunes ?? null,
+      fetchedAt: new Date(),
+    },
+  }).catch((e) => {
+    logger.warn({ err: e, upc }, "[metadata-cache] write failed");
+  });
+}
+
 router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const upcRaw = typeof req.body?.upc === "string" ? req.body.upc.trim() : "";
   const sourceRaw = typeof req.body?.source === "string" ? req.body.source : undefined;
@@ -1829,53 +1961,107 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
     return;
   }
 
-  // Извлекаем метаданные из выбранного источника. "apple" не поддерживается
-  // напрямую — используем MusicBrainz как открытую альтернативу.
+  // ── 1. Проверяем кэш метаданных ──────────────────────────────────────────
+  // Если в кэше есть свежие данные (< 30 дней) — используем их и не ходим
+  // во внешние API. Это экономит время и квоты.
+  const [cachedRow] = await db.select().from(metadataCacheTable)
+    .where(eq(metadataCacheTable.upc, upc)).limit(1);
+  const cacheIsFresh = cachedRow && (Date.now() - cachedRow.fetchedAt.getTime()) < METADATA_CACHE_TTL_MS;
+
   let data: ImportedReleaseData | null = null;
-  try {
-    if (source === "spotify") {
-      const cfg = await loadSpotifyConfig();
-      let token: string;
-      try {
-        token = await getSpotifyToken(cfg);
-      } catch (e: any) {
-        if (e instanceof SpotifyNotConfiguredError) {
-          // Spotify не настроен — пробуем MusicBrainz, не требующий ключей.
-          data = await fetchReleaseFromMusicBrainzByUpc(upc);
-        } else {
-          throw e;
+
+  if (cacheIsFresh) {
+    data = {
+      upc,
+      title: cachedRow.albumName ?? "Unknown release",
+      artist: cachedRow.artistName ?? "Unknown artist",
+      label: cachedRow.labelName,
+      coverUrl: cachedRow.coverUrl,
+      releaseDate: cachedRow.releaseDate,
+      genre: cachedRow.genre,
+      subgenre: null,
+      releaseType: (cachedRow.releaseType as ImportedReleaseData["releaseType"]) ?? null,
+      pLine: cachedRow.pLine,
+      cLine: cachedRow.cLine,
+      tracks: (cachedRow.tracks as ImportedReleaseData["tracks"]) ??
+        [{ title: cachedRow.albumName ?? "Track 1", trackNumber: 1, isrc: null, explicit: false }],
+      source: (cachedRow.sourceUsed as ImportedReleaseData["source"]) ?? "musicbrainz",
+      _ids: {
+        spotifyAlbumId: cachedRow.spotifyAlbumId ?? undefined,
+        spotifyArtistId: cachedRow.spotifyArtistId ?? undefined,
+        deezerAlbumId: cachedRow.deezerAlbumId ?? undefined,
+        musicbrainzMbid: cachedRow.musicbrainzMbid ?? undefined,
+        itunesCollectionId: cachedRow.itunesCollectionId ?? undefined,
+      },
+    };
+  } else {
+    // ── 2. Запрашиваем первичный источник и iTunes параллельно ──────────────
+    // iTunes всегда запускаем параллельно — он не зависит от токена Spotify.
+    const itunesPromise = itunesLookupByUpc(upc);
+
+    try {
+      if (source === "spotify") {
+        const cfg = await loadSpotifyConfig();
+        let token: string;
+        try {
+          token = await getSpotifyToken(cfg);
+        } catch (e: any) {
+          if (e instanceof SpotifyNotConfiguredError) {
+            data = await fetchReleaseFromMusicBrainzByUpc(upc);
+          } else {
+            throw e;
+          }
+          token = "";
         }
-        token = "";
-      }
-      if (token) {
-        data = await fetchReleaseFromSpotifyByUpc(token, upc);
-        // Если в Spotify не нашлось — добираем из MusicBrainz.
+        if (token) {
+          data = await fetchReleaseFromSpotifyByUpc(token, upc);
+          if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
+        }
+      } else if (source === "deezer") {
+        data = await fetchReleaseFromDeezerByUpc(upc);
         if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
+      } else {
+        // musicbrainz / apple → MusicBrainz
+        data = await fetchReleaseFromMusicBrainzByUpc(upc);
       }
-    } else if (source === "deezer") {
-      // Deezer — бесплатный публичный каталог (без ключей и Premium).
-      // Если в Deezer не нашлось — запасной вариант MusicBrainz.
-      data = await fetchReleaseFromDeezerByUpc(upc);
-      if (!data) data = await fetchReleaseFromMusicBrainzByUpc(upc);
-    } else {
-      // musicbrainz / apple → MusicBrainz
-      data = await fetchReleaseFromMusicBrainzByUpc(upc);
-    }
-  } catch (e: any) {
-    if (e instanceof SpotifyUpstreamError) {
-      res.status(502).json({ error: "spotify_upstream_error", message: `Spotify недоступен или отклонил запрос: ${e.message}` });
+    } catch (e: any) {
+      if (e instanceof SpotifyUpstreamError) {
+        res.status(502).json({ error: "spotify_upstream_error", message: `Spotify недоступен или отклонил запрос: ${e.message}` });
+        return;
+      }
+      res.status(502).json({ error: "lookup_failed", message: `Не удалось получить данные по UPC: ${e?.message ?? "unknown"}` });
       return;
     }
-    res.status(502).json({ error: "lookup_failed", message: `Не удалось получить данные по UPC: ${e?.message ?? "unknown"}` });
-    return;
+
+    if (!data) {
+      res.status(404).json({ error: "not_found", message: `Релиз с UPC ${upc} не найден ни в одном из доступных каталогов.` });
+      return;
+    }
+
+    // ── 3. Обогащаем данными из iTunes ────────────────────────────────────
+    // Ждём iTunes (он уже выполнялся параллельно с первичным источником).
+    const itunesResult = await itunesPromise;
+    if (itunesResult.kind === "found") {
+      const it = itunesResult.data;
+      const { pLine, cLine } = parseItunesCopyright(it.copyright);
+      if (pLine && !data.pLine) data.pLine = pLine;
+      if (cLine && !data.cLine) data.cLine = cLine;
+      if (!data.coverUrl) data.coverUrl = itunesHighResCover(it.artworkUrl100);
+      if (!data.genre && it.primaryGenreName) {
+        const mapped = mapSourceGenre([it.primaryGenreName]);
+        if (mapped.genre) data.genre = mapped.genre;
+      }
+      data._rawItunes = itunesResult.raw;
+      if (it.collectionId != null) {
+        data._ids = { ...data._ids, itunesCollectionId: String(it.collectionId) };
+      }
+    }
+
+    // ── 4. Пишем в кэш (неблокирующий upsert) ─────────────────────────────
+    writeMetadataCache(data, upc);
   }
 
-  if (!data) {
-    res.status(404).json({ error: "not_found", message: `Релиз с UPC ${upc} не найден ни в одном из доступных каталогов.` });
-    return;
-  }
-
-  // Создаём artist / label / release / tracks в одной транзакции.
+  // ── 5. Создаём записи в БД (транзакция) ───────────────────────────────────
   type PendingAudit = Parameters<typeof auditMutation>[1];
   const pendingAudits: PendingAudit[] = [];
   const found = data;
@@ -1892,10 +2078,14 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
       const artist = await findOrCreateArtist(tx, found.artist, labelId);
       if (artist.created && artist.row) pendingAudits.push({ action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist.row });
 
-      // Тип релиза: сначала из источника, иначе по количеству треков.
       const releaseType = found.releaseType ?? (found.tracks.length > 1 ? "album" : "single");
-      // Explicit на уровне релиза — true, если хотя бы один трек explicit.
       const releaseExplicit = found.tracks.some((t) => t.explicit);
+
+      // Метка источника с учётом iTunes-обогащения.
+      const sourceLabel = found.source === "spotify" ? "Spotify"
+        : found.source === "deezer" ? "Deezer" : "MusicBrainz";
+      const itunesNote = found.pLine || found.cLine ? " + iTunes" : "";
+
       const [release] = await tx.insert(releasesTable).values({
         title: found.title,
         releaseType,
@@ -1908,7 +2098,9 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         genre: found.genre ?? undefined,
         subgenre: found.subgenre ?? undefined,
         isExplicit: releaseExplicit,
-        statusNote: `Импортировано по UPC из ${found.source === "spotify" ? "Spotify" : found.source === "deezer" ? "Deezer" : "MusicBrainz"}`,
+        pLine: found.pLine ?? undefined,
+        cLine: found.cLine ?? undefined,
+        statusNote: `Импортировано по UPC из ${sourceLabel}${itunesNote}`,
       }).returning();
       pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
@@ -1928,7 +2120,6 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         pendingAudits.push({ action: "create", entityType: "track", entityId: tr.id, before: null, after: { releaseId: release.id } });
       }
 
-      // Авто-нумерация каталога (TM######), как в обычном POST /releases.
       if (!release.catalogNumber || !release.catalogNumber.trim()) {
         const candidate = await generateCatalogNumber();
         const [updated] = await tx.update(releasesTable)

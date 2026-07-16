@@ -183,6 +183,13 @@
       "when": 1784200000000,
       "tag": "0025_metadata_field_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784800000000,
+      "tag": "0026_metadata_cache",
+      "breakpoints": true
     }
   ]
 }

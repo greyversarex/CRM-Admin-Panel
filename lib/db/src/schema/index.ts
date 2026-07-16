@@ -53,3 +53,4 @@ export * from "./dsp_catalog";
 export * from "./release_artists";
 export * from "./release_dsps";
 export * from "./broma16";
+export * from "./metadata_cache";
