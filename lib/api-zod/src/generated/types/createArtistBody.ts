@@ -19,6 +19,9 @@ export interface CreateArtistBody {
   labelId?: number | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  ipiNameNumber?: string | null;
+  ipn?: string | null;
+  isni?: string | null;
   broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: CreateArtistBodySocialLinks;
   status?: CreateArtistBodyStatus;

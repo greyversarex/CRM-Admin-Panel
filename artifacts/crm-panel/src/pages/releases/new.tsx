@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useListArtists, useListLabels, useCreateRelease, useCreateArtist, useUpdateReleaseArtists,
   useSearchArtistDspProfiles,
@@ -101,6 +101,28 @@ export default function CreateRelease() {
     { query: { enabled: addArtistDialogOpen && dspQuery.length >= 2, staleTime: 60_000 } as any },
   );
 
+  // ── Шаг 2 диалога (как у Broma16): идентификаторы + ID на других площадках ──
+  const [quickStep, setQuickStep] = useState<1 | 2>(1);
+  const [quickIpi, setQuickIpi] = useState("");
+  const [quickIpn, setQuickIpn] = useState("");
+  const [quickIsni, setQuickIsni] = useState("");
+  const [quickOutlets, setQuickOutlets] = useState<Array<{ outletId: number; outletName: string; idOutletUser: string }>>([]);
+  const outletOptionsQ = useQuery({
+    queryKey: ["broma16-outlet-options"],
+    enabled: addArtistDialogOpen && quickStep === 2,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const r = await fetch("/api/artists/meta/outlets", { credentials: "include" });
+      if (!r.ok) throw new Error("outlets load failed");
+      return r.json() as Promise<{ items: Array<{ externalId: string; name: string }> }>;
+    },
+  });
+  const outletOptions = outletOptionsQ.data?.items ?? [];
+  function resetQuickDialog() {
+    setQuickArtistName(""); setDspQuery(""); setSpotifySel("none"); setAppleSel("none");
+    setQuickStep(1); setQuickIpi(""); setQuickIpn(""); setQuickIsni(""); setQuickOutlets([]);
+  }
+
   // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
 
@@ -200,6 +222,12 @@ export default function CreateRelease() {
           appleId: applePick,
           // Аватар из Spotify-профиля — приятный бонус для карточки артиста.
           imageUrl: spotifyCand?.imageUrl ?? null,
+          ipiNameNumber: quickIpi.trim() || null,
+          ipn: quickIpn.trim() || null,
+          isni: quickIsni.trim() || null,
+          broma16Outlets: quickOutlets
+            .filter((o) => o.outletId > 0 && o.idOutletUser.trim() !== "")
+            .map((o) => ({ outletId: o.outletId, outletName: o.outletName, idOutletUser: o.idOutletUser.trim() })),
         },
       });
       await qc.invalidateQueries({ queryKey: getListArtistsQueryKey() });
@@ -214,7 +242,7 @@ export default function CreateRelease() {
         }];
       });
       setAddArtistDialogOpen(false);
-      setQuickArtistName("");
+      resetQuickDialog();
       toast({ title: L.artistCreatedTitle, description: L.artistCreatedDesc.replace("{name}", created.name) });
     } catch (e) {
       toast({ title: L.artistCreateFailedTitle, description: (e as Error).message, variant: "destructive" });
@@ -723,7 +751,7 @@ export default function CreateRelease() {
       {/* ── Quick Create Artist dialog (Symphonic-style) ─────────────────── */}
       <Dialog
         open={addArtistDialogOpen}
-        onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) { setQuickArtistName(""); setDspQuery(""); setSpotifySel("none"); setAppleSel("none"); } }}
+        onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) resetQuickDialog(); }}
       >
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
@@ -732,12 +760,13 @@ export default function CreateRelease() {
               {L.createArtistDesc}
             </DialogDescription>
           </DialogHeader>
+          {quickStep === 1 && (
           <div className="py-2 space-y-3">
             <Input
               autoFocus
               value={quickArtistName}
               onChange={e => setQuickArtistName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && quickArtistName.trim()) handleQuickCreateArtist(); }}
+              onKeyDown={e => { if (e.key === "Enter" && quickArtistName.trim()) setQuickStep(2); }}
               placeholder={L.artistNamePlaceholder}
             />
 
@@ -780,17 +809,102 @@ export default function CreateRelease() {
               </div>
             )}
           </div>
+          )}
+
+          {/* ── Шаг 2: идентификаторы + ID на других площадках (как у Broma16) ── */}
+          {quickStep === 2 && (
+          <div className="py-2 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{L.dspIdentifiers}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="grid gap-1">
+                  <FieldLabel className="text-xs">IPI</FieldLabel>
+                  <Input value={quickIpi} onChange={(e) => setQuickIpi(e.target.value)} placeholder="IPI" />
+                </div>
+                <div className="grid gap-1">
+                  <FieldLabel className="text-xs">IPN</FieldLabel>
+                  <Input value={quickIpn} onChange={(e) => setQuickIpn(e.target.value)} placeholder="IPN" />
+                </div>
+                <div className="grid gap-1">
+                  <FieldLabel className="text-xs">ISNI</FieldLabel>
+                  <Input value={quickIsni} onChange={(e) => setQuickIsni(e.target.value)} placeholder="ISNI" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{L.dspOutletsTitle}</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">{L.dspOutletsHint}</p>
+              {quickOutlets.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Select
+                    value={row.outletId ? String(row.outletId) : ""}
+                    onValueChange={(v) => {
+                      const opt = outletOptions.find((o) => o.externalId === v);
+                      setQuickOutlets((p) => p.map((r, i) => i === idx ? { ...r, outletId: Number(v), outletName: opt?.name ?? "" } : r));
+                    }}
+                  >
+                    <SelectTrigger className="w-[190px] shrink-0">
+                      <SelectValue placeholder={L.dspOutletPick} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outletOptions.map((o) => (
+                        <SelectItem key={o.externalId} value={o.externalId}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    className="flex-1"
+                    value={row.idOutletUser}
+                    onChange={(e) => setQuickOutlets((p) => p.map((r, i) => i === idx ? { ...r, idOutletUser: e.target.value } : r))}
+                    placeholder={L.dspOutletIdPh}
+                  />
+                  <Button
+                    type="button" variant="ghost" size="icon" className="shrink-0"
+                    onClick={() => setQuickOutlets((p) => p.filter((_, i) => i !== idx))}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button" variant="outline" size="sm" className="w-fit"
+                disabled={outletOptions.length === 0}
+                onClick={() => setQuickOutlets((p) => [...p, { outletId: 0, outletName: "", idOutletUser: "" }])}
+              >
+                {L.dspAddOutlet}
+              </Button>
+              {outletOptionsQ.isError && (
+                <p className="text-xs text-destructive">{L.dspOutletsLoadError}</p>
+              )}
+            </div>
+          </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
-              {L.cancel}
-            </Button>
-            <Button
-              onClick={handleQuickCreateArtist}
-              disabled={!quickArtistName.trim() || createArtistMut.isPending}
-            >
-              {createArtistMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {L.createArtist}
-            </Button>
+            {quickStep === 1 ? (
+              <>
+                <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
+                  {L.cancel}
+                </Button>
+                <Button onClick={() => setQuickStep(2)} disabled={!quickArtistName.trim()}>
+                  {L.dspNext}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setQuickStep(1)} disabled={createArtistMut.isPending}>
+                  {L.dspBack}
+                </Button>
+                <Button
+                  onClick={handleQuickCreateArtist}
+                  disabled={!quickArtistName.trim() || createArtistMut.isPending}
+                >
+                  {createArtistMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  {L.createArtist}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

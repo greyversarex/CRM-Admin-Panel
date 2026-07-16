@@ -162,6 +162,9 @@ export const CreateArtistBody = zod.object({
   labelId: zod.number().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  ipiNameNumber: zod.string().nullish(),
+  ipn: zod.string().nullish(),
+  isni: zod.string().nullish(),
   broma16Outlets: zod
     .array(
       zod.object({
@@ -553,6 +556,9 @@ export const UpdateArtistBody = zod.object({
   labelId: zod.number().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  ipiNameNumber: zod.string().nullish(),
+  ipn: zod.string().nullish(),
+  isni: zod.string().nullish(),
   broma16Outlets: zod
     .array(
       zod.object({

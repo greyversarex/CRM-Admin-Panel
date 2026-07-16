@@ -2312,6 +2312,15 @@ components:
         appleId:
           type: string
           nullable: true
+        ipiNameNumber:
+          type: string
+          nullable: true
+        ipn:
+          type: string
+          nullable: true
+        isni:
+          type: string
+          nullable: true
         broma16Outlets:
           type: array
           nullable: true
