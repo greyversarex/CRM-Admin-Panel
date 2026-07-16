@@ -27,7 +27,8 @@ type ArtistOutletPayload = { outlet: string; outlet_id: number; id_outlet_user: 
  */
 async function buildArtistOutlets(artist: Artist): Promise<ArtistOutletPayload[]> {
   const list = artist.broma16Outlets ?? [];
-  if (list.length === 0) return [];
+  const hasDspIds = Boolean(artist.spotifyId?.trim() || artist.appleId?.trim());
+  if (list.length === 0 && !hasDspIds) return [];
   const dict = await getDictionary("outlet");
   const nameById = new Map<number, string>();
   for (const d of dict) {
@@ -41,6 +42,29 @@ async function buildArtistOutlets(artist: Artist): Promise<ArtistOutletPayload[]
     const idOutletUser = (o?.idOutletUser ?? "").trim();
     if (!Number.isFinite(outletId) || outletId <= 0 || idOutletUser === "") continue;
     if (!nameById.has(outletId) || seen.has(outletId)) continue;
+    seen.add(outletId);
+    out.push({ outlet: nameById.get(outletId)!, outlet_id: outletId, id_outlet_user: idOutletUser });
+  }
+
+  // Профили, выбранные при создании артиста (identity mapping из мастера):
+  // spotifyId/appleId маппим на витрины Broma16 по названию из словаря.
+  // Явные записи broma16Outlets имеют приоритет (seen защищает от дублей).
+  const findOutletIdByName = (...needles: string[]): number | null => {
+    for (const [id, name] of nameById) {
+      const n = name.toLowerCase();
+      if (needles.some((h) => n.includes(h))) return id;
+    }
+    return null;
+  };
+  const dspPicks: Array<{ idOutletUser: string | null | undefined; needles: string[] }> = [
+    { idOutletUser: artist.spotifyId, needles: ["spotify"] },
+    { idOutletUser: artist.appleId, needles: ["apple", "itunes"] },
+  ];
+  for (const pick of dspPicks) {
+    const idOutletUser = (pick.idOutletUser ?? "").trim();
+    if (!idOutletUser) continue;
+    const outletId = findOutletIdByName(...pick.needles);
+    if (outletId == null || seen.has(outletId)) continue;
     seen.add(outletId);
     out.push({ outlet: nameById.get(outletId)!, outlet_id: outletId, id_outlet_user: idOutletUser });
   }
