@@ -3,9 +3,11 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListArtists, useListLabels, useCreateRelease, useCreateArtist, useUpdateReleaseArtists,
+  useSearchArtistDspProfiles,
   getListReleasesQueryKey, getGetReleaseCountsQueryKey, getListArtistsQueryKey,
-  type ReleaseArtistRef,
+  type ReleaseArtistRef, type DspArtistCandidate,
 } from "@workspace/api-client-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
@@ -82,6 +84,22 @@ export default function CreateRelease() {
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
   const [quickArtistName, setQuickArtistName] = useState("");
   const createArtistMut = useCreateArtist();
+
+  // ── DSP identity mapping (как у Broma16): поиск профилей артиста на
+  //    площадках по имени и выбор конкретного профиля (или «не найден»). ──
+  const [dspQuery, setDspQuery] = useState("");
+  const [spotifySel, setSpotifySel] = useState<string>("none");
+  const [appleSel, setAppleSel] = useState<string>("none");
+  useEffect(() => {
+    const id = setTimeout(() => setDspQuery(quickArtistName.trim()), 450);
+    return () => clearTimeout(id);
+  }, [quickArtistName]);
+  // Сбрасываем выбор при смене запроса — старые кандидаты уже неактуальны.
+  useEffect(() => { setSpotifySel("none"); setAppleSel("none"); }, [dspQuery]);
+  const dspSearch = useSearchArtistDspProfiles(
+    { name: dspQuery },
+    { query: { enabled: addArtistDialogOpen && dspQuery.length >= 2, staleTime: 60_000 } as any },
+  );
 
   // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
@@ -169,11 +187,19 @@ export default function CreateRelease() {
     const name = quickArtistName.trim();
     if (!name) return;
     try {
+      // Выбранные профили на площадках (если «не найден» — null, площадка создаст новый).
+      const spotifyPick = spotifySel !== "none" ? spotifySel : null;
+      const applePick = appleSel !== "none" ? appleSel : null;
+      const spotifyCand = dspSearch.data?.spotify.results.find((c) => c.id === spotifyPick);
       const created = await createArtistMut.mutateAsync({
         data: {
           name,
           labelId: user?.role === "label" ? (user.labelId ?? null) : null,
           status: "active",
+          spotifyId: spotifyPick,
+          appleId: applePick,
+          // Аватар из Spotify-профиля — приятный бонус для карточки артиста.
+          imageUrl: spotifyCand?.imageUrl ?? null,
         },
       });
       await qc.invalidateQueries({ queryKey: getListArtistsQueryKey() });
@@ -697,16 +723,16 @@ export default function CreateRelease() {
       {/* ── Quick Create Artist dialog (Symphonic-style) ─────────────────── */}
       <Dialog
         open={addArtistDialogOpen}
-        onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) setQuickArtistName(""); }}
+        onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) { setQuickArtistName(""); setDspQuery(""); setSpotifySel("none"); setAppleSel("none"); } }}
       >
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>{L.createArtist}</DialogTitle>
             <DialogDescription>
               {L.createArtistDesc}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2">
+          <div className="py-2 space-y-3">
             <Input
               autoFocus
               value={quickArtistName}
@@ -714,6 +740,45 @@ export default function CreateRelease() {
               onKeyDown={e => { if (e.key === "Enter" && quickArtistName.trim()) handleQuickCreateArtist(); }}
               placeholder={L.artistNamePlaceholder}
             />
+
+            {/* ── Профили на площадках (identity mapping как у Broma16) ── */}
+            {dspQuery.length >= 2 && (
+              <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground leading-snug">{L.dspHint}</p>
+                <Tabs defaultValue="spotify">
+                  <TabsList className="grid w-full grid-cols-2 h-8">
+                    <TabsTrigger value="spotify" className="text-xs">Spotify</TabsTrigger>
+                    <TabsTrigger value="apple" className="text-xs">Apple Music</TabsTrigger>
+                  </TabsList>
+                  {dspSearch.isLoading ? (
+                    <div className="flex items-center gap-2 py-4 justify-center text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> {L.dspSearching}
+                    </div>
+                  ) : (
+                    <>
+                      <TabsContent value="spotify" className="mt-2">
+                        <DspCandidateList
+                          platform="Spotify"
+                          result={dspSearch.data?.spotify}
+                          selected={spotifySel}
+                          onSelect={setSpotifySel}
+                          L={L}
+                        />
+                      </TabsContent>
+                      <TabsContent value="apple" className="mt-2">
+                        <DspCandidateList
+                          platform="Apple Music"
+                          result={dspSearch.data?.apple}
+                          selected={appleSel}
+                          onSelect={setAppleSel}
+                          L={L}
+                        />
+                      </TabsContent>
+                    </>
+                  )}
+                </Tabs>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
@@ -731,5 +796,70 @@ export default function CreateRelease() {
       </Dialog>
     </Layout>
     </TooltipProvider>
+  );
+}
+
+// ─── Список кандидатов профиля артиста на площадке ──────────────────────────
+// Radio-выбор в стиле Broma16: «не найден» + карточки (аватар, подписчики,
+// ссылка на профиль). Для Apple iTunes API не отдаёт фото — рисуем инициал.
+function DspCandidateList({
+  platform,
+  result,
+  selected,
+  onSelect,
+  L,
+}: {
+  platform: string;
+  result: { status: "ok" | "not_configured" | "error"; results: DspArtistCandidate[] } | undefined;
+  selected: string;
+  onSelect: (v: string) => void;
+  L: any;
+}) {
+  if (result?.status === "not_configured") {
+    return <p className="text-xs text-muted-foreground py-3 text-center">{L.dspNotConfigured}</p>;
+  }
+  if (result?.status === "error") {
+    return <p className="text-xs text-destructive py-3 text-center">{L.dspSearchError}</p>;
+  }
+  return (
+    <RadioGroup value={selected} onValueChange={onSelect} className="gap-1.5 max-h-64 overflow-y-auto pr-1">
+      <label className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-background/40 px-3 py-2 cursor-pointer text-sm hover:border-border">
+        <span>{L.dspNotFoundOn.replace("{platform}", platform)}</span>
+        <RadioGroupItem value="none" />
+      </label>
+      {(result?.results ?? []).map((c) => (
+        <label
+          key={c.id}
+          className="flex items-center gap-3 rounded-md border border-border/50 bg-background/40 px-3 py-2 cursor-pointer hover:border-border"
+        >
+          {c.imageUrl ? (
+            <img src={c.imageUrl} alt={c.name} className="h-10 w-10 rounded object-cover shrink-0" />
+          ) : (
+            <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-sm font-semibold shrink-0">
+              {c.name.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{c.name}</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {c.followers != null && <>{L.dspFollowers.replace("{n}", c.followers.toLocaleString())}{c.genre ? " · " : ""}</>}
+              {c.genre ?? ""}
+            </p>
+            {c.url && (
+              <a
+                href={c.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[11px] text-primary hover:underline"
+              >
+                {L.dspGoTo.replace("{platform}", platform)} ↗
+              </a>
+            )}
+          </div>
+          <RadioGroupItem value={c.id} />
+        </label>
+      ))}
+    </RadioGroup>
   );
 }

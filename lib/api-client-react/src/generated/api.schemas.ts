@@ -443,6 +443,34 @@ export interface ArtistStats {
   streamsByPlatform: PlatformAnalytics[];
 }
 
+export interface DspArtistCandidate {
+  id: string;
+  name: string;
+  imageUrl?: string | null;
+  followers?: number | null;
+  url?: string | null;
+  genre?: string | null;
+}
+
+export type DspSearchResultStatus =
+  (typeof DspSearchResultStatus)[keyof typeof DspSearchResultStatus];
+
+export const DspSearchResultStatus = {
+  ok: "ok",
+  not_configured: "not_configured",
+  error: "error",
+} as const;
+
+export interface DspSearchResult {
+  status: DspSearchResultStatus;
+  results: DspArtistCandidate[];
+}
+
+export interface ArtistDspSearchResponse {
+  spotify: DspSearchResult;
+  apple: DspSearchResult;
+}
+
 export type CreateArtistBodySocialLinks = { [key: string]: unknown } | null;
 
 export type CreateArtistBodyStatus =
@@ -1650,6 +1678,10 @@ export type ListArtistsParams = {
   label_id?: number;
   page?: number;
   limit?: number;
+};
+
+export type SearchArtistDspProfilesParams = {
+  name: string;
 };
 
 export type ListLabelsParams = {

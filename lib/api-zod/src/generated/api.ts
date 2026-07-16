@@ -178,6 +178,42 @@ export const CreateArtistBody = zod.object({
 });
 
 /**
+ * @summary Search artist profiles on DSPs (Spotify, Apple Music) by name
+ */
+export const SearchArtistDspProfilesQueryParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const SearchArtistDspProfilesResponse = zod.object({
+  spotify: zod.object({
+    status: zod.enum(["ok", "not_configured", "error"]),
+    results: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        imageUrl: zod.string().nullish(),
+        followers: zod.number().nullish(),
+        url: zod.string().nullish(),
+        genre: zod.string().nullish(),
+      }),
+    ),
+  }),
+  apple: zod.object({
+    status: zod.enum(["ok", "not_configured", "error"]),
+    results: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        imageUrl: zod.string().nullish(),
+        followers: zod.number().nullish(),
+        url: zod.string().nullish(),
+        genre: zod.string().nullish(),
+      }),
+    ),
+  }),
+});
+
+/**
  * @summary Get artist by ID
  */
 export const GetArtistParams = zod.object({

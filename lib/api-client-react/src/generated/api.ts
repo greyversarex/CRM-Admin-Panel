@@ -20,6 +20,7 @@ import type {
   ActivityItem,
   Artist,
   ArtistDetail,
+  ArtistDspSearchResponse,
   ArtistStats,
   Asset,
   AssetWithDownload,
@@ -100,6 +101,7 @@ import type {
   RoyaltyByRelease,
   RoyaltyStatement,
   RoyaltySummary,
+  SearchArtistDspProfilesParams,
   Split,
   SpotifySearchReleasesParams,
   SpotifySearchResult,
@@ -761,6 +763,109 @@ export const useCreateArtist = <
 > => {
   return useMutation(getCreateArtistMutationOptions(options));
 };
+
+/**
+ * @summary Search artist profiles on DSPs (Spotify, Apple Music) by name
+ */
+export const getSearchArtistDspProfilesUrl = (
+  params: SearchArtistDspProfilesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/artists/dsp-search?${stringifiedParams}`
+    : `/api/artists/dsp-search`;
+};
+
+export const searchArtistDspProfiles = async (
+  params: SearchArtistDspProfilesParams,
+  options?: RequestInit,
+): Promise<ArtistDspSearchResponse> => {
+  return customFetch<ArtistDspSearchResponse>(
+    getSearchArtistDspProfilesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getSearchArtistDspProfilesQueryKey = (
+  params?: SearchArtistDspProfilesParams,
+) => {
+  return [`/api/artists/dsp-search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchArtistDspProfilesQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchArtistDspProfiles>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchArtistDspProfilesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistDspProfiles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSearchArtistDspProfilesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof searchArtistDspProfiles>>
+  > = ({ signal }) =>
+    searchArtistDspProfiles(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchArtistDspProfiles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchArtistDspProfilesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchArtistDspProfiles>>
+>;
+export type SearchArtistDspProfilesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search artist profiles on DSPs (Spotify, Apple Music) by name
+ */
+
+export function useSearchArtistDspProfiles<
+  TData = Awaited<ReturnType<typeof searchArtistDspProfiles>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchArtistDspProfilesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistDspProfiles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchArtistDspProfilesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get artist by ID

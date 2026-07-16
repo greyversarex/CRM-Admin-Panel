@@ -14,6 +14,8 @@ import { logger } from "../lib/logger";
 import { createNotification } from "../services/notifications";
 import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
 import { getDictionary } from "../services/broma16/dictionaries";
+import { searchSpotifyArtists, searchAppleArtists, type DspSearchResult } from "../services/artist-dsp-search";
+import { loadSpotifyConfig, getSpotifyToken } from "./releases";
 
 const router = Router();
 
@@ -200,6 +202,28 @@ router.get(
     res.json({ items });
   },
 );
+
+// ─── Поиск профилей артиста на площадках (identity mapping как у Broma16) ───
+// ВАЖНО: маршрут должен стоять ДО /artists/:id, иначе "dsp-search" распарсится как id.
+router.get("/artists/dsp-search", requireRole("admin", "manager", "label"), async (req, res): Promise<void> => {
+  const name = String(req.query.name ?? "").trim();
+  if (name.length < 2) {
+    res.status(400).json({ error: "name query param required (min 2 chars)" });
+    return;
+  }
+  // Spotify: опционален — если интеграция не настроена, отдаём not_configured,
+  // Apple (iTunes Search API) работает всегда и без ключей.
+  const spotifyPromise: Promise<DspSearchResult> = (async () => {
+    try {
+      const token = await getSpotifyToken(await loadSpotifyConfig());
+      return await searchSpotifyArtists(token, name);
+    } catch (e: any) {
+      return { status: e?.message === "spotify_not_configured" ? "not_configured" : "error", results: [] };
+    }
+  })();
+  const [spotify, apple] = await Promise.all([spotifyPromise, searchAppleArtists(name)]);
+  res.json({ spotify, apple });
+});
 
 router.get("/artists/:id", async (req, res): Promise<void> => {
   const params = GetArtistParams.safeParse(req.params);

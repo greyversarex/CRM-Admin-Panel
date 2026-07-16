@@ -276,7 +276,7 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
 // inserts artist/label/release/tracks rows so the catalog gets real data.
 
 interface SpotifyConfig { clientId?: string; clientSecret?: string }
-async function loadSpotifyConfig(): Promise<SpotifyConfig> {
+export async function loadSpotifyConfig(): Promise<SpotifyConfig> {
   try {
     // Приоритет: интеграции (Настройки → Интеграции → Spotify for Artists)
     const integration = await getIntegrationByCode("spotify");
@@ -301,7 +301,7 @@ class SpotifyNotConfiguredError extends Error { constructor() { super("spotify_n
 class SpotifyUpstreamError extends Error { constructor(msg: string) { super(msg); } }
 
 let _spotifyToken: { value: string; expiresAt: number } | null = null;
-async function getSpotifyToken(cfg: SpotifyConfig): Promise<string> {
+export async function getSpotifyToken(cfg: SpotifyConfig): Promise<string> {
   if (!cfg.clientId || !cfg.clientSecret) throw new SpotifyNotConfiguredError();
   if (_spotifyToken && _spotifyToken.expiresAt > Date.now() + 60_000) return _spotifyToken.value;
   // Убираем лишние пробелы/переводы строк при копировании ключей (иначе 400 invalid_client).
