@@ -600,6 +600,7 @@ export type ImportByUpcBodySource =
   (typeof ImportByUpcBodySource)[keyof typeof ImportByUpcBodySource];
 
 export const ImportByUpcBodySource = {
+  all: "all",
   spotify: "spotify",
   apple: "apple",
   musicbrainz: "musicbrainz",

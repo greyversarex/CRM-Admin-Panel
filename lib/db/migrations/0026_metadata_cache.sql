@@ -1,4 +1,4 @@
-CREATE TABLE "metadata_cache" (
+CREATE TABLE IF NOT EXISTS "metadata_cache" (
 	"upc" text PRIMARY KEY NOT NULL,
 	"spotify_album_id" text,
 	"spotify_artist_id" text,
@@ -21,4 +21,4 @@ CREATE TABLE "metadata_cache" (
 	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "metadata_cache_fetched_at_idx" ON "metadata_cache" USING btree ("fetched_at");
+CREATE INDEX IF NOT EXISTS "metadata_cache_fetched_at_idx" ON "metadata_cache" USING btree ("fetched_at");

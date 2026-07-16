@@ -1961,12 +1961,12 @@ export const UpdateReleaseStatusResponse = zod.object({
 /**
  * @summary Import release metadata by UPC
  */
-export const importReleaseByUpcBodySourceDefault = `spotify`;
+export const importReleaseByUpcBodySourceDefault = `all`;
 
 export const ImportReleaseByUpcBody = zod.object({
   upc: zod.string(),
   source: zod
-    .enum(["spotify", "apple", "musicbrainz", "deezer"])
+    .enum(["all", "spotify", "apple", "musicbrainz", "deezer"])
     .default(importReleaseByUpcBodySourceDefault),
 });
 

@@ -1842,6 +1842,83 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
 const METADATA_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
+ * Нормализует название трека для сопоставления между источниками
+ * (разные каталоги пишут "feat."/скобки/регистр по-разному).
+ */
+function normalizeTrackTitle(title: string): string {
+  return title.toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, "")
+    .replace(/feat\.?|ft\.?/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+/**
+ * Режим «Все сервисы»: параллельно запрашивает Spotify (если настроен),
+ * Deezer и MusicBrainz и сливает лучшие данные по полям:
+ *
+ *   - база: Spotify > Deezer > MusicBrainz (полнота треков и explicit-флагов)
+ *   - ISRC треков: недостающие добираются из остальных источников
+ *     (сопоставление по номеру трека, затем по нормализованному названию)
+ *   - обложка: Spotify (640px) > Deezer (1000px XL) > iTunes 600px (позже)
+ *   - label/genre/releaseDate/releaseType: первый непустой по приоритету
+ *   - _ids: объединяются от всех источников (для кэша)
+ *
+ * iTunes-обогащение (pLine/cLine) выполняется отдельно в общем потоке хендлера.
+ */
+async function fetchReleaseFromAllSources(upc: string): Promise<ImportedReleaseData | null> {
+  // Spotify: пропускаем молча, если не настроен или упал — остальные источники бесплатны.
+  const spotifyPromise: Promise<ImportedReleaseData | null> = (async () => {
+    try {
+      const cfg = await loadSpotifyConfig();
+      const token = await getSpotifyToken(cfg);
+      return await fetchReleaseFromSpotifyByUpc(token, upc);
+    } catch {
+      return null;
+    }
+  })();
+  const deezerPromise = fetchReleaseFromDeezerByUpc(upc).catch(() => null);
+  const mbPromise = fetchReleaseFromMusicBrainzByUpc(upc).catch(() => null);
+
+  const [spotify, deezer, musicbrainz] = await Promise.all([spotifyPromise, deezerPromise, mbPromise]);
+
+  // Приоритет базы: Spotify даёт максимально полные данные, затем Deezer, затем MB.
+  const ordered = [spotify, deezer, musicbrainz].filter((d): d is ImportedReleaseData => d !== null);
+  if (ordered.length === 0) return null;
+  const base = ordered[0];
+
+  // Добираем недостающие ISRC из остальных источников.
+  const others = ordered.slice(1);
+  const tracks = base.tracks.map((t) => {
+    if (t.isrc) return t;
+    for (const src of others) {
+      const byNumber = src.tracks.find((s) => s.trackNumber === t.trackNumber && s.isrc);
+      if (byNumber?.isrc) return { ...t, isrc: byNumber.isrc };
+      const norm = normalizeTrackTitle(t.title);
+      const byTitle = norm ? src.tracks.find((s) => s.isrc && normalizeTrackTitle(s.title) === norm) : undefined;
+      if (byTitle?.isrc) return { ...t, isrc: byTitle.isrc };
+    }
+    return t;
+  });
+
+  const firstNonNull = <K extends keyof ImportedReleaseData>(key: K): ImportedReleaseData[K] =>
+    ordered.map((d) => d[key]).find((v) => v !== null && v !== undefined) ?? base[key];
+
+  return {
+    ...base,
+    tracks,
+    label: firstNonNull("label"),
+    coverUrl: firstNonNull("coverUrl"),
+    genre: firstNonNull("genre"),
+    subgenre: firstNonNull("subgenre"),
+    releaseDate: firstNonNull("releaseDate"),
+    releaseType: firstNonNull("releaseType"),
+    _ids: ordered.reduce((acc, d) => ({ ...acc, ...d._ids }), {} as NonNullable<ImportedReleaseData["_ids"]>),
+    _rawSource: base._rawSource,
+  };
+}
+
+/**
  * Обогащает ImportedReleaseData данными из iTunes Search API:
  *   - pLine / cLine (copyright)
  *   - обложка высокого разрешения (600×600), если у источника нет или низкое качество
@@ -1950,8 +2027,10 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
     res.status(400).json({ error: "invalid_upc", message: "Укажите корректный UPC/EAN (8–14 цифр)." });
     return;
   }
-  const source: "spotify" | "apple" | "musicbrainz" | "deezer" =
-    sourceRaw === "apple" || sourceRaw === "musicbrainz" || sourceRaw === "deezer" ? sourceRaw : "spotify";
+  // По умолчанию — «все сервисы»: параллельный запрос ко всем каталогам
+  // и слияние лучших данных по полям. Конкретный источник можно выбрать явно.
+  const source: "all" | "spotify" | "apple" | "musicbrainz" | "deezer" =
+    sourceRaw === "spotify" || sourceRaw === "apple" || sourceRaw === "musicbrainz" || sourceRaw === "deezer" ? sourceRaw : "all";
 
   // Idempotency: не создаём дубль, если релиз с таким UPC уже есть.
   const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
@@ -2000,7 +2079,10 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
     const itunesPromise = itunesLookupByUpc(upc);
 
     try {
-      if (source === "spotify") {
+      if (source === "all") {
+        // Все сервисы параллельно + слияние лучших данных.
+        data = await fetchReleaseFromAllSources(upc);
+      } else if (source === "spotify") {
         const cfg = await loadSpotifyConfig();
         let token: string;
         try {

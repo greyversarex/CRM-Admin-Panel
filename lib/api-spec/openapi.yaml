@@ -2636,8 +2636,8 @@ components:
           type: string
         source:
           type: string
-          enum: [spotify, apple, musicbrainz, deezer]
-          default: spotify
+          enum: [all, spotify, apple, musicbrainz, deezer]
+          default: all
       required: [upc]
 
     ReleaseCounts:
