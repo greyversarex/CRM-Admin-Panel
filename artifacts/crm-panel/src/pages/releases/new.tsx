@@ -8,7 +8,7 @@ import {
   type ReleaseArtistRef, type DspArtistCandidate,
 } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
@@ -748,18 +748,18 @@ export default function CreateRelease() {
         </div>
       </div>
 
-      {/* ── Quick Create Artist dialog (Symphonic-style) ─────────────────── */}
-      <Dialog
+      {/* ── Quick Create Artist: боковая панель как у Broma16 ────────────── */}
+      <Sheet
         open={addArtistDialogOpen}
         onOpenChange={(o) => { setAddArtistDialogOpen(o); if (!o) resetQuickDialog(); }}
       >
-        <DialogContent className="sm:max-w-[460px]">
-          <DialogHeader>
-            <DialogTitle>{L.createArtist}</DialogTitle>
-            <DialogDescription>
+        <SheetContent side="right" className="w-full sm:max-w-[440px] flex flex-col overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{L.createArtist}</SheetTitle>
+            <SheetDescription>
               {L.createArtistDesc}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           {quickStep === 1 && (
           <div className="py-2 space-y-3">
             <Input
@@ -813,7 +813,7 @@ export default function CreateRelease() {
 
           {/* ── Шаг 2: идентификаторы + ID на других площадках (как у Broma16) ── */}
           {quickStep === 2 && (
-          <div className="py-2 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="py-2 space-y-4 flex-1">
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{L.dspIdentifiers}</p>
               <div className="grid grid-cols-3 gap-2">
@@ -877,11 +877,14 @@ export default function CreateRelease() {
               {outletOptionsQ.isError && (
                 <p className="text-xs text-destructive">{L.dspOutletsLoadError}</p>
               )}
+              {!outletOptionsQ.isError && !outletOptionsQ.isLoading && outletOptions.length === 0 && (
+                <p className="text-[11px] text-amber-500 leading-snug">{L.dspOutletsEmpty}</p>
+              )}
             </div>
           </div>
           )}
 
-          <DialogFooter>
+          <SheetFooter className="mt-auto pt-4">
             {quickStep === 1 ? (
               <>
                 <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
@@ -905,9 +908,9 @@ export default function CreateRelease() {
                 </Button>
               </>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </Layout>
     </TooltipProvider>
   );
