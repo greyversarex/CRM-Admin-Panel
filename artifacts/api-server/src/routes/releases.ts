@@ -1645,15 +1645,31 @@ async function fetchReleaseFromSpotifyByUpc(token: string, upc: string): Promise
     external_ids?: { upc?: string };
     images?: { url: string }[];
     artists?: { name: string }[];
-    tracks?: { items?: { name: string; track_number: number; explicit?: boolean; external_ids?: { isrc?: string } }[] };
+    tracks?: { items?: { id?: string; name: string; track_number: number; explicit?: boolean; external_ids?: { isrc?: string } }[] };
   };
 
-  const tracks = (aj.tracks?.items ?? []).map((tr, idx) => ({
-    title: tr.name,
-    trackNumber: tr.track_number ?? idx + 1,
-    isrc: tr.external_ids?.isrc ?? null,
-    explicit: !!tr.explicit,
-  }));
+  // Simplified-треки из /albums/{id} НЕ содержат ISRC — догружаем батчами
+  // по 50 через /tracks?ids= (та же стратегия, что в fetchTransferTracks).
+  const items = aj.tracks?.items ?? [];
+  const metaById = new Map<string, { isrc: string | null; explicit: boolean }>();
+  const ids = items.map((t) => t.id).filter((id): id is string => !!id);
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const tr = await fetch(`https://api.spotify.com/v1/tracks?ids=${chunk.join(",")}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!tr.ok) continue; // частичная неудача — isrc=null для этого батча
+    const tj = await tr.json() as { tracks?: { id: string; explicit?: boolean; external_ids?: { isrc?: string } }[] };
+    for (const t of tj.tracks ?? []) metaById.set(t.id, { isrc: t.external_ids?.isrc ?? null, explicit: !!t.explicit });
+  }
+
+  const tracks = items.map((tr, idx) => {
+    const meta = tr.id ? metaById.get(tr.id) : undefined;
+    return {
+      title: tr.name,
+      trackNumber: tr.track_number ?? idx + 1,
+      isrc: meta?.isrc ?? tr.external_ids?.isrc ?? null,
+      explicit: meta?.explicit ?? !!tr.explicit,
+    };
+  });
 
   return {
     upc: aj.external_ids?.upc ?? upc,
@@ -1969,7 +1985,20 @@ async function enrichWithItunes(
  * Сохраняет метаданные релиза в кэш (upsert). Неблокирующий вызов —
  * ошибки логируются, но не прерывают основной поток.
  */
+/**
+ * Минимальный порог качества для кэширования/использования кэша:
+ * есть треки и (хотя бы один ISRC ИЛИ обложка). Деградированные результаты
+ * (например, MusicBrainz-only без ISRC при недоступном Spotify) не кэшируем,
+ * чтобы не «заморозить» плохие метаданные на 30 дней.
+ */
+function metadataQualityOk(d: { tracks?: { isrc: string | null }[] | null; coverUrl?: string | null }): boolean {
+  const tracks = d.tracks ?? [];
+  if (tracks.length === 0) return false;
+  return tracks.some((t) => t.isrc) || !!d.coverUrl;
+}
+
 function writeMetadataCache(data: ImportedReleaseData, upc: string): void {
+  if (!metadataQualityOk(data)) return; // не фиксируем деградированный результат
   db.insert(metadataCacheTable).values({
     upc,
     spotifyAlbumId: data._ids?.spotifyAlbumId,
@@ -1984,6 +2013,7 @@ function writeMetadataCache(data: ImportedReleaseData, upc: string): void {
     cLine: data.cLine,
     coverUrl: data.coverUrl,
     genre: data.genre,
+    subgenre: data.subgenre,
     releaseDate: data.releaseDate,
     releaseType: data.releaseType,
     tracks: data.tracks,
@@ -2006,6 +2036,7 @@ function writeMetadataCache(data: ImportedReleaseData, upc: string): void {
       cLine: data.cLine,
       coverUrl: data.coverUrl,
       genre: data.genre,
+      subgenre: data.subgenre,
       releaseDate: data.releaseDate,
       releaseType: data.releaseType,
       tracks: data.tracks,
@@ -2045,7 +2076,11 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
   // во внешние API. Это экономит время и квоты.
   const [cachedRow] = await db.select().from(metadataCacheTable)
     .where(eq(metadataCacheTable.upc, upc)).limit(1);
-  const cacheIsFresh = cachedRow && (Date.now() - cachedRow.fetchedAt.getTime()) < METADATA_CACHE_TTL_MS;
+  // Кэш используем только если он свежий И проходит порог качества —
+  // иначе перезапрашиваем внешние API (и перезапишем кэш лучшим результатом).
+  const cacheIsFresh = cachedRow
+    && (Date.now() - cachedRow.fetchedAt.getTime()) < METADATA_CACHE_TTL_MS
+    && metadataQualityOk({ tracks: cachedRow.tracks, coverUrl: cachedRow.coverUrl });
 
   let data: ImportedReleaseData | null = null;
 
@@ -2058,7 +2093,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
       coverUrl: cachedRow.coverUrl,
       releaseDate: cachedRow.releaseDate,
       genre: cachedRow.genre,
-      subgenre: null,
+      subgenre: cachedRow.subgenre,
       releaseType: (cachedRow.releaseType as ImportedReleaseData["releaseType"]) ?? null,
       pLine: cachedRow.pLine,
       cLine: cachedRow.cLine,

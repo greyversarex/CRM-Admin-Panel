@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS "metadata_cache" (
 	"c_line" text,
 	"cover_url" text,
 	"genre" text,
+	"subgenre" text,
 	"release_date" text,
 	"release_type" text,
 	"tracks" jsonb,

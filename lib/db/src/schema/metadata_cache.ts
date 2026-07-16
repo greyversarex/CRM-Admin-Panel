@@ -38,6 +38,7 @@ export const metadataCacheTable = pgTable("metadata_cache", {
 
   coverUrl: text("cover_url"),
   genre: text("genre"),
+  subgenre: text("subgenre"),
   releaseDate: text("release_date"),
   releaseType: text("release_type"),
 

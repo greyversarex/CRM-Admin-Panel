@@ -123,8 +123,13 @@ export function parseItunesCopyright(copyright: string | undefined | null): {
   const hasP = cleaned.includes("℗") || cleaned.toLowerCase().startsWith("p ");
   // Если содержит © — это copyright (cLine)
   const hasC = cleaned.includes("©") || cleaned.toLowerCase().startsWith("c ");
+  if (!hasP && !hasC) {
+    // Маркеров нет — считаем pLine (для музыкальных релизов ℗ вероятнее),
+    // cLine не выдумываем.
+    return { pLine: cleaned, cLine: null };
+  }
   return {
-    pLine: hasP || (!hasC) ? cleaned : null,
-    cLine: hasC || (!hasP) ? cleaned : null,
+    pLine: hasP ? cleaned : null,
+    cLine: hasC ? cleaned : null,
   };
 }
