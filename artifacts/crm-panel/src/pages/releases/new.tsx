@@ -691,7 +691,8 @@ export default function CreateRelease() {
               <FieldLabel className="text-sm">{L.catalogNumber}</FieldLabel>
               <Input
                 value={catalogNumber}
-                onChange={e => setCatalogNumber(e.target.value)}
+                disabled
+                readOnly
                 placeholder={L.autoAssigned}
                 className="bg-background/40 font-mono"
               />

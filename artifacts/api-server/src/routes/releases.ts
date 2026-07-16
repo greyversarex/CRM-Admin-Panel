@@ -652,35 +652,20 @@ router.post("/releases", async (req, res): Promise<void> => {
     }
   }
 
+  // Каталожный номер не задаётся вручную: он присваивается автоматически
+  // (TM######, по порядку) в момент одобрения релиза модератором
+  // (PATCH /releases/:id/status → approved). Присланное клиентом значение игнорируем.
+  delete (parsed.data as Record<string, unknown>).catalogNumber;
+
   let release;
   try {
     [release] = await db.insert(releasesTable).values(parsed.data).returning();
   } catch (e) {
     if (isUniqueViolation(e)) {
-      res.status(409).json({ error: `Каталожный номер «${parsed.data.catalogNumber}» уже используется другим релизом. Укажите другой или оставьте поле пустым для автоприсвоения.` });
+      res.status(409).json({ error: "Конфликт уникальности при создании релиза. Попробуйте ещё раз." });
       return;
     }
     throw e;
-  }
-
-  // Auto-generate catalogNumber в формате TM###### если лейбл не задал свой.
-  // Уникальный индекс на catalog_number защищает от гонок: при конфликте
-  // (двое создали релиз одновременно) повторяем с новым номером.
-  if (!release.catalogNumber || !release.catalogNumber.trim()) {
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const candidate = await generateCatalogNumber();
-      try {
-        const [updated] = await db.update(releasesTable)
-          .set({ catalogNumber: candidate })
-          .where(eq(releasesTable.id, release.id))
-          .returning();
-        if (updated) release.catalogNumber = updated.catalogNumber;
-        break;
-      } catch (e) {
-        if (isUniqueViolation(e) && attempt < 5) continue;
-        throw e;
-      }
-    }
   }
 
   // Сразу заносим главного артиста в release_artists (primary, position=0),
@@ -759,12 +744,16 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // Каталожный номер системный: присваивается автоматически при одобрении
+  // релиза и вручную не редактируется — присланное значение игнорируем.
+  delete (parsed.data as Record<string, unknown>).catalogNumber;
+
   let release;
   try {
     [release] = await db.update(releasesTable).set(parsed.data).where(eq(releasesTable.id, params.data.id)).returning();
   } catch (e) {
     if (isUniqueViolation(e)) {
-      res.status(409).json({ error: `Каталожный номер «${(parsed.data as Record<string, unknown>).catalogNumber}» уже используется другим релизом. Укажите другой номер.` });
+      res.status(409).json({ error: "Конфликт уникальности при обновлении релиза. Попробуйте ещё раз." });
       return;
     }
     throw e;
@@ -1211,6 +1200,27 @@ router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req
       error: "Release status changed concurrently. Reload and try again.",
     });
     return;
+  }
+
+  // ── Присвоение каталожного номера при одобрении ──────────────────────
+  // Правило: TM###### (по порядку, старт TM260001) присваивается автоматически
+  // в момент approve и больше не меняется. Уникальный индекс на catalog_number
+  // защищает от гонок: при конфликте повторяем с новым номером.
+  if (parsed.data.status === "approved" && (!release.catalogNumber || !release.catalogNumber.trim())) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const candidate = await generateCatalogNumber();
+      try {
+        const [withCatalog] = await db.update(releasesTable)
+          .set({ catalogNumber: candidate })
+          .where(eq(releasesTable.id, release.id))
+          .returning();
+        if (withCatalog) release.catalogNumber = withCatalog.catalogNumber;
+        break;
+      } catch (e) {
+        if (isUniqueViolation(e) && attempt < 5) continue;
+        throw e;
+      }
+    }
   }
 
   // Audit: на одобрении/отказе используем отдельные actions для отчётов.
