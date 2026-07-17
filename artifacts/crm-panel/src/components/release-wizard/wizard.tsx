@@ -940,13 +940,10 @@ function Step2Tracks({
         // 1. Создаём пустой трек.
         const track = await createTrack.mutateAsync({
           data: {
-            title: titleFromName,
+            title: "",
             releaseId,
             artistId: primaryArtistId,
             trackNumber: nextNumber,
-            audioStyle: "vocal",
-            aiUsage: "none",
-            explicitStatus: "non_explicit",
             clipStartSeconds: 0,
             displayArtists: [],
             writers: [],

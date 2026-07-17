@@ -34,10 +34,8 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  ArrowLeft, Save, Music2, Headphones, FileAudio, Users, UserPlus,
-  AlertTriangle, Plus, Trash2, Languages, Loader2, Wand2,
+  ArrowLeft, Save, Music2, FileAudio, Plus, Trash2, Loader2, Wand2,
 } from "lucide-react";
-import { useAssetUpload } from "@/components/asset-uploader";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -79,9 +77,6 @@ type FormState = {
   lyrics:             string;
   iswc:               string;
   audioUrl:           string | null;
-  spatialAudioUrl:    string | null;
-  spatialIsrc:        string;
-  spatialAiUsage:     "none" | "some" | "all" | "";
   displayArtists:     TrackDisplayArtist[];
   writers:            TrackWriter[];
   performers:         TrackPerformer[];
@@ -98,7 +93,7 @@ function trackToForm(t: Track): FormState {
     durationSeconds:    t.durationSeconds ?? null,
     genre:              t.genre ?? "",
     subgenre:           t.subgenre ?? "",
-    language:           t.language ?? "",
+    language:           t.language ?? "en",
     isExplicit:         !!t.isExplicit,
     explicitStatus:     (t.explicitStatus ?? "") as FormState["explicitStatus"],
     aiUsage:            (t.aiUsage ?? "") as FormState["aiUsage"],
@@ -110,10 +105,7 @@ function trackToForm(t: Track): FormState {
     lyrics:             t.lyrics ?? "",
     iswc:               t.iswc ?? "",
     audioUrl:           t.audioUrl ?? null,
-    spatialAudioUrl:    t.spatialAudioUrl ?? null,
-    spatialIsrc:        t.spatialIsrc ?? "",
-    spatialAiUsage:     (t.spatialAiUsage ?? "") as FormState["spatialAiUsage"],
-    displayArtists:     t.displayArtists?.length ? t.displayArtists : [{ name: "", role: "primary" }],
+    displayArtists:     t.displayArtists?.length ? t.displayArtists : [],
     writers:            t.writers?.length ? t.writers : [{ name: "", role: "songwriter", share: 100, caeIpi: null }],
     performers:         t.performers?.length ? t.performers : [{ name: "", role: "vocals" }],
     production:         t.production?.length ? t.production : [{ name: "", role: "producer" }],
@@ -134,7 +126,7 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     language:           N(f.language),
     isExplicit:         f.isExplicit,
     explicitStatus:     (f.explicitStatus || "non_explicit") as "non_explicit" | "explicit" | "censored",
-    aiUsage:            (f.aiUsage || "none") as "none" | "some" | "all",
+    aiUsage:            (f.aiUsage || undefined) as "none" | "some" | "all" | undefined,
     clipStartSeconds:   f.clipStartSeconds,
     recordingYear:      f.recordingYear ?? null,
     countryOfRecording: N(f.countryOfRecording),
@@ -143,9 +135,6 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     lyrics:             N(f.lyrics),
     iswc:               N(f.iswc),
     audioUrl:           f.audioUrl,
-    spatialAudioUrl:    f.spatialAudioUrl,
-    spatialIsrc:        N(f.spatialIsrc),
-    spatialAiUsage:     f.spatialAiUsage === "" ? null : f.spatialAiUsage,
     displayArtists:     f.displayArtists.filter((a) => a.name.trim()),
     writers:            splitWriterSharesEvenly(f.writers.filter((w) => w.name.trim())),
     performers:         f.performers.filter((p) => p.name.trim()),
@@ -156,62 +145,6 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
   };
 }
 
-// ─── Spatial Audio uploader ─────────────────────────────────────────────
-function SpatialAudioUploader({
-  value, trackId, onChange,
-}: {
-  value: string | null;
-  trackId: number;
-  onChange: (objectPath: string | null) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { upload, isUploading, progress } = useAssetUpload();
-  const onPick = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      const asset = await upload(file, { kind: "audio", trackId, attach: false });
-      onChange(asset.objectPath);
-      toast({ title: "Dolby Atmos file uploaded", description: file.name });
-    } catch (e: any) {
-      toast({ title: "Upload failed", description: e?.message ?? "Error", variant: "destructive" });
-    }
-  };
-  return (
-    <div className="space-y-2">
-      <input
-        ref={inputRef} type="file"
-        accept="audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/mp4"
-        className="hidden"
-        onChange={(e) => onPick(e.target.files?.[0])}
-      />
-      {value ? (
-        <div className="flex items-center gap-3 p-2 rounded-md bg-background/40 border border-border/50">
-          <div className="h-8 w-8 rounded-full bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-300">
-            <Headphones className="h-3.5 w-3.5" />
-          </div>
-          <div className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate">{value}</div>
-          <Button type="button" variant="outline" size="sm" disabled={isUploading}
-            onClick={() => inputRef.current?.click()}>Replace</Button>
-          <Button type="button" variant="ghost" size="sm" className="text-rose-300"
-            disabled={isUploading} onClick={() => onChange(null)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ) : (
-        <Button type="button" variant="outline" size="sm" className="w-full justify-start"
-          disabled={isUploading} onClick={() => inputRef.current?.click()}>
-          <Headphones className="h-3.5 w-3.5 mr-1.5" />
-          {isUploading ? `Uploading ${progress}%…` : "Upload Dolby Atmos (WAV/FLAC, ≤200 MB)"}
-        </Button>
-      )}
-      {isUploading && (
-        <div className="h-1 bg-muted rounded overflow-hidden">
-          <div className="h-full bg-violet-500 transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Metadata translations ───────────────────────────────────────────────
 function MetadataTranslationsEditor({
@@ -309,15 +242,22 @@ export default function TrackEditPage() {
   };
   const [isTranscribing, setIsTranscribing] = useState(false);
   useEffect(() => {
-    if (track) setF(trackToForm(track));
-  }, [track?.id, track?.updatedAt]);
+    if (!track) return;
+    const form = trackToForm(track);
+    // Auto-populate Display Artists with the release's primary artist if none are saved yet.
+    if (form.displayArtists.length === 0 && release?.artistName) {
+      form.displayArtists = [{ name: release.artistName, role: "primary" }];
+    }
+    setF(form);
+  }, [track?.id, track?.updatedAt, release?.artistName]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })) });
 
-  // ── Clip time helpers ──
-  const clipMm = f ? String(Math.floor(f.clipStartSeconds / 60)).padStart(2, "0") : "00";
+  // ── Clip time helpers (HH:MM:SS) ──
+  const clipHh = f ? String(Math.floor(f.clipStartSeconds / 3600)).padStart(2, "0") : "00";
+  const clipMm = f ? String(Math.floor((f.clipStartSeconds % 3600) / 60)).padStart(2, "0") : "00";
   const clipSs = f ? String(f.clipStartSeconds % 60).padStart(2, "0") : "00";
 
   const save = async (): Promise<boolean> => {
@@ -569,14 +509,15 @@ export default function TrackEditPage() {
                   Clip Start Time <InfoTip text="The time offset (minutes:seconds:centiseconds) at which the DSP preview clip should start." />
                 </Label>
                 <Input
-                  value={`${clipMm}:${clipSs}`}
+                  value={`${clipHh}:${clipMm}:${clipSs}`}
                   onChange={(e) => {
                     const parts = e.target.value.split(":").map((p) => parseInt(p, 10) || 0);
-                    const mm = parts[0] ?? 0;
-                    const ss = Math.min(59, parts[1] ?? 0);
-                    setF({ ...f, clipStartSeconds: Math.max(0, mm * 60 + ss) });
+                    const hh = parts[0] ?? 0;
+                    const mm = parts[1] ?? 0;
+                    const ss = Math.min(59, parts[2] ?? 0);
+                    setF({ ...f, clipStartSeconds: Math.max(0, hh * 3600 + mm * 60 + ss) });
                   }}
-                  placeholder="00:00"
+                  placeholder="00:00:00"
                   className="font-mono w-full"
                 />
               </div>
@@ -596,66 +537,6 @@ export default function TrackEditPage() {
             </div>
             </div>
 
-            <Separator className="opacity-20" />
-
-            {/* Spatial Audio */}
-            <div className="space-y-5">
-            <h3 className="text-lg font-semibold inline-flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5">
-                Spatial Audio <InfoTip text="Optional Dolby Atmos / spatial audio version of the track. A fee applies per spatial track upon release approval." />
-              </span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
-                +$24.99
-              </span>
-            </h3>
-            <div className="rounded-md bg-primary/5 border border-primary/20 px-3 py-2 text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">$24.99</span> per spatial audio track will be charged to your account balance upon release approval.
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 items-start">
-              {/* Left: spatial file */}
-              <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground">Spatial Audio File (Dolby Atmos)</Label>
-                <SpatialAudioUploader
-                  value={f.spatialAudioUrl}
-                  trackId={track.id}
-                  onChange={(p) => setF({ ...f, spatialAudioUrl: p })}
-                />
-              </div>
-              {/* Right: spatial AI usage */}
-              <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground leading-relaxed">
-                  What amount of generative AI tools were used in the creation of this spatial audio?{" "}
-                  <InfoTip text="Disclose how much generative AI was used to create or significantly alter the spatial (Dolby Atmos) audio." />
-                </Label>
-                <RadioGroup
-                  value={f.spatialAiUsage || "none"}
-                  onValueChange={(v) => setF({ ...f, spatialAiUsage: v as FormState["spatialAiUsage"] })}
-                  className="flex gap-4"
-                >
-                  {([["none", "None"], ["some", "Some"], ["all", "All"]] as const).map(([v, label]) => (
-                    <div key={v} className="flex items-center gap-1.5">
-                      <RadioGroupItem value={v} id={`spatial-ai-${v}`} />
-                      <Label htmlFor={`spatial-ai-${v}`} className="text-sm font-normal cursor-pointer">{label}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            </div>
-
-            <div className="max-w-xs space-y-1.5">
-              <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
-                Spatial ISRC <InfoTip text="ISRC for the spatial audio version. We'll assign one automatically if you don't have it." /> — Optional
-              </Label>
-              <Input
-                value={f.spatialIsrc}
-                onChange={(e) => setF({ ...f, spatialIsrc: e.target.value })}
-                placeholder="TJCTM2500001"
-                className="font-mono"
-              />
-              <p className="text-[11px] text-muted-foreground/60">We'll assign an ISRC if you don't have one.</p>
-            </div>
-            </div>
             </CardContent>
           </Card>
 
