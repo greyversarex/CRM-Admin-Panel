@@ -1,5 +1,5 @@
 - [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
-- [Track nullable enum fields](track-nullable-enum-fields.md) — explicit_status/ai_usage/audio_style are nullable (NOT NULL+DEFAULT dropped); trackToForm maps null→""; edit page requires choice before save; track-card sends || undefined so Zod default applies instead of null-rejection.
+- [Track nullable enum fields](track-nullable-enum-fields.md) — explicit_status/ai_usage/audio_style must stay NULL until chosen; defaults lived in 3 layers (OpenAPI Zod, DB NOT NULL+DEFAULT, several frontend create paths) — check all.
 - [Stereo audio upload validation](audio-upload-validation.md) — /assets/confirm stereo checks gated on audioProfile; keep audio MIME gate lenient (accept empty/octet-stream).
 - [i18n conventions](i18n-conventions.md) — crm-panel: en is source of truth (ru must mirror or typecheck fails); beware `t` shadow in `.map`; localize module-const labels by key.
 - [Typecheck after regen libs](typecheck-project-references.md) — TS project references: after openapi/orval/lib changes, run ROOT `pnpm run typecheck` (tsc --build), not per-package filter, or phantom stale-type errors.

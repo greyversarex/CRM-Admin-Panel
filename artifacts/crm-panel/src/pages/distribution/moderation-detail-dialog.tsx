@@ -48,9 +48,9 @@ type Contributor = { name: string; role?: string; share?: number };
 type TrackDetail = {
   id: number; position: number | null; title: string; trackVersion: string | null;
   isrc: string | null; durationSeconds: number | null;
-  explicitStatus: string; aiUsage: string;
+  explicitStatus: string | null; aiUsage: string | null;
   recordingYear: number | null; countryOfRecording: string | null;
-  audioStyle: string; vocalLanguage: string | null; hasLyrics: boolean;
+  audioStyle: string | null; vocalLanguage: string | null; hasLyrics: boolean;
   displayArtists: Contributor[]; writers: Contributor[]; performers: Contributor[]; production: Contributor[];
   audio: Audio | null; requirements: Requirements;
 };
@@ -493,9 +493,9 @@ function TrackDetailsExpanded({ t }: { t: TrackDetail }) {
   return (
     <div className="border-t bg-muted/20 p-3 space-y-3 text-sm">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-        <KV label="Explicit" value={t.explicitStatus.replace("_", " ")} />
-        <KV label="AI Usage" value={t.aiUsage} />
-        <KV label="Audio Style" value={t.audioStyle} />
+        <KV label="Explicit" value={t.explicitStatus ? t.explicitStatus.replace("_", " ") : "—"} />
+        <KV label="AI Usage" value={t.aiUsage || "—"} />
+        <KV label="Audio Style" value={t.audioStyle || "—"} />
         <KV label="Vocal Lang" value={t.vocalLanguage ?? "—"} />
         <KV label="Recording Year" value={t.recordingYear?.toString() ?? "—"} />
         <KV label="Country" value={t.countryOfRecording ?? "—"} />

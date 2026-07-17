@@ -954,6 +954,7 @@ function Step2Tracks({
             releaseId,
             artistId: primaryArtistId,
             trackNumber: nextNumber,
+            language: "English",
             clipStartSeconds: 0,
             displayArtists: [],
             writers: [],
