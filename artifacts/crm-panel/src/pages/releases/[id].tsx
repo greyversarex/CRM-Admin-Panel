@@ -555,7 +555,7 @@ export default function ReleaseDetail() {
               </Button>
               <Button
                 size="sm" className="text-xs h-8"
-                onClick={() => setLocation(`/releases/${id}/audio-upload`)}
+                onClick={() => window.open(`/releases/${id}/audio-upload`, "_blank")}
               >
                 <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload Audio
               </Button>
