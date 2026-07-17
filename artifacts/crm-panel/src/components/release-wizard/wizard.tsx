@@ -947,7 +947,6 @@ function Step2Tracks({
     let nextNumber = (tracks.length || 0) + 1;
     try {
       for (const file of Array.from(files)) {
-        const titleFromName = file.name.replace(/\.[^.]+$/, "").trim() || t.releaseWizard.untitled;
         // 1. Создаём пустой трек.
         const track = await createTrack.mutateAsync({
           data: {

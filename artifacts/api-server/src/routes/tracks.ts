@@ -169,7 +169,19 @@ router.post("/tracks", async (req, res): Promise<void> => {
     }
   }
 
-  const [track] = await db.insert(tracksTable).values(parsed.data).returning();
+  // The generated Zod schema applies OpenAPI `default:` values for explicitStatus,
+  // aiUsage, and audioStyle when those keys are absent from the request. We want
+  // them to stay NULL in the DB so the UI can distinguish "user chose X" from
+  // "user hasn't chosen yet". Strip the Zod-applied defaults when the client
+  // didn't provide the fields.
+  const insertData = {
+    ...parsed.data,
+    explicitStatus: ("explicitStatus" in req.body) ? parsed.data.explicitStatus : undefined,
+    aiUsage:        ("aiUsage"        in req.body) ? parsed.data.aiUsage        : undefined,
+    audioStyle:     ("audioStyle"     in req.body) ? parsed.data.audioStyle     : undefined,
+  };
+
+  const [track] = await db.insert(tracksTable).values(insertData).returning();
   void auditMutation(req, { action: "create", entityType: "track", entityId: track.id, before: null, after: track });
   const enriched = await enrichTrack(track);
   res.status(201).json(enriched);
@@ -269,7 +281,15 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
   // Если клиент очищает spatial-файл (spatialAudioUrl=null), синхронно
   // сбрасываем биллинг-статус Atmos в "none", иначе остаётся "pending"/"charged"
   // от прошлой загрузки и пользователь повторно платит.
-  const patch: Record<string, unknown> = { ...parsed.data };
+  // Same as CREATE: strip Zod-applied defaults for nullable enum fields when the
+  // client didn't send those keys, so DB retains NULL instead of getting forced
+  // back to "non_explicit" / "none" / "vocal" on every save.
+  const patch: Record<string, unknown> = {
+    ...parsed.data,
+    explicitStatus: ("explicitStatus" in req.body) ? parsed.data.explicitStatus : undefined,
+    aiUsage:        ("aiUsage"        in req.body) ? parsed.data.aiUsage        : undefined,
+    audioStyle:     ("audioStyle"     in req.body) ? parsed.data.audioStyle     : undefined,
+  };
   if (
     Object.prototype.hasOwnProperty.call(parsed.data, "spatialAudioUrl") &&
     (parsed.data as any).spatialAudioUrl == null
