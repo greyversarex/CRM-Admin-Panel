@@ -248,8 +248,12 @@ export default function TrackEditPage() {
     if (form.displayArtists.length === 0 && release?.artistName) {
       form.displayArtists = [{ name: release.artistName, role: "primary" }];
     }
+    // Auto-populate Recording Year from the release's cLineYear when the track has no year set.
+    if (!form.recordingYear && release?.cLineYear) {
+      form.recordingYear = release.cLineYear;
+    }
     setF(form);
-  }, [track?.id, track?.updatedAt, release?.artistName]);
+  }, [track?.id, track?.updatedAt, release?.artistName, release?.cLineYear]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });

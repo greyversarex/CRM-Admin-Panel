@@ -115,10 +115,21 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
 
   const tracks = useMemo(() => tracksList?.data ?? [], [tracksList]);
 
+  // Все доступные Broma16-витрины — нужны для «выбрать все по умолчанию».
+  const { options: allOutletOptions } = useCatalogOptions("outlet", { valueKey: "code" });
+  const allOutletCodes = useMemo(() => allOutletOptions.map((o) => o.value), [allOutletOptions]);
+
   // Локальные shadow-копии, чтобы пользователь видел изменения сразу.
   const [dsps, setDsps] = useState<string[]>([]);
   const [artists, setArtists] = useState<ReleaseArtistRef[]>([]);
-  useEffect(() => { setDsps(serverDsps); }, [serverDsps.join("|")]);
+  // По умолчанию: все доступные витрины. Если релиз уже сохранён — берём с сервера.
+  useEffect(() => {
+    if (serverDsps.length > 0) {
+      setDsps(serverDsps);
+    } else if (allOutletCodes.length > 0) {
+      setDsps(allOutletCodes);
+    }
+  }, [serverDsps.join("|"), allOutletCodes.join("|")]);
   useEffect(() => { setArtists(serverArtists); }, [JSON.stringify(serverArtists)]);
 
   // Hydrate form once from server release.

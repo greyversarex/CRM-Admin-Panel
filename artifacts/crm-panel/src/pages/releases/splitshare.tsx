@@ -17,6 +17,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   ChevronLeft, Music2, AlertTriangle, Plus, X, AlertCircle, Loader2, Share2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -147,40 +150,56 @@ function AssignSplitDialog({
             </Button>
           </div>
           <div className="space-y-2 max-h-[44vh] overflow-y-auto pr-1">
-            {participants.map((p, idx) => (
+            {participants.map((p, idx) => {
+              // Сумма остальных участников — используется для ограничения ввода
+              const otherSum = participants.reduce(
+                (acc, row, i) => i !== idx ? acc + (Number.isFinite(row.percentage) ? row.percentage : 0) : acc,
+                0,
+              );
+              const maxForRow = Math.max(0, 100 - otherSum);
+              return (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                <select
-                  aria-label="Тип участника"
-                  className="col-span-3 h-9 px-2 text-xs rounded-md bg-background border border-border"
-                  value={p.entityType}
-                  onChange={(e) => patchRow(idx, { entityType: e.target.value as EntityType, entityId: null })}
-                >
-                  <option value="artist">Артист</option>
-                  <option value="label">Лейбл</option>
-                  <option value="producer">Продюсер</option>
-                  <option value="author">Автор</option>
-                  <option value="distributor">Дистрибьютор</option>
-                  <option value="custom">Другое</option>
-                </select>
+                <div className="col-span-3">
+                  <Select
+                    value={p.entityType}
+                    onValueChange={(v) => patchRow(idx, { entityType: v as EntityType, entityId: null })}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="artist">Артист</SelectItem>
+                      <SelectItem value="label">Лейбл</SelectItem>
+                      <SelectItem value="producer">Продюсер</SelectItem>
+                      <SelectItem value="author">Автор</SelectItem>
+                      <SelectItem value="distributor">Дистрибьютор</SelectItem>
+                      <SelectItem value="custom">Другое</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 {(p.entityType === "artist" || p.entityType === "label") ? (
-                  <select
-                    aria-label="Пользователь"
-                    className="col-span-5 h-9 px-2 text-xs rounded-md bg-background border border-border"
-                    value={p.entityId ?? ""}
-                    onChange={(e) => {
-                      const id = e.target.value ? Number(e.target.value) : null;
-                      const u = users.find((x) => x.id === id);
-                      patchRow(idx, { entityId: id, entityName: u?.name ?? p.entityName });
-                    }}
-                  >
-                    <option value="">— выбрать пользователя —</option>
-                    {users
-                      .filter((u) => (p.entityType === "artist" ? u.role === "artist" : u.role === "label"))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                      ))}
-                  </select>
+                  <div className="col-span-5">
+                    <Select
+                      value={p.entityId != null ? String(p.entityId) : ""}
+                      onValueChange={(v) => {
+                        const id = v ? Number(v) : null;
+                        const u = users.find((x) => x.id === id);
+                        patchRow(idx, { entityId: id, entityName: u?.name ?? p.entityName });
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="— выбрать пользователя —" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users
+                          .filter((u) => (p.entityType === "artist" ? u.role === "artist" : u.role === "label"))
+                          .map((u) => (
+                            <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.email})</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 ) : (
                   <Input
                     className="col-span-5 h-9 text-xs"
@@ -192,10 +211,15 @@ function AssignSplitDialog({
 
                 <Input
                   type="number"
-                  min={0} max={100} step={0.01}
-                  className="col-span-3 h-9 text-xs text-right"
+                  min={0}
+                  max={maxForRow}
+                  step={0.01}
+                  className={`col-span-3 h-9 text-xs text-right ${p.percentage > maxForRow + 0.001 ? "border-rose-500 focus-visible:ring-rose-500" : ""}`}
                   value={p.percentage}
-                  onChange={(e) => patchRow(idx, { percentage: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const val = Math.min(maxForRow, Math.max(0, Number(e.target.value)));
+                    patchRow(idx, { percentage: val });
+                  }}
                 />
                 <Button
                   variant="ghost" size="icon" className="col-span-1 h-7 w-7 text-rose-400"
@@ -206,7 +230,8 @@ function AssignSplitDialog({
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           <div className="flex items-center justify-between text-xs pt-1">
