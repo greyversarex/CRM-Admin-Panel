@@ -93,7 +93,7 @@ function trackToForm(t: Track): FormState {
     durationSeconds:    t.durationSeconds ?? null,
     genre:              t.genre ?? "",
     subgenre:           t.subgenre ?? "",
-    language:           t.language ?? "en",
+    language:           t.language ?? "English",
     isExplicit:         !!t.isExplicit,
     explicitStatus:     (t.explicitStatus ?? "") as FormState["explicitStatus"],
     aiUsage:            (t.aiUsage ?? "") as FormState["aiUsage"],
@@ -125,12 +125,12 @@ function formToBody(f: FormState): Omit<CreateTrackBody, "artistId"> {
     subgenre:           N(f.subgenre),
     language:           N(f.language),
     isExplicit:         f.isExplicit,
-    explicitStatus:     (f.explicitStatus || "non_explicit") as "non_explicit" | "explicit" | "censored",
+    explicitStatus:     (f.explicitStatus || undefined) as "non_explicit" | "explicit" | "censored" | undefined,
     aiUsage:            (f.aiUsage || undefined) as "none" | "some" | "all" | undefined,
     clipStartSeconds:   f.clipStartSeconds,
     recordingYear:      f.recordingYear ?? null,
     countryOfRecording: N(f.countryOfRecording),
-    audioStyle:         (f.audioStyle || "vocal") as "instrumental" | "vocal",
+    audioStyle:         (f.audioStyle || undefined) as "instrumental" | "vocal" | undefined,
     vocalLanguage:      (f.audioStyle === "vocal" || !f.audioStyle) ? N(f.vocalLanguage) : null,
     lyrics:             N(f.lyrics),
     iswc:               N(f.iswc),
@@ -252,8 +252,16 @@ export default function TrackEditPage() {
     if (!form.recordingYear && release?.cLineYear) {
       form.recordingYear = release.cLineYear;
     }
+    // Auto-populate Genre + Subgenre from release when track has none.
+    if (!form.genre && release?.genre) {
+      form.genre = release.genre;
+      // Only carry subgenre if it belongs to the genre being set.
+      if (!form.subgenre && release?.subgenre) {
+        form.subgenre = release.subgenre;
+      }
+    }
     setF(form);
-  }, [track?.id, track?.updatedAt, release?.artistName, release?.cLineYear]);
+  }, [track?.id, track?.updatedAt, release?.artistName, release?.cLineYear, release?.genre, release?.subgenre]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
   const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });

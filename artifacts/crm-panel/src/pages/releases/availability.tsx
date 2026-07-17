@@ -11,7 +11,7 @@
 //   • витрины → PUT /releases/:id/distribution-outlets (реальный канал Broma16,
 //     а не мёртвый release_dsps), только если их меняли.
 import { useParams, useLocation } from "wouter";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGetRelease, useUpdateRelease,
@@ -199,10 +199,18 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   const [dsps, setDsps] = useState<string[]>([]);
   const dspTouched = useRef(false);
   const [showPartners, setShowPartners] = useState(false);
+  const allOutletCodes = useMemo(() => outletOptions.map((o) => o.value), [outletOptions]);
   useEffect(() => {
-    if (!dspTouched.current) setDsps(serverDsps);
+    if (!dspTouched.current) {
+      if (serverDsps.length > 0) {
+        setDsps(serverDsps);
+      } else if (allOutletCodes.length > 0) {
+        // Новый релиз — по умолчанию выбираем все доступные площадки.
+        setDsps(allOutletCodes);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverDsps.join(",")]);
+  }, [serverDsps.join(","), allOutletCodes.join(",")]);
 
   const saving = updateRelease.isPending || updateOutlets.isPending;
 
