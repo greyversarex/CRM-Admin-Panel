@@ -266,13 +266,12 @@ export default function ReleaseDetail() {
                     const num = startNum + k;
                     await createTrack.mutateAsync({
                       data: {
-                        title: `Track ${num}`,
+                        title: "",
                         artistId: release.artistId,
                         releaseId: id,
                         trackNumber: num,
-                        language: release.language || "Tajik",
+                        language: "English",
                         genre: release.genre || "Pop",
-                        isExplicit: false,
                       } as any,
                     });
                     created++;
@@ -3016,13 +3015,12 @@ function BulkAudioUploadButton({
       const f = list[i];
       try {
         const asset = await upload(f, { kind: "audio", releaseId, attach: false });
-        const baseTitle = f.name.replace(/\.[^.]+$/, "").trim() || `Track ${startTrackNumber + i}`;
         await createTrack.mutateAsync({
           data: {
-            title: baseTitle,
+            title: "",
             artistId, releaseId,
             trackNumber: startTrackNumber + i,
-            language: defaultLanguage,
+            language: "English",
             genre: defaultGenre,
             audioUrl: asset.objectPath,
             durationSeconds: asset.durationSeconds ?? null,
