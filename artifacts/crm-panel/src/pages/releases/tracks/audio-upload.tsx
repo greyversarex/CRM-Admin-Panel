@@ -75,7 +75,8 @@ export default function AudioUploadPage() {
         await upload(row.file, {
           kind: "audio",
           releaseId,
-          attach: false,
+          trackId,
+          attach: true,
           audioProfile: "stereo",
           onProgress: (pct) => setRow(row.id, { progress: pct }),
         });
