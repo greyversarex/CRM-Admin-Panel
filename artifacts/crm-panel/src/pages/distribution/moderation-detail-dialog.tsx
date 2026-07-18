@@ -262,6 +262,43 @@ export function ModerationDetailDialog({
                     <XCircle className="mr-2 h-4 w-4" /> Take Down
                   </Button>
                 )}
+                <div className="ml-auto">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={decide.isPending} data-testid="button-more-actions">
+                        More actions
+                        <ChevronDown className="h-4 w-4 ml-1.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuItem
+                        onClick={() => setFailReturnOpen(true)}
+                        className="text-amber-400 focus:text-amber-300"
+                        data-testid="dropdown-fail-return"
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Fail &amp; Return
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => decide.mutate({ status: "parked" })}
+                        disabled={decide.isPending}
+                        data-testid="dropdown-park"
+                      >
+                        <PauseCircle className="h-4 w-4 mr-2 text-violet-400" />
+                        Park / Hide
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={onClose}
+                        className="text-muted-foreground focus:text-foreground"
+                        data-testid="dropdown-close"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Закрыть
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             ) : (
             <div className="border-t bg-muted/30 px-6 py-4 flex items-center justify-between gap-2 sticky bottom-0">
