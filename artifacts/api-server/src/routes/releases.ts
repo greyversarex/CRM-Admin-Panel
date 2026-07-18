@@ -481,7 +481,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
             trackNumber: t.trackNumber ?? idx + 1,
             isrc: t.isrc ?? null,
             isExplicit: t.explicit ?? false,
-            explicitStatus: (t.explicit ?? false) ? "explicit" : "non_explicit",
+            explicitStatus: (t.explicit ?? false) ? "explicit" : null,
           }));
         } else {
           const trackCount = Math.max(1, Math.min(i.tracks ?? 1, 50));
@@ -2284,7 +2284,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         genre: found.genre ?? undefined,
         subgenre: found.subgenre ?? undefined,
         isExplicit: t.explicit,
-        explicitStatus: t.explicit ? "explicit" : "non_explicit",
+        explicitStatus: t.explicit ? "explicit" : null,
       }));
       const inserted = await tx.insert(tracksTable).values(trackRows).returning({ id: tracksTable.id });
       for (const tr of inserted) {
