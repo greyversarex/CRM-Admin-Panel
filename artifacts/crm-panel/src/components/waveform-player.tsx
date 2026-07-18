@@ -12,6 +12,7 @@ import {
   CheckCircle2, AlertCircle, AlertOctagon, Info, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
+import { useAuth } from "@/lib/auth";
 
 function fmt(s: number): string {
   if (!isFinite(s) || s < 0) s = 0;
@@ -328,7 +329,10 @@ function severityIcon(s: AudioQcIssue["severity"]) {
 }
 
 export function AudioQcPanel({ trackId, qc, isLoading }: { trackId: number; qc: AudioQcResult; isLoading: boolean }) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  if (user?.role !== "admin") return null;
   const [open, setOpen] = useState(false);
   const rerun = useMutation({
     mutationFn: async () => {
