@@ -106,9 +106,9 @@ function trackToForm(t: Track): FormState {
     iswc:               t.iswc ?? "",
     audioUrl:           t.audioUrl ?? null,
     displayArtists:     t.displayArtists?.length ? t.displayArtists : [],
-    writers:            t.writers?.length ? t.writers : [{ name: "", role: "songwriter", share: 100, caeIpi: null }],
-    performers:         t.performers?.length ? t.performers : [{ name: "", role: "vocals" }],
-    production:         t.production?.length ? t.production : [{ name: "", role: "producer" }],
+    writers:            t.writers?.length ? t.writers : [{ name: "", role: "" as TrackWriter["role"], share: 100, caeIpi: null }],
+    performers:         t.performers?.length ? t.performers : [{ name: "", role: "" }],
+    production:         t.production?.length ? t.production : [{ name: "", role: "" }],
     metadataTranslations: t.metadataTranslations ?? [],
   };
 }
