@@ -701,7 +701,6 @@ export default function CreateRelease() {
               <Select
                 value={labelId ? String(labelId) : "none"}
                 onValueChange={v => setLabelId(v === "none" ? null : Number(v))}
-                disabled={user?.role === "label"}
               >
                 <SelectTrigger data-testid="select-label"><SelectValue /></SelectTrigger>
                 <SelectContent>

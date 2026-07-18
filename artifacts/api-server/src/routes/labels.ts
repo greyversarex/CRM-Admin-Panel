@@ -18,10 +18,9 @@ router.get("/labels", requireAuth, async (req, res): Promise<void> => {
   const limit = parseInt(req.query.limit as string ?? "20", 10) || 20;
   const offset = (page - 1) * limit;
 
-  // Label users only see their own label; artist users see the label of their artist.
-  const whereClause = !scope.fullAccess && scope.labelId
-    ? eq(labelsTable.id, scope.labelId)
-    : undefined;
+  // Список лейблов открыт всем ролям: лейблу нужно видеть другие лейблы,
+  // чтобы выпускать релизы под чужим импринтом (выбор лейбла при создании релиза).
+  const whereClause = undefined;
 
   const labels = await db.select().from(labelsTable).where(whereClause).limit(limit).offset(offset).orderBy(desc(labelsTable.createdAt));
   const [totalResult] = await db.select({ count: count() }).from(labelsTable).where(whereClause);

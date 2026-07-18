@@ -22,10 +22,18 @@ const router = Router();
 
 // Verifies a release row is visible to the current session user. Fail-closed
 // when the session user has no linked artist/label record.
-function releaseInScope(scope: ReturnType<typeof getDataScope>, r: { artistId: number; labelId: number | null }): boolean {
+// Для лейбла релиз «свой», если он привязан к лейблу напрямую (labelId) ИЛИ
+// принадлежит артисту этого лейбла — лейбл может выпускать релиз под чужим
+// импринтом (labelId другого лейбла), не теряя к нему доступ.
+async function releaseInScope(scope: ReturnType<typeof getDataScope>, r: { artistId: number; labelId: number | null }): Promise<boolean> {
   if (scope.fullAccess) return true;
   if (scope.role === "artist") return scope.artistId != null && r.artistId === scope.artistId;
-  if (scope.role === "label")  return scope.labelId  != null && r.labelId  === scope.labelId;
+  if (scope.role === "label") {
+    if (scope.labelId == null) return false;
+    if (r.labelId === scope.labelId) return true;
+    const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, r.artistId));
+    return a?.labelId === scope.labelId;
+  }
   return false;
 }
 
@@ -163,12 +171,22 @@ router.get("/releases", async (req, res): Promise<void> => {
       artistId = scope.artistId; labelId = undefined;
     } else if (scope.role === "label") {
       if (scope.labelId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
-      if (labelId !== undefined && labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
-      labelId = scope.labelId; artistId = undefined;
+      // Фильтр по label_id из query оставляем (он ANDуется со scope-условием ниже,
+      // так что чужие данные не утекут).
     }
   }
 
   const conditions: any[] = [];
+  // Scope-условие лейбла: релиз виден, если привязан к лейблу напрямую ИЛИ
+  // принадлежит артисту лейбла (лейбл может выпускать под чужим импринтом).
+  if (!scope.fullAccess && scope.role === "label" && scope.labelId != null) {
+    const ownArtistIds = (
+      await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId))
+    ).map((r) => r.id);
+    const scopeParts: any[] = [eq(releasesTable.labelId, scope.labelId)];
+    if (ownArtistIds.length > 0) scopeParts.push(inArray(releasesTable.artistId, ownArtistIds));
+    conditions.push(or(...scopeParts));
+  }
   if (status) {
     const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
     if (statuses.length === 1) conditions.push(eq(releasesTable.status, statuses[0]));
@@ -232,7 +250,13 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
         res.json({ all: 0, draft: 0, pending_review: 0, approved: 0, scheduled: 0, live: 0, takedown: 0, unfinished: 0, readyToSubmit: 0 });
         return;
       }
-      where = eq(releasesTable.labelId, scope.labelId);
+      // Прямой labelId ИЛИ релизы артистов лейбла (свой релиз под чужим импринтом).
+      const ownArtistIds = (
+        await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId))
+      ).map((r) => r.id);
+      const scopeParts: any[] = [eq(releasesTable.labelId, scope.labelId)];
+      if (ownArtistIds.length > 0) scopeParts.push(inArray(releasesTable.artistId, ownArtistIds));
+      where = or(...scopeParts);
     }
   }
 
@@ -645,7 +669,9 @@ router.post("/releases", async (req, res): Promise<void> => {
       }
       parsed.data.labelId = ownLabelId ?? undefined;
     } else if (scope.role === "label") {
-      if (scope.labelId == null || parsed.data.labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      // Лейбл может выбрать ЛЮБОЙ labelId (в т.ч. чужой импринт) — доступ к
+      // релизу сохраняется через принадлежность артиста лейблу (см. releaseInScope).
+      if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
       // Label users must also assign an artist that belongs to their label.
       const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, parsed.data.artistId));
       if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Artist does not belong to your label" }); return; }
@@ -698,7 +724,7 @@ router.get("/releases/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Release not found" });
     return;
   }
-  if (!releaseInScope(getDataScope(req), release)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(getDataScope(req), release))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const tracks = await db.select().from(tracksTable).where(eq(tracksTable.releaseId, release.id));
   const enriched = await enrichRelease(release);
@@ -726,7 +752,7 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   // Non-privileged users cannot edit a release that is past 'draft' / 'rejected'.
   // Admin/manager bypass via scope.fullAccess.
@@ -739,7 +765,9 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     if (body.artistId !== undefined && body.artistId !== existing.artistId) {
       res.status(403).json({ error: "Cannot change artistId" }); return;
     }
-    if (body.labelId !== undefined && body.labelId !== existing.labelId) {
+    // Лейбл может менять labelId (выпуск под другим импринтом) — доступ
+    // остаётся через артиста; артист менять labelId по-прежнему не может.
+    if (scope.role !== "label" && body.labelId !== undefined && body.labelId !== existing.labelId) {
       res.status(403).json({ error: "Cannot change labelId" }); return;
     }
   }
@@ -778,7 +806,7 @@ router.delete("/releases/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   // Удалять разрешено только черновики и отклонённые релизы. Релиз на модерации /
   // одобренный / живой защищён жизненным циклом: его сначала нужно отозвать
@@ -826,7 +854,7 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   // Допустимые исходные статусы. Из live/delivering/approved/etc нельзя «пере-отправить».
   if (existing.status !== "draft" && existing.status !== "rejected") {
@@ -941,7 +969,7 @@ router.post("/releases/:id/cancel-submission", async (req, res): Promise<void> =
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   if (existing.status !== "pending_review") {
     res.status(409).json({
@@ -1000,7 +1028,7 @@ router.post("/releases/:id/reopen", async (req, res): Promise<void> => {
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   if (existing.status !== "approved" && existing.status !== "rejected") {
     res.status(409).json({
@@ -1062,7 +1090,7 @@ router.post("/releases/:id/request-takedown", async (req, res): Promise<void> =>
   if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
 
   const scope = getDataScope(req);
-  if (!releaseInScope(scope, existing)) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!(await releaseInScope(scope, existing))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   if (existing.status !== "approved" && existing.status !== "live") {
     res.status(409).json({
