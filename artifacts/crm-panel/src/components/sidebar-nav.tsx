@@ -157,10 +157,7 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "my_catalog",
     items: [
-      { nameKey: "releases",      href: "/releases",           icon: Disc3,           iconColor: "text-emerald-400" },
-      { nameKey: "artists",       href: "/artists",            icon: Mic2,            iconColor: "text-emerald-400" },
       { nameKey: "transfer",      href: "/releases/transfer",  icon: ArrowRightLeft,  iconColor: "text-emerald-400" },
-      { nameKey: "release_cal",   href: "/releases/calendar",  icon: CalendarDays,    iconColor: "text-emerald-400" },
     ],
   },
   {
