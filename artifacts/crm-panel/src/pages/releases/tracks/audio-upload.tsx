@@ -19,14 +19,13 @@ import {
   ArrowLeft, UploadCloud, Music2, CheckCircle2, AlertTriangle, Loader2, FileAudio,
 } from "lucide-react";
 import { useAssetUpload } from "@/components/asset-uploader";
+import { useLang } from "@/lib/i18n";
 
 // Допустимые расширения/типы на клиенте (быстрый отказ до загрузки).
 const ALLOWED_EXT = [".wav", ".wave", ".aif", ".aiff", ".aifc", ".flac"];
-function clientTypeError(file: File): string | null {
+function isAllowedType(file: File): boolean {
   const name = file.name.toLowerCase();
-  const okExt = ALLOWED_EXT.some((e) => name.endsWith(e));
-  if (!okExt) return "Invalid file type. Only WAV, AIFF, or FLAC files are accepted.";
-  return null;
+  return ALLOWED_EXT.some((e) => name.endsWith(e));
 }
 
 type Status = "pending" | "uploading" | "done" | "error";
@@ -47,6 +46,8 @@ export default function AudioUploadPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { upload } = useAssetUpload();
+  const { t } = useLang();
+  const A = t.audioUpload;
 
   const { data: release } = useGetRelease(releaseId, {
     query: { enabled: Number.isFinite(releaseId) && releaseId > 0 },
@@ -65,9 +66,8 @@ export default function AudioUploadPage() {
   const uploadOne = useCallback(
     async (row: Row) => {
       // Клиентская проверка типа — без загрузки сети.
-      const typeErr = clientTypeError(row.file);
-      if (typeErr) {
-        setRow(row.id, { status: "error", error: typeErr, progress: 0 });
+      if (!isAllowedType(row.file)) {
+        setRow(row.id, { status: "error", error: A.invalidType, progress: 0 });
         return;
       }
       setRow(row.id, { status: "uploading", progress: 0, error: undefined });
@@ -91,11 +91,11 @@ export default function AudioUploadPage() {
           e?.response?.data?.error ??
           e?.data?.error ??
           e?.message ??
-          "Не удалось загрузить файл.";
+          A.uploadFailed;
         setRow(row.id, { status: "error", error: String(msg), progress: 0 });
       }
     },
-    [releaseId, upload, queryClient],
+    [releaseId, upload, queryClient, A],
   );
 
   const addFiles = useCallback(
@@ -125,7 +125,7 @@ export default function AudioUploadPage() {
   };
 
   if (!Number.isFinite(releaseId) || !Number.isFinite(trackId)) {
-    return <Layout><div className="p-6 text-sm text-rose-300">Неверные параметры.</div></Layout>;
+    return <Layout><div className="p-6 text-sm text-rose-300">{A.invalidParams}</div></Layout>;
   }
 
   const doneCount = rows.filter((r) => r.status === "done").length;
@@ -140,7 +140,7 @@ export default function AudioUploadPage() {
             onClick={backToTrack}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/30 border border-border/40"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Release
+            <ArrowLeft className="h-3.5 w-3.5" /> {A.backToRelease}
           </button>
         </div>
 
@@ -148,11 +148,10 @@ export default function AudioUploadPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <Music2 className="h-5 w-5 text-primary" />
-            Upload Stereo Audio for {release?.title ? `«${release.title}»` : "релиза"}
+            {A.titleWith.replace("{name}", release?.title ? `«${release.title}»` : A.titleFallback)}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Перетащите один или несколько файлов. Принимаются WAV, AIFF или FLAC —
-            частота дискретизации 44100 Гц и выше, 16 или 24 бита, стерео (2 канала).
+            {A.subtitle}
           </p>
         </div>
 
@@ -178,10 +177,10 @@ export default function AudioUploadPage() {
                 <UploadCloud className="h-6 w-6" />
               </div>
               <div className="text-sm font-medium">
-                Перетащите аудиофайлы сюда или нажмите, чтобы выбрать
+                {A.dropHint}
               </div>
               <div className="text-xs text-muted-foreground">
-                WAV / AIFF / FLAC · до 200 МБ на файл · можно несколько сразу
+                {A.formatsHint}
               </div>
             </div>
             <input
@@ -203,8 +202,8 @@ export default function AudioUploadPage() {
           <div className="mt-6 space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-sm text-muted-foreground">
-                {rows.length} файл(ов){doneCount ? ` · загружено: ${doneCount}` : ""}
-                {errorCount ? ` · с ошибкой: ${errorCount}` : ""}
+                {A.filesCount.replace("{count}", String(rows.length))}{doneCount ? A.uploadedSuffix.replace("{count}", String(doneCount)) : ""}
+                {errorCount ? A.errorSuffix.replace("{count}", String(errorCount)) : ""}
               </span>
             </div>
 
@@ -234,12 +233,12 @@ export default function AudioUploadPage() {
                     <div className="text-xs text-rose-300 mt-0.5">{row.error}</div>
                   )}
                   {row.status === "done" && (
-                    <div className="text-xs text-emerald-300/80 mt-0.5">Загрузка завершена</div>
+                    <div className="text-xs text-emerald-300/80 mt-0.5">{A.uploadDone}</div>
                   )}
                 </div>
 
                 <div className="shrink-0 text-[11px] text-muted-foreground font-mono">
-                  {(row.file.size / 1024 / 1024).toFixed(1)} МБ
+                  {(row.file.size / 1024 / 1024).toFixed(1)} {A.megabytes}
                 </div>
               </div>
             ))}
@@ -249,11 +248,11 @@ export default function AudioUploadPage() {
         {/* Footer actions */}
         <div className="mt-8 flex items-center justify-between">
           <Button variant="outline" onClick={backToTrack} disabled={busy}>
-            <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to Release
+            <ArrowLeft className="h-4 w-4 mr-1.5" /> {A.backToRelease}
           </Button>
           {busy && (
             <span className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
-              <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
+              <Loader2 className="h-4 w-4 animate-spin" /> {A.uploading}
             </span>
           )}
         </div>

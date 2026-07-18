@@ -47,6 +47,7 @@ import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
 import { generateIsrcCode } from "@/lib/codes";
+import { useLang } from "@/lib/i18n";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function fmtDuration(s: number | null | undefined): string {
@@ -153,24 +154,25 @@ function MetadataTranslationsEditor({
   value: TrackMetadataTranslationsItem[];
   onChange: (v: TrackMetadataTranslationsItem[]) => void;
 }) {
+  const { t } = useLang();
   const update = (i: number, patch: Partial<TrackMetadataTranslationsItem>) =>
     onChange(value.map((v, idx) => idx === i ? { ...v, ...patch } : v));
   return (
     <div className="space-y-2">
       {value.length === 0 && (
         <div className="text-sm text-muted-foreground border border-dashed border-border/40 rounded px-2 py-3 text-center">
-          Нет переводов. Добавьте, если название трека звучит на другом языке.
+          {t.trackEdit.noTranslations}
         </div>
       )}
       {value.map((row, i) => (
         <div key={i} className="grid grid-cols-12 gap-2 items-center">
-          <Input placeholder="Код (en, ru…)" value={row.language}
+          <Input placeholder={t.trackEdit.codePlaceholder} value={row.language}
             onChange={(e) => update(i, { language: e.target.value })}
             className="col-span-3 bg-background/40 text-sm" />
-          <Input placeholder="Название" value={row.title}
+          <Input placeholder={t.trackEdit.titlePlaceholder} value={row.title}
             onChange={(e) => update(i, { title: e.target.value })}
             className="col-span-6 bg-background/40 text-sm" />
-          <Input placeholder="Версия" value={row.version ?? ""}
+          <Input placeholder={t.trackEdit.versionPlaceholder} value={row.version ?? ""}
             onChange={(e) => update(i, { version: e.target.value })}
             className="col-span-2 bg-background/40 text-sm" />
           <Button variant="ghost" size="sm" className="text-rose-300 col-span-1"
@@ -181,7 +183,7 @@ function MetadataTranslationsEditor({
       ))}
       <Button variant="outline" size="sm" className="w-full border-dashed"
         onClick={() => onChange([...value, { language: "", title: "", version: null }])}>
-        <Plus className="h-3.5 w-3.5 mr-1.5" /> Добавить перевод
+        <Plus className="h-3.5 w-3.5 mr-1.5" /> {t.trackEdit.addTranslation}
       </Button>
     </div>
   );
@@ -193,9 +195,11 @@ export default function TrackEditPage() {
   const releaseId = Number(params.id);
   const trackId = Number(params.tid);
   const [, setLocation] = useLocation();
+  const { t: T } = useLang();
+  const L = T.trackEdit;
 
   if (!Number.isFinite(releaseId) || !Number.isFinite(trackId)) {
-    return <Layout><div className="p-6 text-sm text-rose-300">Неверные параметры.</div></Layout>;
+    return <Layout><div className="p-6 text-sm text-rose-300">{L.invalidParams}</div></Layout>;
   }
 
   const { data: track, isLoading, error, refetch } = useGetTrack(trackId);
@@ -233,9 +237,9 @@ export default function TrackEditPage() {
     try {
       const { code, warning } = await generateIsrcCode();
       setF((prev) => (prev ? { ...prev, isrc: code } : prev));
-      if (warning) toast({ title: "ISRC", description: warning });
+      if (warning) toast({ title: L.isrcToast, description: warning });
     } catch (e: any) {
-      toast({ title: "Ошибка", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: L.errorToast, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setIsrcBusy(false);
     }
@@ -275,29 +279,29 @@ export default function TrackEditPage() {
   const save = async (): Promise<boolean> => {
     if (!f || !track) return false;
     if (!f.title.trim()) {
-      toast({ title: "Название трека обязательно", variant: "destructive" });
+      toast({ title: L.titleRequired, variant: "destructive" });
       return false;
     }
     if (f.writers.filter((w) => w.name.trim()).length === 0) {
       toast({
-        title: "Укажите хотя бы одного автора",
-        description: "Поле «Writers» обязательно для сохранения.",
+        title: L.writersRequiredTitle,
+        description: L.writersRequiredDesc,
         variant: "destructive",
       });
       return false;
     }
     if (!f.audioStyle) {
       toast({
-        title: "Укажите Audio Style",
-        description: "Выберите: Instrumental или Vocal.",
+        title: L.audioStyleRequiredTitle,
+        description: L.audioStyleRequiredDesc,
         variant: "destructive",
       });
       return false;
     }
     if (!f.explicitStatus) {
       toast({
-        title: "Укажите Explicit Status",
-        description: "Выберите: Non Explicit, Explicit или Censored.",
+        title: L.explicitStatusRequiredTitle,
+        description: L.explicitStatusRequiredDesc,
         variant: "destructive",
       });
       return false;
@@ -306,8 +310,8 @@ export default function TrackEditPage() {
     for (const w of f.writers.filter((w) => w.name.trim())) {
       if (!w.role) {
         toast({
-          title: "Не указана роль",
-          description: `Укажите роль для «${w.name}» в разделе Writers.`,
+          title: L.roleMissingTitle,
+          description: L.roleMissingWriters.replace("{name}", w.name),
           variant: "destructive",
         });
         return false;
@@ -316,8 +320,8 @@ export default function TrackEditPage() {
     for (const p of f.performers.filter((p) => p.name.trim())) {
       if (!p.role) {
         toast({
-          title: "Не указана роль",
-          description: `Укажите роль для «${p.name}» в разделе Performers.`,
+          title: L.roleMissingTitle,
+          description: L.roleMissingPerformers.replace("{name}", p.name),
           variant: "destructive",
         });
         return false;
@@ -326,8 +330,8 @@ export default function TrackEditPage() {
     for (const p of f.production.filter((p) => p.name.trim())) {
       if (!p.role) {
         toast({
-          title: "Не указана роль",
-          description: `Укажите роль для «${p.name}» в разделе Production & Engineering.`,
+          title: L.roleMissingTitle,
+          description: L.roleMissingProduction.replace("{name}", p.name),
           variant: "destructive",
         });
         return false;
@@ -339,8 +343,8 @@ export default function TrackEditPage() {
       f.performers.some((p) => /producer/i.test(p.role) && p.name.trim());
     if (!hasProducer) {
       toast({
-        title: "Укажите продюсера",
-        description: "Добавьте хотя бы одного продюсера (роль «Producer») в разделе Production & Engineering. Без продюсера релиз не пройдёт модерацию.",
+        title: L.producerRequiredTitle,
+        description: L.producerRequiredDesc,
         variant: "destructive",
       });
       return false;
@@ -353,10 +357,10 @@ export default function TrackEditPage() {
       // Инвалидируем кэш: трек, список треков релиза и все треки.
       await queryClient.invalidateQueries({ queryKey: [`/api/tracks/${track.id}`] });
       await queryClient.invalidateQueries({ queryKey: ["/api/tracks"] });
-      toast({ title: "Сохранено", description: `Трек «${f.title}» обновлён.` });
+      toast({ title: L.savedTitle, description: L.savedDesc.replace("{title}", f.title) });
       return true;
     } catch (e: any) {
-      toast({ title: "Не удалось сохранить", description: e?.message ?? "Ошибка", variant: "destructive" });
+      toast({ title: L.saveFailedTitle, description: e?.message ?? L.saveFailedDesc, variant: "destructive" });
       return false;
     }
   };
@@ -375,7 +379,7 @@ export default function TrackEditPage() {
     return (
       <Layout>
         <div className="max-w-7xl mx-auto p-6 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Загружаем трек…
+          <Loader2 className="h-4 w-4 animate-spin" /> {L.loadingTrack}
         </div>
       </Layout>
     );
@@ -384,7 +388,7 @@ export default function TrackEditPage() {
     return (
       <Layout>
         <div className="max-w-7xl mx-auto p-6 text-sm text-rose-300">
-          Трек не найден или нет доступа.
+          {L.notFound}
         </div>
       </Layout>
     );
@@ -412,13 +416,13 @@ export default function TrackEditPage() {
     .map((a) => ({
       value: a.objectPath,
       label: a.filename,
-      sub: `загружен ${fmtUploaded(a.createdAt)}`,
+      sub: L.uploadedAt.replace("{date}", fmtUploaded(a.createdAt)),
     }));
   if (f.audioUrl && !audioOptions.some((o) => o.value === f.audioUrl)) {
     audioOptions.unshift({
       value: f.audioUrl,
       label: audioFileName ?? f.audioUrl,
-      sub: "текущий файл трека",
+      sub: L.currentTrackFile,
     });
   }
 
@@ -442,7 +446,7 @@ export default function TrackEditPage() {
             onClick={() => setLocation(`/releases/${releaseId}`)}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent/30 border border-border/40"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
+            <ArrowLeft className="h-3.5 w-3.5" /> {L.back}
           </button>
           <span className="text-sm font-medium text-muted-foreground">
             {trackIndex >= 0 ? trackIndex + 1 : "—"}
@@ -458,23 +462,23 @@ export default function TrackEditPage() {
 
             {/* Audio Details */}
             <div className="space-y-5">
-            <h3 className="text-lg font-semibold">Audio Details</h3>
+            <h3 className="text-lg font-semibold">{L.audioDetails}</h3>
 
             {/* Audio file row + AI radios */}
             <div className="grid grid-cols-2 gap-6 items-start">
               {/* Left */}
               <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground">Audio File</Label>
+                <Label className="text-sm text-muted-foreground">{L.audioFile}</Label>
                 <div className="flex gap-2">
                   <Select
                     value={f.audioUrl ?? "__none__"}
                     onValueChange={onSelectAudio}
                   >
                     <SelectTrigger className="flex-1 min-w-0">
-                      <SelectValue placeholder="Select Audio File" />
+                      <SelectValue placeholder={L.selectAudioFile} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Select None</SelectItem>
+                      <SelectItem value="__none__">{L.selectNone}</SelectItem>
                       {audioOptions.map((o) => (
                         <SelectItem key={o.value} value={o.value}>
                           <span className="flex flex-col">
@@ -491,12 +495,12 @@ export default function TrackEditPage() {
                     className="shrink-0"
                     onClick={() => setLocation(`/releases/${releaseId}/tracks/${track.id}/audio-upload`)}
                   >
-                    Upload Audio
+                    {L.uploadAudio}
                   </Button>
                 </div>
                 {audioOptions.length === 0 && (
                   <p className="text-[11px] text-muted-foreground/70">
-                    Для этого релиза ещё не загружено аудио. Нажмите «Upload Audio».
+                    {L.noAudioUploaded}
                   </p>
                 )}
               </div>
@@ -504,15 +508,15 @@ export default function TrackEditPage() {
               {/* Right: AI usage */}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground leading-relaxed">
-                  What amount of generative AI tools were used in the creation of the stereo track?{" "}
-                  <InfoTip text="Disclose how much generative AI was used to create or significantly alter the stereo audio. DSPs require this disclosure." />
+                  {L.aiUsageQuestion}{" "}
+                  <InfoTip text={L.aiUsageTip} />
                 </Label>
                 <RadioGroup
                   value={f.aiUsage}
                   onValueChange={(v) => setF({ ...f, aiUsage: v as FormState["aiUsage"] })}
                   className="flex gap-4"
                 >
-                  {([["none", "None"], ["some", "Some"], ["all", "All"]] as const).map(([v, label]) => (
+                  {([["none", L.aiNone], ["some", L.aiSome], ["all", L.aiAll]] as const).map(([v, label]) => (
                     <div key={v} className="flex items-center gap-1.5">
                       <RadioGroupItem value={v} id={`ai-${v}`} />
                       <Label htmlFor={`ai-${v}`} className="text-sm font-normal cursor-pointer">{label}</Label>
@@ -527,7 +531,7 @@ export default function TrackEditPage() {
               <WaveformPlayer objectPath={f.audioUrl} filename={audioFileName} trackId={trackId} />
             ) : (
               <p className="text-sm text-muted-foreground/60">
-                <FileAudio className="inline h-3 w-3 mr-1" /> No audio file linked
+                <FileAudio className="inline h-3 w-3 mr-1" /> {L.noAudioLinked}
               </p>
             )}
 
@@ -544,13 +548,13 @@ export default function TrackEditPage() {
                   />
                   <Button type="button" size="sm" className="shrink-0"
                     disabled={isrcBusy} onClick={() => void genIsrc()}>
-                    Generate ISRC
+                    {L.generateIsrc}
                   </Button>
                 </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
-                  Clip Start Time <InfoTip text="The time offset (minutes:seconds:centiseconds) at which the DSP preview clip should start." />
+                  {L.clipStartTime} <InfoTip text={L.clipStartTip} />
                 </Label>
                 <Input
                   value={`${clipHh}:${clipMm}:${clipSs}`}
@@ -570,7 +574,7 @@ export default function TrackEditPage() {
             {/* ISWC */}
             <div className="max-w-xs space-y-1.5">
               <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
-                ISWC <InfoTip text="International Standard Musical Work Code — identifies the underlying composition. Leave blank if you don't have one." /> — Optional
+                ISWC <InfoTip text={L.iswcTip} /> — {L.optional}
               </Label>
               <Input
                 value={f.iswc}
@@ -590,11 +594,11 @@ export default function TrackEditPage() {
 
             {/* Track Details */}
             <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Track Details</h3>
+            <h3 className="text-lg font-semibold">{L.trackDetails}</h3>
             <div className="grid grid-cols-3 gap-4 items-end">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
-                  Song Name <InfoTip text="The track title exactly as it should appear on DSPs. Don't include version info here — use the Version field." />
+                  {L.songName} <InfoTip text={L.songNameTip} />
                 </Label>
                 <Input
                   value={f.title}
@@ -603,7 +607,7 @@ export default function TrackEditPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Version (Optional)</Label>
+                <Label className="text-sm text-muted-foreground">{L.versionOptional}</Label>
                 <Input
                   value={f.trackVersion}
                   onChange={(e) => setF({ ...f, trackVersion: e.target.value })}
@@ -611,12 +615,12 @@ export default function TrackEditPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Metadata Language</Label>
+                <Label className="text-sm text-muted-foreground">{L.metadataLanguage}</Label>
                 <DictionaryCombobox
                   value={f.language || ""}
                   onChange={(v) => setF({ ...f, language: v })}
-                  options={[{ value: "", label: "— Not specified" }, ...langOpts.options]}
-                  placeholder="Select language"
+                  options={[{ value: "", label: L.notSpecifiedOpt }, ...langOpts.options]}
+                  placeholder={L.selectLanguage}
                 />
               </div>
             </div>
@@ -631,11 +635,9 @@ export default function TrackEditPage() {
             {/* Display Artists */}
             <div className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold">Display Artists</h3>
+              <h3 className="text-lg font-semibold">{L.displayArtists}</h3>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                Artists that appear as the main performers or in search items for the song.
-                Each track requires a primary artist to be specified. Include any additional
-                display artists who appear on this track.
+                {L.displayArtistsDesc}
               </p>
             </div>
             <DisplayArtistsEditor
@@ -651,22 +653,19 @@ export default function TrackEditPage() {
             <div className="space-y-5">
             <div>
               <h3 className="text-lg font-semibold inline-flex items-center gap-1.5">
-                Contributors <InfoTip text="Everyone credited on the track. Apple Music requires at least one role per group: Writers, Performers, and Production & Engineering." />
+                {L.contributors} <InfoTip text={L.contributorsTip} />
               </h3>
               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                Apple Music requires that tracks delivered to Apple Music must have at least one role represented
-                per contributor group (Writers, Performers, Production &amp; Engineering). Details from Apple can be
-                found in their{" "}
+                {L.contributorsDescPart1}{" "}
                 <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer"
-                  className="text-primary underline">Apple Music Style Guide</a>.
-                Writer contributors must be entered with their real first and last names
-                (ex: "Austin Post", not "Post Malone").
+                  className="text-primary underline">{L.appleStyleGuide}</a>.{" "}
+                {L.contributorsDescPart2}
               </p>
             </div>
 
             {/* Writers */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Writers</h4>
+              <h4 className="text-sm font-semibold">{L.writers}</h4>
               <WritersEditor hideTitle value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
             </div>
 
@@ -675,8 +674,8 @@ export default function TrackEditPage() {
             {/* Performers */}
             <div className="space-y-3">
               <div>
-                <h4 className="text-sm font-semibold">Performers <span className="text-muted-foreground font-normal">— OPTIONAL*</span></h4>
-                <p className="text-[11px] text-muted-foreground">*Required for Apple</p>
+                <h4 className="text-sm font-semibold">{L.performers} <span className="text-muted-foreground font-normal">— {L.optionalUpper}</span></h4>
+                <p className="text-[11px] text-muted-foreground">{L.requiredForApple}</p>
               </div>
               <PerformersEditor hideTitle value={f.performers} onChange={(v) => setF({ ...f, performers: v })} />
             </div>
@@ -686,8 +685,8 @@ export default function TrackEditPage() {
             {/* Production & Engineering */}
             <div className="space-y-3">
               <div>
-                <h4 className="text-sm font-semibold">Production &amp; Engineering <span className="text-rose-400 font-normal">— обязательно</span></h4>
-                <p className="text-[11px] text-muted-foreground">Укажите хотя бы одного продюсера (роль «Producer»). Без продюсера релиз не пройдёт модерацию.</p>
+                <h4 className="text-sm font-semibold">{L.productionEngineering} <span className="text-rose-400 font-normal">— {L.requiredLower}</span></h4>
+                <p className="text-[11px] text-muted-foreground">{L.productionHint}</p>
               </div>
               <ProductionEditor hideTitle value={f.production} onChange={(v) => setF({ ...f, production: v })} />
             </div>
@@ -697,24 +696,24 @@ export default function TrackEditPage() {
 
             {/* Genre */}
             <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Genre</h3>
+            <h3 className="text-lg font-semibold">{L.genre}</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Genre</Label>
+                <Label className="text-sm text-muted-foreground">{L.genre}</Label>
                 <DictionaryCombobox
                   value={f.genre || ""}
                   onChange={(v) => setF({ ...f, genre: v, subgenre: (SUBGENRES[v] ?? []).includes(f.subgenre) ? f.subgenre : "" })}
-                  options={[{ value: "", label: "— Not selected" }, ...genreOptionsWith(f.genre)]}
-                  placeholder="Please select"
+                  options={[{ value: "", label: L.notSelectedOpt }, ...genreOptionsWith(f.genre)]}
+                  placeholder={L.pleaseSelect}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Subgenres</Label>
+                <Label className="text-sm text-muted-foreground">{L.subgenres}</Label>
                 <DictionaryCombobox
                   value={f.subgenre || ""}
                   onChange={(v) => setF({ ...f, subgenre: v })}
-                  options={[{ value: "", label: "— Not selected" }, ...subgenreOptionsFor(f.genre, f.subgenre)]}
-                  placeholder="Please select"
+                  options={[{ value: "", label: L.notSelectedOpt }, ...subgenreOptionsFor(f.genre, f.subgenre)]}
+                  placeholder={L.pleaseSelect}
                 />
               </div>
             </div>
@@ -724,28 +723,28 @@ export default function TrackEditPage() {
 
             {/* Recording */}
             <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Recording</h3>
+            <h3 className="text-lg font-semibold">{L.recording}</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Recording Year</Label>
+                <Label className="text-sm text-muted-foreground">{L.recordingYear}</Label>
                 <Select
                   value={f.recordingYear ? String(f.recordingYear) : "none"}
                   onValueChange={(v) => setF({ ...f, recordingYear: v === "none" ? null : Number(v) })}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={L.selectYear} /></SelectTrigger>
                   <SelectContent className="max-h-48">
-                    <SelectItem value="none">— Not specified</SelectItem>
+                    <SelectItem value="none">{L.notSpecifiedOpt}</SelectItem>
                     {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm text-muted-foreground">Country of Recording</Label>
+                <Label className="text-sm text-muted-foreground">{L.countryOfRecording}</Label>
                 <DictionaryCombobox
                   value={f.countryOfRecording || ""}
                   onChange={(v) => setF({ ...f, countryOfRecording: v })}
-                  options={[{ value: "", label: "— Not specified" }, ...countryOpts.options]}
-                  placeholder="Select a Country of Recording"
+                  options={[{ value: "", label: L.notSpecifiedOpt }, ...countryOpts.options]}
+                  placeholder={L.selectCountry}
                 />
               </div>
             </div>
@@ -755,13 +754,13 @@ export default function TrackEditPage() {
 
             {/* Classification */}
             <div className="space-y-5">
-            <h3 className="text-lg font-semibold">Classification</h3>
+            <h3 className="text-lg font-semibold">{L.classification}</h3>
 
             {/* Audio Style + Explicit Status side by side */}
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold inline-flex items-center gap-1">
-                  Audio Style <InfoTip text="Choose «Instrumental» if the track has no lyrics, or «Vocal» if it contains singing or spoken words." />
+                  {L.audioStyle} <InfoTip text={L.audioStyleTip} />
                 </Label>
                 <RadioGroup
                   value={f.audioStyle}
@@ -770,18 +769,18 @@ export default function TrackEditPage() {
                 >
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="instrumental" id="style-instrumental" />
-                    <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">Instrumental</Label>
+                    <Label htmlFor="style-instrumental" className="text-sm font-normal cursor-pointer">{L.instrumental}</Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="vocal" id="style-vocal" />
-                    <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">Vocal</Label>
+                    <Label htmlFor="style-vocal" className="text-sm font-normal cursor-pointer">{L.vocal}</Label>
                   </div>
                 </RadioGroup>
               </div>
 
               <div className="space-y-2">
                 <Label className="text-sm font-semibold inline-flex items-center gap-1">
-                  Explicit Status <InfoTip text="«Non Explicit» — no explicit content; «Explicit» — contains explicit language; «Censored» — an edited/clean version." />
+                  {L.explicitStatus} <InfoTip text={L.explicitStatusTip} />
                 </Label>
                 <RadioGroup
                   value={f.explicitStatus}
@@ -794,15 +793,15 @@ export default function TrackEditPage() {
                 >
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="non_explicit" id="exp-clean" />
-                    <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">Non Explicit</Label>
+                    <Label htmlFor="exp-clean" className="text-sm font-normal cursor-pointer">{L.nonExplicit}</Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="explicit" id="exp-explicit" />
-                    <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">Explicit</Label>
+                    <Label htmlFor="exp-explicit" className="text-sm font-normal cursor-pointer">{L.explicit}</Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="censored" id="exp-censored" />
-                    <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">Censored</Label>
+                    <Label htmlFor="exp-censored" className="text-sm font-normal cursor-pointer">{L.censored}</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -812,23 +811,23 @@ export default function TrackEditPage() {
             {f.audioStyle === "vocal" && (
               <div className="space-y-5 pt-1">
                 <p className="text-sm text-muted-foreground">
-                  We strongly encourage you to provide lyrics so fans have a better DSP experience.
+                  {L.lyricsEncourage}
                 </p>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Vocal Language</Label>
+                  <Label className="text-sm font-semibold">{L.vocalLanguage}</Label>
                   <div className="w-72">
                     <DictionaryCombobox
                       value={f.vocalLanguage || ""}
                       onChange={(v) => setF({ ...f, vocalLanguage: v })}
                       options={langOpts.options}
-                      placeholder="Select a Language"
+                      placeholder={L.selectLanguageA}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <Label className="text-sm font-semibold">Lyrics</Label>
+                  <Label className="text-sm font-semibold">{L.lyrics}</Label>
                   <div className="flex items-center gap-3 flex-wrap">
                     <Button
                       type="button"
@@ -845,16 +844,16 @@ export default function TrackEditPage() {
                           const data = await res.json() as { text?: string; error?: string };
                           if (!res.ok) {
                             toast({
-                              title: "Ошибка транскрипции",
-                              description: data.error ?? "Неизвестная ошибка",
+                              title: L.transcribeErrorTitle,
+                              description: data.error ?? L.transcribeUnknownError,
                               variant: "destructive",
                             });
                             return;
                           }
                           setF((prev) => ({ ...prev!, lyrics: data.text ?? "" }));
-                          toast({ title: "Готово", description: "Текст песни успешно распознан." });
+                          toast({ title: L.transcribeDoneTitle, description: L.transcribeDoneDesc });
                         } catch {
-                          toast({ title: "Ошибка", description: "Не удалось связаться с сервером.", variant: "destructive" });
+                          toast({ title: L.errorToast, description: L.transcribeServerErrorDesc, variant: "destructive" });
                         } finally {
                           setIsTranscribing(false);
                         }
@@ -863,28 +862,27 @@ export default function TrackEditPage() {
                       {isTranscribing
                         ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                         : <Wand2 className="h-4 w-4 mr-1.5" />}
-                      {isTranscribing ? "Распознаём…" : "Transcribe Lyrics with AI"}
+                      {isTranscribing ? L.transcribing : L.transcribeLyrics}
                     </Button>
                     {!f.audioUrl && (
                       <p className="text-sm text-red-400">
-                        You must link an audio file to the track in order to transcribe lyrics.
+                        {L.transcribeNeedAudio}
                       </p>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Please list lyrics in standard lyrical format,{" "}
-                    <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer" className="text-primary underline">more info here</a>.{" "}
-                    Learn about lyrics distribution{" "}
-                    <a href="https://support.apple.com/en-us/101564" target="_blank" rel="noopener noreferrer" className="text-primary underline">here</a>.{" "}
-                    Don't annotate section headers [Intro, Verse, Chorus, Hook, etc.]
-                    Repeated lines &amp; choruses must be transcribed. (Don't denote "Chorus 2x")
+                    {L.lyricsHintPart1}{" "}
+                    <a href="https://help.apple.com/itc/musicstyleguide/" target="_blank" rel="noopener noreferrer" className="text-primary underline">{L.lyricsHintLink1}</a>.{" "}
+                    {L.lyricsHintPart2}{" "}
+                    <a href="https://support.apple.com/en-us/101564" target="_blank" rel="noopener noreferrer" className="text-primary underline">{L.lyricsHintLink2}</a>.{" "}
+                    {L.lyricsHintPart3}
                   </p>
                   <Textarea
                     value={f.lyrics}
                     onChange={(e) => setF({ ...f, lyrics: e.target.value })}
                     rows={10}
                     className="font-mono text-sm bg-background/40 resize-y"
-                    placeholder="Enter lyrics here…"
+                    placeholder={L.lyricsPlaceholder}
                   />
                 </div>
               </div>
@@ -897,17 +895,17 @@ export default function TrackEditPage() {
           <div className="flex items-center justify-between">
             <Button variant="outline" onClick={() => setLocation(`/releases/${releaseId}`)}>
               <ArrowLeft className="h-4 w-4 mr-1.5" />
-              Back
+              {L.back}
             </Button>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={save} disabled={isBusy}>
                 {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-                Save
+                {L.save}
               </Button>
               {nextTrack && (
                 <Button onClick={saveAndGoNext} disabled={isBusy}>
                   {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-                  Save & Next track
+                  {L.saveAndNext}
                 </Button>
               )}
             </div>

@@ -65,7 +65,7 @@ export function TrackCard({
       set("isrc", code);
       if (warning) toast({ title: "ISRC", description: warning });
     } catch (e: any) {
-      toast({ title: "Ошибка", description: e?.message ?? "", variant: "destructive" });
+      toast({ title: t.trackEdit.errorToast, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setIsrcBusy(false);
     }

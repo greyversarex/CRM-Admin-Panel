@@ -86,12 +86,12 @@ export function MultiArtistPicker({
               <SelectTrigger className="bg-background/40 w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ARTIST_ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  <SelectItem key={r.value} value={r.value}>{t.releaseWizard.artistRoles[r.value as keyof typeof t.releaseWizard.artistRoles] ?? r.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {isLocked ? (
-              <span className="h-8 w-8 flex items-center justify-center text-muted-foreground/40 shrink-0" title="Это ваш артист — нельзя убрать">
+              <span className="h-8 w-8 flex items-center justify-center text-muted-foreground/40 shrink-0" title={t.releaseWizard.lockedArtist}>
                 <Lock className="h-3.5 w-3.5" />
               </span>
             ) : (

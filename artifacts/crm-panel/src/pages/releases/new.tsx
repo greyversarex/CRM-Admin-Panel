@@ -606,7 +606,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
                                 <span
                                   role="button"
                                   tabIndex={-1}
-                                  aria-label={`Убрать ${a.name}`}
+                                  aria-label={`${t.common.delete} ${a.name}`}
                                   onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   onClick={(e) => {
                                     e.preventDefault();
