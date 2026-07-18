@@ -36,7 +36,6 @@ const HUB_CARDS: LinkCard[] = [
   { href: "/catalog/duplicates",   title: "Дубликаты",   description: "Поиск дублей по имени, ISRC, UPC, sha256",          icon: Files,       color: "text-rose-400" },
   { href: "/catalog/codes",        title: "Генератор кодов", description: "Получить новый ISRC или UPC код",              icon: Hash,        color: "text-violet-400" },
   { href: "/catalog/bulk-edit",    title: "Массовое редактирование", description: "Применить изменения к множеству объектов сразу", icon: Layers,      color: "text-cyan-400" },
-  { href: "/releases?tab=tracks",  title: "Треки",       description: "Все треки в каталоге",                              icon: Music2,      color: "text-emerald-400" },
 ];
 
 type CatalogTab = "hub" | "releases" | "artists" | "labels" | "videos";
