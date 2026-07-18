@@ -355,6 +355,12 @@ async function findOrCreateLabel(tx: Tx, name: string): Promise<{ id: number; cr
   return { id: created.id, created: true, row: created };
 }
 
+/** Извлекает 4-значный год из строки pLine/cLine, например «© 2025 Tajik Music» → 2025. */
+function yearFromLine(s: string | null | undefined): number | null {
+  const m = s?.match(/\b(19|20)\d{2}\b/);
+  return m ? Number(m[0]) : null;
+}
+
 // Postgres unique-violation SQLSTATE. Drizzle wraps DB errors and pushes the
 // pg error onto `cause`, so we walk the cause chain to find the original code.
 function isUniqueViolation(e: any): boolean {
@@ -2254,7 +2260,9 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         subgenre: found.subgenre ?? undefined,
         isExplicit: releaseExplicit,
         pLine: found.pLine ?? undefined,
+        pLineYear: yearFromLine(found.pLine) ?? undefined,
         cLine: found.cLine ?? found.pLine ?? undefined,
+        cLineYear: yearFromLine(found.cLine ?? found.pLine) ?? undefined,
         statusNote: `Импортировано по UPC из ${sourceLabel}${itunesNote}`,
       }).returning();
       pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });

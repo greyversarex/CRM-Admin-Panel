@@ -32,6 +32,12 @@ import {
 import { and, eq, ilike, inArray } from "drizzle-orm";
 import { auditMutation } from "../lib/audit";
 
+/** Извлекает 4-значный год из строки pLine/cLine, например «© 2025 Tajik Music» → 2025. */
+function yearFromLine(s: string | null | undefined): number | null {
+  const m = s?.match(/\b(19|20)\d{2}\b/);
+  return m ? Number(m[0]) : null;
+}
+
 const router = Router();
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20 МБ — файлы держим в памяти для xlsx.
@@ -418,7 +424,9 @@ router.post("/catalog/metadata-import/commit", uploadSingle("file"), async (req,
             language: g.language ?? null,
             isExplicit: anyExplicit,
             pLine: g.pLine ?? null,
+            pLineYear: yearFromLine(g.pLine),
             cLine: g.cLine ?? null,
+            cLineYear: yearFromLine(g.cLine ?? g.pLine),
             // Перенос каталога → в Broma16 уйдёт isTransferRelease=true и сработает
             // запрет на генерацию новых UPC/ISRC.
             isTransfer: true,
