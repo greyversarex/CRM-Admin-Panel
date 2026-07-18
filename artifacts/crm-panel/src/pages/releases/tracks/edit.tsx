@@ -867,10 +867,18 @@ export default function TrackEditPage() {
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Back
             </Button>
-            <Button onClick={nextTrack ? saveAndGoNext : save} disabled={isBusy}>
-              {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-              {nextTrack ? "Save & Next track" : "Save"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={save} disabled={isBusy}>
+                {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+                Save
+              </Button>
+              {nextTrack && (
+                <Button onClick={saveAndGoNext} disabled={isBusy}>
+                  {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+                  Save & Next track
+                </Button>
+              )}
+            </div>
           </div>
 
         </div>
