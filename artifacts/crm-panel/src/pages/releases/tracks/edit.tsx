@@ -559,7 +559,7 @@ export default function TrackEditPage() {
             {/* Track Details */}
             <div className="space-y-4">
             <h3 className="text-lg font-semibold">Track Details</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4 items-end">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
                   Song Name <InfoTip text="The track title exactly as it should appear on DSPs. Don't include version info here — use the Version field." />
