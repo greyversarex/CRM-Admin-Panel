@@ -35,6 +35,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FailReturnDialog } from "@/components/fail-return-dialog";
+import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
+import { Broma16DistributionControl } from "@/components/broma16-push-card";
+import { Send } from "lucide-react";
 
 // ─── Типы ответа от /distribution/moderation/:id/details ───────────────
 
@@ -148,6 +151,8 @@ export function ModerationDetailDialog({
   const { toast } = useToast();
   const [note, setNote] = useState("");
   const [failReturnOpen, setFailReturnOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
+  const [takedownOpen, setTakedownOpen] = useState(false);
 
   const q = useQuery({
     queryKey: ["moderation-detail", releaseId],
@@ -208,7 +213,8 @@ export function ModerationDetailDialog({
               {/* ACR history + проверка на дубли (S3) */}
               <AcrCard acr={q.data.acr} releaseId={releaseId} />
 
-              {/* Comment */}
+              {/* Comment — нужен только когда релиз ждёт решения модератора */}
+              {q.data.release.status === "pending_review" && (
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">
                   Комментарий (попадёт в releases.status_note и в email-уведомление)
@@ -225,9 +231,39 @@ export function ModerationDetailDialog({
                   </p>
                 )}
               </div>
+              )}
             </div>
 
-            {/* Footer actions */}
+            {/* Footer actions.
+                pending_review — решение модератора (More actions + Одобрить).
+                Одобрен и дальше — пост-модерационные действия: Дистрибуция
+                (Broma16), Deliver to DSPs, Take Down. Кнопка «Одобрить релиз»
+                для уже одобренного релиза не показывается. */}
+            {q.data.release.status !== "pending_review" ? (
+              <div className="border-t bg-muted/30 px-6 py-4 flex items-center gap-2 flex-wrap sticky bottom-0">
+                <Broma16DistributionControl releaseId={releaseId} releaseStatus={q.data.release.status} />
+                {["approved", "delivering", "delivered", "live"].includes(q.data.release.status) && (
+                  <Button
+                    variant="outline"
+                    className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+                    onClick={() => setDeliverOpen(true)}
+                    data-testid="button-deliver"
+                  >
+                    <Send className="mr-2 h-4 w-4" /> Deliver to DSPs
+                  </Button>
+                )}
+                {["approved", "delivering", "delivered", "live"].includes(q.data.release.status) && (
+                  <Button
+                    variant="outline"
+                    className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
+                    onClick={() => setTakedownOpen(true)}
+                    data-testid="button-takedown"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Take Down
+                  </Button>
+                )}
+              </div>
+            ) : (
             <div className="border-t bg-muted/30 px-6 py-4 flex items-center justify-between gap-2 sticky bottom-0">
               {/* More Actions dropdown (left) */}
               <DropdownMenu>
@@ -281,6 +317,33 @@ export function ModerationDetailDialog({
                 Одобрить релиз
               </Button>
             </div>
+            )}
+
+            {/* Deliver to DSPs / Take Down dialogs (для одобренного релиза) */}
+            {deliverOpen && (
+              <Dialog open onOpenChange={(o) => !o && setDeliverOpen(false)}>
+                <DeliverDialog
+                  releaseId={releaseId}
+                  onClose={() => {
+                    setDeliverOpen(false);
+                    qc.invalidateQueries({ queryKey: ["moderation"] });
+                    qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
+                  }}
+                />
+              </Dialog>
+            )}
+            {takedownOpen && (
+              <Dialog open onOpenChange={(o) => !o && setTakedownOpen(false)}>
+                <TakeDownDialog
+                  releaseId={releaseId}
+                  onClose={() => {
+                    setTakedownOpen(false);
+                    qc.invalidateQueries({ queryKey: ["moderation"] });
+                    qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
+                  }}
+                />
+              </Dialog>
+            )}
 
             {/* Fail & Return structured dialog */}
             <FailReturnDialog
