@@ -10,4 +10,5 @@ import type { DspSearchResult } from "./dspSearchResult";
 export interface ArtistDspSearchResponse {
   spotify: DspSearchResult;
   apple: DspSearchResult;
+  deezer: DspSearchResult;
 }

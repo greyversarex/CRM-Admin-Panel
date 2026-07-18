@@ -90,12 +90,13 @@ export default function CreateRelease() {
   const [dspQuery, setDspQuery] = useState("");
   const [spotifySel, setSpotifySel] = useState<string>("none");
   const [appleSel, setAppleSel] = useState<string>("none");
+  const [deezerSel, setDeezerSel] = useState<string>("none");
   useEffect(() => {
     const id = setTimeout(() => setDspQuery(quickArtistName.trim()), 450);
     return () => clearTimeout(id);
   }, [quickArtistName]);
   // Сбрасываем выбор при смене запроса — старые кандидаты уже неактуальны.
-  useEffect(() => { setSpotifySel("none"); setAppleSel("none"); }, [dspQuery]);
+  useEffect(() => { setSpotifySel("none"); setAppleSel("none"); setDeezerSel("none"); }, [dspQuery]);
   const dspSearch = useSearchArtistDspProfiles(
     { name: dspQuery },
     { query: { enabled: addArtistDialogOpen && dspQuery.length >= 2, staleTime: 60_000 } as any },
@@ -109,7 +110,7 @@ export default function CreateRelease() {
   const [quickOutlets, setQuickOutlets] = useState<Array<{ outletId: number; outletName: string; idOutletUser: string }>>([]);
   const outletOptionsQ = useQuery({
     queryKey: ["broma16-outlet-options"],
-    enabled: addArtistDialogOpen && quickStep === 2,
+    enabled: addArtistDialogOpen,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const r = await fetch("/api/artists/meta/outlets", { credentials: "include" });
@@ -119,8 +120,54 @@ export default function CreateRelease() {
   });
   const outletOptions = outletOptionsQ.data?.items ?? [];
   function resetQuickDialog() {
-    setQuickArtistName(""); setDspQuery(""); setSpotifySel("none"); setAppleSel("none");
-    setQuickStep(1); setQuickIpi(""); setQuickIpn(""); setQuickIsni(""); setQuickOutlets([]);
+    setQuickArtistName(""); setDspQuery(""); setSpotifySel("none"); setAppleSel("none"); setDeezerSel("none");
+    setQuickStep(1); setQuickIpi(""); setQuickIpn(""); setQuickIsni(""); setQuickOutlets([]); setOutletUrl("");
+  }
+
+  // ── Вставка ссылки на профиль (VK / Яндекс / Звук / YouTube и др.) ──
+  // Официальных API у VK/Яндекс/Звук нет, поэтому ID берём из вставленного URL
+  // и кладём в общий список outlets (Broma16 доставит на все площадки).
+  const [outletUrl, setOutletUrl] = useState("");
+  function parseArtistUrl(raw: string): { outletId: number; outletName: string; idOutletUser: string } | null {
+    let u: URL;
+    try { u = new URL(raw.trim()); } catch { return null; }
+    const host = u.hostname.replace(/^www\./, "");
+    const path = u.pathname;
+    // Каждое правило: как узнать площадку по хосту, как вытащить ID из пути,
+    // и как найти соответствующий outlet в словаре Broma16 по названию.
+    const rules: Array<{ host: RegExp; id: RegExp; dict: RegExp }> = [
+      { host: /(^|\.)music\.yandex\./, id: /\/artist\/(\d+)/,                 dict: /yandex/i },
+      { host: /(^|\.)vk\.(com|ru)$/,   id: /\/artist\/([^/?#]+)/,             dict: /vk music/i },
+      { host: /(^|\.)zvuk\.com$/,      id: /\/artist\/(\d+)/,                 dict: /^zvuk/i },
+      { host: /(^|\.)youtube\.com$/,   id: /\/(?:channel\/(UC[\w-]+)|(@[\w.-]+))/, dict: /^youtube(?!.*content)/i },
+      { host: /(^|\.)open\.spotify\.com$/, id: /\/artist\/([A-Za-z0-9]+)/,    dict: /^spotify/i },
+      { host: /(^|\.)deezer\.com$/,    id: /\/artist\/(\d+)/,                 dict: /^deezer/i },
+      { host: /(^|\.)music\.apple\.com$/, id: /\/artist\/(?:[^/]+\/)?(\d+)/,  dict: /apple music/i },
+    ];
+    for (const rule of rules) {
+      if (!rule.host.test(host)) continue;
+      const m = path.match(rule.id);
+      const id = m?.[1] ?? m?.[2];
+      if (!id) return null;
+      const opt = outletOptions.find((o) => rule.dict.test(o.name));
+      if (!opt) return null;
+      return { outletId: Number(opt.externalId), outletName: opt.name, idOutletUser: id };
+    }
+    return null;
+  }
+  function handleAddOutletFromUrl() {
+    const parsed = parseArtistUrl(outletUrl);
+    if (!parsed) {
+      toast({ title: L.dspUrlParseFailed, variant: "destructive" });
+      return;
+    }
+    setQuickOutlets((p) => {
+      // Не плодим дубликаты одной площадки — заменяем ID.
+      const i = p.findIndex((r) => r.outletId === parsed.outletId);
+      if (i >= 0) return p.map((r, idx) => idx === i ? parsed : r);
+      return [...p, parsed];
+    });
+    setOutletUrl("");
   }
 
   // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
@@ -212,7 +259,17 @@ export default function CreateRelease() {
       // Выбранные профили на площадках (если «не найден» — null, площадка создаст новый).
       const spotifyPick = spotifySel !== "none" ? spotifySel : null;
       const applePick = appleSel !== "none" ? appleSel : null;
+      const deezerPick = deezerSel !== "none" ? deezerSel : null;
       const spotifyCand = dspSearch.data?.spotify.results.find((c) => c.id === spotifyPick);
+      // Deezer нет среди legacy-колонок — кладём его в общий список outlets
+      // (Broma16 сам доставит), если словарь площадок доступен.
+      const outlets = [...quickOutlets];
+      if (deezerPick) {
+        const deezerOpt = outletOptions.find((o) => /^deezer/i.test(o.name));
+        if (deezerOpt && !outlets.some((o) => o.outletId === Number(deezerOpt.externalId))) {
+          outlets.push({ outletId: Number(deezerOpt.externalId), outletName: deezerOpt.name, idOutletUser: deezerPick });
+        }
+      }
       const created = await createArtistMut.mutateAsync({
         data: {
           name,
@@ -225,7 +282,7 @@ export default function CreateRelease() {
           ipiNameNumber: quickIpi.trim() || null,
           ipn: quickIpn.trim() || null,
           isni: quickIsni.trim() || null,
-          broma16Outlets: quickOutlets
+          broma16Outlets: outlets
             .filter((o) => o.outletId > 0 && o.idOutletUser.trim() !== "")
             .map((o) => ({ outletId: o.outletId, outletName: o.outletName, idOutletUser: o.idOutletUser.trim() })),
         },
@@ -776,9 +833,10 @@ export default function CreateRelease() {
               <div className="space-y-2">
                 <p className="text-[11px] text-muted-foreground leading-snug">{L.dspHint}</p>
                 <Tabs defaultValue="spotify">
-                  <TabsList className="grid w-full grid-cols-2 h-8">
+                  <TabsList className="grid w-full grid-cols-3 h-8">
                     <TabsTrigger value="spotify" className="text-xs">Spotify</TabsTrigger>
                     <TabsTrigger value="apple" className="text-xs">Apple Music</TabsTrigger>
+                    <TabsTrigger value="deezer" className="text-xs">Deezer</TabsTrigger>
                   </TabsList>
                   {dspSearch.isLoading ? (
                     <div className="flex items-center gap-2 py-4 justify-center text-sm text-muted-foreground">
@@ -801,6 +859,15 @@ export default function CreateRelease() {
                           result={dspSearch.data?.apple}
                           selected={appleSel}
                           onSelect={setAppleSel}
+                          L={L}
+                        />
+                      </TabsContent>
+                      <TabsContent value="deezer" className="mt-2">
+                        <DspCandidateList
+                          platform="Deezer"
+                          result={dspSearch.data?.deezer}
+                          selected={deezerSel}
+                          onSelect={setDeezerSel}
                           L={L}
                         />
                       </TabsContent>
@@ -836,6 +903,27 @@ export default function CreateRelease() {
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{L.dspOutletsTitle}</p>
               <p className="text-[11px] text-muted-foreground leading-snug">{L.dspOutletsHint}</p>
+
+              {/* Вставка ссылки на профиль — ID достаём из URL автоматически */}
+              <div className="flex items-center gap-2">
+                <Input
+                  className="flex-1"
+                  value={outletUrl}
+                  onChange={(e) => setOutletUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && outletUrl.trim()) { e.preventDefault(); handleAddOutletFromUrl(); } }}
+                  placeholder={L.dspUrlPastePh}
+                  disabled={outletOptions.length === 0}
+                />
+                <Button
+                  type="button" variant="secondary" size="sm" className="shrink-0"
+                  disabled={!outletUrl.trim() || outletOptions.length === 0}
+                  onClick={handleAddOutletFromUrl}
+                >
+                  {L.dspUrlAdd}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-snug">{L.dspUrlPasteHint}</p>
+
               {quickOutlets.map((row, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <Select

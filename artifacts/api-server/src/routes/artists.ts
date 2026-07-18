@@ -14,7 +14,7 @@ import { logger } from "../lib/logger";
 import { createNotification } from "../services/notifications";
 import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage";
 import { getDictionary } from "../services/broma16/dictionaries";
-import { searchSpotifyArtists, searchAppleArtists, type DspSearchResult } from "../services/artist-dsp-search";
+import { searchSpotifyArtists, searchAppleArtists, searchDeezerArtists, type DspSearchResult } from "../services/artist-dsp-search";
 import { loadSpotifyConfig, getSpotifyToken } from "./releases";
 
 const router = Router();
@@ -221,8 +221,8 @@ router.get("/artists/dsp-search", requireRole("admin", "manager", "label"), asyn
       return { status: e?.message === "spotify_not_configured" ? "not_configured" : "error", results: [] };
     }
   })();
-  const [spotify, apple] = await Promise.all([spotifyPromise, searchAppleArtists(name)]);
-  res.json({ spotify, apple });
+  const [spotify, apple, deezer] = await Promise.all([spotifyPromise, searchAppleArtists(name), searchDeezerArtists(name)]);
+  res.json({ spotify, apple, deezer });
 });
 
 router.get("/artists/:id", async (req, res): Promise<void> => {

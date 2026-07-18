@@ -2281,7 +2281,9 @@ components:
           $ref: "#/components/schemas/DspSearchResult"
         apple:
           $ref: "#/components/schemas/DspSearchResult"
-      required: [spotify, apple]
+        deezer:
+          $ref: "#/components/schemas/DspSearchResult"
+      required: [spotify, apple, deezer]
 
     CreateArtistBody:
       type: object

@@ -469,6 +469,7 @@ export interface DspSearchResult {
 export interface ArtistDspSearchResponse {
   spotify: DspSearchResult;
   apple: DspSearchResult;
+  deezer: DspSearchResult;
 }
 
 export type CreateArtistBodySocialLinks = { [key: string]: unknown } | null;
