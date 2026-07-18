@@ -429,9 +429,6 @@ export default function Login() {
             className="h-13 w-auto object-contain mb-2 drop-shadow-[0_0_24px_hsla(226,84%,67%,0.35)]"
             style={{ filter: "drop-shadow(0 0 20px hsla(226,84%,67%,0.4))" }}
           />
-          <p className="text-[11px] text-white/40 uppercase tracking-[0.2em] font-semibold">
-            Distribution CRM
-          </p>
         </div>
 
         {/* Card */}
@@ -537,9 +534,6 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-white/25 mt-5">
-          Tajik Music Distribution · PA-DPIDA-2024053004-T
-        </p>
       </div>
     </div>
   );
