@@ -29,6 +29,10 @@ RUN pnpm --filter @workspace/api-server run build \
 
 # ── Stage 3: runtime (минимальный образ для API) ───────────
 FROM node:20-bookworm-slim AS runtime
+# ffmpeg/ffprobe нужны для Audio QC (анализ аудиофайлов)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 ENV NODE_ENV=production

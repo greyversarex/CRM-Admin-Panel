@@ -10,7 +10,7 @@ echo "▶ Обновляем пакеты..."
 apt-get update -y && apt-get upgrade -y
 
 echo "▶ Устанавливаем базовые утилиты..."
-apt-get install -y curl wget git unzip ufw build-essential
+apt-get install -y curl wget git unzip ufw build-essential ffmpeg
 
 # ── Node.js 20 LTS ──────────────────────────────────────
 echo "▶ Устанавливаем Node.js 20 LTS..."

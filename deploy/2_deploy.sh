@@ -46,6 +46,12 @@ set +a
 : "${LOCAL_STORAGE_ROOT:=/var/lib/tajikmusic/uploads}"
 export PORT LOCAL_STORAGE_ROOT
 
+# ── ffmpeg нужен для Audio QC (анализ аудиофайлов) ──────
+if ! command -v ffprobe >/dev/null 2>&1; then
+  echo "▶ Устанавливаем ffmpeg (нужен для Audio QC)..."
+  apt-get update -y && apt-get install -y --no-install-recommends ffmpeg
+fi
+
 echo "▶ Создаём папки..."
 mkdir -p /var/log/tajikmusic
 mkdir -p "$LOCAL_STORAGE_ROOT"

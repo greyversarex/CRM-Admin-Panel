@@ -1,3 +1,4 @@
+- [VPS production deploy](vps-production-deploy.md) — prod is Timeweb VPS via deploy/*.sh (pm2), not Replit deploy; system binaries (ffmpeg…) must go in setup+deploy scripts AND Dockerfile.
 - [Release update clobber](release-update-clobber.md) — PUT /releases/:id set(parsed.data) resets zod-defaulted bools; partial updates must resend all defaulted fields.
 - [Track nullable enum fields](track-nullable-enum-fields.md) — explicit_status/ai_usage/audio_style must stay NULL until chosen; defaults lived in 3 layers (OpenAPI Zod, DB NOT NULL+DEFAULT, several frontend create paths) — check all.
 - [Stereo audio upload validation](audio-upload-validation.md) — /assets/confirm stereo checks gated on audioProfile; keep audio MIME gate lenient (accept empty/octet-stream).
