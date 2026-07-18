@@ -20,22 +20,8 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-// Verifies a release row is visible to the current session user. Fail-closed
-// when the session user has no linked artist/label record.
-// Для лейбла релиз «свой», если он привязан к лейблу напрямую (labelId) ИЛИ
-// принадлежит артисту этого лейбла — лейбл может выпускать релиз под чужим
-// импринтом (labelId другого лейбла), не теряя к нему доступ.
-async function releaseInScope(scope: ReturnType<typeof getDataScope>, r: { artistId: number; labelId: number | null }): Promise<boolean> {
-  if (scope.fullAccess) return true;
-  if (scope.role === "artist") return scope.artistId != null && r.artistId === scope.artistId;
-  if (scope.role === "label") {
-    if (scope.labelId == null) return false;
-    if (r.labelId === scope.labelId) return true;
-    const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, r.artistId));
-    return a?.labelId === scope.labelId;
-  }
-  return false;
-}
+// Единая проверка видимости релиза — см. lib/release-scope (OR-семантика для лейбла).
+import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -180,12 +166,7 @@ router.get("/releases", async (req, res): Promise<void> => {
   // Scope-условие лейбла: релиз виден, если привязан к лейблу напрямую ИЛИ
   // принадлежит артисту лейбла (лейбл может выпускать под чужим импринтом).
   if (!scope.fullAccess && scope.role === "label" && scope.labelId != null) {
-    const ownArtistIds = (
-      await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId))
-    ).map((r) => r.id);
-    const scopeParts: any[] = [eq(releasesTable.labelId, scope.labelId)];
-    if (ownArtistIds.length > 0) scopeParts.push(inArray(releasesTable.artistId, ownArtistIds));
-    conditions.push(or(...scopeParts));
+    conditions.push(await labelReleaseScopeCondition(scope.labelId));
   }
   if (status) {
     const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
@@ -251,12 +232,7 @@ router.get("/releases/counts", async (req, res): Promise<void> => {
         return;
       }
       // Прямой labelId ИЛИ релизы артистов лейбла (свой релиз под чужим импринтом).
-      const ownArtistIds = (
-        await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.labelId, scope.labelId))
-      ).map((r) => r.id);
-      const scopeParts: any[] = [eq(releasesTable.labelId, scope.labelId)];
-      if (ownArtistIds.length > 0) scopeParts.push(inArray(releasesTable.artistId, ownArtistIds));
-      where = or(...scopeParts);
+      where = await labelReleaseScopeCondition(scope.labelId);
     }
   }
 

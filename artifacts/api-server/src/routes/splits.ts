@@ -3,6 +3,7 @@ import { db, splitsTable, releasesTable, tracksTable } from "@workspace/db";
 import { count, eq, desc, and, sql, inArray } from "drizzle-orm";
 import { CreateSplitBody, UpdateSplitBody, GetSplitParams, UpdateSplitParams, DeleteSplitParams } from "@workspace/api-zod";
 import { requireAuth, getDataScope } from "../lib/auth";
+import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { notifyAdmins } from "../services/notifications";
 import { releaseEditableReason } from "./releases";
@@ -49,9 +50,9 @@ async function canMutateReleaseSplits(
     .from(releasesTable)
     .where(eq(releasesTable.id, releaseId));
   if (!release) return false;
-  if (scope.artistId && release.artistId === scope.artistId) return true;
-  if (scope.labelId && release.labelId === scope.labelId) return true;
-  return false;
+  // OR-семантика для лейбла (прямой labelId или артист лейбла) — релизы под
+  // чужим импринтом остаются управляемыми своим лейблом.
+  return releaseInScope(scope, release);
 }
 
 /**
@@ -104,7 +105,7 @@ async function scopedReleaseIds(scope: ReturnType<typeof getDataScope>): Promise
     return rows.map(r => r.id);
   }
   if (scope.labelId) {
-    const rows = await db.select({ id: releasesTable.id }).from(releasesTable).where(eq(releasesTable.labelId, scope.labelId));
+    const rows = await db.select({ id: releasesTable.id }).from(releasesTable).where(await labelReleaseScopeCondition(scope.labelId));
     return rows.map(r => r.id);
   }
   return [];

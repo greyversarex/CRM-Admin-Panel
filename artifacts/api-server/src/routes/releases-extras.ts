@@ -11,6 +11,7 @@ import {
   UpdateReleaseArtistsBody, UpdateReleaseDspsBody,
 } from "@workspace/api-zod";
 import { getDataScope } from "../lib/auth";
+import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
 import { getDictionary } from "../services/broma16/dictionaries";
@@ -24,10 +25,7 @@ async function loadReleaseInScope(req: any, idRaw: unknown): Promise<{ status: n
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
   if (!release) return { status: 404 };
   const scope = getDataScope(req);
-  if (!scope.fullAccess) {
-    if (scope.role === "artist" && release.artistId !== scope.artistId) return { status: 403 };
-    if (scope.role === "label"  && release.labelId  !== scope.labelId)  return { status: 403 };
-  }
+  if (!(await releaseInScope(scope, release))) return { status: 403 };
   return { status: 200, release };
 }
 

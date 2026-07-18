@@ -3,6 +3,7 @@ import { db, tracksTable, artistsTable, releasesTable } from "@workspace/db";
 import { count, eq, desc, and, inArray, ne } from "drizzle-orm";
 import { CreateTrackBody, UpdateTrackBody, GetTrackParams, UpdateTrackParams, DeleteTrackParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
+import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -161,8 +162,7 @@ router.post("/tracks", async (req, res): Promise<void> => {
       res.status(403).json({ error: "Release does not belong to artist" }); return;
     }
     if (!scope.fullAccess) {
-      if (scope.role === "artist" && rel.artistId !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
-      if (scope.role === "label"  && rel.labelId  !== scope.labelId)  { res.status(403).json({ error: "Forbidden" }); return; }
+      if (!(await releaseInScope(scope, rel))) { res.status(403).json({ error: "Forbidden" }); return; }
       // Релиз в закрытом статусе — добавлять треки нельзя.
       const lockReason = releaseEditableReason(scope, rel.status);
       if (lockReason) { res.status(409).json({ error: lockReason }); return; }

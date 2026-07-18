@@ -6,6 +6,7 @@ import {
 import { eq, and, ilike, ne, or, inArray, asc, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { getDataScope } from "../lib/auth";
+import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
 
@@ -101,10 +102,7 @@ router.post("/releases/:id/tracks/reorder", async (req, res): Promise<void> => {
   if (!release) { res.status(404).json({ error: "Release not found" }); return; }
   const scope = getDataScope(req);
   if (!scope.fullAccess) {
-    if (scope.role === "artist" && release.artistId !== scope.artistId) {
-      res.status(403).json({ error: "Forbidden" }); return;
-    }
-    if (scope.role === "label" && release.labelId !== scope.labelId) {
+    if (!(await releaseInScope(scope, release))) {
       res.status(403).json({ error: "Forbidden" }); return;
     }
     const lock = releaseEditableReason(scope, release.status);
@@ -152,10 +150,7 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
   if (!release) { res.status(404).json({ error: "Release not found" }); return; }
   const scope = getDataScope(req);
   if (!scope.fullAccess) {
-    if (scope.role === "artist" && release.artistId !== scope.artistId) {
-      res.status(403).json({ error: "Forbidden" }); return;
-    }
-    if (scope.role === "label" && release.labelId !== scope.labelId) {
+    if (!(await releaseInScope(scope, release))) {
       res.status(403).json({ error: "Forbidden" }); return;
     }
   }
