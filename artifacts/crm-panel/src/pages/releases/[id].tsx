@@ -408,13 +408,19 @@ export default function ReleaseDetail() {
             )}
             {release.status === "pending_review" && (
               <>
-                <Button
-                  size="sm" variant="outline"
-                  className="bg-card border-amber-500/30 text-amber-300 hover:bg-amber-500/10 h-8 text-xs"
-                  onClick={() => setCancelSubmitOpen(true)}
-                >
-                  <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel Submission
-                </Button>
+                {release.canCancelSubmit ? (
+                  <Button
+                    size="sm" variant="outline"
+                    className="bg-card border-amber-500/30 text-amber-300 hover:bg-amber-500/10 h-8 text-xs"
+                    onClick={() => setCancelSubmitOpen(true)}
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancel Submission
+                  </Button>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground/60 italic px-1">
+                    Отзыв заявки недоступен — прошло более 30 мин
+                  </span>
+                )}
                 <Button
                   size="sm" variant="outline"
                   className="bg-card h-8 text-xs"

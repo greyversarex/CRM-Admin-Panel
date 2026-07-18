@@ -104,6 +104,9 @@ export const releasesTable = pgTable("releases", {
   /** Текст последней ошибки пуша в Broma16 (для UI «Повторить»). */
   broma16LastError: text("broma16_last_error"),
 
+  /** Когда релиз был отправлен на модерацию (POST /releases/:id/submit). NULL = ещё не отправлен. */
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

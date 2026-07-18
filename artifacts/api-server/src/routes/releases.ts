@@ -114,6 +114,10 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
   const dsps = dspRows.map((d) => d.code);
 
   const EDITABLE_STATUSES = new Set(["draft", "rejected"]);
+  const CANCEL_WINDOW_MS = 30 * 60 * 1000; // 30 минут
+  const submittedAt = r.submittedAt ?? null;
+  const cancelWindowExpired =
+    submittedAt != null && Date.now() - submittedAt.getTime() > CANCEL_WINDOW_MS;
   return {
     ...r,
     artistName,
@@ -123,6 +127,7 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
     dsps,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    submittedAt: submittedAt ? submittedAt.toISOString() : null,
     // ── Флаги единого источника истины (используются фронтендом) ──────────
     // Список допустимых переходов для PATCH /releases/:id/status.
     allowedTransitions: RELEASE_STATUS_TRANSITIONS[r.status] ?? [] as readonly string[],
@@ -132,6 +137,8 @@ async function enrichRelease(r: typeof releasesTable.$inferSelect) {
     canSubmit: EDITABLE_STATUSES.has(r.status),
     // Можно запустить отгрузку в DSP (POST /releases/:id/deliver).
     canDeliver: r.status === "approved",
+    // Отзыв заявки: доступен в течение 30 мин после submit (для admin/manager — всегда).
+    canCancelSubmit: r.status === "pending_review" && !cancelWindowExpired,
     // Risk-engine: composite оценка + список факторов.
     // Гарантируем явные значения (не undefined), даже если в БД старые строки.
     riskScore: r.riskScore ?? 0,
@@ -901,7 +908,7 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
   // Это защищает от гонки: два параллельных submit'а — один пройдёт, второй
   // получит 0 строк и 409. statusNote сбрасываем (старая причина отказа неактуальна).
   const updated = await db.update(releasesTable)
-    .set({ status: "pending_review", statusNote: null })
+    .set({ status: "pending_review", statusNote: null, submittedAt: new Date() })
     .where(and(
       eq(releasesTable.id, params.data.id),
       inArray(releasesTable.status, ["draft", "rejected"]),
@@ -984,11 +991,26 @@ router.post("/releases/:id/cancel-submission", async (req, res): Promise<void> =
     return;
   }
 
+  // 30-минутное окно: только admin/manager могут отозвать заявку позже.
+  const sessionUser = req.session?.user;
+  const isPrivileged = sessionUser?.role === "admin" || sessionUser?.role === "manager";
+  if (!isPrivileged && existing.submittedAt) {
+    const elapsedMs = Date.now() - existing.submittedAt.getTime();
+    const WINDOW_MS = 30 * 60 * 1000;
+    if (elapsedMs > WINDOW_MS) {
+      res.status(403).json({
+        error: "Отзыв заявки доступен только в течение 30 минут после отправки. Обратитесь к менеджеру.",
+        code: "CANCEL_WINDOW_EXPIRED",
+      });
+      return;
+    }
+  }
+
   // Атомарный условный UPDATE: применяется только если статус всё ещё
   // pending_review. Защита от гонки с решением модератора (approve/reject):
   // если модератор успел сменить статус — наш UPDATE вернёт 0 строк и 409.
   const updated = await db.update(releasesTable)
-    .set({ status: "draft", statusNote: null })
+    .set({ status: "draft", statusNote: null, submittedAt: null })
     .where(and(
       eq(releasesTable.id, params.data.id),
       eq(releasesTable.status, "pending_review"),
@@ -1006,7 +1028,6 @@ router.post("/releases/:id/cancel-submission", async (req, res): Promise<void> =
   void auditMutation(req, { action: "cancel_submit", entityType: "release", entityId: release.id, before: existing, after: release });
 
   // Уведомляем модераторов, что заявку отозвали — чтобы её убрали из очереди.
-  const sessionUser = req.session?.user;
   const byName = sessionUser?.name ?? sessionUser?.email ?? "владелец";
   void notifyAdmins({
     type: "release_submission_cancelled",

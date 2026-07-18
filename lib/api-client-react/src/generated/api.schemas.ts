@@ -254,6 +254,12 @@ UI должен показывать UPC поле как "Assigned on submission
   /** true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved).
    */
   canDeliver: boolean;
+  /** true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).
+Admin/manager могут отозвать всегда — проверяется на бэкенде.
+   */
+  canCancelSubmit: boolean;
+  /** ISO-строка момента отправки на модерацию. null если ещё не отправлен. */
+  submittedAt: string | null;
   /**
    * Композитная оценка риска отказа DSP (0..100). Рассчитывается risk-engine'ом
 на основе ACR-результатов, страйков лейбла, регионального жанра и т.п.
