@@ -654,32 +654,7 @@ export default function ReleaseDetail() {
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             {RV.terms}
           </p>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Broma16 (ROD): кнопка «Дистрибуция» (admin) + индикатор статуса
-                  (admin+manager). Сама отправка — в модалке внутри контрола. */}
-              {isModeratorRole && (
-                <Broma16DistributionControl releaseId={id} releaseStatus={release.status} />
-              )}
-              {user && (user.role === "admin" || user.role === "manager") && release.canDeliver && (
-                <Button
-                  variant="outline"
-                  className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
-                  onClick={() => setDeliverOpen(true)}
-                >
-                  <Send className="mr-2 h-4 w-4" /> {RV.deliverToDsps}
-                </Button>
-              )}
-              {release.allowedTransitions.includes("takedown_requested") && (
-                <Button
-                  variant="outline"
-                  className="bg-card border-rose-500/30 text-rose-300 hover:bg-rose-500/10"
-                  onClick={() => setTakedownOpen(true)}
-                >
-                  <XCircle className="mr-2 h-4 w-4" /> {RV.takeDown}
-                </Button>
-              )}
-            </div>
+          <div className="flex items-center justify-end gap-3 flex-wrap">
             {release.canSubmit && (
               <Button
                 className="bg-gradient-to-r from-primary to-violet-500 hover:opacity-95 px-6"
