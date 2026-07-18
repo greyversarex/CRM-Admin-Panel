@@ -36,7 +36,7 @@ export function DisplayArtistsEditor({
       onAdd={() => onChange([...value, { name: "", role: "primary" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.displayArtistsEmpty}
-      addLabel="Add Artist"
+      addLabel={t.releaseWizard.addArtistEntry}
       roleWidth="w-36"
       renderRow={(row, i) => (
         <>
@@ -48,7 +48,7 @@ export function DisplayArtistsEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackDisplayArtist["role"] })}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+              {DISPLAY_ARTIST_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{t.releaseWizard.artistRoles[r.value as keyof typeof t.releaseWizard.artistRoles] ?? r.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -72,7 +72,7 @@ export function WritersEditor({
       onAdd={() => onChange(splitWriterSharesEvenly([...value, { name: "", role: "songwriter", share: 0, caeIpi: null }]))}
       onRemove={(i) => onChange(splitWriterSharesEvenly(value.filter((_, idx) => idx !== i)))}
       empty={t.releaseWizard.writersEmpty}
-      addLabel="Add Artist"
+      addLabel={t.releaseWizard.addArtistEntry}
       roleWidth="w-36"
       renderRow={(row, i) => (
         <>
@@ -84,7 +84,7 @@ export function WritersEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v as TrackWriter["role"] })}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+              {WRITER_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{t.releaseWizard.writerRoles[r.value as keyof typeof t.releaseWizard.writerRoles] ?? r.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -108,7 +108,7 @@ export function PerformersEditor({
       onAdd={() => onChange([...value, { name: "", role: "vocals" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.performersEmpty}
-      addLabel="Add Artist"
+      addLabel={t.releaseWizard.addArtistEntry}
       roleWidth="w-44"
       renderRow={(row, i) => (
         <>
@@ -120,7 +120,7 @@ export function PerformersEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              {PERFORMER_ROLES.map((r) => <SelectItem key={r} value={r}>{t.releaseWizard.performerRoles[r as keyof typeof t.releaseWizard.performerRoles] ?? r}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -144,7 +144,7 @@ export function ProductionEditor({
       onAdd={() => onChange([...value, { name: "", role: "producer" }])}
       onRemove={(i) => onChange(value.filter((_, idx) => idx !== i))}
       empty={t.releaseWizard.productionEmpty}
-      addLabel="Add Artist"
+      addLabel={t.releaseWizard.addArtistEntry}
       roleWidth="w-48"
       renderRow={(row, i) => (
         <>
@@ -156,7 +156,7 @@ export function ProductionEditor({
           <Select value={row.role} onValueChange={(v) => update(i, { role: v })}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              {PRODUCTION_ROLES.map((r) => <SelectItem key={r} value={r}>{t.releaseWizard.productionRoles[r as keyof typeof t.releaseWizard.productionRoles] ?? r}</SelectItem>)}
             </SelectContent>
           </Select>
         </>
@@ -193,8 +193,8 @@ function Editor<T>({
 
       {/* Column headers aligned with grid columns below */}
       <div className="grid gap-2 px-0.5" style={{ gridTemplateColumns: "1fr 1fr 36px" }}>
-        <span className="text-xs text-muted-foreground/70">Artist Name</span>
-        <span className="text-xs text-muted-foreground/70">Role</span>
+        <span className="text-xs text-muted-foreground/70">{t.releaseWizard.artistName}</span>
+        <span className="text-xs text-muted-foreground/70">{t.releaseWizard.role}</span>
         <span />
       </div>
 
