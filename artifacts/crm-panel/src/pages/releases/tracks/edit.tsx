@@ -302,6 +302,38 @@ export default function TrackEditPage() {
       });
       return false;
     }
+    // Проверяем: если у участника есть имя, должна быть выбрана роль.
+    for (const w of f.writers.filter((w) => w.name.trim())) {
+      if (!w.role) {
+        toast({
+          title: "Не указана роль",
+          description: `Укажите роль для «${w.name}» в разделе Writers.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+    for (const p of f.performers.filter((p) => p.name.trim())) {
+      if (!p.role) {
+        toast({
+          title: "Не указана роль",
+          description: `Укажите роль для «${p.name}» в разделе Performers.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+    for (const p of f.production.filter((p) => p.name.trim())) {
+      if (!p.role) {
+        toast({
+          title: "Не указана роль",
+          description: `Укажите роль для «${p.name}» в разделе Production & Engineering.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
     const hasProducer =
       f.production.some((p) => /producer/i.test(p.role) && p.name.trim()) ||
       f.performers.some((p) => /producer/i.test(p.role) && p.name.trim());
