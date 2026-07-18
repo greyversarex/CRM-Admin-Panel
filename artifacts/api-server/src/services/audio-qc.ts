@@ -16,7 +16,6 @@ import { eq } from "drizzle-orm";
 import { resolveAssetLocalPath } from "../ddex/service";
 
 const PEAK_BUCKETS = 600;          // точек волнограммы для UI
-const ANALYZE_RATE = 8000;         // Гц: даунсэмпл для детекторов пауз/фейдов
 const SILENCE_DB = -50;            // порог тишины, dBFS (RMS окна)
 const SILENCE_MIN_SEC = 3;         // минимальная длительность «паузы» внутри трека
 const DEAD_AIR_MIN_SEC = 2;        // «мёртвый воздух» в конце
@@ -34,6 +33,78 @@ function run(cmd: string, args: string[], opts: { collectStdout?: boolean } = {}
     p.on("error", reject);
     p.on("close", (code) => resolve({ stdout: Buffer.concat(out), stderr: err, code: code ?? -1 }));
   });
+}
+
+/**
+ * Потоковый однопроходный анализ PCM: ffmpeg декодирует в mono f32le 44.1kHz,
+ * а мы обрабатываем чанки на лету, НЕ буферизуя весь трек в памяти
+ * (WAV 4 мин ≈ 44 МБ f32 — при параллельных анализах это критично).
+ * За один проход считаем: пики волнограммы, клиппинг, RMS-окна по 100 мс.
+ */
+async function streamAnalyzePcm(file: string, rate: number, expectedDurationSec: number): Promise<{
+  totalSamples: number;
+  peaks: number[];
+  clippedSamples: number;
+  clipStarts: number[];       // сэмпл-индексы начала событий клиппинга
+  winDb: number[];            // RMS каждого 100 мс окна, dBFS
+}> {
+  const expectedSamples = Math.max(1, Math.round(expectedDurationSec * rate));
+  const bucketSize = Math.max(1, Math.floor(expectedSamples / PEAK_BUCKETS));
+  const win = Math.floor(rate / 10);
+
+  const peaks: number[] = [];
+  const winDb: number[] = [];
+  let bucketMax = 0, bucketFill = 0;
+  let winSum = 0, winFill = 0;
+  let clippedSamples = 0, runLen = 0;
+  const clipStarts: number[] = [];
+  let totalSamples = 0;
+  let carry: Buffer | null = null; // хвост чанка, не кратный 4 байтам
+
+  await new Promise<void>((resolve, reject) => {
+    const p = spawn("ffmpeg", ["-v", "error", "-i", file, "-map", "a:0", "-ac", "1", "-ar", String(rate), "-f", "f32le", "-"], { stdio: ["ignore", "pipe", "pipe"] });
+    let err = "";
+    p.stderr.on("data", (d: Buffer) => { err += d.toString(); if (err.length > 100_000) err = err.slice(-50_000); });
+    p.stdout.on("data", (chunk: Buffer) => {
+      let buf = carry ? Buffer.concat([carry, chunk]) : chunk;
+      const usable = buf.length - (buf.length % 4);
+      carry = usable < buf.length ? buf.subarray(usable) : null;
+      const n = usable / 4;
+      for (let i = 0; i < n; i++) {
+        const v = buf.readFloatLE(i * 4);
+        const av = Math.abs(v);
+        // пики
+        if (av > bucketMax) bucketMax = av;
+        if (++bucketFill >= bucketSize) { peaks.push(Number(bucketMax.toFixed(4))); bucketMax = 0; bucketFill = 0; }
+        // клиппинг
+        if (av >= CLIP_THRESHOLD) { runLen++; clippedSamples++; }
+        else {
+          if (runLen >= CLIP_RUN_MIN && clipStarts.length < 200) clipStarts.push(totalSamples - runLen);
+          runLen = 0;
+        }
+        // RMS-окна
+        winSum += v * v;
+        if (++winFill >= win) {
+          const rms = Math.sqrt(winSum / winFill);
+          winDb.push(rms > 0 ? 20 * Math.log10(rms) : -120);
+          winSum = 0; winFill = 0;
+        }
+        totalSamples++;
+      }
+    });
+    p.on("error", reject);
+    p.on("close", (code) => {
+      if (code !== 0) reject(new Error(`ffmpeg decode: ${err.slice(0, 300)}`));
+      else resolve();
+    });
+  });
+  if (runLen >= CLIP_RUN_MIN && clipStarts.length < 200) clipStarts.push(totalSamples - runLen);
+  if (winFill > 0) {
+    const rms = Math.sqrt(winSum / winFill);
+    winDb.push(rms > 0 ? 20 * Math.log10(rms) : -120);
+  }
+  if (bucketFill > 0) peaks.push(Number(bucketMax.toFixed(4)));
+  return { totalSamples, peaks: peaks.slice(0, PEAK_BUCKETS), clippedSamples, clipStarts, winDb };
 }
 
 type ProbeInfo = {
@@ -59,15 +130,6 @@ async function ffprobe(file: string): Promise<ProbeInfo> {
   };
 }
 
-/** Декодирует файл в mono f32le PCM указанной частоты. */
-async function decodePcm(file: string, rate: number): Promise<Float32Array> {
-  const { stdout, code, stderr } = await run("ffmpeg", [
-    "-v", "error", "-i", file, "-map", "a:0", "-ac", "1", "-ar", String(rate), "-f", "f32le", "-",
-  ]);
-  if (code !== 0) throw new Error(`ffmpeg decode: ${stderr.slice(0, 300)}`);
-  return new Float32Array(stdout.buffer, stdout.byteOffset, Math.floor(stdout.byteLength / 4));
-}
-
 /** Интегральная громкость + true peak через ebur128. */
 async function loudness(file: string): Promise<{ integratedLufs: number | null; truePeakDb: number | null }> {
   const { stderr } = await run("ffmpeg", ["-v", "info", "-nostats", "-i", file, "-map", "a:0", "-af", "ebur128=peak=true", "-f", "null", "-"], { collectStdout: false });
@@ -81,14 +143,6 @@ async function loudness(file: string): Promise<{ integratedLufs: number | null; 
   };
 }
 
-function rmsDb(pcm: Float32Array, from: number, to: number): number {
-  let sum = 0; let n = 0;
-  for (let i = Math.max(0, from); i < Math.min(pcm.length, to); i++) { sum += pcm[i] * pcm[i]; n++; }
-  if (n === 0) return -120;
-  const rms = Math.sqrt(sum / n);
-  return rms > 0 ? 20 * Math.log10(rms) : -120;
-}
-
 function fmtTime(sec: number): string {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
@@ -98,48 +152,24 @@ export type AudioQcAnalysis = Omit<AudioQcRow, "id" | "analyzedAt">;
 
 export async function analyzeAudioFile(trackId: number, objectPath: string, filePath: string): Promise<AudioQcAnalysis> {
   const probe = await ffprobe(filePath);
-  const [{ integratedLufs, truePeakDb }, pcmFull, pcmLow] = await Promise.all([
+  const rate = 44100; // фиксированная частота анализа (потоковый декод, память O(1))
+  const [{ integratedLufs, truePeakDb }, pcm] = await Promise.all([
     loudness(filePath),
-    decodePcm(filePath, probe.sampleRateHz ?? 44100), // полная частота — для клиппинга и пиков
-    decodePcm(filePath, ANALYZE_RATE),                // даунсэмпл — для пауз/фейдов
+    streamAnalyzePcm(filePath, rate, probe.durationSec ?? 300),
   ]);
-  const rate = probe.sampleRateHz ?? 44100;
-  const durationSec = probe.durationSec ?? pcmFull.length / rate;
+  const durationSec = probe.durationSec ?? pcm.totalSamples / rate;
 
-  // ── Пики волнограммы ──
-  const peaks: number[] = [];
-  const bucket = Math.max(1, Math.floor(pcmFull.length / PEAK_BUCKETS));
-  for (let b = 0; b < PEAK_BUCKETS && b * bucket < pcmFull.length; b++) {
-    let mx = 0;
-    const end = Math.min(pcmFull.length, (b + 1) * bucket);
-    for (let i = b * bucket; i < end; i++) { const v = Math.abs(pcmFull[i]); if (v > mx) mx = v; }
-    peaks.push(Number(mx.toFixed(4)));
-  }
+  // ── Пики волнограммы ── (посчитаны потоково)
+  const peaks = pcm.peaks;
 
   // ── Клиппинг ──
-  let clippedSamples = 0;
-  const clippingEvents: { startSec: number; peakDb: number | null }[] = [];
-  let runLen = 0;
-  for (let i = 0; i < pcmFull.length; i++) {
-    if (Math.abs(pcmFull[i]) >= CLIP_THRESHOLD) {
-      runLen++;
-      clippedSamples++;
-    } else {
-      if (runLen >= CLIP_RUN_MIN && clippingEvents.length < 20) {
-        clippingEvents.push({ startSec: Number(((i - runLen) / rate).toFixed(2)), peakDb: truePeakDb });
-      }
-      runLen = 0;
-    }
-  }
-  if (runLen >= CLIP_RUN_MIN && clippingEvents.length < 20) {
-    clippingEvents.push({ startSec: Number(((pcmFull.length - runLen) / rate).toFixed(2)), peakDb: truePeakDb });
-  }
-  const distortion = pcmFull.length > 0 && clippedSamples / pcmFull.length > DISTORTION_RATIO;
+  const clippedSamples = pcm.clippedSamples;
+  const clippingEvents: { startSec: number; peakDb: number | null }[] =
+    pcm.clipStarts.slice(0, 20).map((s) => ({ startSec: Number((s / rate).toFixed(2)), peakDb: truePeakDb }));
+  const distortion = pcm.totalSamples > 0 && clippedSamples / pcm.totalSamples > DISTORTION_RATIO;
 
-  // ── Тишина / мёртвый воздух (окна по 100 мс на даунсэмпле) ──
-  const win = Math.floor(ANALYZE_RATE / 10);
-  const winDb: number[] = [];
-  for (let i = 0; i + win <= pcmLow.length; i += win) winDb.push(rmsDb(pcmLow, i, i + win));
+  // ── Тишина / мёртвый воздух (окна по 100 мс, из того же потока) ──
+  const winDb = pcm.winDb;
   const silences: { startSec: number; endSec: number }[] = [];
   let silStart: number | null = null;
   for (let w = 0; w <= winDb.length; w++) {
@@ -161,11 +191,12 @@ export async function analyzeAudioFile(trackId: number, objectPath: string, file
   // Начальную тишину тоже не считаем «паузой» внутри трека.
   if (silences.length > 0 && silences[0].startSec < 0.3) silences.shift();
 
-  // ── Fade in / fade out ──
-  const overallDb = rmsDb(pcmLow, 0, pcmLow.length);
-  const musicEndSec = deadAir ? deadAir.startSec : durationSec;
-  const headDb = rmsDb(pcmLow, 0, Math.floor(0.7 * ANALYZE_RATE));
-  const tailDb = rmsDb(pcmLow, Math.floor((musicEndSec - 0.7) * ANALYZE_RATE), Math.floor(musicEndSec * ANALYZE_RATE));
+  // ── Fade in / fade out (по 100-мс RMS-окнам) ──
+  const meanDb = (arr: number[]): number => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : -120);
+  const overallDb = meanDb(winDb);
+  const musicEndWin = Math.max(1, Math.floor((deadAir ? deadAir.startSec : durationSec) * 10));
+  const headDb = meanDb(winDb.slice(0, 7));
+  const tailDb = meanDb(winDb.slice(Math.max(0, musicEndWin - 7), musicEndWin));
   const fadeIn = headDb < overallDb - 8;   // начало заметно тише среднего → плавный вход
   const fadeOut = tailDb < overallDb - 8;  // конец заметно тише среднего → есть затухание
 
@@ -240,16 +271,40 @@ export async function analyzeAudioFile(trackId: number, objectPath: string, file
  * Запускает анализ для трека (по его текущему audioUrl) и сохраняет результат.
  * Возвращает сохранённую строку или null, если у трека нет аудио/файл не найден.
  */
-export async function runAudioQcForTrack(trackId: number): Promise<AudioQcRow | null> {
+// Дедупликация: не гоняем два анализа одного трека одновременно
+// (ленивый GET + POST + fire-and-forget после загрузки могут совпасть).
+const inFlight = new Map<number, Promise<AudioQcRow | null>>();
+
+export function runAudioQcForTrack(trackId: number): Promise<AudioQcRow | null> {
+  const existing = inFlight.get(trackId);
+  if (existing) return existing;
+  const p = doRunAudioQc(trackId).finally(() => inFlight.delete(trackId));
+  inFlight.set(trackId, p);
+  return p;
+}
+
+async function doRunAudioQc(trackId: number): Promise<AudioQcRow | null> {
   const [track] = await db.select().from(tracksTable).where(eq(tracksTable.id, trackId));
   if (!track?.audioUrl) return null;
+  const objectPath = track.audioUrl;
 
   // Ассет может быть «пуловым» (track_id=null) — ищем по objectPath (см. memory).
-  const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.objectPath, track.audioUrl));
-  const filePath = resolveAssetLocalPath(track.audioUrl, asset?.storageKey ?? null);
+  const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.objectPath, objectPath));
+  // Anti-IDOR: если ассет принадлежит другому артисту/треку, НЕ анализируем чужой
+  // файл (audioUrl мог быть подставлен). Бесхозные ассеты (без владельца) — ок.
+  if (asset) {
+    const ownedByOtherTrack = asset.trackId != null && asset.trackId !== track.id;
+    const ownedByOtherArtist = asset.artistId != null && asset.artistId !== track.artistId;
+    if (ownedByOtherTrack || ownedByOtherArtist) return null;
+  }
+  const filePath = resolveAssetLocalPath(objectPath, asset?.storageKey ?? null);
   if (!filePath || !fs.existsSync(filePath)) return null;
 
-  const analysis = await analyzeAudioFile(trackId, track.audioUrl, filePath);
+  const analysis = await analyzeAudioFile(trackId, objectPath, filePath);
+  // Stale-wins guard: за время анализа аудиофайл трека мог смениться —
+  // не перезаписываем результат более нового файла устаревшим.
+  const [fresh] = await db.select({ audioUrl: tracksTable.audioUrl }).from(tracksTable).where(eq(tracksTable.id, trackId));
+  if (fresh?.audioUrl !== objectPath) return null;
   const [row] = await db.insert(audioQcTable)
     .values({ ...analysis, analyzedAt: new Date() })
     .onConflictDoUpdate({ target: audioQcTable.trackId, set: { ...analysis, analyzedAt: new Date() } })
