@@ -892,14 +892,14 @@ function EditDetailsForm({
         </FormField>
         <FormField label="℗ Год">
           <Input type="number" min={1900} max={2100} value={form.pLineYear ?? ""} placeholder={String(yearFromLine(form.pLine) ?? new Date().getFullYear())}
-            onChange={(e) => set("pLineYear", e.target.value ? Number(e.target.value) : null)} className="bg-background/40 font-mono" />
+            onChange={(e) => { const n = Number(e.target.value); set("pLineYear", e.target.value && Number.isFinite(n) ? n : null); }} className="bg-background/40 font-mono" />
         </FormField>
         <FormField label="© Строка">
           <Input value={form.cLine} onChange={(e) => set("cLine", e.target.value)} placeholder="2026 Tajik Music" className="bg-background/40" />
         </FormField>
         <FormField label="© Год">
           <Input type="number" min={1900} max={2100} value={form.cLineYear ?? ""} placeholder={String(yearFromLine(form.cLine) ?? new Date().getFullYear())}
-            onChange={(e) => set("cLineYear", e.target.value ? Number(e.target.value) : null)} className="bg-background/40 font-mono" />
+            onChange={(e) => { const n = Number(e.target.value); set("cLineYear", e.target.value && Number.isFinite(n) ? n : null); }} className="bg-background/40 font-mono" />
         </FormField>
       </div>
 
