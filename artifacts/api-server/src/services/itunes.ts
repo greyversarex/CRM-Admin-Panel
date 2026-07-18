@@ -125,8 +125,12 @@ export function parseItunesCopyright(copyright: string | undefined | null): {
   const hasC = cleaned.includes("©") || cleaned.toLowerCase().startsWith("c ");
   if (!hasP && !hasC) {
     // Маркеров нет — считаем pLine (для музыкальных релизов ℗ вероятнее),
-    // cLine не выдумываем.
-    return { pLine: cleaned, cLine: null };
+    // cLine берём ту же строку (один источник, разделить невозможно).
+    return { pLine: cleaned, cLine: cleaned };
+  }
+  if (hasP && !hasC) {
+    // Только ℗ — используем одну строку для обоих полей.
+    return { pLine: cleaned, cLine: cleaned };
   }
   return {
     pLine: hasP ? cleaned : null,
