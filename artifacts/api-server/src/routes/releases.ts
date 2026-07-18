@@ -457,6 +457,15 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
         }).returning();
         itemAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
 
+        // Заносим главного артиста в release_artists (как в import-upc),
+        // иначе MultiArtistPicker в мастере будет пустым.
+        await tx.insert(releaseArtistsTable).values({
+          releaseId: release.id,
+          artistId: artist.id,
+          role: "primary",
+          position: 0,
+        }).onConflictDoNothing();
+
         let trackRows: { title: string; releaseId: number; artistId: number; trackNumber: number; isrc?: string | null; isExplicit?: boolean }[];
         if (realTracks && realTracks.length > 0) {
           trackRows = realTracks.slice(0, 100).map((t, idx) => ({
