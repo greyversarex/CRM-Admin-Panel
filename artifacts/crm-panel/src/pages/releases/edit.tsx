@@ -1,22 +1,17 @@
 import { useParams } from "wouter";
-import { Layout } from "@/components/layout";
-import { ReleaseWizard } from "@/components/release-wizard/wizard";
+import CreateRelease from "@/pages/releases/new";
 
+// Редактирование релиза — та же страница, что и создание (/releases/new),
+// но с загруженными данными существующего релиза (editId).
 export default function EditRelease() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
   if (!Number.isFinite(id) || id <= 0) {
     return (
-      <Layout>
-        <div className="max-w-7xl mx-auto p-6 text-sm text-muted-foreground">
-          Неверный идентификатор релиза.
-        </div>
-      </Layout>
+      <div className="max-w-7xl mx-auto p-6 text-sm text-muted-foreground">
+        Неверный идентификатор релиза.
+      </div>
     );
   }
-  return (
-    <Layout>
-      <ReleaseWizard initialReleaseId={id} />
-    </Layout>
-  );
+  return <CreateRelease editId={id} />;
 }

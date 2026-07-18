@@ -3,8 +3,9 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useListArtists, useListLabels, useCreateRelease, useCreateArtist, useUpdateReleaseArtists,
+  useGetRelease, useGetReleaseArtists, useUpdateRelease,
   useSearchArtistDspProfiles,
-  getListReleasesQueryKey, getGetReleaseCountsQueryKey, getListArtistsQueryKey,
+  getListReleasesQueryKey, getGetReleaseCountsQueryKey, getListArtistsQueryKey, getGetReleaseQueryKey,
   type ReleaseArtistRef, type DspArtistCandidate,
 } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -54,7 +55,7 @@ type Translation = { language: string; title: string; version?: string };
 
 const RELEASE_TYPE_VALUES = ["single", "album", "ep", "compilation"] as const;
 
-export default function CreateRelease() {
+export default function CreateRelease({ editId = null }: { editId?: number | null } = {}) {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -233,6 +234,45 @@ export default function CreateRelease() {
   const primaryArtistId = pickerArtists.find(a => a.role === "primary")?.artistId ?? null;
 
   const createMut = useCreateRelease({} as never);
+  const updateMut = useUpdateRelease({} as never);
+
+  // ── Режим редактирования: подгружаем существующий релиз и гидрируем форму ──
+  const { data: editRelease } = useGetRelease(editId ?? 0, {
+    query: { enabled: editId != null && editId > 0 } as never,
+  });
+  const { data: editArtists } = useGetReleaseArtists(editId ?? 0, {
+    query: { enabled: editId != null && editId > 0 } as never,
+  });
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    if (editId == null || hydrated || !editRelease) return;
+    const r = editRelease as any;
+    setTitle(r.title ?? "");
+    setReleaseType((r.releaseType as typeof releaseType) ?? "single");
+    setReleaseVersion(r.releaseVersion ?? "");
+    setCoverUrl(r.coverUrl ?? "");
+    setCoverAiUsage((r.coverAiUsage as typeof coverAiUsage) ?? "");
+    setLanguage(r.language ?? "Tajik");
+    setLabelId(r.labelId ?? null);
+    setGenre(r.genre ?? "");
+    setSubgenre(r.subgenre ?? "");
+    setCatalogNumber(r.catalogNumber ?? "");
+    setCLine(r.cLine ?? "");
+    setCLineYear(r.cLineYear ?? CURRENT_YEAR);
+    setPLine(r.pLine ?? "");
+    setPLineYear(r.pLineYear ?? CURRENT_YEAR);
+    setIsCompilation(typeof r.isCompilation === "boolean" ? r.isCompilation : null);
+    setIsVariousArtists(!!r.isVariousArtists);
+    setTranslations(((r.metadataTranslations as Translation[] | null) ?? []).map(tr => ({
+      language: tr.language ?? "", title: tr.title ?? "", version: tr.version ?? "",
+    })));
+    setHydrated(true);
+  }, [editId, editRelease, hydrated]);
+  useEffect(() => {
+    if (editId == null || !editArtists) return;
+    // Гидрируем один раз (пока пользователь не менял список).
+    setReleaseArtists(prev => (prev.length > 0 ? prev : (editArtists as ReleaseArtistRef[])));
+  }, [editId, editArtists]);
 
   const canCreate =
     title.trim().length >= 1 &&
@@ -240,7 +280,7 @@ export default function CreateRelease() {
     coverAiUsage !== "" &&
     !!genre &&
     isCompilation !== null &&
-    !createMut.isPending;
+    !createMut.isPending && !updateMut.isPending;
 
   function addTranslation() {
     setTranslations(p => [...p, { language: "", title: "", version: "" }]);
@@ -316,29 +356,49 @@ export default function CreateRelease() {
       .filter(tr => tr.language.trim() && tr.title.trim())
       .map(tr => ({ language: tr.language.trim(), title: tr.title.trim(), version: tr.version?.trim() || null }));
 
+    const payload = {
+      title: title.trim(),
+      releaseType,
+      artistId: primaryArtistId,
+      labelId: labelId ?? undefined,
+      releaseVersion: releaseVersion.trim() || undefined,
+      coverUrl: coverUrl || undefined,
+      coverAiUsage: coverAiUsage || undefined,
+      language: language || undefined,
+      genre: genre || undefined,
+      subgenre: subgenre || undefined,
+      catalogNumber: catalogNumber.trim() || undefined,
+      cLine: cLine.trim() || undefined,
+      cLineYear: cLineYear === "" ? undefined : Number(cLineYear),
+      pLine: pLine.trim() || undefined,
+      pLineYear: pLineYear === "" ? undefined : Number(pLineYear),
+      isCompilation: isCompilation === true,
+      isVariousArtists,
+      metadataTranslations: cleanedTranslations,
+    };
+
     try {
+      if (editId != null) {
+        // ── Редактирование существующего релиза ──
+        // Артистов сохраняем ПЕРВЫМ (эндпоинт синхронизирует releases.artist_id
+        // с первым primary) — потом метаданные, чтобы не было частичного рассинхрона.
+        await updateArtistsMut.mutateAsync({
+          id: editId,
+          data: { artists: pickerArtists.map(a => ({ artistId: a.artistId, role: a.role })) },
+        } as never);
+        await updateMut.mutateAsync({ id: editId, data: payload } as never);
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getListReleasesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetReleaseCountsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetReleaseQueryKey(editId) }),
+        ]);
+        toast({ title: L.savedTitle, description: L.savedDesc });
+        setLocation(`/releases/${editId}`);
+        return;
+      }
+
       const rel = await createMut.mutateAsync({
-        data: {
-          title: title.trim(),
-          releaseType,
-          artistId: primaryArtistId,
-          labelId: labelId ?? undefined,
-          releaseVersion: releaseVersion.trim() || undefined,
-          coverUrl: coverUrl || undefined,
-          coverAiUsage: coverAiUsage || undefined,
-          language: language || undefined,
-          genre: genre || undefined,
-          subgenre: subgenre || undefined,
-          catalogNumber: catalogNumber.trim() || undefined,
-          cLine: cLine.trim() || undefined,
-          cLineYear: cLineYear === "" ? undefined : Number(cLineYear),
-          pLine: pLine.trim() || undefined,
-          pLineYear: pLineYear === "" ? undefined : Number(pLineYear),
-          isCompilation: isCompilation === true,
-          isVariousArtists,
-          upcRequestPending: true,
-          metadataTranslations: cleanedTranslations,
-        },
+        data: { ...payload, upcRequestPending: true },
       } as never) as any;
 
       // Если выбрано несколько артистов — сохраняем их
@@ -371,7 +431,7 @@ export default function CreateRelease() {
 
         {/* ── Page header ──────────────────────────────────────────────── */}
         <div className="mb-6">
-          <h1 className="text-3xl font-semibold">{L.title}</h1>
+          <h1 className="text-3xl font-semibold">{editId != null ? L.editTitle : L.title}</h1>
           <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
             {L.subtitle}
           </p>
@@ -798,11 +858,11 @@ export default function CreateRelease() {
 
           {/* ── Actions ──────────────────────────────────────────────────── */}
           <div className="flex items-center justify-between pt-2 pb-6">
-            <Button variant="outline" style={{ height: 36, boxShadow: "none" }} onClick={() => setLocation("/releases")}>
+            <Button variant="outline" style={{ height: 36, boxShadow: "none" }} onClick={() => setLocation(editId != null ? `/releases/${editId}` : "/releases")}>
               {L.cancel}
             </Button>
             <Button style={{ height: 36, boxShadow: "none" }} onClick={handleCreate} disabled={!canCreate} data-testid="button-create-release">
-              {createMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {(createMut.isPending || updateMut.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {L.save}
             </Button>
           </div>
