@@ -17,6 +17,7 @@ export async function adminApi<T>(path: string, init?: RequestInit): Promise<T> 
     } catch { /* keep status */ }
     throw new Error(m);
   }
+  if (r.status === 204 || r.headers.get("content-length") === "0") return undefined as T;
   return r.json() as Promise<T>;
 }
 
