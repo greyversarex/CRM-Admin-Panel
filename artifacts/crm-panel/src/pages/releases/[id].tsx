@@ -448,10 +448,10 @@ export default function ReleaseDetail() {
                 <Button
                   size="sm" variant="outline"
                   className={metaEditing ? "bg-primary/15 border-primary/40 text-primary" : "bg-card"}
-                  onClick={() => { if (release.status === "draft") setMetaEditing((v) => !v); else setEditOpen(true); }}
+                  onClick={() => setLocation(`/releases/${release.id}/edit`)}
                 >
                   <Edit3 className="h-3.5 w-3.5 mr-1" />
-                  {metaEditing ? "Done" : "Edit"}
+                  Edit
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" disabled className="bg-card opacity-60 cursor-not-allowed">
