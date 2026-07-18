@@ -41,6 +41,7 @@ export * from "./ugc_metrics";
 export * from "./realtime_alerts";
 export * from "./publishing_conflicts";
 export * from "./acr_checks";
+export * from "./audio_qc";
 export * from "./push_subscriptions";
 export * from "./takedowns";
 export * from "./presave_campaigns";

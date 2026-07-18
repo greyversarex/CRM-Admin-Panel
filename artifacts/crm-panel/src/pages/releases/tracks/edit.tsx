@@ -492,7 +492,7 @@ export default function TrackEditPage() {
 
             {/* Waveform player / status */}
             {f.audioUrl ? (
-              <WaveformPlayer objectPath={f.audioUrl} filename={audioFileName} />
+              <WaveformPlayer objectPath={f.audioUrl} filename={audioFileName} trackId={trackId} />
             ) : (
               <p className="text-sm text-muted-foreground/60">
                 <FileAudio className="inline h-3 w-3 mr-1" /> No audio file linked

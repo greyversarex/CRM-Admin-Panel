@@ -1328,7 +1328,7 @@ function TrackRow({
 
         {/* Waveform player / audio status */}
         {t.audioUrl ? (
-          <WaveformPlayer objectPath={t.audioUrl} filename={null} />
+          <WaveformPlayer objectPath={t.audioUrl} filename={null} trackId={t.id} />
         ) : (
           <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground/70">
             <span>No audio file linked</span>

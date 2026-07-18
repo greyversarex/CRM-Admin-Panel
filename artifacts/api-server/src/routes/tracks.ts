@@ -7,6 +7,7 @@ import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { queueAudioQc } from "../services/audio-qc";
 import OpenAI from "openai";
 import { createReadStream } from "node:fs";
 
@@ -298,6 +299,10 @@ router.put("/tracks/:id", async (req, res): Promise<void> => {
   }
 
   const [track] = await db.update(tracksTable).set(patch).where(eq(tracksTable.id, params.data.id)).returning();
+  // Смена аудиофайла → автоматический Audio QC (fire-and-forget).
+  if (typeof nextAudioUrl === "string" && nextAudioUrl && nextAudioUrl !== existing.audioUrl) {
+    queueAudioQc(track.id);
+  }
   if (!track) {
     res.status(404).json({ error: "Track not found" });
     return;

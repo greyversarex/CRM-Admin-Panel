@@ -13,6 +13,7 @@ import {
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getDataScope } from "../lib/auth";
 import { releaseEditableReason } from "./releases";
+import { queueAudioQc } from "../services/audio-qc";
 
 const router = Router();
 const storage = new ObjectStorageService();
@@ -401,6 +402,8 @@ async function maybeAttach(
     const patch: Partial<typeof tracksTable.$inferInsert> = { audioUrl: asset.objectPath };
     if (asset.durationSeconds != null) patch.durationSeconds = asset.durationSeconds;
     await db.update(tracksTable).set(patch).where(eq(tracksTable.id, trackId));
+    // Автоматический Audio QC после привязки нового аудио к треку (fire-and-forget).
+    queueAudioQc(trackId);
   }
 }
 
