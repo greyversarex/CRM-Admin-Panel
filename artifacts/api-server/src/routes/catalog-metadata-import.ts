@@ -27,6 +27,7 @@ import {
   labelsTable,
   deliveriesTable,
   metadataFieldAliasesTable,
+  releaseArtistsTable,
 } from "@workspace/db";
 import { and, eq, ilike, inArray } from "drizzle-orm";
 import { auditMutation } from "../lib/audit";
@@ -423,6 +424,14 @@ router.post("/catalog/metadata-import/commit", uploadSingle("file"), async (req,
             isTransfer: true,
             statusNote: `Массовый импорт каталога${source && source !== "auto" ? ` (${source})` : ""}`,
           }).returning();
+
+          // Заносим главного артиста в release_artists — без этого MultiArtistPicker пуст.
+          await tx.insert(releaseArtistsTable).values({
+            releaseId: release.id,
+            artistId,
+            role: "primary",
+            position: 0,
+          }).onConflictDoNothing();
 
           const trackRows = g.tracks.slice(0, 100).map((t, idx) => ({
             title: t.trackTitle || g.title || "Untitled",

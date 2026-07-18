@@ -475,6 +475,7 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
             trackNumber: t.trackNumber ?? idx + 1,
             isrc: t.isrc ?? null,
             isExplicit: t.explicit ?? false,
+            explicitStatus: (t.explicit ?? false) ? "explicit" : "non_explicit",
           }));
         } else {
           const trackCount = Math.max(1, Math.min(i.tracks ?? 1, 50));
@@ -2257,6 +2258,14 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         statusNote: `Импортировано по UPC из ${sourceLabel}${itunesNote}`,
       }).returning();
       pendingAudits.push({ action: "create", entityType: "release", entityId: release.id, before: null, after: release });
+
+      // Заносим главного артиста в release_artists — без этого MultiArtistPicker пуст.
+      await tx.insert(releaseArtistsTable).values({
+        releaseId: release.id,
+        artistId: artist.id,
+        role: "primary",
+        position: 0,
+      }).onConflictDoNothing();
 
       const trackRows = found.tracks.slice(0, 100).map((t, idx) => ({
         title: t.title,
