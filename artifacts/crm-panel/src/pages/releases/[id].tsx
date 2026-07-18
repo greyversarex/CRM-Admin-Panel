@@ -45,6 +45,7 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AcrMatchesModal } from "@/components/acr-matches-modal";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
+import { ModerationActionsBar } from "@/components/moderation-actions-bar";
 import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
@@ -667,6 +668,11 @@ export default function ReleaseDetail() {
           release={release}
           onEdit={() => setLocation(`/releases/${id}/splitshare`)}
         />
+
+        {/* ── Модерация (админ, релиз на модерации) ────────────────────────── */}
+        {user?.role === "admin" && release.status === "pending_review" && (
+          <ModerationActionsBar releaseId={id} onDecided={invalidateAll} />
+        )}
 
         {/* ── Terms + submit / actions ─────────────────────────────────────── */}
         <div className="space-y-3 pt-1">
