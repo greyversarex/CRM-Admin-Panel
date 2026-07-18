@@ -49,6 +49,12 @@ import { toast } from "@/hooks/use-toast";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
 
+/** Вытаскивает 4-значный год из строки ℗/© («℗ 2025 Tajik Music» → 2025). */
+function yearFromLine(s: string | null | undefined): number | null {
+  const m = s?.match(/\b(19|20)\d{2}\b/);
+  return m ? Number(m[0]) : null;
+}
+
 // Те же справочники, что в /releases/new — единый источник.
 const META_LANGS: Array<{ value: string; label: string }> = [
   { value: "Tajik",   label: "Таджикский" },
@@ -744,7 +750,9 @@ function EditDetailsForm({
     upc:          release.upc ?? "",
     catalogNumber: (release as any).catalogNumber ?? "",
     pLine:        release.pLine ?? "",
+    pLineYear:    ((release as any).pLineYear as number | null) ?? null,
     cLine:        release.cLine ?? "",
+    cLineYear:    ((release as any).cLineYear as number | null) ?? null,
     isExplicit:   !!release.isExplicit,
     territories:  (release.territories ?? ["WW"]).join(", "),
     coverAiUsage: ((release as any).coverAiUsage as "none" | "some" | "all" | null) ?? null,
@@ -795,7 +803,10 @@ function EditDetailsForm({
       upc:         form.upc.trim() || null,
       catalogNumber: form.catalogNumber.trim() || null,
       pLine:       form.pLine.trim() || null,
+      // Год: явное поле, а если не задано — пробуем вытащить из строки («2025 Tajik Music»).
+      pLineYear:   form.pLineYear ?? yearFromLine(form.pLine),
       cLine:       form.cLine.trim() || null,
+      cLineYear:   form.cLineYear ?? yearFromLine(form.cLine),
       isExplicit:  form.isExplicit,
       territories: territories.length > 0 ? territories : ["WW"],
       coverAiUsage: form.coverAiUsage ?? undefined,
@@ -879,8 +890,16 @@ function EditDetailsForm({
         <FormField label="℗ Строка">
           <Input value={form.pLine} onChange={(e) => set("pLine", e.target.value)} placeholder="2026 Tajik Music" className="bg-background/40" />
         </FormField>
+        <FormField label="℗ Год">
+          <Input type="number" min={1900} max={2100} value={form.pLineYear ?? ""} placeholder={String(yearFromLine(form.pLine) ?? new Date().getFullYear())}
+            onChange={(e) => set("pLineYear", e.target.value ? Number(e.target.value) : null)} className="bg-background/40 font-mono" />
+        </FormField>
         <FormField label="© Строка">
           <Input value={form.cLine} onChange={(e) => set("cLine", e.target.value)} placeholder="2026 Tajik Music" className="bg-background/40" />
+        </FormField>
+        <FormField label="© Год">
+          <Input type="number" min={1900} max={2100} value={form.cLineYear ?? ""} placeholder={String(yearFromLine(form.cLine) ?? new Date().getFullYear())}
+            onChange={(e) => set("cLineYear", e.target.value ? Number(e.target.value) : null)} className="bg-background/40 font-mono" />
         </FormField>
       </div>
 

@@ -174,9 +174,13 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
   }
   if (!release.language)
     issues.push({ section: "release", field: "language", message: "Выберите язык метаданных.", severity: "error" });
-  if (!release.pLine || !release.pLineYear)
+  // Год может быть указан отдельным полем (pLineYear) ИЛИ прямо в строке
+  // («℗ 2025 Tajik Music») — старые релизы сохраняли только строку. Не блокируем,
+  // если год читается из текста.
+  const lineHasYear = (s: string | null) => !!s && /\b(19|20)\d{2}\b/.test(s);
+  if (!release.pLine || (!release.pLineYear && !lineHasYear(release.pLine)))
     issues.push({ section: "release", field: "pLine", message: "Укажите ℗ Line (год + правообладатель).", severity: "error" });
-  if (!release.cLine || !release.cLineYear)
+  if (!release.cLine || (!release.cLineYear && !lineHasYear(release.cLine)))
     issues.push({ section: "release", field: "cLine", message: "Укажите © Line (год + правообладатель).", severity: "error" });
   if ((release as any).coverAiUsage == null)
     issues.push({ section: "release", field: "coverAiUsage", message: "Раскройте использование AI при создании обложки (требование DSP).", severity: "error" });

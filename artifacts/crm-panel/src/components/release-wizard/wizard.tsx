@@ -122,14 +122,16 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
   // Локальные shadow-копии, чтобы пользователь видел изменения сразу.
   const [dsps, setDsps] = useState<string[]>([]);
   const [artists, setArtists] = useState<ReleaseArtistRef[]>([]);
-  // По умолчанию: все доступные витрины. Если релиз уже сохранён — берём с сервера.
+  // По умолчанию: все доступные витрины — но только для НОВОГО релиза.
+  // Для существующего релиза показываем ровно то, что сохранено на сервере,
+  // иначе UI выглядит «выбрано», а в базе пусто (рассинхрон при проверке готовности).
   useEffect(() => {
     if (serverDsps.length > 0) {
       setDsps(serverDsps);
-    } else if (allOutletCodes.length > 0) {
+    } else if (releaseId == null && allOutletCodes.length > 0) {
       setDsps(allOutletCodes);
     }
-  }, [serverDsps.join("|"), allOutletCodes.join("|")]);
+  }, [serverDsps.join("|"), allOutletCodes.join("|"), releaseId]);
   useEffect(() => { setArtists(serverArtists); }, [JSON.stringify(serverArtists)]);
 
   // Hydrate form once from server release.
@@ -665,7 +667,7 @@ function Step1Details({
                 {t.createRelease.aiQuestion}
               </p>
               <RadioGroup
-                value={form.coverAiUsage ?? "none"}
+                value={form.coverAiUsage ?? ""}
                 onValueChange={(v) => set("coverAiUsage", v as Form["coverAiUsage"])}
                 className="gap-2"
               >
