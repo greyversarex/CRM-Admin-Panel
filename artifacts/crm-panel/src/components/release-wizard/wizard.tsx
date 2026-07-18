@@ -158,8 +158,8 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
         isVariousArtists: release.isVariousArtists,
         pLine: release.pLine ?? "",
         pLineYear: release.pLineYear ?? new Date().getFullYear(),
-        cLine: release.cLine ?? "",
-        cLineYear: release.cLineYear ?? new Date().getFullYear(),
+        cLine: release.cLine ?? release.pLine ?? "",
+        cLineYear: release.cLineYear ?? release.pLineYear ?? new Date().getFullYear(),
         coverAiUsage: (release.coverAiUsage as Form["coverAiUsage"]) ?? null,
       });
     }

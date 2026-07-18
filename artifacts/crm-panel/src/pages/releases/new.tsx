@@ -257,10 +257,10 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
     setGenre(r.genre ?? "");
     setSubgenre(r.subgenre ?? "");
     setCatalogNumber(r.catalogNumber ?? "");
-    setCLine(r.cLine ?? "");
-    setCLineYear(r.cLineYear ?? CURRENT_YEAR);
     setPLine(r.pLine ?? "");
     setPLineYear(r.pLineYear ?? CURRENT_YEAR);
+    setCLine(r.cLine ?? r.pLine ?? "");
+    setCLineYear(r.cLineYear ?? r.pLineYear ?? CURRENT_YEAR);
     setIsCompilation(typeof r.isCompilation === "boolean" ? r.isCompilation : null);
     setIsVariousArtists(!!r.isVariousArtists);
     setTranslations(((r.metadataTranslations as Translation[] | null) ?? []).map(tr => ({
@@ -270,9 +270,24 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
   }, [editId, editRelease, hydrated]);
   useEffect(() => {
     if (editId == null || !editArtists) return;
-    // Гидрируем один раз (пока пользователь не менял список).
-    setReleaseArtists(prev => (prev.length > 0 ? prev : (editArtists as ReleaseArtistRef[])));
-  }, [editId, editArtists]);
+    const serverArtists = editArtists as ReleaseArtistRef[];
+    if (serverArtists.length > 0) {
+      // Гидрируем один раз (пока пользователь не менял список).
+      setReleaseArtists(prev => (prev.length > 0 ? prev : serverArtists));
+    } else if (editRelease && artistOptions.length > 0) {
+      // Fallback: нет строк в release_artists (старый трансфер-импорт).
+      // Используем artistId из самого релиза.
+      const r = editRelease as any;
+      if (r.artistId) {
+        setReleaseArtists(prev => {
+          if (prev.length > 0) return prev;
+          const a = artistOptions.find((x: any) => x.id === r.artistId);
+          if (!a) return prev;
+          return [{ artistId: a.id, name: (a as any).name, role: "primary", position: 0 }];
+        });
+      }
+    }
+  }, [editId, editArtists, editRelease, artistOptions]);
 
   const canCreate =
     title.trim().length >= 1 &&
