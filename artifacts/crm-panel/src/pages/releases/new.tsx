@@ -263,7 +263,11 @@ export default function CreateRelease() {
       const spotifyCand = dspSearch.data?.spotify.results.find((c) => c.id === spotifyPick);
       // Deezer нет среди legacy-колонок — кладём его в общий список outlets
       // (Broma16 сам доставит), если словарь площадок доступен.
-      const outlets = [...quickOutlets];
+      // Финальный дедуп по outletId (последнее значение выигрывает) — ручные
+      // строки тоже могут задублировать одну площадку.
+      const outletMap = new Map<number, { outletId: number; outletName: string; idOutletUser: string }>();
+      for (const o of quickOutlets) outletMap.set(o.outletId, o);
+      const outlets = [...outletMap.values()];
       if (deezerPick) {
         const deezerOpt = outletOptions.find((o) => /^deezer/i.test(o.name));
         if (deezerOpt && !outlets.some((o) => o.outletId === Number(deezerOpt.externalId))) {
