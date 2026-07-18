@@ -37,6 +37,7 @@ import {
 import { FailReturnDialog } from "@/components/fail-return-dialog";
 import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
+import { AudioQcPanel, type AudioQcResult } from "@/components/waveform-player";
 import { Send } from "lucide-react";
 
 // ─── Типы ответа от /distribution/moderation/:id/details ───────────────
@@ -571,11 +572,30 @@ function TracksCard({ tracks }: { tracks: TrackDetail[] }) {
                       : <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3 mr-1" />OK</Badge>}
                 </div>
               </button>
+              <TrackAudioQc trackId={t.id} />
               {isOpen && <TrackDetailsExpanded t={t} />}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Audio QC для трека в карточке модерации (виден только админу — гейт внутри AudioQcPanel). */
+function TrackAudioQc({ trackId }: { trackId: number }) {
+  const q = useQuery({
+    queryKey: ["audio-qc", trackId],
+    queryFn: async (): Promise<AudioQcResult> => {
+      const res = await fetch(`/api/tracks/${trackId}/audio-qc`, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as AudioQcResult;
+    },
+    staleTime: 60_000,
+  });
+  return (
+    <div className="px-3 pb-2 -mt-1">
+      <AudioQcPanel trackId={trackId} qc={q.data ?? null} isLoading={q.isLoading} />
     </div>
   );
 }
