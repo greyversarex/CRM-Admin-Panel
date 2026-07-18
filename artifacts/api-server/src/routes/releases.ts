@@ -22,6 +22,7 @@ const router = Router();
 
 // Единая проверка видимости релиза — см. lib/release-scope (OR-семантика для лейбла).
 import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope";
+import { getDictionary } from "../services/broma16/dictionaries";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -659,9 +660,22 @@ router.post("/releases", async (req, res): Promise<void> => {
   // (PATCH /releases/:id/status → approved). Присланное клиентом значение игнорируем.
   delete (parsed.data as Record<string, unknown>).catalogNumber;
 
+  // Витрины дистрибуции по умолчанию: ВСЕ доступные площадки из словаря Broma16
+  // сразу фиксируются в базе (а не только показываются в UI) — иначе проверка
+  // готовности говорит «не выбрано ни одной площадки», пока пользователь
+  // не зайдёт и не пересохранит выбор вручную.
+  let defaultOutlets: string[] = [];
+  try {
+    const dict = await getDictionary("outlet");
+    defaultOutlets = dict.map((d) => d.code || d.externalId).filter(Boolean);
+  } catch { /* словарь недоступен (Broma16 не подключён) — оставляем пусто */ }
+
   let release;
   try {
-    [release] = await db.insert(releasesTable).values(parsed.data).returning();
+    [release] = await db.insert(releasesTable).values({
+      ...parsed.data,
+      broma16DistributionOutlets: defaultOutlets.length > 0 ? defaultOutlets : undefined,
+    }).returning();
   } catch (e) {
     if (isUniqueViolation(e)) {
       res.status(409).json({ error: "Конфликт уникальности при создании релиза. Попробуйте ещё раз." });
