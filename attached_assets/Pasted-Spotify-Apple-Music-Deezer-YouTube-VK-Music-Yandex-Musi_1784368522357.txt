@@ -1,0 +1,117 @@
+Spotify
+Apple Music
+Deezer
+YouTube
+VK Music
+Yandex Music
+Zvuk
+
+Что сохранять в базе
+spotify_artist_id
+apple_artist_id
+deezer_artist_id
+youtube_channel_id
+vk_artist_id
+yandex_artist_id
+zvuk_artist_id
+
+Уровень 1 (обязательно)
+✅ Spotify
+✅ Apple Music
+✅ Deezer
+✅ YouTube OAC
+Уровень 2 (для СНГ)
+✅ VK Музыка
+✅ Яндекс Музыка
+✅ Звук (SberZvuk)
+Как реализовать VK и Яндекс
+Поскольку официального API практически нет, есть два варианта:
+Вариант 1 (рекомендую)
+Пользователь вставляет ссылку вручную:
+VK Artist URL
+Yandex Artist URL
+Например:
+https://music.yandex.ru/artist/1234567
+https://vk.com/artist/9876543
+
+
+
+После ввода имени артиста
+Например:
+Zafar Ayubi
+Система автоматически ищет:
+Spotify API
+Apple Music API
+Deezer API
+YouTube API
+и показывает:
+☑️ Zafar Ayubi
+Spotify ID: xxxxx
+Followers: 1,044
+Open Profile
+
+☑️ Zafar Ayubi
+Apple Artist ID: xxxxx
+Open Profile
+
+☑️ Zafar Ayubi
+Deezer Artist ID: xxxxx
+Fans: 5,234
+Open Profile
+Если артист не найден
+Показывать:
+○ Artist not found on Spotify
+○ Create new artist profile
+Что сохранять в базе
+artists
+-------
+id
+name
+spotify_artist_id
+spotify_url
+apple_artist_id
+apple_url
+deezer_artist_id
+deezer_url
+youtube_channel_id
+youtube_url
+followers
+image
+verified
+Что должно происходить автоматически
+Input Artist Name
+       ↓
+Search APIs
+       ↓
+Show Artist Cards
+       ↓
+User Selects Correct Artist
+       ↓
+Save IDs
+       ↓
+Attach to Release
+Для нового артиста
+Если артист отсутствует на всех площадках:
+Create New Artist
+Система сохраняет:
+spotify_artist_id = null
+apple_artist_id = null
+deezer_artist_id = null
+youtube_channel_id = null
+После первого релиза DSP создадут профили автоматически.
+Для разработчика
+Основные API
+Spotify Web API
+Apple Music API (MusicKit)
+Deezer API
+YouTube Data API v3
+Интерфейс уровня Symphonic
+Release Artist
+[ Zafar Ayubi ]
+
+--------------------------------
+Spotify (3 results)
+Apple Music (2 results)
+Deezer (1 result)
+YouTube Music (1 result)
+--------------------------------
