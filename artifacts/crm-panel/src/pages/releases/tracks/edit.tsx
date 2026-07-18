@@ -25,6 +25,7 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -232,13 +233,18 @@ export default function TrackEditPage() {
 
   const [f, setF] = useState<FormState | null>(null);
   const [isrcBusy, setIsrcBusy] = useState(false);
-  const genIsrc = async () => {
+  const [isrcAuto, setIsrcAuto] = useState(false);
+  const toggleIsrcAuto = async (checked: boolean) => {
+    setIsrcAuto(checked);
+    if (!checked) return;
+    // Присвоить ISRC автоматически: генерируем код и подставляем в поле.
     setIsrcBusy(true);
     try {
       const { code, warning } = await generateIsrcCode();
       setF((prev) => (prev ? { ...prev, isrc: code } : prev));
       if (warning) toast({ title: L.isrcToast, description: warning });
     } catch (e: any) {
+      setIsrcAuto(false);
       toast({ title: L.errorToast, description: e?.message ?? "", variant: "destructive" });
     } finally {
       setIsrcBusy(false);
@@ -539,17 +545,24 @@ export default function TrackEditPage() {
             <div className="grid grid-cols-2 gap-6 items-end">
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">ISRC</Label>
-                <div className="flex gap-1.5">
+                <div className="flex gap-2 items-center">
                   <Input
                     value={f.isrc}
                     onChange={(e) => setF({ ...f, isrc: e.target.value })}
                     placeholder="TJCTM2500001"
                     className="font-mono min-w-0"
+                    disabled={isrcAuto || isrcBusy}
                   />
-                  <Button type="button" size="sm" className="shrink-0"
-                    disabled={isrcBusy} onClick={() => void genIsrc()}>
-                    {L.generateIsrc}
-                  </Button>
+                  <label className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none">
+                    <Checkbox
+                      checked={isrcAuto}
+                      disabled={isrcBusy}
+                      onCheckedChange={(v) => void toggleIsrcAuto(v === true)}
+                    />
+                    <span className="text-xs leading-tight text-muted-foreground max-w-[5.5rem] whitespace-normal">
+                      {L.assignAutomatically}
+                    </span>
+                  </label>
                 </div>
               </div>
               <div className="space-y-1.5">
