@@ -98,8 +98,8 @@ export async function saveCredentials(
   const integration = await getIntegrationByCode(integrationCode);
   if (!integration) throw new Error(`Интеграция ${integrationCode} не зарегистрирована`);
 
-  // Удаляем старые креды и сохраняем новые
-  await db.delete(integrationCredentialsTable).where(eq(integrationCredentialsTable.integrationId, integration.id));
+  // Шифруем всё до удаления старых данных, затем заменяем credentials атомарно.
+  // Ошибка ключа/шифрования или insert больше не оставит интеграцию без секретов.
   const inserts = Object.entries(fields)
     .filter(([, v]) => v && v.length > 0)
     .map(([fieldKey, value]) => ({
@@ -107,12 +107,15 @@ export async function saveCredentials(
       fieldKey,
       cipherText: encryptSecret(value),
     }));
-  if (inserts.length > 0) {
-    await db.insert(integrationCredentialsTable).values(inserts);
-  }
-  await db.update(integrationsTable)
-    .set({ status: "pending", lastError: null })
-    .where(eq(integrationsTable.id, integration.id));
+  await db.transaction(async (tx) => {
+    await tx.delete(integrationCredentialsTable).where(eq(integrationCredentialsTable.integrationId, integration.id));
+    if (inserts.length > 0) {
+      await tx.insert(integrationCredentialsTable).values(inserts);
+    }
+    await tx.update(integrationsTable)
+      .set({ status: "pending", lastError: null })
+      .where(eq(integrationsTable.id, integration.id));
+  });
 }
 
 export async function loadCredentials(integrationId: number): Promise<Record<string, string>> {

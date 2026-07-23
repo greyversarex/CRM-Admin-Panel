@@ -18,6 +18,8 @@ import {
 } from "recharts";
 import { Download, TrendingUp, TrendingDown, Play, Music, Globe2, DollarSign, Lock, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useSearch } from "wouter";
+import { UgcMapCard } from "@/components/dashboard-sections";
 
 // ─── API helper ─────────────────────────────────────────────────────────────
 
@@ -92,6 +94,8 @@ export default function AnalyticsPage() {
   const { perms } = useManagerPermissions(role);
   // Кнопка синхронизации статистики дергает Broma16, а это право «distribution».
   const canSyncStatistics = isAdminOrManager && perms.distribution;
+  const search = useSearch();
+  const requestedTab = new URLSearchParams(search).get("tab");
 
   const [period, setPeriod] = useState<Period>("30d");
   const [streams, setStreams] = useState<StreamsResp | null>(null);
@@ -171,13 +175,15 @@ export default function AnalyticsPage() {
             <h1 className="text-2xl font-bold tracking-tight">{t.analytics.title}</h1>
             <p className="text-[13px] text-muted-foreground mt-0.5">Статистика плейлистов и TikTok</p>
           </div>
-          <Tabs defaultValue="playlists" className="w-full">
+          <Tabs defaultValue={requestedTab === "tiktok" || requestedTab === "ugc" ? requestedTab : "playlists"} className="w-full">
             <TabsList className="bg-card border border-border h-auto p-1 gap-1">
               <TabsTrigger value="playlists" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">Плейлисты</TabsTrigger>
               <TabsTrigger value="tiktok" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">TikTok</TabsTrigger>
+              <TabsTrigger value="ugc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">UGC</TabsTrigger>
             </TabsList>
             <TabsContent value="playlists" className="mt-4"><PlaylistAnalyticsTab /></TabsContent>
             <TabsContent value="tiktok" className="mt-4"><TikTokAnalyticsTab /></TabsContent>
+            <TabsContent value="ugc" className="mt-4"><UgcMapCard /></TabsContent>
           </Tabs>
         </div>
       </Layout>
@@ -278,7 +284,7 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        <Tabs defaultValue="streams" className="w-full">
+        <Tabs defaultValue={["streams", "revenue", "geo", "tracks", "ugc", "realtime", "playlists", "tiktok"].includes(requestedTab ?? "") ? requestedTab! : "streams"} className="w-full">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1 flex flex-wrap">
             <TabsTrigger value="streams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.streams}</TabsTrigger>
             <TabsTrigger value="revenue" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">{t.analytics.tabs.revenue}</TabsTrigger>

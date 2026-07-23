@@ -27,7 +27,7 @@ export const ROUTE_ROLES: Record<string, Role[]> = {
   "/releases/calendar":  ["admin", "manager", "label"],
   "/releases/takedown":  ["admin", "manager", "label", "artist"],
   "/artists":        ["admin", "manager", "label", "artist"],
-  "/labels":         ["admin", "manager"],
+  "/labels":         ["admin", "manager", "label"],
   "/videos":         ["admin", "manager"],
   "/users":          ["admin", "manager"],
   "/publishing":     ["admin", "manager", "label"],

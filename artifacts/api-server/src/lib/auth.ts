@@ -2,6 +2,12 @@ import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { createHash } from "crypto";
 import { db, apiKeysTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import {
+  canApiKeyAccess,
+  sanitizeApiKeyPermissions,
+  type ApiKeyPermission,
+} from "./api-key-permissions";
+import { logger } from "./logger";
 
 export type AuthRole = "admin" | "manager" | "label" | "artist";
 
@@ -27,6 +33,21 @@ export interface ImpersonatorRef {
   role: AuthRole;
 }
 
+export interface ApiKeyAuthContext {
+  id: number;
+  name: string;
+  permissions: ApiKeyPermission[];
+  createdBy: number | null;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      apiKeyAuth?: ApiKeyAuthContext;
+    }
+  }
+}
+
 declare module "express-session" {
   interface SessionData {
     user?: SessionUser;
@@ -35,40 +56,102 @@ declare module "express-session" {
 }
 
 /**
- * Try to authenticate by X-API-Key header. If valid, sets req.session.user
- * with role="admin" (api keys grant full back-office access; permission scoping
- * via api_keys.permissions is enforced by individual routes when relevant).
+ * Expose an API-key principal through the legacy req.session.user reads without
+ * serializing it into the PostgreSQL session store. The non-enumerable property
+ * is request-scoped: express-session's JSON-based change detection and save do
+ * not turn an API-key request into a reusable cookie session.
  */
-async function tryApiKeyAuth(req: Request): Promise<boolean> {
-  const raw = req.header("x-api-key");
-  if (!raw || !raw.startsWith("tjm_")) return false;
-  const hash = createHash("sha256").update(raw).digest("hex");
-  const [row] = await db
-    .select()
-    .from(apiKeysTable)
-    .where(and(eq(apiKeysTable.keyHash, hash), eq(apiKeysTable.enabled, true)));
-  if (!row) return false;
-  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return false;
-  // Update last_used_at (fire-and-forget)
-  void db.update(apiKeysTable).set({ lastUsedAt: new Date() }).where(eq(apiKeysTable.id, row.id));
-  if (req.session) {
-    req.session.user = {
-      id: 0,
-      name: `[api-key] ${row.name}`,
-      email: `apikey-${row.id}@system.local`,
-      role: "admin" as AuthRole,
-      artistId: null,
-      labelId: null,
-    };
-  }
+function attachRequestScopedApiKeyUser(req: Request, context: ApiKeyAuthContext): boolean {
+  if (!req.session) return false;
+  const user: SessionUser = {
+    // Use the creator for legacy created_by fields when it still exists. Audit
+    // records identify the API key separately and never claim this is a login.
+    id: context.createdBy ?? 0,
+    name: `[api-key] ${context.name}`,
+    email: `apikey-${context.id}@system.local`,
+    role: "admin",
+    artistId: null,
+    labelId: null,
+  };
+  Object.defineProperty(req.session, "user", {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: user,
+  });
   return true;
 }
 
+/** Authenticate X-API-Key and attach its request-scoped principal. */
+async function tryApiKeyAuth(req: Request): Promise<ApiKeyAuthContext | null> {
+  const raw = req.header("x-api-key");
+  if (!raw || !raw.startsWith("tjm_")) return null;
+  const hash = createHash("sha256").update(raw).digest("hex");
+  const [row] = await db
+    .select({
+      id: apiKeysTable.id,
+      name: apiKeysTable.name,
+      permissions: apiKeysTable.permissions,
+      createdBy: apiKeysTable.createdBy,
+      expiresAt: apiKeysTable.expiresAt,
+    })
+    .from(apiKeysTable)
+    .where(and(eq(apiKeysTable.keyHash, hash), eq(apiKeysTable.enabled, true)));
+  if (!row) return null;
+  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
+  const context: ApiKeyAuthContext = {
+    id: row.id,
+    name: row.name,
+    permissions: sanitizeApiKeyPermissions(row.permissions),
+    createdBy: row.createdBy,
+  };
+  if (!attachRequestScopedApiKeyUser(req, context)) return null;
+  req.apiKeyAuth = context;
+
+  // A denied request still counts as key usage, which makes attempted access
+  // visible to administrators without logging the raw key.
+  void db.update(apiKeysTable)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(apiKeysTable.id, row.id))
+    .catch((err: unknown) => {
+      logger.warn({ err, apiKeyId: row.id }, "failed to update API key lastUsedAt");
+    });
+  return context;
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // A route can invoke requireAuth more than once. Never let the temporary
+  // admin-shaped compatibility principal bypass the API-key permission check.
+  if (req.apiKeyAuth) {
+    const access = canApiKeyAccess(req.apiKeyAuth.permissions, req.method, req.originalUrl);
+    if (!access.allowed) {
+      res.status(403).json({
+        error: "Forbidden: API key lacks permission for this endpoint",
+        requiredPermission: access.requiredPermission,
+      });
+      return;
+    }
+    next();
+    return;
+  }
+
   if (req.session?.user) { next(); return; }
   try {
-    if (await tryApiKeyAuth(req)) { next(); return; }
-  } catch {
+    const apiKey = await tryApiKeyAuth(req);
+    if (apiKey) {
+      const access = canApiKeyAccess(apiKey.permissions, req.method, req.originalUrl);
+      if (!access.allowed) {
+        res.status(403).json({
+          error: "Forbidden: API key lacks permission for this endpoint",
+          requiredPermission: access.requiredPermission,
+        });
+        return;
+      }
+      next();
+      return;
+    }
+  } catch (err) {
+    logger.warn({ err }, "API key authentication failed");
     // fall through to 401
   }
   res.status(401).json({ error: "Unauthorized" });

@@ -2192,6 +2192,15 @@ components:
         appleId:
           type: string
           nullable: true
+        ipiNameNumber:
+          type: string
+          nullable: true
+        ipn:
+          type: string
+          nullable: true
+        isni:
+          type: string
+          nullable: true
         broma16Outlets:
           type: array
           nullable: true
@@ -2566,6 +2575,15 @@ components:
           type: boolean
           description: |
             true, если релиз готов к отгрузке в DSP через POST /releases/:id/deliver (статус approved).
+        canCancelSubmit:
+          type: boolean
+          description: |
+            true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).
+            Admin/manager могут отозвать всегда — проверяется на бэкенде.
+        submittedAt:
+          type: string
+          nullable: true
+          description: ISO-строка момента отправки на модерацию. null если ещё не отправлен.
         riskScore:
           type: integer
           minimum: 0
@@ -2585,7 +2603,7 @@ components:
               message: { type: string }
               severity: { type: string, enum: [low, medium, high] }
             required: [code, message, severity]
-      required: [id, title, releaseType, status, artistId, artistName, isExplicit, isCompilation, isVariousArtists, territories, totalTracks, artists, dsps, upcRequestPending, metadataTranslations, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, riskScore, riskFactors]
+      required: [id, title, releaseType, status, artistId, artistName, isExplicit, isCompilation, isVariousArtists, territories, totalTracks, artists, dsps, upcRequestPending, metadataTranslations, createdAt, updatedAt, allowedTransitions, isEditable, canSubmit, canDeliver, canCancelSubmit, submittedAt, riskScore, riskFactors]
 
     ReleaseDetail:
       allOf:

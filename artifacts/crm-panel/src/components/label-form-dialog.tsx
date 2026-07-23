@@ -1,5 +1,6 @@
 /**
- * Диалог создания/редактирования лейбла. Только admin/manager.
+ * Диалог создания/редактирования лейбла.
+ * Label users create sublabels only inside their own catalog tree.
  */
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -14,6 +15,7 @@ import {
   getListLabelsQueryKey, getGetLabelQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 
 export interface LabelFormValues {
   id?: number;
@@ -42,12 +44,19 @@ const EMPTY: LabelFormValues = {
 };
 
 export function LabelFormDialog({ open, onOpenChange, initial, onSaved }: Props) {
+  const { user } = useAuth();
+  const isLabel = user?.role === "label";
   const isEdit = Boolean(initial?.id);
+  const isRootLabel = isLabel && initial?.id === user?.labelId;
   const [form, setForm] = useState<LabelFormValues>(EMPTY);
 
   useEffect(() => {
-    if (open) setForm(initial ? { ...EMPTY, ...initial } : EMPTY);
-  }, [open, initial]);
+    if (open) {
+      setForm(initial
+        ? { ...EMPTY, ...initial }
+        : { ...EMPTY, parentLabelId: isLabel ? user?.labelId ?? null : null });
+    }
+  }, [open, initial, isLabel, user?.labelId]);
 
   // Для parent-label выбора (исключаем самого себя при редактировании)
   const labelsQ = useListLabels({ limit: 200 });
@@ -105,7 +114,9 @@ export function LabelFormDialog({ open, onOpenChange, initial, onSaved }: Props)
           <DialogDescription>
             {isEdit
               ? "Измените данные лейбла и сохраните."
-              : "Заполните основные данные нового лейбла."}
+              : isLabel
+                ? "Создайте подлейбл внутри своего каталога. Доступ к чужим лейблам не предоставляется."
+                : "Заполните основные данные нового лейбла."}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +163,7 @@ export function LabelFormDialog({ open, onOpenChange, initial, onSaved }: Props)
             />
           </div>
 
-          {labels.length > 0 && (
+          {labels.length > 0 && !isRootLabel && (
             <div className="grid gap-1.5">
               <Label htmlFor="lbl-parent">Материнский лейбл</Label>
               <Select
@@ -161,7 +172,7 @@ export function LabelFormDialog({ open, onOpenChange, initial, onSaved }: Props)
               >
                 <SelectTrigger id="lbl-parent"><SelectValue placeholder="Нет" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Нет (независимый)</SelectItem>
+                  {!isLabel && <SelectItem value="none">Нет (независимый)</SelectItem>}
                   {labels.map((l) => (
                     <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
                   ))}

@@ -26,10 +26,10 @@ import { Check, ChevronsUpDown, HelpCircle, Loader2, Plus, Trash2, UserPlus, X }
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS } from "@/components/release-wizard/types";
-import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
+import { SUBGENRES, subgenreOptionsFor, genreOptionsWith } from "@/components/release-wizard/types";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { CoverUploader } from "@/components/asset-uploader";
+import { DEFAULT_METADATA_LANGUAGE, metadataLanguageOptionsWith } from "@/lib/metadata-languages";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -67,7 +67,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
   const [coverAiUsage, setCoverAiUsage] = useState<"" | "none" | "some" | "all">("");
   const [title, setTitle]               = useState("");
   const [releaseVersion, setReleaseVersion] = useState("");
-  const [language, setLanguage]         = useState("Tajik");
+  const [language, setLanguage]         = useState(DEFAULT_METADATA_LANGUAGE);
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [releaseArtists, setReleaseArtists] = useState<ReleaseArtistRef[]>([]);
   const [isVariousArtists, setIsVariousArtists] = useState(false);
@@ -172,7 +172,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
   }
 
   // Справочники Broma16 (жанр ≈280, язык ≈186); при недоступности — курируемый фолбэк.
-  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
+  const languageOptions = metadataLanguageOptionsWith(language);
 
   const { data: artistsData } = useListArtists({ limit: 200, page: 1 } as never);
   const artists = useMemo(() => artistsData?.data ?? [], [artistsData]);
@@ -252,7 +252,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
     setReleaseVersion(r.releaseVersion ?? "");
     setCoverUrl(r.coverUrl ?? "");
     setCoverAiUsage((r.coverAiUsage as typeof coverAiUsage) ?? "");
-    setLanguage(r.language ?? "Tajik");
+    setLanguage(r.language ?? DEFAULT_METADATA_LANGUAGE);
     setLabelId(r.labelId ?? null);
     setGenre(r.genre ?? "");
     setSubgenre(r.subgenre ?? "");
@@ -528,7 +528,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
               <DictionaryCombobox
                 value={language}
                 onChange={setLanguage}
-                options={langOpts.options}
+                options={languageOptions}
                 placeholder={L.pleaseSelect}
               />
             </div>
@@ -549,7 +549,7 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
                   <DictionaryCombobox
                     value={tr.language}
                     onChange={v => updateTranslation(i, { language: v })}
-                    options={langOpts.options.filter(l => l.value !== language)}
+                    options={languageOptions.filter(l => l.value !== language)}
                     placeholder="—"
                     className="h-9 text-sm bg-background/40"
                   />
@@ -1085,7 +1085,28 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
 
 // ─── Список кандидатов профиля артиста на площадке ──────────────────────────
 // Radio-выбор в стиле Broma16: «не найден» + карточки (аватар, подписчики,
-// ссылка на профиль). Для Apple iTunes API не отдаёт фото — рисуем инициал.
+// ссылка на профиль).
+function DspArtistArtwork({ candidate }: { candidate: DspArtistCandidate }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!candidate.imageUrl || failed) {
+    return (
+      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-sm font-semibold shrink-0">
+        {candidate.name.slice(0, 1).toUpperCase()}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={candidate.imageUrl}
+      alt={candidate.name}
+      onError={() => setFailed(true)}
+      className="h-10 w-10 rounded object-cover shrink-0"
+    />
+  );
+}
+
 function DspCandidateList({
   platform,
   result,
@@ -1116,13 +1137,7 @@ function DspCandidateList({
           key={c.id}
           className="flex items-center gap-3 rounded-md border border-border/50 bg-background/40 px-3 py-2 cursor-pointer hover:border-border"
         >
-          {c.imageUrl ? (
-            <img src={c.imageUrl} alt={c.name} className="h-10 w-10 rounded object-cover shrink-0" />
-          ) : (
-            <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-sm font-semibold shrink-0">
-              {c.name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
+          <DspArtistArtwork candidate={c} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{c.name}</p>
             <p className="text-[11px] text-muted-foreground truncate">

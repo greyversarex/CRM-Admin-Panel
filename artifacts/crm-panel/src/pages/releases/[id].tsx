@@ -30,7 +30,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { DspPickerDialog } from "@/components/release-wizard/dsp-picker";
 import { MultiArtistPicker } from "@/components/release-wizard/multi-artist-picker";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
-import { genreOptionsWith } from "@/components/release-wizard/types";
+import { SUBGENRES, genreOptionsWith, subgenreOptionsFor } from "@/components/release-wizard/types";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -49,6 +49,7 @@ import { ModerationActionsBar } from "@/components/moderation-actions-bar";
 import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
 import { toast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";
+import { DEFAULT_METADATA_LANGUAGE, metadataLanguageOptionsWith } from "@/lib/metadata-languages";
 
 const DSPS = ["Spotify", "Apple Music", "YouTube Music", "Yandex", "VK Music", "Tidal", "Boom", "Zvooq", "Amazon"];
 
@@ -58,16 +59,6 @@ function yearFromLine(s: string | null | undefined): number | null {
   return m ? Number(m[0]) : null;
 }
 
-// Те же справочники, что в /releases/new — единый источник.
-const META_LANGS: Array<{ value: string; label: string }> = [
-  { value: "Tajik",   label: "Таджикский" },
-  { value: "Russian", label: "Русский" },
-  { value: "English", label: "Английский" },
-  { value: "Persian", label: "Персидский" },
-  { value: "Uzbek",   label: "Узбекский" },
-  { value: "Arabic",  label: "Арабский" },
-  { value: "Turkish", label: "Турецкий" },
-];
 const META_RELEASE_TYPES: Array<{ value: string; label: string }> = [
   { value: "single",      label: "Сингл" },
   { value: "album",       label: "Альбом" },
@@ -253,8 +244,9 @@ export default function ReleaseDetail() {
                         artistId: release.artistId,
                         releaseId: id,
                         trackNumber: num,
-                        language: "English",
-                        genre: release.genre || "Pop",
+                        language: release.language || DEFAULT_METADATA_LANGUAGE,
+                        genre: release.genre || null,
+                        subgenre: release.subgenre || null,
                       } as any,
                     });
                     created++;
@@ -475,7 +467,7 @@ export default function ReleaseDetail() {
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 pt-3 border-t border-border/30">
                   <KV label={RV.genre} value={release.genre || "—"} mini />
                   <KV label="UPC" value={release.upc || RV.upcPending} mono mini />
-                  <KV label={RV.subgenre} value="—" mini />
+                  <KV label={RV.subgenre} value={release.subgenre || "—"} mini />
                   <KV label={RV.catalog} value={(release as any).catalogNumber || release.upc || "—"} mini />
                   <KV label={RV.releaseTypeLabel2} value={(RV.releaseTypes as Record<string, string>)[release.releaseType] ?? release.releaseType} cap mini />
                   <KV label={RV.labelLabel} value={release.labelName || RV.independent} mini />
@@ -687,8 +679,6 @@ function EditDetailsForm({
   const RV = TT.releaseView;
   const updateRelease = useUpdateRelease();
   const updateArtists = useUpdateReleaseArtists();
-  // Язык — справочник Broma16; жанр берётся из иерархии документа.
-  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const { data: serverArtists } = useGetReleaseArtists(release.id);
   // Локальный список артистов релиза. Синхронизируем один раз, когда придёт
   // ответ сервера, пока пользователь его не правил.
@@ -705,9 +695,10 @@ function EditDetailsForm({
 
   const [form, setForm] = useState({
     title:        release.title ?? "",
-    language:     release.language ?? "Tajik",
+    language:     release.language ?? DEFAULT_METADATA_LANGUAGE,
     releaseType:  release.releaseType ?? "single",
     genre:        release.genre ?? "",
+    subgenre:     release.subgenre ?? "",
     releaseDate:  release.releaseDate ? String(release.releaseDate).slice(0, 10) : "",
     upc:          release.upc ?? "",
     catalogNumber: (release as any).catalogNumber ?? "",
@@ -761,6 +752,7 @@ function EditDetailsForm({
       coverUrl:    release.coverUrl ?? null,
       language:    form.language || null,
       genre:       form.genre || null,
+      subgenre:    form.subgenre || null,
       releaseDate: form.releaseDate || null,
       upc:         form.upc.trim() || null,
       catalogNumber: form.catalogNumber.trim() || null,
@@ -809,7 +801,7 @@ function EditDetailsForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormField label={RV.metadataLanguageLabel}>
-          <DictionaryCombobox value={form.language} onChange={(v) => set("language", v)} options={langOpts.options} placeholder="—" />
+          <DictionaryCombobox value={form.language} onChange={(v) => set("language", v)} options={metadataLanguageOptionsWith(form.language)} placeholder="—" />
 
         </FormField>
         <FormField label={RV.releaseTypeLabel}>
@@ -822,10 +814,27 @@ function EditDetailsForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <FormField label={RV.genreLabel}>
-          <DictionaryCombobox value={form.genre || ""} onChange={(v) => set("genre", v)} options={genreOptionsWith(form.genre)} placeholder="—" />
+          <DictionaryCombobox
+            value={form.genre || ""}
+            onChange={(v) => setForm((prev) => ({
+              ...prev,
+              genre: v,
+              subgenre: (SUBGENRES[v] ?? []).includes(prev.subgenre) ? prev.subgenre : "",
+            }))}
+            options={genreOptionsWith(form.genre)}
+            placeholder="—"
+          />
 
+        </FormField>
+        <FormField label={RV.subgenre}>
+          <DictionaryCombobox
+            value={form.subgenre || ""}
+            onChange={(v) => set("subgenre", v)}
+            options={subgenreOptionsFor(form.genre, form.subgenre)}
+            placeholder="—"
+          />
         </FormField>
         <FormField label={RV.upcOptional}>
           <Input value={form.upc} onChange={(e) => set("upc", e.target.value)} placeholder="195502855390" className="bg-background/40 font-mono" />
@@ -838,9 +847,10 @@ function EditDetailsForm({
       <FormField label={RV.catalogOptional}>
         <Input
           value={form.catalogNumber}
-          onChange={(e) => set("catalogNumber", e.target.value)}
           placeholder="TM260001"
           className="bg-background/40 font-mono"
+          readOnly
+          disabled
         />
         <p className="text-[11px] text-muted-foreground/80 mt-1">
           {RV.catalogHint}
@@ -925,7 +935,7 @@ function EditDetailsForm({
                 next[i] = { ...next[i], language: v };
                 return { ...p, translations: next };
               })}
-              options={langOpts.options}
+              options={metadataLanguageOptionsWith(tr.language)}
               placeholder={RV.langPlaceholder}
               className="bg-background/60 h-9 text-sm"
             />
@@ -1233,7 +1243,7 @@ function TrackRow({
         <div className="grid grid-cols-3 gap-4">
           <TrackField label={RV.trackTitle} value={t.title || DASH} />
           <TrackField label={RV.mixVersion} value={trackVer || DASH} />
-          <TrackField label={RV.metadataLanguage} value={t.language || DASH} />
+          <TrackField label={RV.metadataLanguage} value={t.language || release.language || DEFAULT_METADATA_LANGUAGE} />
         </div>
 
         {/* Row 2: Primary Artist */}
@@ -1276,8 +1286,8 @@ function TrackRow({
 
         {/* Row 5: Genre / Subgenre */}
         <div className="grid grid-cols-2 gap-4">
-          <TrackField label={RV.genre} value={t.genre || DASH} />
-          <TrackField label={RV.subgenre} value={(t as any).subgenre || DASH} />
+          <TrackField label={RV.genre} value={t.genre || release.genre || DASH} />
+          <TrackField label={RV.subgenre} value={(t as any).subgenre || release.subgenre || DASH} />
         </div>
 
         {/* Row 6-8: Recorded / ISRC / Stereo AI Use */}
@@ -2179,8 +2189,6 @@ function MultiEditTracksDialog({
   const updateTrack = useUpdateTrack();
   const { t: TT } = useLang();
   const RV = TT.releaseView;
-  // Язык — справочник Broma16; жанр берётся из иерархии документа.
-  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: META_LANGS.map((l) => ({ value: l.value, label: l.label })) });
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [genre, setGenre] = useState<string>("");
@@ -2304,7 +2312,7 @@ function MultiEditTracksDialog({
               <DictionaryCombobox
                 value={language}
                 onChange={setLanguage}
-                options={[{ value: "", label: RV.keepAsIs }, ...langOpts.options]}
+                options={[{ value: "", label: RV.keepAsIs }, ...metadataLanguageOptionsWith(language)]}
                 placeholder={RV.keepAsIs}
               />
             </div>
@@ -2673,7 +2681,7 @@ function BulkAudioUploadButton({
             title: "",
             artistId, releaseId,
             trackNumber: startTrackNumber + i,
-            language: "English",
+            language: defaultLanguage || DEFAULT_METADATA_LANGUAGE,
             genre: defaultGenre,
             audioUrl: asset.objectPath,
             durationSeconds: asset.durationSeconds ?? null,

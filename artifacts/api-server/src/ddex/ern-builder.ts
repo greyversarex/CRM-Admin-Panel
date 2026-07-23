@@ -20,6 +20,7 @@
  */
 
 import { create } from "xmlbuilder2";
+import { metadataLanguageToCode } from "../lib/metadata-language-code";
 import type {
   BuildErnInput,
   BuildErnResult,
@@ -121,7 +122,7 @@ export function buildErn(input: BuildErnInput): BuildErnResult {
   // Переводы названия релиза на другие языки
   for (const tr of (release.metadataTranslations ?? [])) {
     if (!tr.language || !tr.title) continue;
-    const tTitle = rel.ele("Title", { TitleType: "TranslatedTitle", LanguageAndScriptCode: tr.language });
+    const tTitle = rel.ele("Title", { TitleType: "TranslatedTitle", LanguageAndScriptCode: metadataLanguageToCode(tr.language) });
     tTitle.ele("TitleText").txt(tr.title);
     if (tr.version) tTitle.ele("SubTitle").txt(tr.version);
   }
@@ -239,7 +240,7 @@ function appendSoundRecording(parent: ReturnType<typeof create>, release: Releas
   // Переводы названия трека на другие языки
   for (const tr of (t.metadataTranslations ?? [])) {
     if (!tr.language || !tr.title) continue;
-    const tTitle = sr.ele("Title", { TitleType: "TranslatedTitle", LanguageAndScriptCode: tr.language });
+    const tTitle = sr.ele("Title", { TitleType: "TranslatedTitle", LanguageAndScriptCode: metadataLanguageToCode(tr.language) });
     tTitle.ele("TitleText").txt(tr.title);
     if (tr.version) tTitle.ele("SubTitle").txt(tr.version);
   }
@@ -260,7 +261,7 @@ function appendSoundRecording(parent: ReturnType<typeof create>, release: Releas
   }
 
   sr.ele("Duration").txt(formatDuration(t.durationSeconds));
-  sr.ele("LanguageOfPerformance").txt(t.language || "tg");
+  sr.ele("LanguageOfPerformance").txt(metadataLanguageToCode(t.language));
   sr.ele("ParentalWarningType").txt(t.isExplicit ? "Explicit" : "NotExplicit");
 
   // Genre на уровне трека с SubGenre

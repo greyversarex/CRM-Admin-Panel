@@ -53,15 +53,17 @@ async function upsertField(
   expiresAt: Date | null = null,
 ): Promise<void> {
   const cipherText = encryptSecret(value);
-  await db
-    .delete(integrationCredentialsTable)
-    .where(
-      and(
-        eq(integrationCredentialsTable.integrationId, integrationId),
-        eq(integrationCredentialsTable.fieldKey, fieldKey),
-      ),
-    );
-  await db.insert(integrationCredentialsTable).values({ integrationId, fieldKey, cipherText, expiresAt });
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(integrationCredentialsTable)
+      .where(
+        and(
+          eq(integrationCredentialsTable.integrationId, integrationId),
+          eq(integrationCredentialsTable.fieldKey, fieldKey),
+        ),
+      );
+    await tx.insert(integrationCredentialsTable).values({ integrationId, fieldKey, cipherText, expiresAt });
+  });
 }
 
 async function readField(integrationId: number, fieldKey: string): Promise<FieldValue | null> {

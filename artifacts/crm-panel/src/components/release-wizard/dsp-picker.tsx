@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search, LayoutGrid, List, HelpCircle, Globe } from "lucide-react";
+import type { IconType } from "react-icons";
+import {
+  FaAmazon, FaApple, FaCloud, FaDeezer, FaFacebook, FaFingerprint,
+  FaInstagram, FaMusic, FaRadio, FaSoundcloud, FaSpotify, FaTiktok,
+  FaVk, FaYandex, FaYoutube,
+} from "react-icons/fa6";
+import {
+  SiCanva, SiIheartradio, SiKuaishou, SiMeta, SiNeteasecloudmusic,
+  SiPandora, SiPeloton, SiShazam, SiSnapchat, SiTidal, SiYoutubemusic,
+} from "react-icons/si";
 import { assetHref } from "@/components/asset-uploader";
 import { useLang } from "@/lib/i18n";
 import { useCatalogOptions } from "./use-catalog";
@@ -277,6 +287,58 @@ const OUTLET_CATEGORY: Record<string, string> = {
   "510131": "fingerprinting", "516342": "fingerprinting",
 };
 
+type OutletIconRule = {
+  match: RegExp;
+  icon: IconType;
+  color: string;
+};
+
+// Broma16 определяет фактический список доступных outlets, но её словарь не
+// содержит URL логотипа. Бренд подбирается по стабильному названию из словаря;
+// неизвестные и составные площадки получают нейтральную музыкальную иконку.
+const OUTLET_ICON_RULES: OutletIconRule[] = [
+  { match: /spotify/i, icon: FaSpotify, color: "#1DB954" },
+  { match: /apple|itunes/i, icon: FaApple, color: "#F5F5F7" },
+  { match: /amazon/i, icon: FaAmazon, color: "#FF9900" },
+  { match: /deezer/i, icon: FaDeezer, color: "#A238FF" },
+  { match: /soundcloud/i, icon: FaSoundcloud, color: "#FF5500" },
+  { match: /tidal/i, icon: SiTidal, color: "#F5F5F5" },
+  { match: /tiktok|dou\s?yin/i, icon: FaTiktok, color: "#25F4EE" },
+  { match: /youtube music/i, icon: SiYoutubemusic, color: "#FF0033" },
+  { match: /youtube/i, icon: FaYoutube, color: "#FF0000" },
+  { match: /facebook|instagram|oculus/i, icon: SiMeta, color: "#168AFF" },
+  { match: /vk music|odnoklassniki/i, icon: FaVk, color: "#0077FF" },
+  { match: /yandex/i, icon: FaYandex, color: "#FC3F1D" },
+  { match: /pandora/i, icon: SiPandora, color: "#3668FF" },
+  { match: /netease/i, icon: SiNeteasecloudmusic, color: "#E20000" },
+  { match: /iheart/i, icon: SiIheartradio, color: "#C6002B" },
+  { match: /shazam/i, icon: SiShazam, color: "#0088FF" },
+  { match: /canva/i, icon: SiCanva, color: "#00C4CC" },
+  { match: /kuaishou/i, icon: SiKuaishou, color: "#FF5000" },
+  { match: /peloton/i, icon: SiPeloton, color: "#DF1C2F" },
+  { match: /snap/i, icon: SiSnapchat, color: "#FFFC00" },
+  { match: /acr cloud|audible magic|fingerprint/i, icon: FaFingerprint, color: "#8B5CF6" },
+  { match: /gudok|goodok|privet|ringback|jingle/i, icon: FaRadio, color: "#F59E0B" },
+  { match: /medianet/i, icon: FaCloud, color: "#38BDF8" },
+  { match: /facebook/i, icon: FaFacebook, color: "#1877F2" },
+  { match: /instagram/i, icon: FaInstagram, color: "#E4405F" },
+];
+
+function OutletBrandIcon({ name }: { name: string }) {
+  const rule = OUTLET_ICON_RULES.find((item) => item.match.test(name));
+  const Icon = rule?.icon ?? FaMusic;
+  const color = rule?.color ?? "#A78BFA";
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-card/80"
+    >
+      <Icon className="h-4 w-4" style={{ color }} />
+    </span>
+  );
+}
+
 function categorizeOutlet(value: string, label: string): string {
   const mapped = OUTLET_CATEGORY[value];
   if (mapped) return mapped;
@@ -390,6 +452,7 @@ export function OutletPickerInline({
                         className={`flex items-center gap-2.5 p-2.5 rounded-md border text-left transition w-full ${checked ? "bg-primary/5 border-primary/40" : "bg-background/30 border-border/50 hover:bg-accent/40"}`}
                       >
                         <Checkbox checked={checked} className="pointer-events-none shrink-0" />
+                        <OutletBrandIcon name={o.label} />
                         <span className="text-sm truncate flex-1">{o.label}</span>
                       </button>
                     );
@@ -470,9 +533,7 @@ function DspRow({
       ) : dsp.logoUrl ? (
         <img src={assetHref(dsp.logoUrl)} alt="" className="h-7 w-7 rounded object-cover bg-muted shrink-0" />
       ) : (
-        <div className="h-7 w-7 rounded bg-muted/40 flex items-center justify-center text-[10px] uppercase text-muted-foreground shrink-0">
-          {dsp.code.slice(0, 2)}
-        </div>
+        <OutletBrandIcon name={dsp.name} />
       )}
       <span className="text-sm truncate flex-1">{dsp.name}</span>
     </button>

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { releasesTable } from "./releases";
@@ -81,6 +81,9 @@ export const ddexAcknowledgementsTable = pgTable("ddex_acknowledgements", {
   ackType: text("ack_type").notNull(),      // FileAccepted | FileRejected | DealAcknowledged | Custom
   status: text("status").notNull(),         // accepted | rejected | warning
   rawPayload: text("raw_payload").notNull(),
+  // Nullable for legacy rows. New ACKs always receive a SHA-256 digest and the
+  // unique index makes exact webhook/SFTP replays idempotent across processes.
+  payloadHash: text("payload_hash"),
   parsed: jsonb("parsed").$type<Record<string, unknown>>(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -88,6 +91,7 @@ export const ddexAcknowledgementsTable = pgTable("ddex_acknowledgements", {
   index("ddex_acks_batch_idx").on(t.batchId),
   index("ddex_acks_partner_idx").on(t.partnerCode),
   index("ddex_acks_received_idx").on(t.receivedAt),
+  uniqueIndex("ddex_acks_payload_hash_unique").on(t.payloadHash),
 ]);
 
 export type DdexAcknowledgement = typeof ddexAcknowledgementsTable.$inferSelect;

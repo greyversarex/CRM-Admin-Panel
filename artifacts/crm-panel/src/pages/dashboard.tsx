@@ -9,10 +9,10 @@ import {
 } from "@workspace/api-client-react";
 import { Users, Disc3, DollarSign, Activity, TrendingUp, TrendingDown, Layers, Headphones, Clock, Wallet, AlertTriangle, ShieldAlert, CheckCircle2, XCircle, Scale, Ban, Hourglass, FileText, BookCheck, ClipboardList, FileX, AlertOctagon, Coins, Library, Search, MoreVertical, ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from "lucide-react";
 import {
-  TopDspCard, TopTerritoriesCard, LatestReleasesGridCard,
-  TopArtistsCard, RoyaltySummaryCard, ArtistsStatsTableCard,
-  PerformanceOverviewCard, PlaylistPlacementsCard, UgcMapCard, UsersRankingCard,
+  TopDspCard, TopTerritoriesCard, RoyaltySummaryCard,
+  ArtistsStatsTableCard, UsersRankingCard,
 } from "@/components/dashboard-sections";
+import { SharedDashboardSections } from "@/components/label-dashboard-sections";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLang } from "@/lib/i18n";
@@ -100,7 +100,9 @@ export default function Dashboard() {
             iconColor="text-emerald-400"
             iconBg="bg-emerald-500/12"
             iconBorder="border-emerald-500/20"
-            trend={{ value: `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth}%`, up: revenueGrowth >= 0, label: "vs last period" }}
+            trend={totalStreams > 0
+              ? { value: `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth}%`, up: revenueGrowth >= 0, label: "vs last period" }
+              : { value: d.no_data, up: undefined }}
           />
           <KpiCard
             label={d.total_streams}
@@ -118,7 +120,6 @@ export default function Dashboard() {
             iconColor="text-primary"
             iconBg="bg-primary/12"
             iconBorder="border-primary/20"
-            trend={{ value: `${totalArtists} ${d.active_suffix}`, up: undefined }}
           />
           <KpiCard
             label={role === "artist" ? d.my_releases : role === "label" ? d.label_releases : d.total_releases}
@@ -143,11 +144,11 @@ export default function Dashboard() {
         {(role === "admin" || role === "manager") && <OpsKpiRow />}
         {(role === "admin" || role === "manager") && <FinanceKpiRow />}
 
-        {/* ── Performance overview (Streams / Revenue toggle) + DSP list ── */}
-        <PerformanceOverviewCard />
+        {/* Shared catalog analytics: one implementation and one visual language for every role. */}
+        <SharedDashboardSections scopeKey={role} />
 
         {/* ── Bottom row ── */}
-        <div className="grid gap-4 lg:grid-cols-7">
+        {role !== "label" && <div className="grid gap-4 lg:grid-cols-7">
           <Card className="col-span-3 card-surface border-border/60">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">{d.recent_releases}</CardTitle>
@@ -186,7 +187,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-2">
                 <Layers className="h-4 w-4 text-muted-foreground/60" />
                 <CardTitle className="text-base font-semibold">
-                  {role === "artist" ? d.my_activity : role === "label" ? d.label_activity : d.recent_activity}
+                  {role === "artist" ? d.my_activity : d.recent_activity}
                 </CardTitle>
               </div>
             </CardHeader>
@@ -215,44 +216,16 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </div>}
 
         {/* ══ Расширенные виджеты (реальные данные из API, scoped по роли в бекенде) ══ */}
-        {(role === "admin" || role === "manager" || role === "label" || role === "artist") && (
+        {(role === "admin" || role === "manager") && (
           <>
-            {/* Streams donut + Top Territories */}
-            <div className="grid gap-4 lg:grid-cols-5 items-start">
-              <div className="lg:col-span-2">
-                <TopDspCard metric="streams" />
-              </div>
-              <div className="lg:col-span-3">
-                <TopTerritoriesCard />
-              </div>
-            </div>
-
-            <LatestReleasesGridCard />
-
-            {/* Top Tracks + Earnings DSP + Royalty Summary */}
-            <div className="grid gap-4 lg:grid-cols-7">
-              <div className="lg:col-span-3">
-                <TopArtistsCard />
-              </div>
-              <div className="lg:col-span-2">
-                <TopDspCard metric="revenue" title="Top DSP · Earnings" />
-              </div>
-              <div className="lg:col-span-2">
-                <RoyaltySummaryCard />
-              </div>
-            </div>
-
-            {/* Плейлисты (для лейбла/артиста в приоритете) + UGC карта активности */}
-            <div className="grid gap-4 lg:grid-cols-5 items-start">
-              <div className="lg:col-span-2">
-                <PlaylistPlacementsCard />
-              </div>
-              <div className="lg:col-span-3">
-                <UgcMapCard />
-              </div>
+            {/* Admin-only analytics. Shared catalog cards are rendered above exactly once. */}
+            <div className="grid gap-5 lg:grid-cols-3 items-stretch">
+              <div className="[&>*]:h-full"><TopTerritoriesCard /></div>
+              <div className="[&>*]:h-full"><TopDspCard metric="revenue" title="Top DSP · Earnings" /></div>
+              <div className="[&>*]:h-full"><RoyaltySummaryCard /></div>
             </div>
 
             {/* Таблица артистов + рейтинг пользователей — только админ/менеджер */}
@@ -273,6 +246,15 @@ export default function Dashboard() {
               </div>
             )}
           </>
+        )}
+
+        {/* Artist-only analytics which do not have a label-dashboard counterpart. */}
+        {role === "artist" && (
+          <div className="grid gap-5 lg:grid-cols-3 items-stretch">
+            <div className="[&>*]:h-full"><TopTerritoriesCard /></div>
+            <div className="[&>*]:h-full"><TopDspCard metric="revenue" title="Top DSP · Earnings" /></div>
+            <div className="[&>*]:h-full"><RoyaltySummaryCard /></div>
+          </div>
         )}
       </div>
     </Layout>

@@ -521,14 +521,10 @@ const ALL_EVENTS = [
   "user.registered", "rights.conflict_detected",
 ];
 
-const ALL_PERMISSIONS = [
-  "read:releases", "write:releases", "read:artists", "read:royalties",
-  "write:royalties", "read:deliveries", "write:deliveries", "read:finance",
-];
-
 function TabApiKeys() {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
+  const [availablePerms, setAvailablePerms] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -538,7 +534,14 @@ function TabApiKeys() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const r = await api<{ data: ApiKeyRow[] }>("/api/api-keys"); setKeys(r.data); }
+    try {
+      const [keysResponse, permissionsResponse] = await Promise.all([
+        api<{ data: ApiKeyRow[] }>("/api/api-keys"),
+        api<{ data: string[] }>("/api/api-keys/permissions"),
+      ]);
+      setKeys(keysResponse.data);
+      setAvailablePerms(permissionsResponse.data);
+    }
     catch (e) { toast({ variant: "destructive", title: "Ошибка", description: (e as Error).message }); }
     finally { setLoading(false); }
   }, [toast]);
@@ -551,6 +554,7 @@ function TabApiKeys() {
     try {
       const r = await api<{ rawKey: string } & ApiKeyRow>("/api/api-keys", { method: "POST", body: JSON.stringify({ name: newName.trim(), permissions: newPerms }) });
       setRawKey(r.rawKey);
+      setShowCreate(false);
       setNewName(""); setNewPerms([]);
       void load();
     } catch (e) {
@@ -625,14 +629,17 @@ function TabApiKeys() {
 
       {/* Create key dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Создать API-ключ</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><label className="text-sm font-medium">Название</label><Input className="mt-1" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My Automation Key" /></div>
             <div>
               <label className="text-sm font-medium">Права доступа</label>
-              <div className="grid grid-cols-2 gap-1.5 mt-2">
-                {ALL_PERMISSIONS.map((p) => (
+              <p className="text-xs text-muted-foreground mt-1">
+                Чтение и изменение выдаются отдельно. Системные настройки и управление ключами недоступны через API-ключ.
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 max-h-80 overflow-y-auto pr-2">
+                {availablePerms.map((p) => (
                   <label key={p} className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={newPerms.includes(p)} onChange={(e) => setNewPerms((prev) => e.target.checked ? [...prev, p] : prev.filter((x) => x !== p))} />
                     <span className="font-mono text-xs">{p}</span>
@@ -643,7 +650,7 @@ function TabApiKeys() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Отмена</Button>
-            <Button onClick={createKey} disabled={creating || !newName.trim()}>{creating ? "Создаём…" : "Создать"}</Button>
+            <Button onClick={createKey} disabled={creating || !newName.trim() || newPerms.length === 0}>{creating ? "Создаём…" : "Создать"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

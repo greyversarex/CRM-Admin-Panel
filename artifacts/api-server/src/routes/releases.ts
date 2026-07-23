@@ -17,6 +17,8 @@ import { assessAndPersist, LABEL_STRIKE_BLOCK_THRESHOLD } from "../services/risk
 import { lookupReleaseByBarcode } from "../services/musicbrainz";
 import { itunesLookupByUpc, itunesHighResCover, parseItunesCopyright } from "../services/itunes";
 import { logger } from "../lib/logger";
+import { resolveLabelTreeIds } from "../lib/label-scope";
+import { equivalentUpcValues, validateUpc } from "../lib/upc";
 
 const router = Router();
 
@@ -354,6 +356,24 @@ async function findOrCreateArtist(tx: Tx, name: string, labelId: number | null):
   return { id: created.id, created: true, row: created };
 }
 
+async function findOrCreateArtistInLabelTree(
+  tx: Tx,
+  name: string,
+  ownerLabelId: number,
+  allowedLabelIds: number[],
+): Promise<{ id: number; created: boolean; row: typeof artistsTable.$inferSelect | null }> {
+  const trimmed = name.trim();
+  const [existing] = await tx.select().from(artistsTable).where(and(
+    ilike(artistsTable.name, trimmed),
+    inArray(artistsTable.labelId, allowedLabelIds),
+  )).limit(1);
+  if (existing) return { id: existing.id, created: false, row: existing };
+  const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `artist-${Date.now()}`;
+  const [created] = await tx.insert(artistsTable)
+    .values({ name: trimmed, slug, labelId: ownerLabelId, status: "active" }).returning();
+  return { id: created.id, created: true, row: created };
+}
+
 async function findOrCreateLabel(tx: Tx, name: string): Promise<{ id: number; created: boolean; row: typeof labelsTable.$inferSelect | null }> {
   const trimmed = name.trim();
   const [existing] = await tx.select().from(labelsTable).where(ilike(labelsTable.name, trimmed)).limit(1);
@@ -669,12 +689,16 @@ router.post("/releases", async (req, res): Promise<void> => {
       }
       parsed.data.labelId = ownLabelId ?? undefined;
     } else if (scope.role === "label") {
-      // Лейбл может выбрать ЛЮБОЙ labelId (в т.ч. чужой импринт) — доступ к
-      // релизу сохраняется через принадлежность артиста лейблу (см. releaseInScope).
       if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
-      // Label users must also assign an artist that belongs to their label.
+      const labelIds = await resolveLabelTreeIds(scope.labelId);
+      const selectedLabelId = parsed.data.labelId ?? scope.labelId;
+      if (!labelIds.includes(selectedLabelId)) {
+        res.status(403).json({ error: "Label is outside your catalog" }); return;
+      }
+      parsed.data.labelId = selectedLabelId;
+      // Label users may assign only artists from their own label tree.
       const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, parsed.data.artistId));
-      if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Artist does not belong to your label" }); return; }
+      if (!a?.labelId || !labelIds.includes(a.labelId)) { res.status(403).json({ error: "Artist does not belong to your catalog" }); return; }
     }
   }
 
@@ -778,9 +802,15 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
     if (body.artistId !== undefined && body.artistId !== existing.artistId) {
       res.status(403).json({ error: "Cannot change artistId" }); return;
     }
-    // Лейбл может менять labelId (выпуск под другим импринтом) — доступ
-    // остаётся через артиста; артист менять labelId по-прежнему не может.
-    if (scope.role !== "label" && body.labelId !== undefined && body.labelId !== existing.labelId) {
+    if (scope.role === "label") {
+      if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+      if (body.labelId !== undefined) {
+        const labelIds = await resolveLabelTreeIds(scope.labelId);
+        if (typeof body.labelId !== "number" || !labelIds.includes(body.labelId)) {
+          res.status(403).json({ error: "Label is outside your catalog" }); return;
+        }
+      }
+    } else if (body.labelId !== undefined && body.labelId !== existing.labelId) {
       res.status(403).json({ error: "Cannot change labelId" }); return;
     }
   }
@@ -2115,13 +2145,34 @@ function writeMetadataCache(data: ImportedReleaseData, upc: string): void {
   });
 }
 
-router.post("/releases/import-upc", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+router.post("/releases/import-upc", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
   const upcRaw = typeof req.body?.upc === "string" ? req.body.upc.trim() : "";
   const sourceRaw = typeof req.body?.source === "string" ? req.body.source : undefined;
-  const upc = upcRaw.replace(/[-\s]/g, "");
-  if (!/^\d{8,14}$/.test(upc)) {
-    res.status(400).json({ error: "invalid_upc", message: "Укажите корректный UPC/EAN (8–14 цифр)." });
+  const validated = validateUpc(upcRaw);
+  if (!validated.ok) {
+    const message = validated.code === "invalid_check_digit"
+      ? "Контрольная цифра UPC/EAN неверна."
+      : "Укажите корректный GTIN-8, UPC-A, EAN-13 или GTIN-14.";
+    res.status(400).json({ error: "invalid_upc", reason: validated.code, message });
     return;
+  }
+  const upc = validated.value;
+
+  // Resolve tenant ownership before calling any external metadata service.
+  // Admin/manager may import into the source label; label/artist imports must
+  // remain inside the catalog derived from their authenticated session.
+  const scope = getDataScope(req);
+  let scopedLabelIds: number[] = [];
+  let scopedArtist: { id: number; labelId: number | null } | null = null;
+  if (!scope.fullAccess && scope.role === "label") {
+    if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+    scopedLabelIds = await resolveLabelTreeIds(scope.labelId);
+  } else if (!scope.fullAccess && scope.role === "artist") {
+    if (scope.artistId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+    const [artist] = await db.select({ id: artistsTable.id, labelId: artistsTable.labelId })
+      .from(artistsTable).where(eq(artistsTable.id, scope.artistId)).limit(1);
+    if (!artist) { res.status(403).json({ error: "Forbidden" }); return; }
+    scopedArtist = artist;
   }
   // По умолчанию — «все сервисы»: параллельный запрос ко всем каталогам
   // и слияние лучших данных по полям. Конкретный источник можно выбрать явно.
@@ -2130,7 +2181,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
 
   // Idempotency: не создаём дубль, если релиз с таким UPC уже есть.
   const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
-    .from(releasesTable).where(eq(releasesTable.upc, upc)).limit(1);
+    .from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(upc))).limit(1);
   if (existing) {
     res.status(409).json({ error: "already_exists", message: `Релиз с UPC ${upc} уже существует в каталоге.`, releaseId: existing.id });
     return;
@@ -2250,14 +2301,27 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
   let createdRelease: typeof releasesTable.$inferSelect;
   try {
     createdRelease = await db.transaction(async (tx) => {
-      const labelId = found.label?.trim()
-        ? await findOrCreateLabel(tx, found.label).then((r) => {
-            if (r.created && r.row) pendingAudits.push({ action: "create", entityType: "label", entityId: r.id, before: null, after: r.row });
-            return r.id;
-          })
-        : null;
+      let labelId: number | null;
+      let artist: { id: number; created: boolean; row: typeof artistsTable.$inferSelect | null };
 
-      const artist = await findOrCreateArtist(tx, found.artist, labelId);
+      if (scope.fullAccess) {
+        labelId = found.label?.trim()
+          ? await findOrCreateLabel(tx, found.label).then((r) => {
+              if (r.created && r.row) pendingAudits.push({ action: "create", entityType: "label", entityId: r.id, before: null, after: r.row });
+              return r.id;
+            })
+          : null;
+        artist = await findOrCreateArtist(tx, found.artist, labelId);
+      } else if (scope.role === "label") {
+        labelId = scope.labelId!;
+        artist = await findOrCreateArtistInLabelTree(
+          tx, found.artist, labelId, scopedLabelIds,
+        );
+      } else {
+        labelId = scopedArtist!.labelId;
+        artist = { id: scopedArtist!.id, created: false, row: null };
+      }
+
       if (artist.created && artist.row) pendingAudits.push({ action: "create", entityType: "artist", entityId: artist.id, before: null, after: artist.row });
 
       const releaseType = found.releaseType ?? (found.tracks.length > 1 ? "album" : "single");
@@ -2272,9 +2336,10 @@ router.post("/releases/import-upc", requireRole("admin", "manager"), async (req,
         title: found.title,
         releaseType,
         status: "draft",
-        upc: found.upc || upc,
+        upc,
         artistId: artist.id,
         labelId,
+        isTransfer: true,
         coverUrl: found.coverUrl,
         releaseDate: found.releaseDate,
         genre: found.genre ?? undefined,

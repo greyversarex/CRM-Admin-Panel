@@ -17,6 +17,7 @@ import Dashboard from "@/pages/dashboard";
 import Releases from "@/pages/releases";
 import ReleaseDetail from "@/pages/releases/[id]";
 import CreateRelease from "@/pages/releases/new";
+import ReleaseUpcGate from "@/pages/releases/upc-gate";
 import EditRelease from "@/pages/releases/edit";
 import TrackEditPage from "@/pages/releases/tracks/edit";
 import AudioUploadPage from "@/pages/releases/tracks/audio-upload";
@@ -121,7 +122,8 @@ function Router() {
       <ProtectedRoute path="/analytics"      component={Analytics} />
       <ProtectedRoute path="/distribution"   component={Distribution} />
       <ProtectedRoute path="/releases"                  component={Releases} />
-      <ProtectedRoute path="/releases/new"              component={CreateRelease} />
+      <ProtectedRoute path="/releases/new/details"      component={CreateRelease} />
+      <ProtectedRoute path="/releases/new"              component={ReleaseUpcGate} />
       <ProtectedRoute path="/releases/transfer"         component={TransferTrack} />
       <ProtectedRoute path="/releases/transfer/new"     component={NewImport} />
       <ProtectedRoute path="/catalog/import"            component={CatalogImport} />

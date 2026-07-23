@@ -8,6 +8,7 @@ import { z } from "zod/v4";
 import { getDataScope } from "../lib/auth";
 import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
+import { equivalentUpcValues, validateUpc } from "../lib/upc";
 import { releaseEditableReason } from "./releases";
 
 const router = Router();
@@ -15,21 +16,24 @@ const router = Router();
 // ─── GET /releases/check-upc?upc=... ─────────────────────────────────────────
 // Проверяет, занят ли UPC в нашем каталоге. Используется UPC Gate (Шаг 1).
 router.get("/releases/check-upc", async (req, res): Promise<void> => {
-  const upc = String(req.query.upc ?? "").trim();
-  if (!upc) { res.status(400).json({ error: "upc required" }); return; }
-  if (!/^\d{8,14}$/.test(upc)) {
-    res.json({ available: false, reason: "Неверный формат UPC (нужно 8–14 цифр)." });
+  const rawUpc = String(req.query.upc ?? "");
+  if (!rawUpc.trim()) { res.status(400).json({ error: "upc_required" }); return; }
+
+  const parsed = validateUpc(rawUpc);
+  if (!parsed.ok) {
+    res.json({ available: false, code: parsed.code });
     return;
   }
+
+  const upc = parsed.value;
   const [existing] = await db.select({
-    id: releasesTable.id, title: releasesTable.title, artistId: releasesTable.artistId,
-    status: releasesTable.status,
-  }).from(releasesTable).where(eq(releasesTable.upc, upc));
-  if (!existing) { res.json({ available: true }); return; }
+    id: releasesTable.id,
+  }).from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(upc))).limit(1);
+  if (!existing) { res.json({ available: true, upc }); return; }
+
   res.json({
     available: false,
-    reason: "Этот UPC уже используется в каталоге.",
-    conflictRelease: { id: existing.id, title: existing.title, status: existing.status },
+    code: "already_exists",
   });
 });
 

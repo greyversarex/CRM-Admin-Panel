@@ -4,7 +4,7 @@
 #  Запускает только API (фронт раздаётся nginx-сервисом из compose).
 # ───────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 
 # ── Stage 1: install deps (используем lockfile для повторяемости) ──
@@ -33,13 +33,14 @@ FROM node:20-bookworm-slim AS runtime
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg \
  && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 ENV NODE_ENV=production
 
 # Только то, что реально нужно в runtime
 COPY --from=build /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json /app/.npmrc ./
 COPY --from=build /app/artifacts/api-server/package.json artifacts/api-server/
+COPY --from=build /app/artifacts/api-server/node_modules artifacts/api-server/node_modules
 COPY --from=build /app/artifacts/api-server/dist artifacts/api-server/dist
 COPY --from=build /app/lib lib
 # Фронтовая статика — для удобства подмонтировать в nginx через volume

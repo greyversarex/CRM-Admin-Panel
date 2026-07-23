@@ -86,10 +86,10 @@ const adminOnly = requireRole("admin", "manager");
 router.use(dashboardRouter);          // scoped per-route inside (artist/label get filtered widgets)
 router.use(artistsRouter);            // scoped per-route inside
 router.use(labelsRouter);             // GET scoped per-role inside; POST/PUT/DELETE guarded inside
+router.use(releaseFlowRouter);        // Must precede /releases/:id so "check-upc" is not parsed as an id.
 router.use(releasesRouter);           // scoped per-route inside
 router.use(releasesExtrasRouter);     // /dsp-catalog + /releases/:id/{artists,dsps,validate}
 router.use(catalogDictionaryRouter);  // GET /catalog/dictionary/:type — read-only, все роли (ДО admin-гарда /catalog)
-router.use(releaseFlowRouter);        // Symphonic-flow: /releases/check-upc, /tracks/reusable, reorder, /issues
 router.use(tracksRouter);             // scoped per-route inside
 router.use(audioQcRouter);            // Audio QC: /tracks/:id/audio-qc (scoped per-route inside)
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
@@ -166,7 +166,8 @@ router.use(auditRouter);                 // /audit — admin/manager only (guard
 router.use(rightsRouter);               // /rights — scoped per-route inside (label/artist see their assets)
 router.use(rightsExtrasRouter);         // /rights/holders/:id/freeze + /rights/history — admin/manager only (гарды внутри)
 router.use("/settings", adminOnly);     // системный — без manager_permission ключа
-router.use("/api-keys", adminOnly);
+// API keys can grant org-wide service access and must only be managed by admin.
+router.use("/api-keys", requireRole("admin"));
 router.use("/webhooks", adminOnly);
 router.use(settingsRouter);
 router.use("/communications", adminOnly, requireManagerPermission("support_comms"));

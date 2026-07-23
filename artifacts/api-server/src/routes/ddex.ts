@@ -20,9 +20,9 @@ import { and, eq, desc, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
+import { getDdexInboundAuthConfig, verifyDdexInboundRequest } from "../lib/ddex-inbound-auth";
 import { createMessage, processMessage, ingestAck, getMessageDetail } from "../ddex/service";
 import { listTransports } from "../ddex/transports";
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 const router = Router();
 
@@ -289,22 +289,12 @@ router.get("/ddex/acknowledgements", async (req, res): Promise<void> => {
 
 // ── POST /ddex/acknowledgements/inbound (без cookie-auth, HMAC) ─────
 //
-// Партнёр шлёт нам raw XML на этот endpoint. Защита через `X-DDEX-Signature`
-// заголовок (HMAC-SHA256 от тела сообщения с общим секретом из env
-// DDEX_INBOUND_SECRET). В dev-режиме разрешаем без подписи если env не задана.
-
-const INBOUND_SECRET = process.env.DDEX_INBOUND_SECRET || "";
-
-function verifyInboundSignature(rawBody: Buffer, signatureHeader: string | undefined): boolean {
-  if (!INBOUND_SECRET) return true; // dev-режим
-  if (!signatureHeader) return false;
-  const expected = createHmac("sha256", INBOUND_SECRET).update(rawBody).digest("hex");
-  try {
-    const a = Buffer.from(expected, "hex");
-    const b = Buffer.from(signatureHeader.replace(/^sha256=/, ""), "hex");
-    if (a.length !== b.length) return false;
-    return timingSafeEqual(a, b);
-  } catch { return false; }
+// Партнёр шлёт raw XML с Unix timestamp и HMAC-SHA256 от
+// `${timestamp}.${rawBody}`. Timestamp ограничивает replay window, а payload hash
+// в ingestAck обеспечивает постоянную идемпотентность точного повтора.
+const inboundAuthConfig = getDdexInboundAuthConfig();
+if (inboundAuthConfig.unsignedDevelopmentMode) {
+  logger.warn("DDEX inbound webhook accepts unsigned payloads in development only");
 }
 
 router.get("/ddex/transports", (_req, res): void => {
@@ -327,15 +317,21 @@ ddexInboundRouter.post(
       res.status(400).json({ error: "Empty body or wrong content-type" });
       return;
     }
-    const sig = req.header("x-ddex-signature") ?? undefined;
-    if (!verifyInboundSignature(rawBody, sig)) {
-      res.status(401).json({ error: "Invalid signature" });
+    const auth = verifyDdexInboundRequest({
+      rawBody,
+      signatureHeader: req.header("x-ddex-signature") ?? undefined,
+      timestampHeader: req.header("x-ddex-timestamp") ?? undefined,
+      config: inboundAuthConfig,
+    });
+    if (!auth.ok) {
+      logger.warn({ reason: auth.reason, ip: req.ip }, "DDEX inbound authentication rejected");
+      res.status(401).json({ error: "Invalid or stale DDEX webhook authentication" });
       return;
     }
     try {
       const partnerHint = req.header("x-ddex-partner") ?? undefined;
       const result = await ingestAck(rawBody.toString("utf8"), "webhook", partnerHint);
-      res.status(202).json(result);
+      res.status(result.duplicate ? 200 : 202).json(result);
     } catch (err) {
       logger.warn({ err }, "ack inbound parse failed");
       res.status(400).json({ error: (err as Error).message });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, artistsTable, labelsTable, releasesTable, tracksTable, transactionsTable, payoutsTable, deliveriesTable, activityLogTable, usageReportsTable, takedownRequestsTable, usersTable, dspDealsTable, publishingWorksTable, publishingConflictsTable, playlistStatsTable, ugcMetricsTable } from "@workspace/db";
-import { count, sum, eq, desc, gte, sql, and, inArray, between, isNotNull } from "drizzle-orm";
+import { count, sum, eq, desc, gte, sql, and, or, inArray, between, isNotNull } from "drizzle-orm";
 import { getDataScope, type DataScope } from "../lib/auth";
 
 const router = Router();
@@ -121,11 +121,23 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [releaseCount] = await db.select({ count: count() }).from(releasesTable).where(relS === false ? sql`false` : relS);
   const [trackCount] = await db.select({ count: count() }).from(tracksTable).where(trackWhere);
 
-  // Streams + revenue from usage_reports (real ingestion data).
+  // Streams and the label dashboard revenue come from usage reports. Broma16
+  // statistics ingestion writes both values there, so the label analytics must
+  // not silently substitute unrelated/manual financial-ledger transactions.
   const [usageTotals] = await db.select({
     streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
     revenue: sql<string>`coalesce(sum(${usageReportsTable.revenue}), 0)`,
   }).from(usageReportsTable).where(usageS === false ? sql`false` : usageS);
+  const revenueS = scope.role === "label" && scope.labelId != null && scopedArtistIds && scopedArtistIds.length > 0
+    ? or(eq(transactionsTable.labelId, scope.labelId), inArray(transactionsTable.artistId, scopedArtistIds))
+    : txS;
+  const [revenueTotals] = await db.select({
+    revenue: sql<string>`coalesce(sum(${transactionsTable.amount}), 0)`,
+  }).from(transactionsTable).where(withCond(
+    inArray(transactionsTable.type, ["dsp_revenue", "publishing_revenue", "content_id"]),
+    eq(transactionsTable.currency, "USD"),
+    revenueS === false ? sql`false` : revenueS,
+  ));
 
   // Revenue growth: last 30d vs prior 30d (from usage_reports).
   const last30Start = daysAgo(29);
@@ -152,7 +164,10 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [pendingPayouts] = await db.select({ count: count() }).from(payoutsTable)
     .where(withCond(eq(payoutsTable.status, "pending"), payS === false ? sql`false` : payS));
   const [activeDeliveries] = await db.select({ count: count() }).from(deliveriesTable)
-    .where(withCond(eq(deliveriesTable.status, "in_progress"), delS === false ? sql`false` : delS));
+    .where(withCond(
+      inArray(deliveriesTable.status, ["queued", "processing", "sent", "pending", "in_progress"]),
+      delS === false ? sql`false` : delS,
+    ));
 
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -164,7 +179,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     totalReleases: releaseCount.count,
     totalTracks: trackCount.count,
     totalStreams: Number(usageTotals.streams),
-    totalRevenue: parseFloat(parseFloat(usageTotals.revenue).toFixed(2)),
+    totalRevenue: scope.role === "label" || scope.role === "artist"
+      ? parseFloat(parseFloat(usageTotals.revenue).toFixed(2))
+      : parseFloat(parseFloat(revenueTotals.revenue).toFixed(2)),
     pendingPayouts: pendingPayouts.count,
     activeDeliveries: activeDeliveries.count,
     revenueGrowth,
@@ -422,9 +439,12 @@ router.get("/dashboard/latest-releases", async (req, res): Promise<void> => {
     artistId: releasesTable.artistId,
     artistName: artistsTable.name,
     artistImageUrl: artistsTable.imageUrl,
+    upc: releasesTable.upc,
+    labelName: labelsTable.name,
   })
     .from(releasesTable)
     .leftJoin(artistsTable, eq(releasesTable.artistId, artistsTable.id))
+    .leftJoin(labelsTable, eq(releasesTable.labelId, labelsTable.id))
     .where(relS)
     .orderBy(desc(releasesTable.createdAt))
     .limit(10);
@@ -439,9 +459,11 @@ router.get("/dashboard/latest-releases", async (req, res): Promise<void> => {
     createdAt: r.createdAt.toISOString(),
     artist: {
       id: r.artistId,
-      name: r.artistName ?? "Unknown Artist",
+      name: r.artistName ?? "",
       imageUrl: r.artistImageUrl,
     },
+    barcode: r.upc,
+    labelName: r.labelName,
   })));
 });
 
@@ -860,7 +882,7 @@ router.get("/dashboard/streams-by-month", async (req, res): Promise<void> => {
 
   // Начало периода — первое число месяца 11 месяцев назад (лексикографическое сравнение текста работает для ISO-дат).
   const startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+  const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
 
   const rows = await db.select({
     ym: sql<string>`substring(${usageReportsTable.period} from 1 for 7)`,
@@ -886,6 +908,54 @@ router.get("/dashboard/streams-by-month", async (req, res): Promise<void> => {
     });
   }
   res.json(result);
+});
+
+/**
+ * Per-platform monthly streams for the label dashboard multi-series chart.
+ * All values come from usage_reports and inherit the session label/artist scope.
+ */
+router.get("/dashboard/streams-by-platform-month", async (req, res): Promise<void> => {
+  const now = new Date();
+  const scope = getDataScope(req);
+  const scopedArtistIds = await resolveScopedArtistIds(scope);
+  const usageS = usageScope(scopedArtistIds);
+  if (usageS === false) { res.json({ platforms: [], series: [] }); return; }
+
+  const startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
+  const rows = await db.select({
+    ym: sql<string>`substring(${usageReportsTable.period} from 1 for 7)`,
+    platform: usageReportsTable.platform,
+    streams: sql<string>`coalesce(sum(${usageReportsTable.streams}), 0)`,
+  })
+    .from(usageReportsTable)
+    .where(withCond(gte(usageReportsTable.period, startKey), usageS))
+    .groupBy(sql`substring(${usageReportsTable.period} from 1 for 7)`, usageReportsTable.platform);
+
+  const platformTotals = new Map<string, number>();
+  const valuesByMonth = new Map<string, Record<string, number>>();
+  for (const row of rows) {
+    const streams = Number(row.streams);
+    platformTotals.set(row.platform, (platformTotals.get(row.platform) ?? 0) + streams);
+    const monthValues = valuesByMonth.get(row.ym) ?? {};
+    monthValues[row.platform] = (monthValues[row.platform] ?? 0) + streams;
+    valuesByMonth.set(row.ym, monthValues);
+  }
+  const platforms = Array.from(platformTotals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([platform]) => platform);
+  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+  const series = [];
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const period = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    series.push({
+      period,
+      month: monthFormatter.format(date),
+      values: valuesByMonth.get(period) ?? {},
+    });
+  }
+  res.json({ platforms, series });
 });
 
 /**
@@ -915,8 +985,11 @@ router.get("/dashboard/playlist-placements", async (req, res): Promise<void> => 
     streams: playlistStatsTable.streams,
     trendPct: playlistStatsTable.trendPct,
     lastUpdated: playlistStatsTable.lastUpdated,
+    artistName: artistsTable.name,
+    artistImageUrl: artistsTable.imageUrl,
   })
     .from(playlistStatsTable)
+    .leftJoin(artistsTable, eq(playlistStatsTable.artistId, artistsTable.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(playlistStatsTable.streams))
     .limit(20);
@@ -929,26 +1002,32 @@ router.get("/dashboard/playlist-placements", async (req, res): Promise<void> => 
     streams: r.streams,
     trendPct: r.trendPct,
     lastUpdated: r.lastUpdated.toISOString(),
+    artistName: r.artistName,
+    artistImageUrl: r.artistImageUrl,
   })));
 });
 
 /**
- * UGC time series — динамика по дням (просмотры / видео / лайки) + разбивка по платформам.
+ * UGC time series — динамика по дням + разбивка по платформам.
  * Данные из ugc_metrics. Scope через треки артистов (как в ugc-summary).
- * Примечание: у ugc_metrics нет колонки "время просмотра", поэтому третий ряд — лайки (вовлечённость).
+ * Spotify popularity намеренно исключён: это индекс 0–100, а не UGC views.
  */
 router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   const artistIds = await resolveScopedArtistIds(scope);
-  const conds: any[] = [];
+  const startDate = new Date();
+  startDate.setUTCHours(0, 0, 0, 0);
+  startDate.setUTCMonth(startDate.getUTCMonth() - 6);
+  const conds: any[] = [gte(ugcMetricsTable.recordedAt, startDate)];
   if (artistIds !== null) {
-    if (artistIds.length === 0) { res.json({ series: [], byPlatform: [] }); return; }
+    if (artistIds.length === 0) { res.json({ series: [], byPlatform: [], platformSeries: [] }); return; }
     const trackRows = await db.select({ id: tracksTable.id }).from(tracksTable)
       .where(inArray(tracksTable.artistId, artistIds));
     const trackIds = trackRows.map((r) => r.id);
-    if (trackIds.length === 0) { res.json({ series: [], byPlatform: [] }); return; }
+    if (trackIds.length === 0) { res.json({ series: [], byPlatform: [], platformSeries: [] }); return; }
     conds.push(inArray(ugcMetricsTable.trackId, trackIds));
   }
+  conds.push(inArray(ugcMetricsTable.platform, ["youtube_cms", "youtube", "tiktok", "meta", "instagram", "facebook"]));
   const where = conds.length ? and(...conds) : undefined;
 
   const series = await db.select({
@@ -956,6 +1035,8 @@ router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
     views: sql<string>`coalesce(sum(${ugcMetricsTable.views}), 0)`,
     videos: sql<string>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)`,
     likes: sql<string>`coalesce(sum(${ugcMetricsTable.likes}), 0)`,
+    shares: sql<string>`coalesce(sum(${ugcMetricsTable.shares}), 0)`,
+    watchTimeSeconds: sql<string>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)`,
   })
     .from(ugcMetricsTable)
     .where(where)
@@ -968,10 +1049,41 @@ router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
     videos: sql<string>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)`,
     likes: sql<string>`coalesce(sum(${ugcMetricsTable.likes}), 0)`,
     shares: sql<string>`coalesce(sum(${ugcMetricsTable.shares}), 0)`,
+    watchTimeSeconds: sql<string>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)`,
   })
     .from(ugcMetricsTable)
     .where(where)
     .groupBy(ugcMetricsTable.platform);
+
+  const perPlatformSeries = await db.select({
+    platform: ugcMetricsTable.platform,
+    day: sql<string>`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`,
+    views: sql<string>`coalesce(sum(${ugcMetricsTable.views}), 0)`,
+    videos: sql<string>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)`,
+    likes: sql<string>`coalesce(sum(${ugcMetricsTable.likes}), 0)`,
+    shares: sql<string>`coalesce(sum(${ugcMetricsTable.shares}), 0)`,
+    watchTimeSeconds: sql<string>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)`,
+  })
+    .from(ugcMetricsTable)
+    .where(where)
+    .groupBy(ugcMetricsTable.platform, sql`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`)
+    .orderBy(ugcMetricsTable.platform, sql`to_char(${ugcMetricsTable.recordedAt}, 'YYYY-MM-DD')`);
+
+  const platformSeries = new Map<string, Array<{
+    day: string; views: number; videos: number; likes: number; shares: number; watchTimeSeconds: number;
+  }>>();
+  for (const point of perPlatformSeries) {
+    const points = platformSeries.get(point.platform) ?? [];
+    points.push({
+      day: point.day,
+      views: Number(point.views),
+      videos: Number(point.videos),
+      likes: Number(point.likes),
+      shares: Number(point.shares),
+      watchTimeSeconds: Number(point.watchTimeSeconds),
+    });
+    platformSeries.set(point.platform, points);
+  }
 
   res.json({
     series: series.map((s) => ({
@@ -979,6 +1091,8 @@ router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
       views: Number(s.views),
       videos: Number(s.videos),
       likes: Number(s.likes),
+      shares: Number(s.shares),
+      watchTimeSeconds: Number(s.watchTimeSeconds),
     })),
     byPlatform: byPlatform.map((p) => ({
       platform: p.platform,
@@ -986,7 +1100,9 @@ router.get("/dashboard/ugc-timeseries", async (req, res): Promise<void> => {
       videos: Number(p.videos),
       likes: Number(p.likes),
       shares: Number(p.shares),
+      watchTimeSeconds: Number(p.watchTimeSeconds),
     })),
+    platformSeries: Array.from(platformSeries, ([platform, points]) => ({ platform, points })),
   });
 });
 

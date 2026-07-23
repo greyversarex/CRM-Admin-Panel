@@ -179,6 +179,7 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
   const to   = typeof req.query.to   === "string" ? new Date(req.query.to)   : null;
 
   const conds: any[] = [];
+  conds.push(inArray(ugcMetricsTable.platform, ["youtube_cms", "youtube", "tiktok", "meta", "instagram", "facebook"]));
   if (from && !Number.isNaN(from.getTime())) conds.push(gte(ugcMetricsTable.recordedAt, from));
   if (to   && !Number.isNaN(to.getTime()))   conds.push(lte(ugcMetricsTable.recordedAt, to));
 
@@ -186,14 +187,14 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
   // Пустой scope → возвращаем нули (НЕ показываем чужие данные).
   if (artistIds !== null) {
     if (artistIds.length === 0) {
-      res.json({ totals: { views: 0, likes: 0, shares: 0, videos: 0, revenueCents: 0 }, byPlatform: [] });
+      res.json({ totals: { views: 0, likes: 0, shares: 0, videos: 0, watchTimeSeconds: 0, revenueCents: 0 }, byPlatform: [] });
       return;
     }
     const trackRows = await db.select({ id: tracksTable.id }).from(tracksTable)
       .where(inArray(tracksTable.artistId, artistIds));
     const trackIds = trackRows.map(r => r.id);
     if (trackIds.length === 0) {
-      res.json({ totals: { views: 0, likes: 0, shares: 0, videos: 0, revenueCents: 0 }, byPlatform: [] });
+      res.json({ totals: { views: 0, likes: 0, shares: 0, videos: 0, watchTimeSeconds: 0, revenueCents: 0 }, byPlatform: [] });
       return;
     }
     conds.push(inArray(ugcMetricsTable.trackId, trackIds));
@@ -206,6 +207,7 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
     likes:        sql<number>`coalesce(sum(${ugcMetricsTable.likes}), 0)::bigint`,
     shares:       sql<number>`coalesce(sum(${ugcMetricsTable.shares}), 0)::bigint`,
     videos:       sql<number>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)::bigint`,
+    watchTimeSeconds: sql<number>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)::bigint`,
     revenueCents: sql<number>`coalesce(sum(${ugcMetricsTable.revenueCents}), 0)::bigint`,
   }).from(ugcMetricsTable).where(where);
 
@@ -215,6 +217,7 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
     likes:        sql<number>`coalesce(sum(${ugcMetricsTable.likes}), 0)::bigint`,
     shares:       sql<number>`coalesce(sum(${ugcMetricsTable.shares}), 0)::bigint`,
     videos:       sql<number>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)::bigint`,
+    watchTimeSeconds: sql<number>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)::bigint`,
     revenueCents: sql<number>`coalesce(sum(${ugcMetricsTable.revenueCents}), 0)::bigint`,
   }).from(ugcMetricsTable).where(where).groupBy(ugcMetricsTable.platform);
 
@@ -224,6 +227,7 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
       likes: Number(totals?.likes ?? 0),
       shares: Number(totals?.shares ?? 0),
       videos: Number(totals?.videos ?? 0),
+      watchTimeSeconds: Number(totals?.watchTimeSeconds ?? 0),
       revenueCents: Number(totals?.revenueCents ?? 0),
     },
     byPlatform: byPlatform.map(p => ({
@@ -232,6 +236,7 @@ router.get("/dashboard/ugc-summary", async (req, res): Promise<void> => {
       likes: Number(p.likes),
       shares: Number(p.shares),
       videos: Number(p.videos),
+      watchTimeSeconds: Number(p.watchTimeSeconds),
       revenueCents: Number(p.revenueCents),
     })),
   });

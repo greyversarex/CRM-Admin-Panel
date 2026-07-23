@@ -34,6 +34,32 @@ export interface Broma16OutletRow {
   idOutletUser: string;
 }
 
+export type ArtistProfileLinks = {
+  website?: string;
+  spotify?: string;
+  appleMusic?: string;
+  youtube?: string;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  deezer?: string;
+  yandexMusic?: string;
+  vkMusic?: string;
+};
+
+const PROFILE_LINK_FIELDS: Array<{ key: keyof ArtistProfileLinks; label: string; placeholder: string }> = [
+  { key: "website", label: "Официальный сайт", placeholder: "https://artist.example" },
+  { key: "spotify", label: "Spotify", placeholder: "https://open.spotify.com/artist/…" },
+  { key: "appleMusic", label: "Apple Music", placeholder: "https://music.apple.com/artist/…" },
+  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@…" },
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/…" },
+  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@…" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/…" },
+  { key: "deezer", label: "Deezer", placeholder: "https://deezer.com/artist/…" },
+  { key: "yandexMusic", label: "Яндекс Музыка", placeholder: "https://music.yandex.ru/artist/…" },
+  { key: "vkMusic", label: "VK Музыка", placeholder: "https://vk.com/artist/…" },
+];
+
 export interface ArtistFormValues {
   id?: number;
   name: string;
@@ -43,6 +69,12 @@ export interface ArtistFormValues {
   imageUrl?: string | null;
   phone?: string | null;
   labelId?: number | null;
+  spotifyId?: string | null;
+  appleId?: string | null;
+  ipiNameNumber?: string | null;
+  ipn?: string | null;
+  isni?: string | null;
+  socialLinks?: ArtistProfileLinks | null;
   broma16Outlets?: Broma16OutletRow[] | null;
   status?: "active" | "inactive";
 }
@@ -62,6 +94,12 @@ const EMPTY: ArtistFormValues = {
   imageUrl: "",
   phone: "",
   labelId: null,
+  spotifyId: "",
+  appleId: "",
+  ipiNameNumber: "",
+  ipn: "",
+  isni: "",
+  socialLinks: {},
   broma16Outlets: [],
   status: "active",
 };
@@ -84,7 +122,12 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   useEffect(() => {
     if (open) {
       setForm(initial
-        ? { ...EMPTY, ...initial, broma16Outlets: (initial.broma16Outlets ?? []).map((o) => ({ ...o })) }
+        ? {
+            ...EMPTY,
+            ...initial,
+            socialLinks: { ...(initial.socialLinks ?? {}) },
+            broma16Outlets: (initial.broma16Outlets ?? []).map((o) => ({ ...o })),
+          }
         : { ...EMPTY, labelId: isLabel ? user?.labelId ?? null : null });
       setCreateAccount(false);
       setInviteEmail("");
@@ -188,9 +231,26 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
   const setField = <K extends keyof ArtistFormValues>(k: K, v: ArtistFormValues[K]) =>
     setForm((s) => ({ ...s, [k]: v }));
 
+  const setProfileLink = (key: keyof ArtistProfileLinks, value: string) =>
+    setForm((s) => ({ ...s, socialLinks: { ...(s.socialLinks ?? {}), [key]: value } }));
+
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast({ title: "Укажите имя артиста", variant: "destructive" });
+      return;
+    }
+    const invalidLink = PROFILE_LINK_FIELDS.find(({ key }) => {
+      const value = form.socialLinks?.[key]?.trim();
+      if (!value) return false;
+      try {
+        const url = new URL(value);
+        return url.protocol !== "http:" && url.protocol !== "https:";
+      } catch {
+        return true;
+      }
+    });
+    if (invalidLink) {
+      toast({ title: `Проверьте ссылку: ${invalidLink.label}`, description: "Нужен полный URL, начинающийся с https://", variant: "destructive" });
       return;
     }
     let uploadedImageUrl: string | null | undefined;
@@ -208,7 +268,17 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
       // Приоритет: новый файл → существующий imageUrl (после edit/без изменений).
       imageUrl: uploadedImageUrl ?? (form.imageUrl?.trim() || null),
       phone: form.phone?.trim() || null,
-      labelId: isLabel ? user?.labelId ?? null : (form.labelId ?? null),
+      labelId: form.labelId ?? (isLabel ? user?.labelId ?? null : null),
+      spotifyId: form.spotifyId?.trim() || null,
+      appleId: form.appleId?.trim() || null,
+      ipiNameNumber: form.ipiNameNumber?.trim() || null,
+      ipn: form.ipn?.trim() || null,
+      isni: form.isni?.trim() || null,
+      socialLinks: Object.fromEntries(
+        Object.entries(form.socialLinks ?? {})
+          .map(([key, value]) => [key, value?.trim()])
+          .filter(([, value]) => Boolean(value)),
+      ),
       broma16Outlets: (form.broma16Outlets ?? [])
         .filter((o) => o.outletId > 0 && o.idOutletUser.trim() !== "")
         .map((o) => ({ outletId: o.outletId, outletName: o.outletName, idOutletUser: o.idOutletUser.trim() })),
@@ -263,7 +333,7 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Редактировать артиста" : "Новый артист"}</DialogTitle>
           <DialogDescription>
@@ -306,23 +376,22 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
             </div>
           </div>
 
-          {!isLabel && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="art-label">Лейбл</Label>
+          <div className="grid gap-1.5">
+              <Label htmlFor="art-label">Лейбл / импринт</Label>
               <Select
                 value={form.labelId ? String(form.labelId) : "none"}
                 onValueChange={(v) => setField("labelId", v === "none" ? null : Number(v))}
               >
                 <SelectTrigger id="art-label"><SelectValue placeholder="Независимый" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Независимый</SelectItem>
+                  {!isLabel && <SelectItem value="none">Независимый</SelectItem>}
                   {labels.map((l) => (
                     <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {isLabel && <p className="text-xs text-muted-foreground">Доступны только ваш основной лейбл и его подлейблы.</p>}
             </div>
-          )}
 
           <div className="grid gap-1.5">
             <Label>Фото артиста</Label>
@@ -392,8 +461,63 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
             />
           </div>
 
-          <div className="grid gap-1.5">
-            <Label>ID артиста на площадках</Label>
+          <section className="rounded-lg border border-border/60 bg-muted/15 p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Профили на музыкальных площадках</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Отдельные ID нужны для точной доставки в существующий профиль, ссылки — для карточки артиста и проверки команды.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="art-spotify-id">Spotify Artist ID</Label>
+                <Input id="art-spotify-id" value={form.spotifyId ?? ""} onChange={(e) => setField("spotifyId", e.target.value)} placeholder="Например: 4Z8W4fKeB5YxbusRsdQVPb" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="art-apple-id">Apple Music Artist ID</Label>
+                <Input id="art-apple-id" value={form.appleId ?? ""} onChange={(e) => setField("appleId", e.target.value)} placeholder="Например: 123456789" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PROFILE_LINK_FIELDS.map((field) => (
+                <div key={field.key} className="grid gap-1.5">
+                  <Label htmlFor={`art-link-${field.key}`}>{field.label}</Label>
+                  <Input
+                    id={`art-link-${field.key}`}
+                    type="url"
+                    inputMode="url"
+                    value={form.socialLinks?.[field.key] ?? ""}
+                    onChange={(e) => setProfileLink(field.key, e.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border/60 bg-muted/15 p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Профессиональные идентификаторы</h3>
+              <p className="text-xs text-muted-foreground mt-1">Заполняются при наличии — для publishing, PRO и международного обмена метаданными.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="art-ipi">IPI Name Number</Label>
+                <Input id="art-ipi" value={form.ipiNameNumber ?? ""} onChange={(e) => setField("ipiNameNumber", e.target.value)} placeholder="IPI" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="art-ipn">IPN</Label>
+                <Input id="art-ipn" value={form.ipn ?? ""} onChange={(e) => setField("ipn", e.target.value)} placeholder="IPN" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="art-isni">ISNI</Label>
+                <Input id="art-isni" value={form.isni ?? ""} onChange={(e) => setField("isni", e.target.value)} placeholder="0000 0000 0000 0000" />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border/60 bg-muted/15 p-4 grid gap-2">
+            <Label>Расширенное сопоставление Broma16</Label>
             <p className="text-xs text-muted-foreground">
               Укажите ID артиста на витринах (Spotify, Apple Music, Яндекс.Музыка и др.). Эти ID
               передаются дистрибьютору Broma16 при отправке релизов.
@@ -452,7 +576,7 @@ export function ArtistFormDialog({ open, onOpenChange, initial, onSaved }: Props
             {outletOptionsQ.isError && (
               <p className="text-xs text-destructive">Не удалось загрузить список площадок.</p>
             )}
-          </div>
+          </section>
 
           <div className="grid gap-1.5">
             <Label htmlFor="art-status">Статус</Label>

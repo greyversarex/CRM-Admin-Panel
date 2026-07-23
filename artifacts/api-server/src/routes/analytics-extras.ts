@@ -11,8 +11,8 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { db, ugcMetricsTable, realtimeAlertsTable } from "@workspace/db";
-import { eq, desc, and, gte, lte, sql, isNull } from "drizzle-orm";
+import { db, ugcMetricsTable, realtimeAlertsTable, tracksTable } from "@workspace/db";
+import { eq, desc, and, gte, lte, sql, isNull, inArray } from "drizzle-orm";
 import { auditMutation } from "../lib/audit";
 
 const router = Router();
@@ -25,7 +25,7 @@ router.get("/analytics/ugc", async (req, res) => {
   const from = typeof req.query.from === "string" ? new Date(req.query.from) : null;
   const to = typeof req.query.to === "string" ? new Date(req.query.to) : null;
 
-  const conds = [];
+  const conds = [inArray(ugcMetricsTable.platform, ["youtube_cms", "youtube", "tiktok", "meta", "instagram", "facebook"])];
   if (platform) conds.push(eq(ugcMetricsTable.platform, platform));
   if (from && !Number.isNaN(from.getTime())) conds.push(gte(ugcMetricsTable.recordedAt, from));
   if (to && !Number.isNaN(to.getTime())) conds.push(lte(ugcMetricsTable.recordedAt, to));
@@ -41,6 +41,7 @@ router.get("/analytics/ugc", async (req, res) => {
     likes: sql<number>`coalesce(sum(${ugcMetricsTable.likes}), 0)::bigint`,
     shares: sql<number>`coalesce(sum(${ugcMetricsTable.shares}), 0)::bigint`,
     videos: sql<number>`coalesce(sum(${ugcMetricsTable.videosCount}), 0)::bigint`,
+    watchTimeSeconds: sql<number>`coalesce(sum(${ugcMetricsTable.watchTimeSeconds}), 0)::bigint`,
     revenueCents: sql<number>`coalesce(sum(${ugcMetricsTable.revenueCents}), 0)::bigint`,
   }).from(ugcMetricsTable).where(where).groupBy(ugcMetricsTable.platform);
 
@@ -50,12 +51,12 @@ router.get("/analytics/ugc", async (req, res) => {
 const UgcMetricBody = z.object({
   platform: z.enum(["youtube_cms", "tiktok", "meta", "instagram"]),
   externalContentId: z.string().max(120).nullish(),
-  releaseId: z.number().int().positive().nullish(),
-  trackId: z.number().int().positive().nullish(),
+  trackId: z.number().int().positive(),
   views: z.number().int().nonnegative().default(0),
   likes: z.number().int().nonnegative().default(0),
   shares: z.number().int().nonnegative().default(0),
   videosCount: z.number().int().nonnegative().default(0),
+  watchTimeSeconds: z.number().int().nonnegative().default(0),
   revenueCents: z.number().int().nonnegative().default(0),
   recordedAt: z.string().datetime().optional(),
 });
@@ -63,7 +64,15 @@ const UgcMetricBody = z.object({
 router.post("/analytics/ugc", async (req, res) => {
   const parsed = UgcMetricBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
-  const data = { ...parsed.data, recordedAt: parsed.data.recordedAt ? new Date(parsed.data.recordedAt) : new Date() };
+  const [track] = await db.select({ id: tracksTable.id, releaseId: tracksTable.releaseId })
+    .from(tracksTable)
+    .where(eq(tracksTable.id, parsed.data.trackId));
+  if (!track) { res.status(400).json({ error: "track_not_found" }); return; }
+  const data = {
+    ...parsed.data,
+    releaseId: track.releaseId,
+    recordedAt: parsed.data.recordedAt ? new Date(parsed.data.recordedAt) : new Date(),
+  };
   const [row] = await db.insert(ugcMetricsTable).values(data).returning();
   void auditMutation(req, { action: "create", entityType: "ugc_metric", entityId: row.id, before: null, after: row });
   res.status(201).json(row);

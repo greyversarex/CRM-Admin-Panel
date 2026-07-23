@@ -8,6 +8,15 @@ import { startPaymentAutomation, stopPaymentAutomation } from "./services/paymen
 import { startBroma16PushWorker, stopBroma16PushWorker } from "./workers/broma16-push-worker";
 import { startBroma16Schedulers, stopBroma16Schedulers } from "./services/broma16/scheduler";
 import { bootstrapManagerPermissions } from "./lib/manager-permissions";
+import { assertIntegrationEncryptionConfigured } from "./lib/crypto";
+import { isDemoLoginEnabled } from "./lib/demo-login";
+
+// Validate credential encryption before opening the HTTP port or starting any
+// worker. Production must never fall back to a source-known deterministic key.
+assertIntegrationEncryptionConfigured();
+if (isDemoLoginEnabled()) {
+  logger.warn("DEMO_LOGIN_ENABLED=true — one-click demo access is active; never use this with production data");
+}
 
 const rawPort = process.env["PORT"];
 

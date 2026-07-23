@@ -3,7 +3,7 @@ import { usersTable } from "./users";
 
 /**
  * API-ключи для внешних интеграций и автоматизации.
- * Секретная часть хранится только как bcrypt-хеш; raw key показывается однократно при создании.
+ * Секретная часть хранится только как SHA-256 hash; raw key показывается однократно при создании.
  */
 export const apiKeysTable = pgTable("api_keys", {
   id: serial("id").primaryKey(),

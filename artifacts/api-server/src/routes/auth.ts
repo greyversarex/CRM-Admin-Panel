@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
@@ -8,6 +8,12 @@ import { requireAuth } from "../lib/auth";
 import { maskBankInfoFor } from "../lib/kycUtils";
 import { auditMutation } from "../lib/audit";
 import { getPasswordPolicy, validatePassword } from "../lib/password-policy";
+import {
+  DEMO_ROLES,
+  getDemoAccountEmail,
+  isDemoLoginEnabled,
+  isDemoRole,
+} from "../lib/demo-login";
 
 const router = Router();
 
@@ -79,6 +85,71 @@ function buildProfilePayload(u: typeof usersTable.$inferSelect) {
     taxFormType: u.taxFormType,
   };
 }
+
+function establishSession(
+  req: Request,
+  res: Response,
+  user: typeof usersTable.$inferSelect,
+): void {
+  const sessionUser: SessionUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role as AuthRole,
+    artistId: user.artistId,
+    labelId: user.labelId,
+  };
+
+  req.session.regenerate((regenErr) => {
+    if (regenErr) {
+      req.log?.error({ err: regenErr }, "session.regenerate failed");
+      res.status(500).json({ error: "Не удалось создать сессию" });
+      return;
+    }
+    req.session.user = sessionUser;
+    req.session.save((err) => {
+      if (err) {
+        req.log?.error({ err }, "session.save failed");
+        res.status(500).json({ error: "Не удалось создать сессию" });
+        return;
+      }
+      res.json({ user: buildProfilePayload(user) });
+    });
+  });
+}
+
+router.get("/auth/demo-accounts", (_req, res): void => {
+  const enabled = isDemoLoginEnabled();
+  res.json({ enabled, roles: enabled ? DEMO_ROLES : [] });
+});
+
+router.post("/auth/demo-login", loginLimiter, async (req, res): Promise<void> => {
+  if (!isDemoLoginEnabled()) {
+    res.status(404).json({ error: "Демо-вход отключён" });
+    return;
+  }
+
+  const role = req.body?.role;
+  if (!isDemoRole(role)) {
+    res.status(400).json({ error: "Недопустимая демо-роль" });
+    return;
+  }
+
+  const email = getDemoAccountEmail(role);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  if (!user || user.role !== role || user.status !== "active") {
+    req.log?.warn({ role }, "demo login account is unavailable");
+    res.status(503).json({ error: "Демо-аккаунт временно недоступен" });
+    return;
+  }
+
+  await db
+    .update(usersTable)
+    .set({ lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null })
+    .where(eq(usersTable.id, user.id));
+
+  establishSession(req, res, user);
+});
 
 router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const email = String(req.body?.email ?? "").toLowerCase().trim();
@@ -157,32 +228,7 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
     })
     .where(eq(usersTable.id, user.id));
 
-  const sessionUser: SessionUser = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role as AuthRole,
-    artistId: user.artistId,
-    labelId: user.labelId,
-  };
-
-  // Regenerate session ID to prevent session fixation
-  req.session.regenerate((regenErr) => {
-    if (regenErr) {
-      req.log?.error({ err: regenErr }, "session.regenerate failed");
-      res.status(500).json({ error: "Не удалось создать сессию" });
-      return;
-    }
-    req.session.user = sessionUser;
-    req.session.save((err) => {
-      if (err) {
-        req.log?.error({ err }, "session.save failed");
-        res.status(500).json({ error: "Не удалось создать сессию" });
-        return;
-      }
-      res.json({ user: buildProfilePayload(user) });
-    });
-  });
+  establishSession(req, res, user);
 });
 
 router.post("/auth/logout", (req, res): void => {

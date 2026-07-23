@@ -23,6 +23,11 @@ import { auditMutation } from "../lib/audit";
 import { invalidatePasswordPolicyCache } from "../lib/password-policy";
 import { invalidateSecurityPolicyCache } from "../middlewares/security-policy";
 import { logger } from "../lib/logger";
+import {
+  API_KEY_PERMISSIONS,
+  isApiKeyPermission,
+  sanitizeApiKeyPermissions,
+} from "../lib/api-key-permissions";
 
 const router = Router();
 
@@ -148,6 +153,10 @@ router.put("/settings/:key", async (req, res): Promise<void> => {
 
 // ── /api/api-keys ────────────────────────────────────────────────────
 
+router.get("/api-keys/permissions", (_req, res): void => {
+  res.json({ data: API_KEY_PERMISSIONS });
+});
+
 router.get("/api-keys", async (_req, res): Promise<void> => {
   const rows = await db.select({
     id: apiKeysTable.id,
@@ -170,9 +179,17 @@ router.get("/api-keys", async (_req, res): Promise<void> => {
   });
 });
 
+const ApiKeyPermissionsSchema = z.array(z.string())
+  .min(1, "Select at least one API-key permission")
+  .max(API_KEY_PERMISSIONS.length)
+  .refine((permissions) => permissions.every(isApiKeyPermission), {
+    message: "Unknown API-key permission",
+  })
+  .transform(sanitizeApiKeyPermissions);
+
 const CreateApiKeyBody = z.object({
   name: z.string().min(1).max(100),
-  permissions: z.array(z.string()).default([]),
+  permissions: ApiKeyPermissionsSchema,
   expiresAt: z.string().datetime().optional(),
 });
 
@@ -195,6 +212,18 @@ router.post("/api-keys", async (req, res): Promise<void> => {
   }).returning();
 
   logger.info({ apiKeyId: row.id, name: row.name, createdBy: user?.id }, "api key created");
+  void auditMutation(req, {
+    action: "create",
+    entityType: "api_key",
+    entityId: row.id,
+    after: {
+      name: row.name,
+      keyPrefix: row.keyPrefix,
+      permissions: row.permissions,
+      enabled: row.enabled,
+      expiresAt: row.expiresAt?.toISOString() ?? null,
+    },
+  });
   res.status(201).json({
     id: row.id,
     name: row.name,
@@ -210,19 +239,56 @@ router.post("/api-keys", async (req, res): Promise<void> => {
 router.delete("/api-keys/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Bad id" }); return; }
-  const [deleted] = await db.delete(apiKeysTable).where(eq(apiKeysTable.id, id)).returning({ id: apiKeysTable.id });
+  const [deleted] = await db.delete(apiKeysTable).where(eq(apiKeysTable.id, id)).returning({
+    id: apiKeysTable.id,
+    name: apiKeysTable.name,
+    keyPrefix: apiKeysTable.keyPrefix,
+    permissions: apiKeysTable.permissions,
+    enabled: apiKeysTable.enabled,
+    expiresAt: apiKeysTable.expiresAt,
+  });
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
+  void auditMutation(req, {
+    action: "delete",
+    entityType: "api_key",
+    entityId: deleted.id,
+    before: {
+      name: deleted.name,
+      keyPrefix: deleted.keyPrefix,
+      permissions: deleted.permissions,
+      enabled: deleted.enabled,
+      expiresAt: deleted.expiresAt?.toISOString() ?? null,
+    },
+  });
   res.status(204).end();
 });
 
 router.patch("/api-keys/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Bad id" }); return; }
-  const body = z.object({ enabled: z.boolean().optional(), name: z.string().min(1).optional() }).safeParse(req.body);
+  const body = z.object({
+    enabled: z.boolean().optional(),
+    name: z.string().min(1).max(100).optional(),
+    permissions: ApiKeyPermissionsSchema.optional(),
+  }).refine((value) => Object.keys(value).length > 0, { message: "No changes supplied" }).safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const [before] = await db.select({
+    id: apiKeysTable.id,
+    name: apiKeysTable.name,
+    permissions: apiKeysTable.permissions,
+    enabled: apiKeysTable.enabled,
+  }).from(apiKeysTable).where(eq(apiKeysTable.id, id));
+  if (!before) { res.status(404).json({ error: "Not found" }); return; }
   const [row] = await db.update(apiKeysTable).set(body.data).where(eq(apiKeysTable.id, id)).returning();
-  if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ id: row.id, name: row.name, enabled: row.enabled });
+  if (!row) { res.status(409).json({ error: "API key changed concurrently" }); return; }
+  void auditMutation(req, {
+    action: "update",
+    entityType: "api_key",
+    entityId: row.id,
+    before: { name: before.name, permissions: before.permissions, enabled: before.enabled },
+    after: { name: row.name, permissions: row.permissions, enabled: row.enabled },
+  });
+  res.json({ id: row.id, name: row.name, permissions: row.permissions, enabled: row.enabled });
 });
 
 // ── /api/webhooks ────────────────────────────────────────────────────

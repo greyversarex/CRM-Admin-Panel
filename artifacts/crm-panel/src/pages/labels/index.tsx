@@ -31,14 +31,13 @@ export function LabelsPanel() {
 
   const isAdminLike = user?.role === "admin" || user?.role === "manager";
   const isLabel     = user?.role === "label";
+  const canManage   = isAdminLike || isLabel;
 
   const { data: labelsDataRaw, isLoading } = useListLabels({
     search: searchQuery || undefined,
     limit: 50,
   });
-  const labelsData = isLabel
-    ? { ...labelsDataRaw, data: (labelsDataRaw?.data ?? []).filter(l => l.id === user?.labelId) }
-    : labelsDataRaw;
+  const labelsData = labelsDataRaw;
 
   const title = isAdminLike ? t.labels.title_admin : t.labels.title_label;
   const subtitle = isAdminLike ? t.labels.subtitle_admin : t.labels.subtitle_label;
@@ -50,7 +49,7 @@ export function LabelsPanel() {
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
             <p className="text-muted-foreground mt-1">{subtitle}</p>
           </div>
-          {isAdminLike && (
+          {canManage && (
             <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
               {t.labels.new_label}
@@ -138,7 +137,7 @@ export function LabelsPanel() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-card border-border">
                             <DropdownMenuLabel>{t.labels.actions}</DropdownMenuLabel>
-                            {isAdminLike && (
+                            {canManage && (
                               <DropdownMenuItem
                                 onClick={() => {
                                   setEditing({
@@ -168,7 +167,7 @@ export function LabelsPanel() {
           </CardContent>
         </Card>
 
-        {isAdminLike && (
+        {canManage && (
           <LabelFormDialog
             open={dialogOpen}
             onOpenChange={setDialogOpen}

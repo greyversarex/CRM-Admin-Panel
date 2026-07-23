@@ -33,13 +33,14 @@ import {
   ListMusic, Send, Loader2, Settings2, MapPin, Calendar, Globe, Upload, ImageIcon,
 } from "lucide-react";
 
-import { RELEASE_TYPES, SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES, STEPS, type StepKey } from "./types";
+import { RELEASE_TYPES, SUBGENRES, subgenreOptionsFor, genreOptionsWith, COUNTRIES, STEPS, type StepKey } from "./types";
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import { MultiArtistPicker } from "./multi-artist-picker";
 import { OutletPickerDialog } from "./dsp-picker";
 import { TrackCard } from "./track-card";
 import { useLang } from "@/lib/i18n";
+import { DEFAULT_METADATA_LANGUAGE, metadataLanguageOptionsWith } from "@/lib/metadata-languages";
 
 // ─── Form state ─────────────────────────────────────────────────────────────
 type Form = {
@@ -71,7 +72,7 @@ const EMPTY: Form = {
   artistId: 0, labelId: null,
   upc: "", catalogNumber: "", coverUrl: "",
   genre: "Tajik Folk", subgenre: "",
-  releaseDate: "", releaseTime: "00:00", language: "Tajik",
+  releaseDate: "", releaseTime: "00:00", language: DEFAULT_METADATA_LANGUAGE,
   isExplicit: false, isCompilation: false, isVariousArtists: false,
   pLine: "", pLineYear: new Date().getFullYear(),
   cLine: "", cLineYear: new Date().getFullYear(),
@@ -152,7 +153,7 @@ export function ReleaseWizard({ initialReleaseId = null }: { initialReleaseId?: 
         subgenre: release.subgenre ?? "",
         releaseDate: release.releaseDate ?? "",
         releaseTime: release.releaseTime ?? "00:00",
-        language: release.language ?? "Tajik",
+        language: release.language ?? DEFAULT_METADATA_LANGUAGE,
         isExplicit: release.isExplicit,
         isCompilation: release.isCompilation,
         isVariousArtists: release.isVariousArtists,
@@ -627,10 +628,7 @@ function Step1Details({
 
   // Язык — справочник Broma16 (с запасным курируемым списком). Жанры и поджанры
   // берутся из иерархии документа (GENRES → SUBGENRES), а не из каталога Broma16.
-  const langOpts = useCatalogOptions("language", {
-    valueKey: "code",
-    fallback: LANGS.map((l) => ({ value: l.value, label: l.label })),
-  });
+  const languageOptions = metadataLanguageOptionsWith(form.language);
 
   // Синхронизируем form.artistId с primary артистом из multi-picker.
   useEffect(() => {
@@ -709,7 +707,7 @@ function Step1Details({
             <DictionaryCombobox
               value={form.language}
               onChange={(v) => set("language", v)}
-              options={langOpts.options}
+              options={languageOptions}
               placeholder={t.createRelease.pleaseSelect}
             />
           </div>
@@ -956,7 +954,6 @@ function Step2Tracks({
             releaseId,
             artistId: primaryArtistId,
             trackNumber: nextNumber,
-            language: "English",
             clipStartSeconds: 0,
             displayArtists: [],
             writers: [],

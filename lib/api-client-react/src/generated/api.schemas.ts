@@ -83,6 +83,9 @@ export interface Artist {
   labelName?: string | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  ipiNameNumber?: string | null;
+  ipn?: string | null;
+  isni?: string | null;
   broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: ArtistSocialLinks;
   status: string;
@@ -256,7 +259,7 @@ UI должен показывать UPC поле как "Assigned on submission
   canDeliver: boolean;
   /** true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).
 Admin/manager могут отозвать всегда — проверяется на бэкенде.
-   */
+ */
   canCancelSubmit: boolean;
   /** ISO-строка момента отправки на модерацию. null если ещё не отправлен. */
   submittedAt: string | null;

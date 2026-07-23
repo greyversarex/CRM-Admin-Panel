@@ -3,8 +3,8 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { z } from "zod/v4";
-import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable, transactionsTable, usageReportsTable } from "@workspace/db";
-import { count, eq, ilike, and, desc, sql } from "drizzle-orm";
+import { db, artistsTable, releasesTable, tracksTable, labelsTable, usersTable, usageReportsTable } from "@workspace/db";
+import { count, eq, ilike, and, desc, inArray, sql } from "drizzle-orm";
 import { CreateArtistBody, UpdateArtistBody, GetArtistParams, UpdateArtistParams, DeleteArtistParams, GetArtistStatsParams } from "@workspace/api-zod";
 import { getDataScope, requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
@@ -16,6 +16,7 @@ import { ObjectStorageService, objectStorageClient } from "../lib/objectStorage"
 import { getDictionary } from "../services/broma16/dictionaries";
 import { searchSpotifyArtists, searchAppleArtists, searchDeezerArtists, type DspSearchResult } from "../services/artist-dsp-search";
 import { loadSpotifyConfig, getSpotifyToken } from "./releases";
+import { resolveLabelTreeIds } from "../lib/label-scope";
 
 const router = Router();
 
@@ -31,6 +32,28 @@ const artistImageUpload = multer({
 });
 const ALLOWED_IMAGE_MIME = /^image\/(png|jpe?g|gif|webp)$/i;
 const IMAGE_PATH_PREFIX = "/api/users/avatars/";
+const MAX_ARTIST_LINKS = 30;
+
+function normalizeArtistLinks(value: unknown): Record<string, string> | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("socialLinks must be an object");
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > MAX_ARTIST_LINKS) throw new Error(`Too many profile links (max ${MAX_ARTIST_LINKS})`);
+  const normalized: Record<string, string> = {};
+  for (const [key, raw] of entries) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(key)) throw new Error(`Invalid profile link key: ${key}`);
+    if (typeof raw !== "string") throw new Error(`Profile link ${key} must be a string`);
+    const value = raw.trim();
+    if (!value) continue;
+    if (value.length > 2048) throw new Error(`Profile link ${key} is too long`);
+    let url: URL;
+    try { url = new URL(value); } catch { throw new Error(`Invalid profile link URL: ${key}`); }
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`Invalid profile link protocol: ${key}`);
+    normalized[key] = url.toString();
+  }
+  return normalized;
+}
 
 // Чистая обёртка над multer: переводим LIMIT_FILE_SIZE в 413, остальные multer-ошибки
 // → 400 с понятным русскоязычным текстом, а не дефолтная HTML-страница 500.
@@ -100,8 +123,11 @@ router.get("/artists", async (req, res): Promise<void> => {
     if (queryLabelId && Number.isFinite(queryLabelId)) conditions.push(eq(artistsTable.labelId, queryLabelId));
   } else if (scope.role === "label") {
     if (scope.labelId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
-    if (queryLabelId !== undefined && queryLabelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
-    conditions.push(eq(artistsTable.labelId, scope.labelId));
+    const labelIds = await resolveLabelTreeIds(scope.labelId);
+    if (queryLabelId !== undefined && !labelIds.includes(queryLabelId)) { res.status(403).json({ error: "Forbidden" }); return; }
+    conditions.push(queryLabelId !== undefined
+      ? eq(artistsTable.labelId, queryLabelId)
+      : inArray(artistsTable.labelId, labelIds));
   } else if (scope.role === "artist") {
     if (scope.artistId == null) { res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } }); return; }
     conditions.push(eq(artistsTable.id, scope.artistId));
@@ -121,6 +147,9 @@ router.get("/artists", async (req, res): Promise<void> => {
     labelId: artistsTable.labelId,
     spotifyId: artistsTable.spotifyId,
     appleId: artistsTable.appleId,
+    ipiNameNumber: artistsTable.ipiNameNumber,
+    ipn: artistsTable.ipn,
+    isni: artistsTable.isni,
     broma16Outlets: artistsTable.broma16Outlets,
     socialLinks: artistsTable.socialLinks,
     status: artistsTable.status,
@@ -130,7 +159,9 @@ router.get("/artists", async (req, res): Promise<void> => {
   const [totalResult] = await db.select({ count: count() }).from(artistsTable).where(where);
 
   const labelIds = artists.map(a => a.labelId).filter(Boolean) as number[];
-  const labels = labelIds.length > 0 ? await db.select({ id: labelsTable.id, name: labelsTable.name }).from(labelsTable) : [];
+  const labels = labelIds.length > 0
+    ? await db.select({ id: labelsTable.id, name: labelsTable.name }).from(labelsTable).where(inArray(labelsTable.id, labelIds))
+    : [];
   const labelMap = new Map(labels.map(l => [l.id, l.name]));
 
   const releaseCounts = await db.select({ artistId: releasesTable.artistId, count: count() })
@@ -166,9 +197,17 @@ router.post("/artists", requireRole("admin", "manager", "label"), async (req, re
   // Label users can sign artists only under their own label.
   const scope = getDataScope(req);
   const data = { ...parsed.data };
+  try {
+    data.socialLinks = normalizeArtistLinks(data.socialLinks);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message }); return;
+  }
   if (scope.role === "label") {
     if (scope.labelId == null) { res.status(403).json({ error: "Label scope missing" }); return; }
-    data.labelId = scope.labelId;
+    const labelIds = await resolveLabelTreeIds(scope.labelId);
+    const labelId = data.labelId ?? scope.labelId;
+    if (!labelIds.includes(labelId)) { res.status(403).json({ error: "Label is outside your catalog" }); return; }
+    data.labelId = labelId;
   }
 
   const slug = data.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -242,7 +281,11 @@ router.get("/artists/:id", async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   if (!scope.fullAccess) {
     if (scope.role === "artist" && artist.id !== scope.artistId) { res.status(403).json({ error: "Forbidden" }); return; }
-    if (scope.role === "label"  && (scope.labelId == null || artist.labelId !== scope.labelId)) { res.status(403).json({ error: "Forbidden" }); return; }
+    if (scope.role === "label") {
+      if (scope.labelId == null || artist.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
+      const labelIds = await resolveLabelTreeIds(scope.labelId);
+      if (!labelIds.includes(artist.labelId)) { res.status(403).json({ error: "Forbidden" }); return; }
+    }
   }
 
   const releases = await db.select().from(releasesTable).where(eq(releasesTable.artistId, artist.id)).limit(10);
@@ -284,12 +327,21 @@ router.put("/artists/:id", requireRole("admin", "manager", "label"), async (req,
   // Label users can edit only artists under their label, and cannot move artist to another label.
   const scope = getDataScope(req);
   const updateData = { ...parsed.data };
+  try {
+    updateData.socialLinks = normalizeArtistLinks(updateData.socialLinks);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message }); return;
+  }
   if (scope.role === "label") {
-    if (scope.labelId == null || existing.labelId !== scope.labelId) {
+    if (scope.labelId == null || existing.labelId == null) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    updateData.labelId = scope.labelId;
+    const labelIds = await resolveLabelTreeIds(scope.labelId);
+    if (!labelIds.includes(existing.labelId)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const labelId = updateData.labelId ?? existing.labelId;
+    if (!labelIds.includes(labelId)) { res.status(403).json({ error: "Label is outside your catalog" }); return; }
+    updateData.labelId = labelId;
   }
 
   const [artist] = await db.update(artistsTable).set(updateData).where(eq(artistsTable.id, params.data.id)).returning();
@@ -342,7 +394,8 @@ router.get("/artists/:id/stats", async (req, res): Promise<void> => {
     } else if (scope.role === "label") {
       if (scope.labelId == null) { res.status(403).json({ error: "Forbidden" }); return; }
       const [a] = await db.select({ labelId: artistsTable.labelId }).from(artistsTable).where(eq(artistsTable.id, params.data.id));
-      if (!a || a.labelId !== scope.labelId) { res.status(403).json({ error: "Forbidden" }); return; }
+      const labelIds = await resolveLabelTreeIds(scope.labelId);
+      if (!a?.labelId || !labelIds.includes(a.labelId)) { res.status(403).json({ error: "Forbidden" }); return; }
     } else {
       res.status(403).json({ error: "Forbidden" }); return;
     }
@@ -362,14 +415,8 @@ router.get("/artists/:id/stats", async (req, res): Promise<void> => {
 
   const totalStreams = platformRows.reduce((acc, r) => acc + Number(r.streams || 0), 0);
 
-  // Доход берём из transactions (источник правды по деньгам), а не из revenue в usage_reports.
-  const [txAgg] = await db
-    .select({
-      revenue: sql<string>`coalesce(sum(case when ${transactionsTable.type} = 'dsp_revenue' then ${transactionsTable.amount} else 0 end), 0)::text`,
-    })
-    .from(transactionsTable)
-    .where(eq(transactionsTable.artistId, params.data.id));
-  const totalRevenue = parseFloat(txAgg?.revenue ?? "0");
+  // Broma usage_reports is the source of truth for both streams and revenue.
+  const totalRevenue = platformRows.reduce((acc, row) => acc + parseFloat(row.revenue || "0"), 0);
 
   // Monthly listeners — из последнего отчёта по периодам. Если нет данных — 0.
   // (Точное значение требует отдельного отчёта DSP; пока используем стримы / 30 как приближение.)
@@ -415,7 +462,8 @@ router.post("/artists/:id/invite-user", requireRole("admin", "manager", "label")
   const scope = getDataScope(req);
   // Лейбл может приглашать только своих артистов.
   if (scope.role === "label") {
-    if (scope.labelId == null || artist.labelId !== scope.labelId) {
+    const labelIds = scope.labelId == null ? [] : await resolveLabelTreeIds(scope.labelId);
+    if (artist.labelId == null || !labelIds.includes(artist.labelId)) {
       res.status(403).json({ error: "Артист не принадлежит вашему лейблу" });
       return;
     }

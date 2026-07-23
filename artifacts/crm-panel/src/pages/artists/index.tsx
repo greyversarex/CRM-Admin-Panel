@@ -37,7 +37,6 @@ export function ArtistsPanel() {
   const { data: artistsDataRaw, isLoading } = useListArtists({
     search: searchQuery || undefined,
     limit: 50,
-    ...(isLabel && user?.labelId ? { label_id: user.labelId } : {}),
   });
   const artistsData = isArtist
     ? { ...artistsDataRaw, data: (artistsDataRaw?.data ?? []).filter(a => a.id === user?.artistId) }
@@ -155,6 +154,12 @@ export function ArtistsPanel() {
                                     imageUrl: artist.imageUrl,
                                     phone: artist.phone,
                                     labelId: artist.labelId,
+                                    spotifyId: artist.spotifyId,
+                                    appleId: artist.appleId,
+                                    ipiNameNumber: artist.ipiNameNumber,
+                                    ipn: artist.ipn,
+                                    isni: artist.isni,
+                                    socialLinks: (artist.socialLinks ?? {}) as Record<string, string>,
                                     broma16Outlets: artist.broma16Outlets ?? [],
                                     status: artist.status as "active" | "inactive",
                                   });

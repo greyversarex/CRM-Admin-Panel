@@ -448,11 +448,18 @@ lib/ddex-schemas/                     // НОВЫЙ — оффлайн XSD
 ### 10.1. Секреты
 - SFTP-логины партнёров — `integration_credentials` (AES-256-GCM, как сейчас).
 - SSH private keys — `cipher_text` той же таблицы, поле `field_key='ssh_private_key'`.
+- Inbound ACK webhook требует отдельный `DDEX_INBOUND_SECRET` минимум 32 bytes.
+  Production API без него не стартует. Партнёр передаёт Unix timestamp в
+  `X-DDEX-Timestamp` и `X-DDEX-Signature: sha256=<hex>`, где hex — HMAC-SHA256 от
+  `<timestamp>.<raw XML bytes>`. Запрос вне configured replay window отклоняется.
 - Никогда не логировать XML целиком в plaintext-логи (контрактные данные).
 
 ### 10.2. Идемпотентность
 - `messageRef` уникален → повторная генерация того же сообщения не приведёт к дубликату на стороне партнёра.
 - `batch.status` через атомарные `UPDATE ... WHERE status=...RETURNING` (как в текущем `delivery-worker`).
+- Каждый новый ACK получает SHA-256 `payload_hash` с unique index. Точный повтор
+  webhook/SFTP payload возвращает существующий `ackId` с `duplicate=true` и не
+  повторяет status transitions. Legacy ACK rows остаются с nullable hash.
 
 ### 10.3. Наблюдаемость
 - Все переходы статусов → `audit_log` (есть инфраструктура).

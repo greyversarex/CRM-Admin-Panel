@@ -12,6 +12,9 @@ import {
   useGetRelease,
   useListTracks,
   useListAssets,
+  getGetReleaseQueryKey,
+  getGetTrackQueryKey,
+  getListTracksQueryKey,
   type Track,
   type Asset,
   type TrackDisplayArtist,
@@ -43,12 +46,13 @@ import {
   DisplayArtistsEditor, WritersEditor, PerformersEditor, ProductionEditor,
   splitWriterSharesEvenly,
 } from "@/components/release-wizard/contributors-editor";
-import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES } from "@/components/release-wizard/types";
+import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, COUNTRIES } from "@/components/release-wizard/types";
 import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { DictionaryCombobox } from "@/components/release-wizard/dictionary-combobox";
 import { InfoTip } from "@/components/release-wizard/info-tip";
 import { generateIsrcCode } from "@/lib/codes";
 import { useLang } from "@/lib/i18n";
+import { DEFAULT_METADATA_LANGUAGE, metadataLanguageOptionsWith } from "@/lib/metadata-languages";
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function fmtDuration(s: number | null | undefined): string {
@@ -95,7 +99,7 @@ function trackToForm(t: Track): FormState {
     durationSeconds:    t.durationSeconds ?? null,
     genre:              t.genre ?? "",
     subgenre:           t.subgenre ?? "",
-    language:           t.language ?? "English",
+    language:           t.language ?? DEFAULT_METADATA_LANGUAGE,
     isExplicit:         !!t.isExplicit,
     explicitStatus:     (t.explicitStatus ?? "") as FormState["explicitStatus"],
     aiUsage:            (t.aiUsage ?? "") as FormState["aiUsage"],
@@ -262,6 +266,10 @@ export default function TrackEditPage() {
     if (!form.recordingYear && release?.cLineYear) {
       form.recordingYear = release.cLineYear;
     }
+    // New tracks inherit release metadata. Existing track values always win.
+    if (!track.language && release?.language) {
+      form.language = release.language;
+    }
     // Auto-populate Genre + Subgenre from release when track has none.
     if (!form.genre && release?.genre) {
       form.genre = release.genre;
@@ -271,10 +279,10 @@ export default function TrackEditPage() {
       }
     }
     setF(form);
-  }, [track?.id, track?.updatedAt, release?.artistName, release?.cLineYear, release?.genre, release?.subgenre]);
+  }, [track?.id, track?.updatedAt, track?.language, release?.artistName, release?.cLineYear, release?.language, release?.genre, release?.subgenre]);
 
   // Справочники Broma16 (жанр/язык/страна). Пока словарь пуст — курируемый фолбэк.
-  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
+  const languageOptions = metadataLanguageOptionsWith(f?.language);
   const countryOpts = useCatalogOptions("country", { valueKey: "code", fallback: COUNTRIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})` })) });
 
   // ── Clip time helpers (HH:MM:SS) ──
@@ -360,15 +368,25 @@ export default function TrackEditPage() {
         id: track.id,
         data: { ...formToBody(f), artistId: track.artistId },
       });
-      // Инвалидируем кэш: трек, список треков релиза и все треки.
-      await queryClient.invalidateQueries({ queryKey: [`/api/tracks/${track.id}`] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/tracks"] });
+      // Инвалидируем карточку релиза вместе с вложенным списком треков, чтобы
+      // после возврата пользователь сразу видел сохранённые данные.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetTrackQueryKey(track.id) }),
+        queryClient.invalidateQueries({ queryKey: getListTracksQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetReleaseQueryKey(releaseId) }),
+      ]);
       toast({ title: L.savedTitle, description: L.savedDesc.replace("{title}", f.title) });
       return true;
     } catch (e: any) {
       toast({ title: L.saveFailedTitle, description: e?.message ?? L.saveFailedDesc, variant: "destructive" });
       return false;
     }
+  };
+
+  const saveAndReturnToRelease = async () => {
+    const ok = await save();
+    if (!ok) return;
+    setLocation(`/releases/${releaseId}`);
   };
 
   const saveAndGoNext = async () => {
@@ -632,10 +650,19 @@ export default function TrackEditPage() {
                 <DictionaryCombobox
                   value={f.language || ""}
                   onChange={(v) => setF({ ...f, language: v })}
-                  options={[{ value: "", label: L.notSpecifiedOpt }, ...langOpts.options]}
+                  options={languageOptions}
                   placeholder={L.selectLanguage}
                 />
               </div>
+            </div>
+            <div className="space-y-1.5 max-w-sm">
+              <Label className="text-sm text-muted-foreground">{T.releaseView.catalog}</Label>
+              <Input
+                value={release?.catalogNumber || T.releaseView.catalogHint}
+                readOnly
+                disabled
+                className="font-mono"
+              />
             </div>
             </div>
             </CardContent>
@@ -833,7 +860,7 @@ export default function TrackEditPage() {
                     <DictionaryCombobox
                       value={f.vocalLanguage || ""}
                       onChange={(v) => setF({ ...f, vocalLanguage: v })}
-                      options={langOpts.options}
+                      options={metadataLanguageOptionsWith(f.vocalLanguage)}
                       placeholder={L.selectLanguageA}
                     />
                   </div>
@@ -911,7 +938,7 @@ export default function TrackEditPage() {
               {L.back}
             </Button>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={save} disabled={isBusy}>
+              <Button variant="outline" onClick={saveAndReturnToRelease} disabled={isBusy}>
                 {isBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
                 {L.save}
               </Button>

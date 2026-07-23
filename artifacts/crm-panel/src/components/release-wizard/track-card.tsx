@@ -14,7 +14,7 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, Trash2, Music2, Save, Wand2, Upload, Loader2 } from "lucide-react";
 import { AudioUploader, assetHref, useAssetUpload } from "@/components/asset-uploader";
-import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, LANGS, COUNTRIES } from "./types";
+import { SUBGENRES, subgenreOptionsFor, genreOptionsWith, COUNTRIES } from "./types";
 import { useCatalogOptions } from "./use-catalog";
 import { DictionaryCombobox } from "./dictionary-combobox";
 import {
@@ -23,6 +23,7 @@ import {
 } from "./contributors-editor";
 import { useLang } from "@/lib/i18n";
 import { generateIsrcCode } from "@/lib/codes";
+import { metadataLanguageOptionsWith } from "@/lib/metadata-languages";
 
 export function TrackCard({
   track, releaseId, expanded, onExpandToggle,
@@ -133,7 +134,7 @@ export function TrackCard({
   };
 
   // Справочники Broma16 для метаданных трека (с запасными курируемыми списками).
-  const langOpts = useCatalogOptions("language", { valueKey: "code", fallback: LANGS.map((l) => ({ value: l.value, label: l.label })) });
+  const languageOptions = metadataLanguageOptionsWith(draft.language);
   const countryOpts = useCatalogOptions("country", {
     valueKey: "code",
     fallback: COUNTRIES.map((c) => ({ value: c.code, label: c.name })),
@@ -256,7 +257,7 @@ export function TrackCard({
               <DictionaryCombobox
                 value={draft.language ?? ""}
                 onChange={(v) => set("language", v)}
-                options={langOpts.options}
+                options={languageOptions}
                 placeholder={t.releaseWizard.selectPlaceholder}
               />
             </Field>
@@ -305,7 +306,7 @@ export function TrackCard({
                 <DictionaryCombobox
                   value={draft.vocalLanguage ?? ""}
                   onChange={(v) => set("vocalLanguage", v)}
-                  options={langOpts.options}
+                  options={metadataLanguageOptionsWith(draft.vocalLanguage)}
                   placeholder="—"
                 />
               </Field>

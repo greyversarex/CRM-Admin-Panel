@@ -14,6 +14,8 @@ export const ugcMetricsTable = pgTable("ugc_metrics", {
   likes: bigint("likes", { mode: "number" }).notNull().default(0),
   shares: bigint("shares", { mode: "number" }).notNull().default(0),
   videosCount: integer("videos_count").notNull().default(0),
+  /** Суммарное время просмотра из отчёта платформы. Никогда не вычисляется из views. */
+  watchTimeSeconds: bigint("watch_time_seconds", { mode: "number" }).notNull().default(0),
   revenueCents: bigint("revenue_cents", { mode: "number" }).notNull().default(0),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

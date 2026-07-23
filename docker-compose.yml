@@ -37,6 +37,16 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://tajikmusic_user:${POSTGRES_PASSWORD}@postgres:5432/tajikmusic
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      # Local HTTP only: set false. Keep true behind production TLS.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      # Explicit opt-in for the four one-click demo accounts; disabled by default.
+      DEMO_LOGIN_ENABLED: ${DEMO_LOGIN_ENABLED:-false}
+      # В production API fail-fast, если inbound DDEX secret не задан или короче 32 bytes.
+      DDEX_INBOUND_SECRET: ${DDEX_INBOUND_SECRET:-}
+      DDEX_INBOUND_MAX_SKEW_SECONDS: ${DDEX_INBOUND_MAX_SKEW_SECONDS:-300}
+      # AES-256-GCM key ring для integration_credentials. Current обязателен в production.
+      INTEGRATIONS_ENCRYPTION_KEY: ${INTEGRATIONS_ENCRYPTION_KEY:-}
+      INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS: ${INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS:-}
       # Где хранить загруженные обложки/аудио/KYC. Совпадает с volume ниже.
       LOCAL_STORAGE_ROOT: /var/lib/tajikmusic/uploads
     ports:

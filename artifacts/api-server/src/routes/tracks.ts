@@ -10,6 +10,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 import { queueAudioQc } from "../services/audio-qc";
 import OpenAI from "openai";
 import { createReadStream } from "node:fs";
+import { resolveTrackMetadata } from "../lib/track-metadata";
 
 const storage = new ObjectStorageService();
 
@@ -154,9 +155,11 @@ router.post("/tracks", async (req, res): Promise<void> => {
   }
   // Validate referential ownership: releaseId (if present) must be in scope and
   // must belong to the same artistId being assigned.
+  let releaseMetadata: { language: string | null; genre: string | null; subgenre: string | null } | null = null;
   if (parsed.data.releaseId != null) {
     const [rel] = await db.select({
       artistId: releasesTable.artistId, labelId: releasesTable.labelId, status: releasesTable.status,
+      language: releasesTable.language, genre: releasesTable.genre, subgenre: releasesTable.subgenre,
     }).from(releasesTable).where(eq(releasesTable.id, parsed.data.releaseId));
     if (!rel) { res.status(400).json({ error: "Release not found" }); return; }
     if (rel.artistId !== parsed.data.artistId) {
@@ -168,6 +171,7 @@ router.post("/tracks", async (req, res): Promise<void> => {
       const lockReason = releaseEditableReason(scope, rel.status);
       if (lockReason) { res.status(409).json({ error: lockReason }); return; }
     }
+    releaseMetadata = rel;
   }
 
   // The generated Zod schema applies OpenAPI `default:` values for explicitStatus,
@@ -175,8 +179,12 @@ router.post("/tracks", async (req, res): Promise<void> => {
   // them to stay NULL in the DB so the UI can distinguish "user chose X" from
   // "user hasn't chosen yet". Strip the Zod-applied defaults when the client
   // didn't provide the fields.
+  const inheritedMetadata = resolveTrackMetadata(parsed.data, releaseMetadata);
   const insertData = {
     ...parsed.data,
+    // Release metadata is the source of truth for newly added tracks. Explicit
+    // non-empty track values still win (for reused/custom tracks).
+    ...inheritedMetadata,
     explicitStatus: ("explicitStatus" in req.body) ? parsed.data.explicitStatus : undefined,
     aiUsage:        ("aiUsage"        in req.body) ? parsed.data.aiUsage        : undefined,
     audioStyle:     ("audioStyle"     in req.body) ? parsed.data.audioStyle     : undefined,

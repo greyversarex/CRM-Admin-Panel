@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type Role = "admin" | "manager" | "label" | "artist";
 
@@ -68,6 +69,7 @@ interface AuthContextValue {
   /** Если admin зашёл от имени пользователя — здесь оригинальный admin. Иначе null. */
   impersonator: ImpersonatorRef | null;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  demoRoles: Role[];
   loginAs: (role: Role) => Promise<{ ok: boolean; error?: string }>;
   /** Admin → войти как пользователь по userId. Только для admin. */
   impersonate: (userId: number) => Promise<{ ok: boolean; error?: string }>;
@@ -78,14 +80,8 @@ interface AuthContextValue {
   isLoading: boolean;
 }
 
-const DEMO_PASSWORDS: Record<Role, { email: string; password: string }> = {
-  admin:   { email: "admin@tajikmusic.com",   password: "admin123" },
-  manager: { email: "manager@tajikmusic.com", password: "manager123" },
-  label:   { email: "label@tajikmusic.com",   password: "label123" },
-  artist:  { email: "artist@tajikmusic.com",  password: "artist123" },
-};
-
 const AuthContext = createContext<AuthContextValue | null>(null);
+const ROLES: Role[] = ["admin", "manager", "label", "artist"];
 
 function deriveAuthUser(raw: any): AuthUser {
   const initials = String(raw.name ?? "")
@@ -148,8 +144,10 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<{ ok: true; 
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [impersonator, setImpersonator] = useState<ImpersonatorRef | null>(null);
+  const [demoRoles, setDemoRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -165,7 +163,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      await refresh();
+      const [, demoResult] = await Promise.all([
+        refresh(),
+        apiJson<{ enabled: boolean; roles: unknown[] }>("/api/auth/demo-accounts"),
+      ]);
+      if (demoResult.ok && demoResult.data.enabled) {
+        setDemoRoles(demoResult.data.roles.filter((role): role is Role => ROLES.includes(role as Role)));
+      } else {
+        setDemoRoles([]);
+      }
       setIsLoading(false);
     })();
   }, [refresh]);
@@ -182,8 +188,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginAs = async (role: Role) => {
-    const creds = DEMO_PASSWORDS[role];
-    return login(creds.email, creds.password);
+    const r = await apiJson<{ user: any }>("/api/auth/demo-login", {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    queryClient.clear();
+    queryClient.clear();
+    setUser(deriveAuthUser(r.data.user));
+    setImpersonator(null);
+    return { ok: true };
   };
 
   const impersonate = async (userId: number) => {
@@ -192,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { method: "POST", body: JSON.stringify({ userId }) },
     );
     if (!r.ok) return { ok: false, error: r.error };
+    queryClient.clear();
     setUser(deriveAuthUser(r.data.user));
     setImpersonator(r.data.impersonator);
     return { ok: true };
@@ -203,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { method: "POST" },
     );
     if (!r.ok) return { ok: false, error: r.error };
+    queryClient.clear();
     setUser(deriveAuthUser(r.data.user));
     setImpersonator(null);
     return { ok: true };
@@ -210,12 +226,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await apiJson("/api/auth/logout", { method: "POST" });
+    queryClient.clear();
     setUser(null);
     setImpersonator(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, impersonator, login, loginAs, impersonate, stopImpersonating, logout, refresh, isLoading }}>
+    <AuthContext.Provider value={{ user, impersonator, login, demoRoles, loginAs, impersonate, stopImpersonating, logout, refresh, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

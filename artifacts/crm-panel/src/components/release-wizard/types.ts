@@ -271,16 +271,6 @@ export const SUBGENRE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "World Fusion", label: "World Fusion" }, { value: "Worship Music", label: "Worship Music" }, { value: "Yoga Music", label: "Yoga Music" },
 ];
 
-export const LANGS: Array<{ value: string; label: string }> = [
-  { value: "Tajik",   label: "Tajik" },
-  { value: "Russian", label: "Russian" },
-  { value: "English", label: "English" },
-  { value: "Persian", label: "Persian" },
-  { value: "Uzbek",   label: "Uzbek" },
-  { value: "Arabic",  label: "Arabic" },
-  { value: "Turkish", label: "Turkish" },
-];
-
 export const ARTIST_ROLES: Array<{ value: ReleaseArtistRefRole; label: string }> = [
   { value: "primary",   label: "Primary" },
   { value: "featuring", label: "Featuring" },

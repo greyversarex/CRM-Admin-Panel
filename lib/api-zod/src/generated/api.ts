@@ -123,6 +123,9 @@ export const ListArtistsResponse = zod.object({
       labelName: zod.string().nullish(),
       spotifyId: zod.string().nullish(),
       appleId: zod.string().nullish(),
+      ipiNameNumber: zod.string().nullish(),
+      ipn: zod.string().nullish(),
+      isni: zod.string().nullish(),
       broma16Outlets: zod
         .array(
           zod.object({
@@ -260,6 +263,9 @@ export const GetArtistResponse = zod
     labelName: zod.string().nullish(),
     spotifyId: zod.string().nullish(),
     appleId: zod.string().nullish(),
+    ipiNameNumber: zod.string().nullish(),
+    ipn: zod.string().nullish(),
+    isni: zod.string().nullish(),
     broma16Outlets: zod
       .array(
         zod.object({
@@ -419,6 +425,17 @@ export const GetArtistResponse = zod
               .boolean()
               .describe(
                 "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
+              ),
+            canCancelSubmit: zod
+              .boolean()
+              .describe(
+                "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+              ),
+            submittedAt: zod
+              .string()
+              .nullable()
+              .describe(
+                "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
               ),
             riskScore: zod
               .number()
@@ -600,6 +617,9 @@ export const UpdateArtistResponse = zod.object({
   labelName: zod.string().nullish(),
   spotifyId: zod.string().nullish(),
   appleId: zod.string().nullish(),
+  ipiNameNumber: zod.string().nullish(),
+  ipn: zod.string().nullish(),
+  isni: zod.string().nullish(),
   broma16Outlets: zod
     .array(
       zod.object({
@@ -938,6 +958,17 @@ export const ListReleasesResponse = zod.object({
         .describe(
           "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
         ),
+      canCancelSubmit: zod
+        .boolean()
+        .describe(
+          "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+        ),
+      submittedAt: zod
+        .string()
+        .nullable()
+        .describe(
+          "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
+        ),
       riskScore: zod
         .number()
         .min(listReleasesResponseDataItemRiskScoreMin)
@@ -1183,6 +1214,17 @@ export const GetReleaseResponse = zod
       .boolean()
       .describe(
         "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
+      ),
+    canCancelSubmit: zod
+      .boolean()
+      .describe(
+        "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+      ),
+    submittedAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
       ),
     riskScore: zod
       .number()
@@ -1519,6 +1561,17 @@ export const UpdateReleaseResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  canCancelSubmit: zod
+    .boolean()
+    .describe(
+      "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+    ),
+  submittedAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
+    ),
   riskScore: zod
     .number()
     .min(updateReleaseResponseRiskScoreMin)
@@ -1807,6 +1860,17 @@ export const SubmitReleaseForReviewResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  canCancelSubmit: zod
+    .boolean()
+    .describe(
+      "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+    ),
+  submittedAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
+    ),
   riskScore: zod
     .number()
     .min(submitReleaseForReviewResponseRiskScoreMin)
@@ -1993,6 +2057,17 @@ export const UpdateReleaseStatusResponse = zod.object({
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
     ),
+  canCancelSubmit: zod
+    .boolean()
+    .describe(
+      "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+    ),
+  submittedAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
+    ),
   riskScore: zod
     .number()
     .min(updateReleaseStatusResponseRiskScoreMin)
@@ -2166,6 +2241,17 @@ export const ImportReleaseByUpcResponse = zod.object({
     .boolean()
     .describe(
       "true, если релиз готов к отгрузке в DSP через POST \/releases\/:id\/deliver (статус approved).\n",
+    ),
+  canCancelSubmit: zod
+    .boolean()
+    .describe(
+      "true, если владелец ещё может отозвать заявку (в течение 30 мин после submit).\nAdmin\/manager могут отозвать всегда — проверяется на бэкенде.\n",
+    ),
+  submittedAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO-строка момента отправки на модерацию. null если ещё не отправлен.",
     ),
   riskScore: zod
     .number()

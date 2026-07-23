@@ -28,7 +28,8 @@ export const integrationsTable = pgTable("integrations", {
 /**
  * Зашифрованные учётные данные (API ключи, OAuth токены, SFTP пароли).
  * Шифрование AES-256-GCM, ключ из env INTEGRATIONS_ENCRYPTION_KEY.
- * Поле `cipher_text` содержит base64(iv||authTag||ciphertext).
+ * Текущий формат `cipher_text`: v1:keyId:base64(iv||authTag||ciphertext).
+ * Legacy unversioned base64 поддерживается только для controlled rotation.
  */
 export const integrationCredentialsTable = pgTable("integration_credentials", {
   id: serial("id").primaryKey(),

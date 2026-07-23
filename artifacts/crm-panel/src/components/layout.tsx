@@ -3,7 +3,7 @@ import { WaveBackground } from "./wave-background";
 import { NotificationsPopover } from "./notifications-popover";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import {
-  Globe, ChevronDown, Plus,
+  Globe, ChevronDown,
   User as UserIcon, CreditCard, Repeat, Moon, Sun, LogOut, Settings2,
 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { CreateReleaseButton } from "./create-release-button";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { lang, setLang, t } = useLang();
@@ -91,10 +92,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header className="h-[60px] flex items-center justify-end px-5 border-b border-border/60 bg-card/40 backdrop-blur-md shrink-0 z-10">
           <div className="flex items-center gap-2">
             {(user?.role === "artist" || user?.role === "label") && (
-              <Button size="sm" onClick={() => navigate("/releases/new")} className="h-8 gap-1.5 mr-2">
-                <Plus className="h-3.5 w-3.5" />
-                {t.releases.create_release}
-              </Button>
+              <CreateReleaseButton
+                size="sm"
+                onClick={() => navigate("/releases/new")}
+                label={t.releases.create_release}
+                className="mr-2"
+                data-testid="button-create-release-global"
+              />
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

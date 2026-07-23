@@ -41,7 +41,7 @@ export function DictionaryCombobox({
     return options;
   }, [value, options]);
 
-  const selectedLabel = mergedOptions.find((o) => o.value === value)?.label ?? "";
+  const selectedOption = mergedOptions.find((o) => o.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -54,9 +54,21 @@ export function DictionaryCombobox({
           disabled={disabled}
           className={`w-full min-w-0 justify-between font-normal h-10 px-3 ${className}`}
         >
-          <span className={selectedLabel ? "truncate" : "text-foreground/40 truncate"}>
-            {selectedLabel || placeholder}
-          </span>
+          {selectedOption ? (
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+              {selectedOption.prefix && (
+                <span className="shrink-0 text-base leading-none">{selectedOption.prefix}</span>
+              )}
+              <span className="truncate">{selectedOption.label}</span>
+              {selectedOption.meta && (
+                <span className="ml-auto shrink-0 rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {selectedOption.meta}
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="truncate text-foreground/40">{placeholder}</span>
+          )}
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </Button>
       </PopoverTrigger>
@@ -69,14 +81,20 @@ export function DictionaryCombobox({
               {mergedOptions.map((o) => (
                 <CommandItem
                   key={o.value}
-                  value={o.label}
+                  value={`${o.label} ${o.meta ?? ""}`.trim()}
                   onSelect={() => {
                     onChange(o.value);
                     setOpen(false);
                   }}
                 >
                   <Check className={`mr-2 h-4 w-4 ${o.value === value ? "opacity-100" : "opacity-0"}`} />
-                  <span className="truncate">{o.label}</span>
+                  {o.prefix && <span className="mr-2 shrink-0 text-base leading-none">{o.prefix}</span>}
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  {o.meta && (
+                    <span className="ml-2 shrink-0 rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {o.meta}
+                    </span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

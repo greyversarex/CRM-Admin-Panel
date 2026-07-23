@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Search, Download, Plus, Image as ImageIcon, MoreHorizontal,
+  Search, Download, Image as ImageIcon, MoreHorizontal,
   FileEdit, Send, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight,
   ArrowUpRight, Upload,
 } from "lucide-react";
@@ -28,6 +28,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { CreateReleaseButton } from "@/components/create-release-button";
 
 type StatusFilter = "all" | "draft" | "pending_review" | "scheduled" | "live" | "takedown";
 
@@ -155,7 +156,7 @@ export function ReleasesPanel() {
             <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
             <p className="text-muted-foreground mt-1 max-w-2xl">{pageSubtitle}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             {!isArtist && !isLabel && (
               <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")} data-testid="button-transfer-track">
                 <ArrowUpRight className="mr-2 h-4 w-4" />
@@ -180,10 +181,11 @@ export function ReleasesPanel() {
                 {t.releases.upload_csv}
               </Button>
             )}
-            <Button onClick={() => setLocation("/releases/new")} className="bg-primary" data-testid="button-create-release">
-              <Plus className="mr-2 h-4 w-4" />
-              {t.releases.create_release}
-            </Button>
+            <CreateReleaseButton
+              onClick={() => setLocation("/releases/new")}
+              label={t.releases.create_release}
+              data-testid="button-create-release"
+            />
           </div>
         </div>
 
@@ -261,10 +263,12 @@ export function ReleasesPanel() {
                   <Download className="mr-2 h-3.5 w-3.5" />
                   {t.releases.export_full}
                 </Button>
-                <Button size="sm" onClick={() => setLocation("/releases/new")}>
-                  <Plus className="mr-2 h-3.5 w-3.5" />
-                  {t.releases.create_release}
-                </Button>
+                <CreateReleaseButton
+                  size="sm"
+                  onClick={() => setLocation("/releases/new")}
+                  label={t.releases.create_release}
+                  data-testid="button-create-release-compact"
+                />
               </div>
             </div>
           </CardHeader>

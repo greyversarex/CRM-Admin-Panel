@@ -21,6 +21,9 @@ export interface Artist {
   labelName?: string | null;
   spotifyId?: string | null;
   appleId?: string | null;
+  ipiNameNumber?: string | null;
+  ipn?: string | null;
+  isni?: string | null;
   broma16Outlets?: Broma16OutletRef[] | null;
   socialLinks?: ArtistSocialLinks;
   status: string;

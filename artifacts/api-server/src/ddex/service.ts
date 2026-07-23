@@ -33,6 +33,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { LOCAL_STORAGE_ROOT } from "../lib/objectStorage";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
+import { metadataLanguageToCode } from "../lib/metadata-language-code";
 import { buildErn } from "./ern-builder";
 import { validateBusinessRules, validateSplits, type ValidationError } from "./business-validator";
 import { getTransport, type TransportFile } from "./transports";
@@ -244,7 +245,7 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
       title: t.title,
       trackVersion: t.trackVersion ?? null,
       durationSeconds: t.durationSeconds ?? 0,
-      language: (t.language || release.language || "tg").toLowerCase(),
+      language: metadataLanguageToCode(t.language || release.language),
       isExplicit: t.isExplicit,
       trackNumber: t.trackNumber ?? trackContexts.length + 1,
       genre: t.genre ?? null,
@@ -272,7 +273,7 @@ async function buildReleaseContext(releaseId: number): Promise<ReleaseContext> {
     releaseDate: release.releaseDate ?? new Date().toISOString().slice(0, 10),
     genre: release.genre,
     subgenre: release.subgenre ?? null,
-    language: (release.language || "tg").toLowerCase(),
+    language: metadataLanguageToCode(release.language),
     isExplicit: release.isExplicit,
     territories: release.territories ?? ["WW"],
     pLine: release.pLine,
@@ -689,6 +690,7 @@ export async function dropToAcrCloud(releaseId: number): Promise<AcrDropResult> 
 export type IngestAckResult = {
   ok: boolean;
   ackId: number;
+  duplicate: boolean;
   matchedMessageId?: number;
   matchedBatchId?: number;
   status: "accepted" | "rejected" | "warning";
@@ -714,6 +716,7 @@ export type _ServiceTypes = { Release: Release; Track: Track };
 
 export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" | "manual" = "webhook", partnerCodeHint?: string): Promise<IngestAckResult> {
   const parsed = parseAck(rawXml, source);
+  const payloadHash = createHash("sha256").update(rawXml, "utf8").digest("hex");
 
   // Найти исходное сообщение/batch
   let matchedMessageId: number | undefined;
@@ -739,7 +742,7 @@ export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" 
 
   // Атомарно: insert ack + update message + update batch — чтобы не было
   // «принят ack, но статус сообщения не сдвинулся» (orphan) при сбое посередине.
-  const ack = await db.transaction(async (tx) => {
+  const transactionResult = await db.transaction(async (tx) => {
     const [a] = await tx.insert(ddexAcknowledgementsTable).values({
       messageId: matchedMessageId ?? null,
       batchId: matchedBatchId ?? null,
@@ -748,8 +751,17 @@ export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" 
       ackType: parsed.ackType,
       status: parsed.status,
       rawPayload: rawXml.slice(0, 200_000), // cap
+      payloadHash,
       parsed: parsed.parsed,
-    }).returning();
+    }).onConflictDoNothing({ target: ddexAcknowledgementsTable.payloadHash }).returning();
+
+    if (!a) {
+      const [existing] = await tx.select().from(ddexAcknowledgementsTable)
+        .where(eq(ddexAcknowledgementsTable.payloadHash, payloadHash))
+        .limit(1);
+      if (!existing) throw new Error("DDEX ACK idempotency conflict could not be resolved");
+      return { ack: existing, duplicate: true };
+    }
 
     if (matchedMessageId) {
       if (parsed.status === "accepted") {
@@ -766,16 +778,18 @@ export async function ingestAck(rawXml: string, source: "webhook" | "sftp-poll" 
     if (matchedBatchId && parsed.status === "accepted") {
       await tx.update(ddexBatchesTable).set({ status: "acked" }).where(eq(ddexBatchesTable.id, matchedBatchId));
     }
-    return a;
+    return { ack: a, duplicate: false };
   });
+  const { ack, duplicate } = transactionResult;
 
   logger.info({
-    ackId: ack.id, matchedMessageId, matchedBatchId, partnerCode, status: parsed.status,
-  }, "ddex ack ingested");
+    ackId: ack.id, duplicate, matchedMessageId, matchedBatchId, partnerCode, status: parsed.status,
+  }, duplicate ? "ddex ack replay ignored" : "ddex ack ingested");
 
   return {
     ok: true,
     ackId: ack.id,
+    duplicate,
     matchedMessageId,
     matchedBatchId,
     status: parsed.status,

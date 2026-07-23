@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Globe2, Film, TrendingUp, TrendingDown, Music2, Disc3, Award, Users as UsersIcon, Video, ListMusic, PlaySquare, Database, BarChart3, Info } from "lucide-react";
+import { Globe2, Film, TrendingUp, TrendingDown, Music2, Disc3, Award, Users as UsersIcon, Video, ListMusic, PlaySquare, Database, BarChart3, Info, Clock3, Eye, Heart, Share2 } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
-import { ResponsiveContainer, Tooltip, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ResponsiveContainer, Tooltip, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +75,7 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
   });
 
   const chartData = (data ?? []).slice(0, 6).map((r, i) => ({
-    name: r.platform,
+    name: dspDisplay(r.platform).label,
     value: metric === "streams" ? r.streams : r.revenue,
     fill: DSP_COLORS[i % DSP_COLORS.length],
   }));
@@ -125,7 +125,7 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70">Total</p>
                 <p className="text-sm font-bold tabular-nums">
-                  {metric === "streams" ? `${(total / 1000).toFixed(0)}K` : `$${(total / 1000).toFixed(1)}k`}
+                  {metric === "streams" ? fmtCompact(total) : `$${fmtCompact(total)}`}
                 </p>
               </div>
             </div>
@@ -136,7 +136,7 @@ export function TopDspCard({ metric = "streams", title }: { metric?: "streams" |
                   <span className="flex-1 truncate">{row.name}</span>
                   <span className="font-semibold tabular-nums text-muted-foreground">
                     {metric === "streams"
-                      ? `${(row.value / 1000).toFixed(0)}K`
+                      ? fmtCompact(row.value)
                       : `$${row.value.toLocaleString()}`}
                   </span>
                   <span className="w-10 text-right text-muted-foreground/70 tabular-nums">
@@ -251,7 +251,7 @@ export function LatestReleasesGridCard() {
         ) : (
           <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             {data.map((r) => (
-              <div key={r.id} className="group cursor-pointer">
+              <a key={r.id} href={`/releases/${r.id}`} className="group block">
                 <div className="aspect-square rounded-lg overflow-hidden border border-border/50 bg-gradient-to-br from-primary/15 to-violet-500/10 flex items-center justify-center relative">
                   {r.coverUrl ? (
                     <img src={assetHref(r.coverUrl)} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -266,8 +266,15 @@ export function LatestReleasesGridCard() {
                   <p className="text-[12px] font-medium truncate group-hover:text-primary transition-colors">{r.title}</p>
                   <p className="text-[10px] text-muted-foreground truncate">{r.artist.name}</p>
                 </div>
-              </div>
+              </a>
             ))}
+          </div>
+        )}
+        {!isLoading && data && data.length > 0 && (
+          <div className="flex justify-center mt-4">
+            <a href="/releases" className="rounded-md border border-border/60 bg-muted/30 px-3 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+              Все релизы →
+            </a>
           </div>
         )}
       </CardContent>
@@ -321,7 +328,7 @@ export function TopTracksCard() {
                   <p className="text-[10px] text-muted-foreground truncate">{t.artist.name}{t.release.title ? ` · ${t.release.title}` : ""}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[12px] font-semibold tabular-nums">{(t.streams / 1000).toFixed(0)}K</p>
+                  <p className="text-[12px] font-semibold tabular-nums">{fmtCompact(t.streams)}</p>
                   <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${t.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {t.trend >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                     {t.trend >= 0 ? "+" : ""}{t.trend}%
@@ -377,7 +384,7 @@ export function TopArtistsCard() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{a.name}</p>
                   <p className="text-[10px] text-muted-foreground truncate">
-                    {(a.totalStreams / 1000).toFixed(0)}K streams{a.country ? ` · ${a.country}` : ""}
+                    {fmtCompact(a.totalStreams)} streams{a.country ? ` · ${a.country}` : ""}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -753,7 +760,7 @@ export function PerformanceOverviewCard() {
                 <li>• UGC-платформы (Reels / Shorts / TikTok)</li>
               </ul>
               <p className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/40">
-                Данные появляются автоматически после выхода релизов на площадках.
+                Данные появляются после синхронизации Broma16 или импорта отчёта DSP.
               </p>
             </PopoverContent>
           </Popover>
@@ -886,35 +893,163 @@ export function PlaylistPlacementsCard() {
 
 /* ───── UGC Map — динамика (просмотры / видео / вовлечённость) + платформы ───── */
 
-type UgcSeriesPoint = { day: string; views: number; videos: number; likes: number };
-type UgcPlatformRow = { platform: string; views: number; videos: number; likes: number; shares: number };
-type UgcTimeseries = { series: UgcSeriesPoint[]; byPlatform: UgcPlatformRow[] };
+type UgcSeriesPoint = {
+  day: string;
+  views: number;
+  videos: number;
+  likes: number;
+  shares: number;
+  watchTimeSeconds: number;
+};
+type UgcPlatformRow = Omit<UgcSeriesPoint, "day"> & { platform: string };
+type UgcPlatformSeries = { platform: string; points: UgcSeriesPoint[] };
+type UgcTimeseries = {
+  series: UgcSeriesPoint[];
+  byPlatform: UgcPlatformRow[];
+  platformSeries: UgcPlatformSeries[];
+};
 
-function UgcMiniChart({ data, dataKey, label, color }: { data: UgcSeriesPoint[]; dataKey: "views" | "videos" | "likes"; label: string; color: string }) {
-  const gradId = `ugc_${dataKey}`;
+type UgcMetricKey = "views" | "videos" | "watchTimeSeconds" | "likes" | "shares";
+
+function ugcMetricValue(point: UgcSeriesPoint, dataKey: UgcMetricKey): number {
+  return dataKey === "watchTimeSeconds" ? point.watchTimeSeconds / 3600 : point[dataKey];
+}
+
+function UgcMiniChart({
+  data,
+  dataKey,
+  label,
+  color,
+  bars = false,
+}: {
+  data: UgcSeriesPoint[];
+  dataKey: UgcMetricKey;
+  label: string;
+  color: string;
+  bars?: boolean;
+}) {
+  const gradId = `ugc_${dataKey}_${color.replace("#", "")}`;
+  const chartData = data.map((point) => ({ ...point, value: ugcMetricValue(point, dataKey) }));
   return (
-    <div className="rounded-md border border-border/40 bg-white/[0.02] p-2">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
-      <div className="h-[90px] w-full">
+    <div className="rounded-lg border border-border/40 bg-white/[0.018] p-3">
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-[12px] font-semibold tabular-nums">
+          {dataKey === "watchTimeSeconds"
+            ? `${fmtCompact(data.reduce((sum, point) => sum + point.watchTimeSeconds, 0) / 3600)} ч`
+            : fmtCompact(data.reduce((sum, point) => sum + point[dataKey], 0))}
+        </p>
+      </div>
+      <div className="h-[122px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.35} />
-                <stop offset="95%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="day" hide />
-            <YAxis hide />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
-              formatter={(v: number) => [v.toLocaleString(), label]}
-              labelFormatter={(l) => new Date(l).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
-            />
-            <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fillOpacity={1} fill={`url(#${gradId})`} dot={false} />
-          </AreaChart>
+          {bars ? (
+            <BarChart data={chartData} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+              <XAxis dataKey="day" hide />
+              <YAxis hide />
+              <Tooltip
+                contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                formatter={(v: number) => [v.toLocaleString(), label]}
+                labelFormatter={(l) => new Date(l).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
+              />
+              <Bar dataKey="value" fill={color} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          ) : (
+            <AreaChart data={chartData} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.32} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="day" hide />
+              <YAxis hide />
+              <Tooltip
+                contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                formatter={(v: number) => [dataKey === "watchTimeSeconds" ? `${v.toLocaleString()} ч` : v.toLocaleString(), label]}
+                labelFormatter={(l) => new Date(l).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
+              />
+              <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fillOpacity={1} fill={`url(#${gradId})`} dot={false} />
+            </AreaChart>
+          )}
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+function platformMatches(platform: string, group: "youtube" | "tiktok" | "meta"): boolean {
+  const key = platform.toLowerCase();
+  if (group === "youtube") return key === "youtube" || key === "youtube_cms";
+  if (group === "tiktok") return key === "tiktok";
+  return key === "meta" || key === "instagram" || key === "facebook";
+}
+
+function combinePlatformSeries(data: UgcPlatformSeries[], group: "youtube" | "tiktok" | "meta"): UgcSeriesPoint[] {
+  const byDay = new Map<string, UgcSeriesPoint>();
+  for (const entry of data.filter((item) => platformMatches(item.platform, group))) {
+    for (const point of entry.points) {
+      const current = byDay.get(point.day) ?? { day: point.day, views: 0, videos: 0, likes: 0, shares: 0, watchTimeSeconds: 0 };
+      current.views += point.views;
+      current.videos += point.videos;
+      current.likes += point.likes;
+      current.shares += point.shares;
+      current.watchTimeSeconds += point.watchTimeSeconds;
+      byDay.set(point.day, current);
+    }
+  }
+  return Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day));
+}
+
+function UgcPlatformPanel({
+  title,
+  color,
+  series,
+}: {
+  title: string;
+  color: string;
+  series: UgcSeriesPoint[];
+}) {
+  const views = series.reduce((sum, point) => sum + point.views, 0);
+  const engagement = series.reduce((sum, point) => sum + point.likes + point.shares, 0);
+  return (
+    <div className="rounded-xl border border-border/50 bg-background/25 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+          <h3 className="text-sm font-semibold">{title}</h3>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Просмотры</p>
+          <p className="text-sm font-semibold tabular-nums">{fmtCompact(views)}</p>
+        </div>
+      </div>
+      {series.length === 0 ? (
+        <div className="h-[150px] flex items-center justify-center text-center text-[11px] text-muted-foreground/65">
+          Нет импортированных данных {title}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="h-[116px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={series} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+                <XAxis dataKey="day" hide />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                  formatter={(v: number) => [v.toLocaleString(), "Просмотры"]}
+                  labelFormatter={(l) => new Date(l).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
+                />
+                <Bar dataKey="views" fill={color} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+            <span><Video className="inline h-3 w-3 mr-1" />{fmtCompact(series.reduce((s, p) => s + p.videos, 0))} видео</span>
+            <span><Heart className="inline h-3 w-3 mr-1" />{fmtCompact(engagement)} реакций</span>
+            <span><Clock3 className="inline h-3 w-3 mr-1" />{fmtCompact(series.reduce((s, p) => s + p.watchTimeSeconds, 0) / 3600)} ч</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -926,51 +1061,71 @@ export function UgcMapCard() {
   });
   const series = data?.series ?? [];
   const byPlatform = data?.byPlatform ?? [];
+  const platformSeries = data?.platformSeries ?? [];
   const hasData = series.length > 0;
-  const maxViews = Math.max(1, ...byPlatform.map((p) => p.views));
+  const totals = byPlatform.reduce((acc, row) => ({
+    views: acc.views + row.views,
+    videos: acc.videos + row.videos,
+    watchTimeSeconds: acc.watchTimeSeconds + row.watchTimeSeconds,
+    engagement: acc.engagement + row.likes + row.shares,
+  }), { views: 0, videos: 0, watchTimeSeconds: 0, engagement: 0 });
+  const youtubeSeries = combinePlatformSeries(platformSeries, "youtube");
+  const tiktokSeries = combinePlatformSeries(platformSeries, "tiktok");
+  const metaSeries = combinePlatformSeries(platformSeries, "meta");
 
   return (
     <Card className="card-surface border-border/60">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Video className="h-3.5 w-3.5 text-primary" />
-          UGC · карта активности
-        </CardTitle>
-        <CardDescription className="text-[11px]">Динамика по дням и разбивка по платформам (TikTok / YouTube / Reels)</CardDescription>
+      <CardHeader className="pb-3 border-b border-border/35">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Video className="h-4 w-4 text-primary" />
+              UGC Overview
+            </CardTitle>
+            <CardDescription className="text-[11px] mt-1">Реальные отчёты YouTube CMS, TikTok и Meta по трекам лейбла</CardDescription>
+          </div>
+          <a href="/analytics?tab=ugc" className="text-[11px] text-primary hover:underline">Открыть UGC Analytics →</a>
+        </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-4">
         {isLoading ? (
-          <Skeleton className="h-[200px] w-full" />
+          <Skeleton className="h-[520px] w-full" />
         ) : !hasData ? (
-          <div className="h-[200px] flex items-center justify-center text-[12px] text-muted-foreground/60">Нет данных</div>
+          <div className="min-h-[290px] flex flex-col items-center justify-center text-center px-6">
+            <Video className="h-8 w-8 text-muted-foreground/35 mb-3" />
+            <p className="text-sm font-medium">UGC-данные ещё не импортированы</p>
+            <p className="text-[11px] text-muted-foreground mt-1 max-w-md">
+              Блок заполнится только отчётами платформ, связанными с треками этого лейбла. Случайные значения и Spotify popularity здесь не используются.
+            </p>
+          </div>
         ) : (
-          <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-3">
-              <UgcMiniChart data={series} dataKey="views" label="Просмотры" color="#6366f1" />
-              <UgcMiniChart data={series} dataKey="videos" label="Видео" color="#06b6d4" />
-              <UgcMiniChart data={series} dataKey="likes" label="Вовлечённость (лайки)" color="#ec4899" />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "UGC Views", value: fmtCompact(totals.views), icon: Eye },
+                { label: "Watch Time", value: `${fmtCompact(totals.watchTimeSeconds / 3600)} ч`, icon: Clock3 },
+                { label: "New UGC Videos", value: fmtCompact(totals.videos), icon: Video },
+                { label: "Engagement", value: fmtCompact(totals.engagement), icon: Share2 },
+              ].map(({ label, value, icon: Icon }) => (
+                <div key={label} className="rounded-lg border border-border/40 bg-white/[0.018] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <p className="text-lg font-semibold mt-1 tabular-nums">{value}</p>
+                </div>
+              ))}
             </div>
-            {byPlatform.length > 0 && (
-              <div className="space-y-2 pt-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Платформы</p>
-                {byPlatform.map((p) => {
-                  const meta = dspDisplay(p.platform);
-                  const share = (p.views / maxViews) * 100;
-                  return (
-                    <div key={p.platform} className="space-y-1">
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
-                        <span className="flex-1 truncate font-medium">{meta.label}</span>
-                        <span className="tabular-nums text-muted-foreground">{fmtCompact(p.views)} просм. · {fmtCompact(p.videos)} видео</span>
-                      </div>
-                      <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${Math.max(share, 2)}%`, backgroundColor: meta.color }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="grid gap-3 lg:grid-cols-3">
+              <UgcMiniChart data={series} dataKey="views" label="Просмотры" color="#06d6e9" />
+              <UgcMiniChart data={series} dataKey="watchTimeSeconds" label="Время просмотра" color="#22c55e" />
+              <UgcMiniChart data={series} dataKey="videos" label="Новые видео" color="#db2777" bars />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <UgcPlatformPanel title="YouTube CMS" color="#ff2d20" series={youtubeSeries} />
+              <UgcPlatformPanel title="TikTok" color="#ff0050" series={tiktokSeries} />
+              <UgcPlatformPanel title="Meta / Reels" color="#0866ff" series={metaSeries} />
+            </div>
           </div>
         )}
       </CardContent>

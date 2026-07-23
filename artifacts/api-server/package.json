@@ -7,7 +7,9 @@
     "dev": "NODE_ENV=development tsx watch --clear-screen=false src/index.ts",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/lib/api-key-permissions.test.ts src/lib/ddex-inbound-auth.test.ts src/lib/crypto.test.ts src/lib/demo-login.test.ts src/lib/cors-origin.test.ts src/lib/label-scope.test.ts src/lib/track-metadata.test.ts src/lib/metadata-language-code.test.ts src/lib/upc.test.ts src/services/artist-dsp-search.test.ts",
+    "rotate:integration-credentials": "tsx src/scripts/rotate-integration-credentials.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

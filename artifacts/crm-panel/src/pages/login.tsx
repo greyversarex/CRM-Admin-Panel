@@ -8,11 +8,11 @@ import { Eye, EyeOff, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 
-const DEMO_ACCOUNTS: { role: Role; email: string; password: string; hintKey: "demo_hint_admin" | "demo_hint_manager" | "demo_hint_own" }[] = [
-  { role: "admin",   email: "admin@tajikmusic.com",   password: "admin123",   hintKey: "demo_hint_admin" },
-  { role: "manager", email: "manager@tajikmusic.com", password: "manager123", hintKey: "demo_hint_manager" },
-  { role: "label",   email: "label@tajikmusic.com",   password: "label123",   hintKey: "demo_hint_own" },
-  { role: "artist",  email: "artist@tajikmusic.com",  password: "artist123",  hintKey: "demo_hint_own" },
+const DEMO_ACCOUNTS: { role: Role; hintKey: "demo_hint_admin" | "demo_hint_manager" | "demo_hint_own" }[] = [
+  { role: "admin",   hintKey: "demo_hint_admin" },
+  { role: "manager", hintKey: "demo_hint_manager" },
+  { role: "label",   hintKey: "demo_hint_own" },
+  { role: "artist",  hintKey: "demo_hint_own" },
 ];
 
 /* ─── Canvas Music Visualizer ─── */
@@ -382,7 +382,7 @@ function MusicCanvas() {
 }
 
 export default function Login() {
-  const { login, loginAs } = useAuth();
+  const { login, loginAs, demoRoles } = useAuth();
   const [, navigate] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -507,14 +507,14 @@ export default function Login() {
               </Link>
             </p>
 
-            {/* Demo accounts — visible only in development */}
-            {import.meta.env.DEV && (
+            {/* Enabled explicitly by the API; off by default in production. */}
+            {demoRoles.length > 0 && (
             <div className="mt-6 pt-5 border-t border-white/10">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/30 mb-3">
                 {l.demo_accounts}
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {DEMO_ACCOUNTS.map(acc => (
+                {DEMO_ACCOUNTS.filter((acc) => demoRoles.includes(acc.role)).map(acc => (
                   <button
                     key={acc.role}
                     onClick={() => handleDemo(acc.role)}

@@ -8,6 +8,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { isCorsOriginAllowed } from "./lib/cors-origin";
 
 const app: Express = express();
 
@@ -66,20 +67,31 @@ const allowedOrigins = (process.env.WEB_ORIGINS ?? "")
 const effectiveAllowedOrigins =
   allowedOrigins.length > 0 ? allowedOrigins : isProduction ? [] : devFallbackOrigins;
 
-const corsOptions: CorsOptions = {
-  credentials: true,
-  origin(origin, cb) {
-    // No Origin header → not a CORS request (curl, server-to-server, same-origin GET).
-    if (!origin) return cb(null, true);
-    // В разработке домен превью Replit (и iframe на Canvas) меняется и заранее
-    // неизвестен, а Vite-прокси пробрасывает Origin браузера на API. Поэтому в dev
-    // разрешаем любой Origin. В продакшене список строго ограничен WEB_ORIGINS.
-    if (!isProduction) return cb(null, true);
-    if (effectiveAllowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error(`Origin ${origin} not allowed by CORS policy`));
-  },
-};
-app.use(cors(corsOptions));
+app.use(cors((corsReq, optionsCallback) => {
+  const req = corsReq as Request;
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || req.protocol;
+  const host = forwardedHost || req.get("host");
+  const requestOrigin = host ? `${protocol}://${host}` : null;
+
+  const corsOptions: CorsOptions = {
+    credentials: true,
+    origin(origin, cb) {
+      if (isCorsOriginAllowed({
+        origin,
+        requestOrigin,
+        configuredOrigins: effectiveAllowedOrigins,
+        isProduction,
+      })) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error(`Origin ${origin} not allowed by CORS policy`));
+    },
+  };
+  optionsCallback(null, corsOptions);
+}));
 
 app.use(
   pinoHttp({

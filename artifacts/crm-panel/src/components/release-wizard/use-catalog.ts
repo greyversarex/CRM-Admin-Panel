@@ -21,6 +21,8 @@ export interface DictItem {
 export interface Option {
   value: string;
   label: string;
+  prefix?: string;
+  meta?: string;
 }
 
 async function fetchDictionary(type: DictType): Promise<DictItem[]> {
@@ -37,6 +39,46 @@ async function fetchDictionary(type: DictType): Promise<DictItem[]> {
  * `fallback` используется, пока справочник Broma16 пуст.
  */
 const normLabel = (s: string) => s.trim().toLowerCase();
+
+const englishRegionNames = new Intl.DisplayNames(["en"], { type: "region" });
+const DEPRECATED_COUNTRY_CODES = new Set(["CS", "SU", "YU"]);
+
+function countryFlag(code: string): string {
+  return Array.from(code)
+    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
+    .join("");
+}
+
+/**
+ * Broma16 currently returns 256 country rows with Russian labels, duplicate
+ * legacy codes and malformed aliases such as CDN/PLS. The product stores an
+ * ISO alpha-2 code, so the UI can safely rebuild canonical English labels from
+ * that code while retaining Broma16 as the source of available countries.
+ */
+export function buildEnglishCountryOptions(items: DictItem[]): Option[] {
+  const byCode = new Map<string, Option>();
+
+  for (const item of items) {
+    const code = String(item.code ?? "").trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code) || DEPRECATED_COUNTRY_CODES.has(code) || byCode.has(code)) {
+      continue;
+    }
+
+    const name = englishRegionNames.of(code);
+    if (!name || name === code || name === "Unknown Region") continue;
+
+    byCode.set(code, {
+      value: code,
+      label: name,
+      prefix: countryFlag(code),
+      meta: code,
+    });
+  }
+
+  return Array.from(byCode.values()).sort((left, right) =>
+    left.label.localeCompare(right.label, "en", { sensitivity: "base" }),
+  );
+}
 
 /**
  * Объединяет базовый список с дополнительными опциями (кастомные жанры/сабжанры),
@@ -73,12 +115,20 @@ export function useCatalogOptions(
   const items = data ?? [];
   const fromBroma16 = items.length > 0;
 
-  const base: Option[] = fromBroma16
-    ? items.map((it) => ({
-        value: valueKey === "code" ? (it.code ?? it.externalId) : it.name,
-        label: it.name,
-      }))
-    : fallback;
+  let base: Option[];
+  if (type === "country") {
+    const countryItems = fromBroma16
+      ? items
+      : fallback.map((item) => ({ externalId: item.value, code: item.value, name: item.label }));
+    base = buildEnglishCountryOptions(countryItems);
+  } else {
+    base = fromBroma16
+      ? items.map((it) => ({
+          value: valueKey === "code" ? (it.code ?? it.externalId) : it.name,
+          label: it.name,
+        }))
+      : fallback;
+  }
 
   // Кастомные жанры/сабжанры показываем всегда — и поверх словаря Broma16,
   // и в запасном списке. Отправку в Broma16 они не ломают: resolveGenres на

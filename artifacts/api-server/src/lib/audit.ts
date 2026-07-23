@@ -28,7 +28,8 @@ const ENTITY_ALLOWLIST: Record<string, Set<string>> = {
   ]),
   artist: new Set([
     "id", "name", "slug", "imageUrl", "genre", "bio", "country", "labelId",
-    "spotifyId", "appleId", "status", "createdAt", "updatedAt",
+    "spotifyId", "appleId", "ipiNameNumber", "ipn", "isni", "broma16ArtistId",
+    "artistH11", "broma16Outlets", "status", "createdAt", "updatedAt",
     // socialLinks НЕ включаем: это PII / контакты, не нужно для аудита изменений.
   ]),
   label: new Set([
@@ -257,14 +258,18 @@ export interface AuditOptions {
 export async function auditMutation(req: Request, opts: AuditOptions): Promise<void> {
   try {
     const sessionUser = req.session?.user;
+    const apiKey = req.apiKeyAuth;
     const sanitizedBefore = opts.before ? sanitizeFields(opts.before, opts.entityType) : null;
     const sanitizedAfter = opts.after ? sanitizeFields(opts.after, opts.entityType) : null;
     const diff = computeDiff(sanitizedBefore, sanitizedAfter);
 
     await db.insert(auditLogTable).values({
-      userId: sessionUser?.id ?? null,
-      userEmail: sessionUser?.email ?? null,
-      userRole: sessionUser?.role ?? null,
+      // API keys are service principals, not user logins. Keeping user_id null
+      // avoids falsely attributing their mutations to the admin who created the
+      // key while the synthetic email still gives the audit trail a stable actor.
+      userId: apiKey ? null : (sessionUser?.id ?? null),
+      userEmail: apiKey ? `apikey-${apiKey.id}@system.local` : (sessionUser?.email ?? null),
+      userRole: apiKey ? "api_key" : (sessionUser?.role ?? null),
       action: opts.action,
       entityType: opts.entityType,
       entityId: opts.entityId,
