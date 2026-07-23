@@ -44,6 +44,52 @@ set +a
 : "${SESSION_SECRET:?SESSION_SECRET отсутствует в .env}"
 : "${PORT:=3001}"
 : "${LOCAL_STORAGE_ROOT:=/var/lib/tajikmusic/uploads}"
+
+# ── Новые обязательные секреты (после обновления безопасности) ──
+# Если ключей нет — генерируем один раз и дописываем в .env, чтобы API не падал.
+ensure_env_secret() {
+  local key="$1"
+  local current="${!key:-}"
+  if [ -n "$current" ] && [ "$current" != "replace_with_64_hex_characters" ] && [ "$current" != "replace_with_long_random_string_here" ]; then
+    return 0
+  fi
+  local value
+  value="$(openssl rand -hex 32)"
+  if grep -qE "^${key}=" "$APP_DIR/.env"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$APP_DIR/.env"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$APP_DIR/.env"
+  fi
+  export "$key=$value"
+  echo "  • сгенерирован и записан в .env: $key"
+}
+
+echo "▶ Проверяем секреты production..."
+ensure_env_secret INTEGRATIONS_ENCRYPTION_KEY
+ensure_env_secret DDEX_INBOUND_SECRET
+
+# Если раньше credentials шифровались dev-ключом (когда INTEGRATIONS_ENCRYPTION_KEY
+# не был задан), оставим его как previous — иначе старые интеграции не расшифруются.
+if [ -z "${INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS:-}" ]; then
+  DEV_FALLBACK_HEX="$(printf '%s' 'tajikmusic-dev-fallback-key-do-not-use-in-prod' | openssl dgst -sha256 | awk '{print $2}')"
+  # Только если текущий ключ НЕ совпадает с dev-fallback
+  if [ "${INTEGRATIONS_ENCRYPTION_KEY}" != "${DEV_FALLBACK_HEX}" ]; then
+    if grep -qE "^INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS=" "$APP_DIR/.env"; then
+      sed -i "s|^INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS=.*|INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS=${DEV_FALLBACK_HEX}|" "$APP_DIR/.env"
+    else
+      printf 'INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS=%s\n' "$DEV_FALLBACK_HEX" >> "$APP_DIR/.env"
+    fi
+    export INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS="$DEV_FALLBACK_HEX"
+    echo "  • добавлен INTEGRATIONS_ENCRYPTION_PREVIOUS_KEYS (миграция со старого dev-ключа)"
+  fi
+fi
+
+# Перечитываем .env после правок
+set -a
+# shellcheck disable=SC1091
+. "$APP_DIR/.env"
+set +a
+
 export PORT LOCAL_STORAGE_ROOT
 
 # ── ffmpeg нужен для Audio QC (анализ аудиофайлов) ──────

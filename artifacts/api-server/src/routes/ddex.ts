@@ -295,6 +295,10 @@ router.get("/ddex/acknowledgements", async (req, res): Promise<void> => {
 const inboundAuthConfig = getDdexInboundAuthConfig();
 if (inboundAuthConfig.unsignedDevelopmentMode) {
   logger.warn("DDEX inbound webhook accepts unsigned payloads in development only");
+} else if (!inboundAuthConfig.secret) {
+  logger.warn(
+    "DDEX_INBOUND_SECRET is not set — inbound webhook will reject all requests until configured",
+  );
 }
 
 router.get("/ddex/transports", (_req, res): void => {
@@ -315,6 +319,12 @@ ddexInboundRouter.post(
     const rawBody = req.body as Buffer;
     if (!Buffer.isBuffer(rawBody) || rawBody.length === 0) {
       res.status(400).json({ error: "Empty body or wrong content-type" });
+      return;
+    }
+    if (!inboundAuthConfig.secret && !inboundAuthConfig.unsignedDevelopmentMode) {
+      res.status(503).json({
+        error: "DDEX inbound webhook is not configured (set DDEX_INBOUND_SECRET)",
+      });
       return;
     }
     const auth = verifyDdexInboundRequest({

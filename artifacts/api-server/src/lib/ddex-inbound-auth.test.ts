@@ -11,11 +11,14 @@ const NOW_MS = 1_785_200_000_000;
 const TIMESTAMP = String(Math.floor(NOW_MS / 1000));
 const BODY = Buffer.from("<Acknowledgement><Status>Accepted</Status></Acknowledgement>");
 
-test("production refuses to start without a strong inbound secret", () => {
-  assert.throws(
-    () => getDdexInboundAuthConfig({ NODE_ENV: "production" }),
-    /DDEX_INBOUND_SECRET.*required/,
-  );
+test("production can boot without inbound secret but rejects unsigned webhooks", () => {
+  const config = getDdexInboundAuthConfig({ NODE_ENV: "production" });
+  assert.equal(config.secret, null);
+  assert.equal(config.unsignedDevelopmentMode, false);
+  assert.deepEqual(verifyDdexInboundRequest({ rawBody: BODY, config }), {
+    ok: false,
+    reason: "missing_signature",
+  });
   assert.throws(
     () => getDdexInboundAuthConfig({ NODE_ENV: "production", DDEX_INBOUND_SECRET: "short" }),
     /at least 32 bytes/,

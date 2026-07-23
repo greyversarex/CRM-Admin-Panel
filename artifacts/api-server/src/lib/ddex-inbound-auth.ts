@@ -25,9 +25,8 @@ export function getDdexInboundAuthConfig(
 ): DdexInboundAuthConfig {
   const isProduction = env.NODE_ENV === "production";
   const secret = env.DDEX_INBOUND_SECRET?.trim() || null;
-  if (isProduction && !secret) {
-    throw new Error("DDEX_INBOUND_SECRET environment variable is required in production");
-  }
+  // Do not crash the whole API when the webhook secret is missing.
+  // Production without a secret simply rejects inbound webhooks (see verify + route).
   if (secret && Buffer.byteLength(secret, "utf8") < MIN_SECRET_BYTES) {
     throw new Error(`DDEX_INBOUND_SECRET must contain at least ${MIN_SECRET_BYTES} bytes`);
   }
@@ -72,7 +71,11 @@ export function verifyDdexInboundRequest(args: {
 }): DdexInboundAuthResult {
   const { rawBody, signatureHeader, timestampHeader, config } = args;
   if (!config.secret) {
-    return { ok: true, unsignedDevelopmentMode: true };
+    // Dev-only open mode. In production a missing secret must not accept payloads.
+    if (config.unsignedDevelopmentMode) {
+      return { ok: true, unsignedDevelopmentMode: true };
+    }
+    return { ok: false, reason: "missing_signature" };
   }
   if (!timestampHeader) return { ok: false, reason: "missing_timestamp" };
   if (!/^\d{10}$/.test(timestampHeader)) return { ok: false, reason: "invalid_timestamp" };
