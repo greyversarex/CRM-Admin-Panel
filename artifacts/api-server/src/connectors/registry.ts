@@ -9,6 +9,7 @@
 import type { IConnector } from "./base";
 import { spotifyConnector } from "./spotify";
 import { acrcloudConnector } from "./acrcloud";
+import { acrcloudFsConnector } from "./acrcloud-fs";
 import { broma16Connector } from "./broma16";
 import { createDdexSftpConnector } from "./ddex-sftp";
 import { createDdexS3Connector } from "./ddex-s3";
@@ -40,6 +41,7 @@ function register(c: IConnector) {
 // ── API-коннекторы с реальными probe-запросами ──
 register(spotifyConnector);
 register(acrcloudConnector);
+register(acrcloudFsConnector);  // File Scanning — проверка трека по базе ACRCloud
 register(broma16Connector);   // Broma16 (ROD) — login + account_id (реальный тест)
 
 // Email

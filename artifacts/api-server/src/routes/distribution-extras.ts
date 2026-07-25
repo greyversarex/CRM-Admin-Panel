@@ -31,6 +31,7 @@ import { logger } from "../lib/logger";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { lookupIsrc, detectIsrcConflict, normalizeIsrc } from "../services/musicbrainz";
+import { loadFileScanConfig, isFileScanConfigured, runFileScan } from "../services/acrcloud-file-scan";
 import { assessAndPersist } from "../services/risk-engine";
 
 const storage = new ObjectStorageService();
@@ -75,6 +76,7 @@ async function loadAcrConfig(): Promise<AcrCloudConfig> {
 
 const AcrChecksQuery = z.object({
   releaseId: z.coerce.number().int().positive().optional(),
+  trackId: z.coerce.number().int().positive().optional(),
 });
 
 router.get("/distribution/acr/checks", async (req, res): Promise<void> => {
@@ -83,17 +85,85 @@ router.get("/distribution/acr/checks", async (req, res): Promise<void> => {
     res.status(400).json({ error: "invalid_query", message: parsed.error.message });
     return;
   }
-  const releaseId = parsed.data.releaseId ?? null;
+  const { releaseId, trackId } = parsed.data;
   let q = db.select().from(acrChecksTable).$dynamic();
-  if (releaseId) q = q.where(eq(acrChecksTable.releaseId, releaseId));
+  if (trackId) q = q.where(eq(acrChecksTable.trackId, trackId));
+  else if (releaseId) q = q.where(eq(acrChecksTable.releaseId, releaseId));
   const rows = await q.orderBy(desc(acrChecksTable.scannedAt)).limit(200);
-  res.json({ checks: rows, configured: await acrConfigured() });
+  res.json({
+    checks: rows,
+    // configured  — старый Identify API (engine='acrcloud')
+    // fileScanConfigured — File Scanning (engine='acrcloud_fs'), которым
+    // делается настоящая проверка трека. UI гейтит кнопку проверки по нему.
+    configured: await acrConfigured(),
+    fileScanConfigured: await isFileScanConfigured(),
+  });
 });
 
 async function acrConfigured(): Promise<boolean> {
   const c = await loadAcrConfig();
   return Boolean(c.enabled !== false && c.host && c.accessKey && c.accessSecret);
 }
+
+// ── Проверка трека через ACRCloud File Scanning ───────────────────────────
+//
+// Это ЗАМЕНА старому sample/full-скану на Identify API: файл уходит целиком,
+// ACRCloud сам находит все совпавшие участки и отдаёт метаданные (лейбл,
+// альбом, UPC, ISRC, дата релиза, где издан). UPC у нашего релиза не нужен.
+
+const FileScanBody = z.object({
+  trackId: z.number().int().positive(),
+});
+
+router.post("/distribution/acr/file-scan", async (req, res): Promise<void> => {
+  const parsed = FileScanBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation", details: parsed.error.flatten() }); return; }
+
+  const [track] = await db.select().from(tracksTable).where(eq(tracksTable.id, parsed.data.trackId));
+  if (!track) { res.status(404).json({ error: "Track not found" }); return; }
+
+  const userId = req.session?.user?.id ?? null;
+  const base = {
+    releaseId: track.releaseId,
+    trackId: track.id,
+    engine: "acrcloud_fs",
+    mode: "file_scan",
+    scannedBy: userId,
+  } as const;
+
+  const cfg = await loadFileScanConfig();
+  if (!cfg) {
+    const [row] = await db.insert(acrChecksTable).values({
+      ...base,
+      status: "error",
+      errorMessage: "ACRCloud (проверка треков) не настроен — заполните Настройки → Интеграции → ACRCloud — проверка треков",
+    }).returning();
+    void auditMutation(req, { action: "acr_file_scan", entityType: "acr_check", entityId: row.id, before: null, after: row });
+    res.status(503).json({ ...row, error: "file_scan_not_configured" });
+    return;
+  }
+
+  if (!track.audioUrl) {
+    const [row] = await db.insert(acrChecksTable).values({
+      ...base,
+      status: "error",
+      errorMessage: "У трека нет аудиофайла — загрузите аудио перед проверкой",
+    }).returning();
+    void auditMutation(req, { action: "acr_file_scan", entityType: "acr_check", entityId: row.id, before: null, after: row });
+    res.status(422).json({ ...row, error: "audio_url_missing" });
+    return;
+  }
+
+  const [row] = await db.insert(acrChecksTable).values({ ...base, status: "pending" }).returning();
+  void auditMutation(req, { action: "acr_file_scan", entityType: "acr_check", entityId: row.id, before: null, after: row });
+
+  // Скан идёт минутами — отвечаем сразу, UI опрашивает строку проверки.
+  void runFileScan(row.id, track.audioUrl, track.title ?? "track", cfg).then(() => {
+    if (track.releaseId) void assessAndPersist(track.releaseId);
+  });
+
+  res.status(202).json(row);
+});
 
 const ScanBody = z.object({
   releaseId: z.number().int().positive(),
@@ -597,7 +667,11 @@ async function processFullScan(checkId: number, audioUrl: string, cfg: Required<
     }
 
     const finishedAt = Date.now();
-    const finalStatus: "matched" | "clean" | "error" = matchedCount > 0 ? "matched" : (errorCount === segments.length ? "error" : "clean");
+    // «Чисто» имеет право появиться ТОЛЬКО когда просканировались все окна.
+    // Иначе получается ложный зелёный: раньше 4 упавших окна из 5 давали
+    // "clean", и модератор видел «дублей нет» там, где проверки не было.
+    const finalStatus: "matched" | "clean" | "error" =
+      matchedCount > 0 ? "matched" : (errorCount > 0 ? "error" : "clean");
 
     await db.update(acrChecksTable).set({
       status: finalStatus,
@@ -621,7 +695,11 @@ async function processFullScan(checkId: number, audioUrl: string, cfg: Required<
         },
         top_match: topMatch,
       },
-      errorMessage: finalStatus === "error" ? "All segments failed (see segments[].error)" : null,
+      errorMessage: finalStatus === "error"
+        ? (errorCount === segments.length
+          ? "Ни одно окно не просканировалось (см. segments[].error)"
+          : `Просканировано ${segments.length - errorCount} из ${segments.length} окон — результат неполный, «чисто» показывать нельзя (см. segments[].error)`)
+        : null,
     }).where(eq(acrChecksTable.id, checkId));
 
     // Risk-engine увидит наличие full-scan и снимет/добавит факторы.

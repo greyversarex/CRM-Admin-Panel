@@ -241,7 +241,7 @@ export type AuditAction =
   | "approve_l1" | "approve_l2"
   | "send"
   | "bulk_edit"
-  | "acr_scan" | "acr_scan_full" | "acr_drop" | "acr_manual_result" | "musicbrainz_isrc_check"
+  | "acr_scan" | "acr_scan_full" | "acr_file_scan" | "acr_drop" | "acr_manual_result" | "musicbrainz_isrc_check"
   | "resolve" | "reopen"
   | "import"
   | "pro_register" | "pro_register_failed" | "pro_register_network_error"

@@ -50,6 +50,7 @@ export const INTEGRATION_CATALOG: Array<{
   { code: "broma16",    name: "Broma16 (ROD)",                 category: "delivery", authType: "api_key" },
 
   // ── Analytics ──
+  { code: "acrcloud_fs", name: "ACRCloud (проверка треков, File Scanning)", category: "analytics", authType: "api_key" },
   { code: "chartmetric", name: "Chartmetric",                  category: "analytics", authType: "api_key" },
   { code: "soundcharts", name: "Soundcharts",                  category: "analytics", authType: "api_key" },
 ];

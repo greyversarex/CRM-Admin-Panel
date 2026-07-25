@@ -58,3 +58,6 @@ Thumbs.db
 artifacts/api-server/.local-storage/
 
 .data/
+
+# Граф знаний graphify — генерируется локально
+graphify-out/

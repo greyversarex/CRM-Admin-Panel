@@ -89,7 +89,7 @@ function fmtDateTime(iso: string): string {
 }
 
 /** "2021-10-28" | ISO -> "Oct 28, 2021" (как на скринах). */
-function fmtReleaseDate(s: string | null): string | null {
+export function fmtReleaseDate(s: string | null): string | null {
   if (!s) return null;
   const d = new Date(s.length === 10 ? `${s}T00:00:00Z` : s);
   if (Number.isNaN(d.getTime())) return s;
@@ -97,7 +97,7 @@ function fmtReleaseDate(s: string | null): string | null {
 }
 
 /** миллисекунды -> "mm:ss" */
-function mmss(ms: number): string {
+export function mmss(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
   const m = Math.floor(total / 60);
   const s = total % 60;
@@ -121,7 +121,12 @@ function dspInfo(key: string): { label: string; color: string } {
   return DSP_BRANDS[k] ?? { label: key.charAt(0).toUpperCase() + key.slice(1), color: "#8b8b8b" };
 }
 
-type RichMatch = {
+/**
+ * Единая форма совпадения для отрисовки. Все поля уже приведены к строкам
+ * (DASH вместо пустоты), чтобы карточка не занималась форматированием.
+ * Экспортируется: тем же типом пользуется трековая модалка File Scanning.
+ */
+export type RichMatch = {
   title: string;
   artist: string;
   scannedSegments: number | null;
@@ -252,7 +257,7 @@ function FoundOnRow({ platform }: { platform: string }) {
   );
 }
 
-function MatchCard({ m }: { m: RichMatch }) {
+export function MatchCard({ m }: { m: RichMatch }) {
   return (
     <div className="rounded-lg border border-border/50 bg-background/40 overflow-hidden">
       <div className="px-3 py-2 bg-muted/30 flex items-center justify-between gap-2 border-b border-border/40">

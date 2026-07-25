@@ -38,6 +38,7 @@ import { FailReturnDialog } from "@/components/fail-return-dialog";
 import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
 import { AudioQcPanel, type AudioQcResult } from "@/components/waveform-player";
+import { AcrTrackCheckDialog } from "@/components/acr-track-check-dialog";
 import { Send } from "lucide-react";
 
 // ─── Типы ответа от /distribution/moderation/:id/details ───────────────
@@ -529,6 +530,8 @@ function ReqTile({ title, value, hint }: { title: string; value: string; hint: s
 
 function TracksCard({ tracks }: { tracks: TrackDetail[] }) {
   const [expanded, setExpanded] = useState<number | null>(null);
+  /** Трек, для которого открыта модалка ACRCloud-проверки. */
+  const [checking, setChecking] = useState<TrackDetail | null>(null);
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <h3 className="text-sm font-semibold flex items-center gap-2"><Music2 className="h-4 w-4" />Треки ({tracks.length})</h3>
@@ -572,12 +575,38 @@ function TracksCard({ tracks }: { tracks: TrackDetail[] }) {
                       : <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3 mr-1" />OK</Badge>}
                 </div>
               </button>
+
+              {/* Проверка трека по базе ACRCloud. Вне <button> раскрытия —
+                  вложенная кнопка ломает разметку и кликается вместе с ней. */}
+              <div className="px-3 pb-2 -mt-1 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs"
+                  disabled={ck.missing}
+                  title={ck.missing ? "Сначала загрузите аудиофайл" : "Проверить трек по базе ACRCloud"}
+                  onClick={() => setChecking(t)}
+                  data-testid={`button-acr-check-${t.id}`}
+                >
+                  <ScanSearch className="h-3.5 w-3.5" />
+                  ACRCloud
+                </Button>
+              </div>
               <TrackAudioQc trackId={t.id} />
               {isOpen && <TrackDetailsExpanded t={t} />}
             </div>
           );
         })}
       </div>
+
+      {checking && (
+        <AcrTrackCheckDialog
+          trackId={checking.id}
+          trackTitle={checking.title}
+          open
+          onOpenChange={(o) => { if (!o) setChecking(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -684,6 +713,8 @@ function IssuesCard({ errors, warns }: { errors: DetailResponse["issues"]; warns
 type DropCheck = {
   id: number; releaseId: number | null; trackId: number | null;
   engine: string; mode: string | null; status: string;
+  /** numeric из БД приезжает строкой. */
+  confidence: string | null;
   matchedTitle: string | null; matchedArtist: string | null; matchedIsrc: string | null;
   scannedAt: string; errorMessage: string | null;
   resultJson: {
@@ -692,149 +723,73 @@ type DropCheck = {
   } | null;
 };
 
-function dropStatusLabel(s: string): string {
-  return ({
-    pending: "Загружено, ждём вердикт",
-    clean: "Уникально (дублей нет)",
-    matched: "Найден дубликат",
-    error: "Ошибка отправки",
-  } as Record<string, string>)[s] ?? s;
-}
-
-function fmtBytes(b?: number): string {
-  if (!b) return "—";
-  const mb = b / 1024 / 1024;
-  return mb < 1 ? `${(b / 1024).toFixed(0)} КБ` : `${mb.toFixed(1)} МБ`;
-}
-
+/**
+ * Сводка ACRCloud по релизу.
+ *
+ * Здесь ТОЛЬКО проверка треков (File Scanning). Отправка DDEX-пакета в
+ * S3-хранилище ACRCloud переехала в отдельную вкладку «Хранилище ACRCloud»:
+ * это доставка каталога, а не проверка, у неё другой смысл и другой момент
+ * в жизни релиза (после одобрения и присвоения UPC).
+ */
 function AcrCard({ acr, releaseId }: { acr: DetailResponse["acr"]; releaseId: number }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  const dropsQ = useQuery({
-    queryKey: ["acr-drops", releaseId],
-    queryFn: () => jget<{ checks: DropCheck[]; configured: boolean }>(`/api/distribution/acr/checks?releaseId=${releaseId}`),
-  });
-  const drops = (dropsQ.data?.checks ?? []).filter((c) => c.engine === "acrcloud_ddex");
-
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["acr-drops", releaseId] });
-    qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
-  };
-
-  const drop = useMutation({
-    mutationFn: () => jpost(`/api/distribution/acr/drop`, { releaseId }),
-    onSuccess: () => {
-      toast({ title: "Релиз отправлен в ACRCloud", description: "Пакет загружен в хранилище. Вердикт появится позже — зафиксируйте его здесь." });
-      refresh();
-    },
-    onError: (e: Error) => toast({ variant: "destructive", title: "Не удалось отправить", description: e.message }),
+  const checksQ = useQuery({
+    queryKey: ["acr-release-checks", releaseId],
+    queryFn: () => jget<{ checks: DropCheck[]; configured: boolean; fileScanConfigured: boolean }>(
+      `/api/distribution/acr/checks?releaseId=${releaseId}`,
+    ),
   });
 
-  const verdict = useMutation({
-    mutationFn: (v: { checkId: number; verdict: "unique" | "duplicate" | "processing" }) =>
-      jpost(`/api/distribution/acr/manual-result`, v),
-    onSuccess: () => { toast({ title: "Вердикт сохранён" }); refresh(); },
-    onError: (e: Error) => toast({ variant: "destructive", title: "Не удалось сохранить вердикт", description: e.message }),
-  });
+  const scans = (checksQ.data?.checks ?? []).filter((c) => c.engine === "acrcloud_fs");
+  const configured = checksQ.data?.fileScanConfigured ?? false;
+  const matched = scans.filter((c) => c.status === "matched").length;
+  const pending = scans.filter((c) => c.status === "pending").length;
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <h3 className="text-sm font-semibold flex items-center gap-2">
-        <ScanSearch className="h-4 w-4" />ACRCloud — {acr.totalChecks} проверок
+        <ScanSearch className="h-4 w-4" />ACRCloud — проверка треков
         <Badge className={
-          acr.status === "match" ? "bg-red-500/15 text-red-700 dark:text-red-300" :
-          acr.status === "clean" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
+          matched > 0 ? "bg-red-500/15 text-red-700 dark:text-red-300" :
+          scans.length > 0 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
           "bg-muted text-muted-foreground"
-        } variant="outline">{acr.status}</Badge>
+        } variant="outline">
+          {matched > 0 ? `совпадений: ${matched}` : scans.length > 0 ? "чисто" : "не проверялось"}
+        </Badge>
       </h3>
 
-      {acr.latest.length > 0 && (
-        <div className="text-xs space-y-1">
-          {acr.latest.map((c) => (
+      {!configured ? (
+        <p className="text-[11px] text-rose-500">
+          Проверка не настроена: Настройки → Интеграции → «ACRCloud — проверка треков».
+        </p>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          Проверка запускается кнопкой <span className="font-medium">ACRCloud</span> в строке трека ниже.
+          UPC для неё не нужен — поиск идёт по звуку.
+          {pending > 0 && <> Сейчас сканируется: {pending}.</>}
+        </p>
+      )}
+
+      {scans.length > 0 && (
+        <div className="text-xs space-y-1 border-t pt-2">
+          {scans.slice(0, 6).map((c) => (
             <div key={c.id} className="flex items-center gap-2">
               <Languages className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground tabular-nums">{new Date(c.scannedAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {new Date(c.scannedAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+              </span>
               <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
               {c.confidence != null && <span className="text-muted-foreground">conf: {c.confidence}</span>}
-              {c.matchedTitle && <span className="truncate">→ {c.matchedTitle} {c.matchedArtist ? `(${c.matchedArtist})` : ""}</span>}
+              {c.matchedTitle && <span className="truncate">→ {c.matchedTitle}{c.matchedArtist ? ` (${c.matchedArtist})` : ""}</span>}
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Проверка на дубли через S3 (полный DDEX-пакет) ── */}
-      <div className="border-t pt-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-medium flex items-center gap-1.5">
-            <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground" />
-            Проверка на дубли (полный пакет в хранилище ACRCloud)
-          </div>
-          <Button
-            size="sm" variant="outline" className="h-7 gap-1.5"
-            disabled={drop.isPending}
-            onClick={() => drop.mutate()}
-          >
-            {drop.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-            Отправить в ACRCloud
-          </Button>
-        </div>
-
-        {drops.length === 0 ? (
-          <p className="text-[11px] text-muted-foreground">Релиз ещё не отправляли на проверку дублей.</p>
-        ) : (
-          <div className="space-y-2">
-            {drops.map((c) => (
-              <div key={c.id} className="rounded-md border bg-muted/30 p-2 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs flex-wrap">
-                  <span className="text-muted-foreground tabular-nums">{new Date(c.scannedAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}</span>
-                  <Badge variant="outline" className={`text-[10px] ${
-                    c.status === "matched" ? "bg-red-500/15 text-red-700 dark:text-red-300" :
-                    c.status === "clean" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
-                    c.status === "error" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
-                    "bg-muted text-muted-foreground"
-                  }`}>{dropStatusLabel(c.status)}</Badge>
-                  {c.resultJson?.fileCount != null && (
-                    <span className="text-muted-foreground">{c.resultJson.fileCount} файл(ов), {fmtBytes(c.resultJson.totalBytes)}</span>
-                  )}
-                </div>
-                {c.errorMessage && <p className="text-[11px] text-red-600 dark:text-red-400 break-words">{c.errorMessage}</p>}
-                {c.status === "matched" && c.matchedTitle && (
-                  <p className="text-[11px] text-muted-foreground">Найдено: {c.matchedTitle}{c.matchedArtist ? ` (${c.matchedArtist})` : ""}</p>
-                )}
-                {c.resultJson?.verdictNote && (
-                  <p className="text-[11px] text-muted-foreground">Заметка: {c.resultJson.verdictNote}</p>
-                )}
-
-                {/* Ручная фиксация вердикта доступна только пока ждём ответ или после ошибки */}
-                {c.status !== "error" && (
-                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                    <span className="text-[11px] text-muted-foreground mr-1">Вердикт ACRCloud:</span>
-                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
-                      disabled={verdict.isPending}
-                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "unique" })}
-                    >
-                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />Уникально
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
-                      disabled={verdict.isPending}
-                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "duplicate" })}
-                    >
-                      <XCircle className="h-3 w-3 text-red-600" />Дубликат
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1"
-                      disabled={verdict.isPending}
-                      onClick={() => verdict.mutate({ checkId: c.id, verdict: "processing" })}
-                    >
-                      <Loader2 className="h-3 w-3" />В обработке
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {acr.totalChecks > 0 && (
+        <p className="text-[11px] text-muted-foreground border-t pt-2">
+          Всего записей проверок по релизу за всё время: {acr.totalChecks}.
+        </p>
+      )}
     </div>
   );
 }

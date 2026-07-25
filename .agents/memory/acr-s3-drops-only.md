@@ -1,16 +1,48 @@
 ---
-name: ACRCloud is S3 DDEX-drops ONLY
-description: This project uses ACRCloud exclusively via the partner S3 DDEX-drop path; never propose or use the Identify API.
+name: ACRCloud — три разных продукта, не путать
+description: Проверка трека идёт через File Scanning (acrcloud_fs); S3 DDEX-дроп — это доставка каталога, а не проверка; Identify API — легаси.
 ---
 
-# ACRCloud usage policy for this project
+# ACRCloud в этом проекте: три разных вещи
 
-Dedup checking runs **only** through the partner **S3 DDEX-drop** flow (engine `acrcloud_ddex`, mode `ddex_drop`): package the ERN + assets and upload to ACRCloud's S3 bucket.
+У ACRCloud это ТРИ отдельных продукта. Их путали, из-за чего модерация не работала.
 
-**Do NOT** use or suggest the direct **Identify API** / sample scan (`callAcrIdentify`) — it is a *different ACRCloud service* the customer does not subscribe to, even though the code path exists and would return an instant match. Never offer it as a "just to see it work" alternative.
+| Код интеграции | Продукт | Что делает | Нужен UPC? |
+|---|---|---|---|
+| `acrcloud_fs` | **File Scanning** | Грузим аудиофайл целиком → ACRCloud возвращает совпавшие участки с таймкодами и метаданными (label, album, UPC, ISRC, release date, где издан). **Это и есть проверка/модерация.** | Нет — матч по звуку |
+| `acrcloud_ddex` | Партнёрская доставка в S3 | Кладём DDEX-пакет в бакет `acrcloud-partners` под префикс `TajikMusic/`. Наш каталог попадает в ИХ базу отпечатков и защищается. | **Да**, обязательно (ICPN в ERN) |
+| `acrcloud` | Identification API | Легаси. Сэмпл <5 МБ / <15 сек, одно совпадение за вызов. | Нет |
 
-**Result ingestion is manual (for now):** S3-drop verdicts do NOT return automatically — no polling, webhook, or return-report ingestion exists. An operator records the verdict via `POST /distribution/acr/manual-result` (`unique`→`clean`, `duplicate`→`matched`). A pending `acr_checks` row after a successful drop is the *correct* expected state; do not treat pending as a bug.
+## Главное правило
 
-**Why:** contractual — customer works with ACRCloud under an S3-Drops partner agreement only. Automatic result retrieval (webhook/API) is pending guidance from ACRCloud (contact "Tony"); add it only once they specify the mechanism. The earlier 404 on push was a wrong-domain bug (.ru vs .com), NOT the Identify-vs-drop distinction.
+**Проверка трека = `acrcloud_fs` (File Scanning).** Роут `POST /distribution/acr/file-scan { trackId }`,
+сервис `services/acrcloud-file-scan.ts`, коннектор `connectors/acrcloud-fs.ts`,
+кнопка ACRCloud в строке трека (модерация) → `components/acr-track-check-dialog.tsx`.
 
-**How to apply:** when asked to run/verify an ACR dedup check, use the S3 DDEX-drop path, confirm upload succeeded + status pending, and stop there. Don't switch modes to force an automatic result.
+**S3-дроп ничего не проверяет.** Канал односторонний: вердикт по нему автоматически не приходит
+(вебхука/return-report ACRCloud не дал), поэтому результат фиксируется вручную через
+`POST /distribution/acr/manual-result`. Живёт в отдельной вкладке «Хранилище ACRCloud»
+(`pages/distribution/acr-storage-tab.tsx`), запускается ПОСЛЕ одобрения релиза и присвоения UPC.
+
+**Правильный порядок:** загрузка → проверка через `acrcloud_fs` → одобрение → UPC → дроп в S3.
+
+## Почему старый подход не работал
+
+Заказчик показывал скриншоты чужой платформы, где трек **без UPC и ISRC** матчился со 100%
+уверенностью (кнопка у них называлась «ACRCloud Check (Fingerprint / Conflicts)»). Прошлое ТЗ
+объявило Identify API «неправильным подходом» и перевело всё на S3-дроп — но дроп требует UPC,
+поэтому все 4 попытки в проде падали с «у релиза нет UPC», а в `acr_checks` за всю историю
+не было ни одного матча.
+
+`mode='full'` на Identify имитировал сегменты, нарезая файл на 5 окон и делая 5 вызовов —
+отсюда rate-limit и code=2004. File Scanning делает это сам, одним запросом.
+
+## Легаси-грабли
+
+- `GET /distribution/acr/checks` возвращает `configured` (это старый Identify) и
+  `fileScanConfigured` (это File Scanning). Кнопку проверки гейтить по **второму**.
+- `acr_checks.resultJson` имеет уже ТРИ формы: сырой ответ Identify (`metadata.music[]`),
+  нормализованный `top_match` (full-скан) и `matches[]` (File Scanning). Любой потребитель
+  обязан гардить форму, а не предполагать одну.
+- «Чисто» показываем ТОЛЬКО когда просканировалось всё. Раньше 4 упавших окна из 5 давали
+  `clean` — ложный зелёный на модерации. Исправлено в `processFullScan`.

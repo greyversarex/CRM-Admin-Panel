@@ -88,8 +88,20 @@ const SERVICES: ServiceDef[] = [
   },
   // Analytics
   {
-    code: "acrcloud_ddex", name: "ACRCloud — проверка на дубли (S3)", category: "analytics", authType: "api_key",
-    description: "Отправка полного релиза (DDEX-пакет: аудио, обложка, метаданные) в хранилище ACRCloud для проверки на дубликаты перед выпуском. Адрес хранилища уже настроен — введите только два ключа доступа, которые выдаёт ACRCloud.",
+    code: "acrcloud_fs", name: "ACRCloud — проверка треков", category: "analytics", authType: "api_key",
+    description:
+      "Проверка трека по базе ACRCloud: загружаем аудиофайл целиком, получаем список совпадений с таймкодами — где трек уже издан, под каким лейблом, с каким UPC/ISRC. UPC у нашего релиза при этом НЕ нужен: поиск идёт по звуку. Это то, что используется для модерации перед выпуском.",
+    docsUrl: "https://docs.acrcloud.com/reference/console-api/file-scanning",
+    fields: [
+      { key: "bearer_token", label: "API Token", type: "password", required: true, hint: "Кабинет ACRCloud → Account → API Token (Console API Bearer-токен, не Access Key от Identify)" },
+      { key: "container_id", label: "Container ID", required: true, placeholder: "12345", hint: "Числовой ID проекта File Scanning: кабинет ACRCloud → File Scanning → нужный контейнер" },
+      { key: "region", label: "Регион", placeholder: "eu-west-1", hint: "eu-west-1 (по умолчанию), us-west-2 или ap-southeast-1 — тот же регион, что у контейнера" },
+    ],
+  },
+  {
+    code: "acrcloud_ddex", name: "ACRCloud — отправка в хранилище (S3)", category: "analytics", authType: "api_key",
+    description:
+      "Партнёрская доставка каталога: полный DDEX-пакет (аудио, обложка, метаданные) уходит в S3-хранилище ACRCloud, чтобы наши треки попали в их базу отпечатков и защищались. Это НЕ проверка на дубли — ответа с вердиктом этот канал не возвращает, и релизу обязательно нужен UPC. Адрес хранилища уже прошит — введите только два ключа доступа от ACRCloud.",
     fields: [
       { key: "access_key_id",     label: "Access Key ID",     required: true, hint: "Ключ доступа к S3-хранилищу от ACRCloud" },
       { key: "secret_access_key", label: "Secret Access Key", type: "password", required: true, hint: "Секретный ключ доступа к S3-хранилищу от ACRCloud" },
