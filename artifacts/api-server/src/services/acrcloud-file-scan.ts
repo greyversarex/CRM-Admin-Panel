@@ -43,6 +43,12 @@ export type AcrFileScanMatch = {
   confidence: number | null;
   /** Ключи DSP, где трек найден: spotify | deezer | youtube | … */
   foundOn: string[];
+  /**
+   * Сырой `external_metadata` от ACRCloud — там лежат id трека на каждой
+   * площадке. Нужен, чтобы UI собирал прямые ссылки «открыть на Spotify».
+   * Без него из плашки «Found On» некуда перейти.
+   */
+  externalMetadata: Record<string, unknown> | null;
   /** Границы совпавшего участка в НАШЕМ файле, мс. */
   matchedFromMs: number | null;
   matchedToMs: number | null;
@@ -198,10 +204,17 @@ function firstString(v: unknown): string | null {
   return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }
 
+/** Приводит external_metadata к объекту; всё остальное (массив, строка, null) — к null. */
+function asExternalMetadata(external: unknown): Record<string, unknown> | null {
+  if (!external || typeof external !== "object" || Array.isArray(external)) return null;
+  return external as Record<string, unknown>;
+}
+
 /** «Found On» — ключи внешних сервисов, где ACRCloud нашёл этот трек. */
 function extractFoundOn(external: unknown): string[] {
-  if (!external || typeof external !== "object" || Array.isArray(external)) return [];
-  return Object.entries(external as Record<string, unknown>)
+  const meta = asExternalMetadata(external);
+  if (!meta) return [];
+  return Object.entries(meta)
     .filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))
     .map(([k]) => k);
 }
@@ -272,6 +285,7 @@ export function normalizeFileScanResults(results: unknown): AcrFileScanMatch[] {
       releaseDate: firstString(r["release_date"]),
       confidence: score,
       foundOn: extractFoundOn(r["external_metadata"]),
+      externalMetadata: asExternalMetadata(r["external_metadata"]),
       matchedFromMs: beginMs,
       matchedToMs: endMs,
       segments: 1,

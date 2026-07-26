@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ScanSearch, CheckCircle2, AlertTriangle, XCircle,
-  Loader2, Play, Zap, ChevronDown, ChevronRight, Music2, Clock,
+  Loader2, Play, Zap, ChevronDown, ChevronRight, Music2, Clock, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -121,6 +121,56 @@ function dspInfo(key: string): { label: string; color: string } {
   return DSP_BRANDS[k] ?? { label: key.charAt(0).toUpperCase() + key.slice(1), color: "#8b8b8b" };
 }
 
+/** Достаёт вложенный id: {track:{id:"…"}} -> "…". Пустое/чужое -> null. */
+function nestedId(node: unknown, key: string): string | null {
+  if (!node || typeof node !== "object" || Array.isArray(node)) return null;
+  const inner = (node as Record<string, unknown>)[key];
+  if (!inner || typeof inner !== "object" || Array.isArray(inner)) return null;
+  const id = (inner as Record<string, unknown>)["id"];
+  if (typeof id === "number" && Number.isFinite(id)) return String(id);
+  return typeof id === "string" && id.trim() !== "" ? id.trim() : null;
+}
+
+/**
+ * Прямые ссылки на трек у площадок из `external_metadata`.
+ *
+ * ACRCloud возвращает не только название сервиса, но и id релиза/трека внутри
+ * него — по ним и собираем адрес, чтобы модератор мог одним кликом открыть
+ * найденное и убедиться глазами. Если id не пришёл — площадка остаётся
+ * обычной плашкой без ссылки, это нормально.
+ *
+ * Трек приоритетнее альбома: ведём на конкретную запись, а не на сборник.
+ */
+export function buildFoundOnUrls(external: unknown): Record<string, string> {
+  if (!external || typeof external !== "object" || Array.isArray(external)) return {};
+  const meta = external as Record<string, unknown>;
+  const urls: Record<string, string> = {};
+  const enc = encodeURIComponent;
+
+  for (const [key, node] of Object.entries(meta)) {
+    const k = key.toLowerCase();
+    const trackId = nestedId(node, "track");
+    const albumId = nestedId(node, "album");
+
+    if (k === "spotify") {
+      if (trackId) urls[key] = `https://open.spotify.com/track/${enc(trackId)}`;
+      else if (albumId) urls[key] = `https://open.spotify.com/album/${enc(albumId)}`;
+    } else if (k === "deezer") {
+      if (trackId) urls[key] = `https://www.deezer.com/track/${enc(trackId)}`;
+      else if (albumId) urls[key] = `https://www.deezer.com/album/${enc(albumId)}`;
+    } else if (k === "youtube") {
+      const vid = node && typeof node === "object" && !Array.isArray(node)
+        ? (node as Record<string, unknown>)["vid"] : null;
+      if (typeof vid === "string" && vid.trim() !== "") {
+        urls[key] = `https://www.youtube.com/watch?v=${enc(vid.trim())}`;
+      }
+    } else if (k === "musicbrainz") {
+      if (trackId) urls[key] = `https://musicbrainz.org/recording/${enc(trackId)}`;
+    }
+  }
+  return urls;
+}
+
 /**
  * Единая форма совпадения для отрисовки. Все поля уже приведены к строкам
  * (DASH вместо пустоты), чтобы карточка не занималась форматированием.
@@ -138,6 +188,8 @@ export type RichMatch = {
   releaseDate: string;
   confidence: string;
   foundOn: string[];
+  /** platform -> прямая ссылка на найденное. Площадки без ссылки просто не попадают сюда. */
+  foundOnUrls: Record<string, string>;
 };
 
 /** Достаём совпадения из resultJson (sample: metadata.music[]; full: top_match). */
@@ -161,6 +213,7 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       const album = m["album"] as { name?: string } | undefined;
       const ext = m["external_ids"] as { isrc?: string; upc?: string } | undefined;
       const foundOn = foundOnKeys(m["external_metadata"]);
+      const foundOnUrls = buildFoundOnUrls(m["external_metadata"]);
       return {
         title: asStr(m["title"]) ?? check.matchedTitle ?? DASH,
         artist: artistNames(m["artists"]) ?? check.matchedArtist ?? DASH,
@@ -177,6 +230,7 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
         releaseDate: fmtReleaseDate(asStr(m["release_date"])) ?? DASH,
         confidence: asNum(m["score"]) != null ? String(asNum(m["score"])) : (check.confidence ?? DASH),
         foundOn,
+        foundOnUrls,
       };
     });
   }
@@ -197,6 +251,7 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       releaseDate: fmtReleaseDate(asStr(tm["releaseDate"])) ?? DASH,
       confidence: asNum(tm["score"]) != null ? String(asNum(tm["score"])) : (check.confidence ?? DASH),
       foundOn,
+      foundOnUrls: buildFoundOnUrls(tm["externalMetadata"]),
     }];
   }
 
@@ -214,6 +269,7 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       releaseDate: DASH,
       confidence: check.confidence ?? DASH,
       foundOn: [],
+      foundOnUrls: {},
     }];
   }
   return [];
@@ -244,15 +300,35 @@ function FieldRow({ label, value, mono }: { label: string; value: React.ReactNod
   );
 }
 
-function FoundOnRow({ platform }: { platform: string }) {
+function FoundOnRow({ platform, url }: { platform: string; url?: string }) {
   const info = dspInfo(platform);
+  const inner = (
+    <>
+      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: info.color }} />
+      {info.label}
+    </>
+  );
   return (
     <div className="flex items-center justify-between gap-4 py-1.5 border-b border-border/25 last:border-0">
       <span className="text-xs text-muted-foreground shrink-0">Found On</span>
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: info.color }}>
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: info.color }} />
-        {info.label}
-      </span>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Открыть на ${info.label}`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline underline-offset-2"
+          style={{ color: info.color }}
+          data-testid={`acr-found-on-${platform}`}
+        >
+          {inner}
+          <ExternalLink className="h-3 w-3 opacity-70" />
+        </a>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: info.color }}>
+          {inner}
+        </span>
+      )}
     </div>
   );
 }
@@ -281,7 +357,7 @@ export function MatchCard({ m }: { m: RichMatch }) {
         <FieldRow label="Release Date" value={m.releaseDate} />
         <FieldRow label="Confidence Score" value={m.confidence} />
         {m.foundOn.length > 0
-          ? m.foundOn.map((p) => <FoundOnRow key={p} platform={p} />)
+          ? m.foundOn.map((p) => <FoundOnRow key={p} platform={p} url={m.foundOnUrls[p]} />)
           : <FieldRow label="Found On" value={DASH} />}
       </div>
     </div>
