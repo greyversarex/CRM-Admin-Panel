@@ -56,6 +56,7 @@ Thumbs.db
 # Local file storage (user uploads: audio, covers, KYC). These live on disk
 # and on the VPS — they must never be committed to the repo.
 artifacts/api-server/.local-storage/
+.local-uploads/
 
 .data/
 
