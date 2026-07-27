@@ -121,54 +121,109 @@ function dspInfo(key: string): { label: string; color: string } {
   return DSP_BRANDS[k] ?? { label: key.charAt(0).toUpperCase() + key.slice(1), color: "#8b8b8b" };
 }
 
-/** Достаёт вложенный id: {track:{id:"…"}} -> "…". Пустое/чужое -> null. */
-function nestedId(node: unknown, key: string): string | null {
+const enc = encodeURIComponent;
+
+/** Объект по ключу: {track:{…}} -> {…}. Пустое/чужое -> null. */
+function nestedNode(node: unknown, key: string): Record<string, unknown> | null {
   if (!node || typeof node !== "object" || Array.isArray(node)) return null;
   const inner = (node as Record<string, unknown>)[key];
   if (!inner || typeof inner !== "object" || Array.isArray(inner)) return null;
-  const id = (inner as Record<string, unknown>)["id"];
+  return inner as Record<string, unknown>;
+}
+
+/** id как строка: ACRCloud шлёт их и числом (Deezer), и строкой (Spotify). */
+function idOf(node: Record<string, unknown> | null): string | null {
+  if (!node) return null;
+  const id = node["id"];
   if (typeof id === "number" && Number.isFinite(id)) return String(id);
   return typeof id === "string" && id.trim() !== "" ? id.trim() : null;
 }
 
+/** Артисты внутри блока площадки: [{name,id}] -> только те, у кого есть id. */
+function platformArtists(node: unknown): Array<{ name: string; id: string }> {
+  if (!node || typeof node !== "object" || Array.isArray(node)) return [];
+  const arr = (node as Record<string, unknown>)["artists"];
+  if (!Array.isArray(arr)) return [];
+  const out: Array<{ name: string; id: string }> = [];
+  for (const a of arr) {
+    if (!a || typeof a !== "object") continue;
+    const id = idOf(a as Record<string, unknown>);
+    const name = asStr((a as Record<string, unknown>)["name"]);
+    if (id && name) out.push({ name, id });
+  }
+  return out;
+}
+
+/** Одна ссылка на площадку. `kind` решает, как её подписать. */
+export type PlatformLink = { kind: "track" | "album" | "artist"; url: string; label: string };
+export type PlatformLinks = Record<string, PlatformLink[]>;
+
 /**
- * Прямые ссылки на трек у площадок из `external_metadata`.
+ * Все ссылки, которые можно собрать из `external_metadata`.
  *
- * ACRCloud возвращает не только название сервиса, но и id релиза/трека внутри
- * него — по ним и собираем адрес, чтобы модератор мог одним кликом открыть
- * найденное и убедиться глазами. Если id не пришёл — площадка остаётся
- * обычной плашкой без ссылки, это нормально.
- *
- * Трек приоритетнее альбома: ведём на конкретную запись, а не на сборник.
+ * ACRCloud присылает не только id трека, но и id альбома и каждого артиста.
+ * Раньше мы брали только трек и выбрасывали остальное — а модератору как раз
+ * важно посмотреть и альбом (на каком сборнике издано), и артиста целиком.
  */
-export function buildFoundOnUrls(external: unknown): Record<string, string> {
+export function buildPlatformLinks(external: unknown): PlatformLinks {
   if (!external || typeof external !== "object" || Array.isArray(external)) return {};
   const meta = external as Record<string, unknown>;
-  const urls: Record<string, string> = {};
-  const enc = encodeURIComponent;
+  const out: PlatformLinks = {};
 
   for (const [key, node] of Object.entries(meta)) {
     const k = key.toLowerCase();
-    const trackId = nestedId(node, "track");
-    const albumId = nestedId(node, "album");
+    const links: PlatformLink[] = [];
+
+    const track = nestedNode(node, "track");
+    const album = nestedNode(node, "album");
+    const trackId = idOf(track);
+    const albumId = idOf(album);
+    const albumName = asStr(album?.["name"]);
 
     if (k === "spotify") {
-      if (trackId) urls[key] = `https://open.spotify.com/track/${enc(trackId)}`;
-      else if (albumId) urls[key] = `https://open.spotify.com/album/${enc(albumId)}`;
+      if (trackId) links.push({ kind: "track", url: `https://open.spotify.com/track/${enc(trackId)}`, label: "трек" });
+      if (albumId) links.push({ kind: "album", url: `https://open.spotify.com/album/${enc(albumId)}`, label: albumName ?? "альбом" });
+      for (const a of platformArtists(node)) {
+        links.push({ kind: "artist", url: `https://open.spotify.com/artist/${enc(a.id)}`, label: a.name });
+      }
     } else if (k === "deezer") {
-      if (trackId) urls[key] = `https://www.deezer.com/track/${enc(trackId)}`;
-      else if (albumId) urls[key] = `https://www.deezer.com/album/${enc(albumId)}`;
+      if (trackId) links.push({ kind: "track", url: `https://www.deezer.com/track/${enc(trackId)}`, label: "трек" });
+      if (albumId) links.push({ kind: "album", url: `https://www.deezer.com/album/${enc(albumId)}`, label: albumName ?? "альбом" });
+      for (const a of platformArtists(node)) {
+        links.push({ kind: "artist", url: `https://www.deezer.com/artist/${enc(a.id)}`, label: a.name });
+      }
     } else if (k === "youtube") {
       const vid = node && typeof node === "object" && !Array.isArray(node)
-        ? (node as Record<string, unknown>)["vid"] : null;
-      if (typeof vid === "string" && vid.trim() !== "") {
-        urls[key] = `https://www.youtube.com/watch?v=${enc(vid.trim())}`;
-      }
+        ? asStr((node as Record<string, unknown>)["vid"]) : null;
+      if (vid) links.push({ kind: "track", url: `https://www.youtube.com/watch?v=${enc(vid)}`, label: "видео" });
     } else if (k === "musicbrainz") {
-      if (trackId) urls[key] = `https://musicbrainz.org/recording/${enc(trackId)}`;
+      if (trackId) links.push({ kind: "track", url: `https://musicbrainz.org/recording/${enc(trackId)}`, label: "запись" });
     }
+
+    if (links.length > 0) out[key] = links;
   }
-  return urls;
+  return out;
+}
+
+/**
+ * Ссылки-поиск на площадки, которых нет в тарифе ACRCloud.
+ *
+ * ACRCloud на нашем аккаунте отдаёт id только для Spotify, Deezer, YouTube и
+ * MusicBrainz — Apple Music, Tidal и остальные идут отдельным платным пакетом
+ * метаданных. Точную ссылку без id не построить, но по ISRC (а если его нет —
+ * по названию и артисту) поиск на площадке открывается сразу, и модератор
+ * дальше проверяет глазами. Это НЕ подтверждённое совпадение, а именно поиск.
+ */
+export function buildSearchLinks(title: string, artist: string, isrc: string): PlatformLink[] {
+  const q = isrc !== DASH && isrc ? isrc : [title, artist].filter((s) => s && s !== DASH).join(" ");
+  if (!q.trim()) return [];
+  return [
+    { kind: "track", label: "Apple Music",  url: `https://music.apple.com/search?term=${enc(q)}` },
+    { kind: "track", label: "YouTube Music", url: `https://music.youtube.com/search?q=${enc(q)}` },
+    { kind: "track", label: "Tidal",        url: `https://listen.tidal.com/search?q=${enc(q)}` },
+    { kind: "track", label: "Amazon Music", url: `https://music.amazon.com/search/${enc(q)}` },
+    { kind: "track", label: "Discogs",      url: `https://www.discogs.com/search/?q=${enc(q)}&type=release` },
+  ];
 }
 
 /**
@@ -176,6 +231,13 @@ export function buildFoundOnUrls(external: unknown): Record<string, string> {
  * (DASH вместо пустоты), чтобы карточка не занималась форматированием.
  * Экспортируется: тем же типом пользуется трековая модалка File Scanning.
  */
+export type MatchArtist = { name: string; roles: string[] };
+export type MatchSegment = {
+  sampleFromMs: number | null; sampleToMs: number | null;
+  dbFromMs: number | null; dbToMs: number | null;
+  score: number | null;
+};
+
 export type RichMatch = {
   title: string;
   artist: string;
@@ -188,9 +250,56 @@ export type RichMatch = {
   releaseDate: string;
   confidence: string;
   foundOn: string[];
-  /** platform -> прямая ссылка на найденное. Площадки без ссылки просто не попадают сюда. */
-  foundOnUrls: Record<string, string>;
+  /** platform -> ссылки на трек, альбом и артистов. Площадки без id сюда не попадают. */
+  platformLinks: PlatformLinks;
+  /** Жанр по версии ACRCloud — может расходиться с заявленным у нас. */
+  genres: string[];
+  /** Артисты с ролями (MainArtist, Composer, Lyricist, …). */
+  artistsDetailed: MatchArtist[];
+  /** Длительность оригинала, мс. Сравнение с нашим файлом показывает, фрагмент это или целиком. */
+  durationMs: number | null;
+  /** Каждый совпавший участок отдельно, с таймкодами и в нашем файле, и в оригинале. */
+  segmentsDetail: MatchSegment[];
 };
+
+/** `[{name,roles}]` из ответа ACRCloud или из нормализованного бэкендом поля. */
+function parseArtistsDetailed(v: unknown): MatchArtist[] {
+  if (!Array.isArray(v)) return [];
+  const out: MatchArtist[] = [];
+  for (const a of v) {
+    if (!a || typeof a !== "object") continue;
+    const rec = a as Record<string, unknown>;
+    const name = asStr(rec["name"]);
+    if (!name) continue;
+    const roles = Array.isArray(rec["roles"])
+      ? (rec["roles"] as unknown[]).filter((r): r is string => typeof r === "string" && r.trim() !== "")
+      : [];
+    out.push({ name, roles });
+  }
+  return out;
+}
+
+/** `[{name:"Dance/House"}]` -> `["Dance/House"]`. */
+function parseGenres(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((g) => (g && typeof g === "object" ? asStr((g as Record<string, unknown>)["name"]) : asStr(g)))
+    .filter((s): s is string => s !== null);
+}
+
+/** Участки, уже нормализованные бэкендом (`segmentsDetail`). */
+function parseSegmentsDetail(v: unknown): MatchSegment[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && !Array.isArray(s))
+    .map((s) => ({
+      sampleFromMs: asNum(s["sampleFromMs"]),
+      sampleToMs: asNum(s["sampleToMs"]),
+      dbFromMs: asNum(s["dbFromMs"]),
+      dbToMs: asNum(s["dbToMs"]),
+      score: asNum(s["score"]),
+    }));
+}
 
 /** Достаём совпадения из resultJson (sample: metadata.music[]; full: top_match). */
 function parseRichMatches(check: AcrCheck): RichMatch[] {
@@ -213,7 +322,10 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       const album = m["album"] as { name?: string } | undefined;
       const ext = m["external_ids"] as { isrc?: string; upc?: string } | undefined;
       const foundOn = foundOnKeys(m["external_metadata"]);
-      const foundOnUrls = buildFoundOnUrls(m["external_metadata"]);
+      const sampleFrom = asNum(m["sample_begin_time_offset_ms"]);
+      const sampleTo = asNum(m["sample_end_time_offset_ms"]);
+      const dbFrom = asNum(m["db_begin_time_offset_ms"]);
+      const dbTo = asNum(m["db_end_time_offset_ms"]);
       return {
         title: asStr(m["title"]) ?? check.matchedTitle ?? DASH,
         artist: artistNames(m["artists"]) ?? check.matchedArtist ?? DASH,
@@ -230,7 +342,15 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
         releaseDate: fmtReleaseDate(asStr(m["release_date"])) ?? DASH,
         confidence: asNum(m["score"]) != null ? String(asNum(m["score"])) : (check.confidence ?? DASH),
         foundOn,
-        foundOnUrls,
+        platformLinks: buildPlatformLinks(m["external_metadata"]),
+        genres: parseGenres(m["genres"]),
+        artistsDetailed: parseArtistsDetailed(m["artists"]),
+        durationMs: asNum(m["duration_ms"]),
+        segmentsDetail: [{
+          sampleFromMs: sampleFrom, sampleToMs: sampleTo,
+          dbFromMs: dbFrom, dbToMs: dbTo,
+          score: asNum(m["score"]),
+        }],
       };
     });
   }
@@ -251,7 +371,11 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       releaseDate: fmtReleaseDate(asStr(tm["releaseDate"])) ?? DASH,
       confidence: asNum(tm["score"]) != null ? String(asNum(tm["score"])) : (check.confidence ?? DASH),
       foundOn,
-      foundOnUrls: buildFoundOnUrls(tm["externalMetadata"]),
+      platformLinks: buildPlatformLinks(tm["externalMetadata"]),
+      genres: parseGenres(tm["genres"]),
+      artistsDetailed: parseArtistsDetailed(tm["artistsDetailed"]),
+      durationMs: asNum(tm["durationMs"]),
+      segmentsDetail: parseSegmentsDetail(tm["segmentsDetail"]),
     }];
   }
 
@@ -269,7 +393,11 @@ function parseRichMatches(check: AcrCheck): RichMatch[] {
       releaseDate: DASH,
       confidence: check.confidence ?? DASH,
       foundOn: [],
-      foundOnUrls: {},
+      platformLinks: {},
+      genres: [],
+      artistsDetailed: [],
+      durationMs: null,
+      segmentsDetail: [],
     }];
   }
   return [];
@@ -300,40 +428,78 @@ function FieldRow({ label, value, mono }: { label: string; value: React.ReactNod
   );
 }
 
-function FoundOnRow({ platform, url }: { platform: string; url?: string }) {
-  const info = dspInfo(platform);
-  const inner = (
-    <>
-      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: info.color }} />
-      {info.label}
-    </>
-  );
+/** Роли, которые говорят об авторстве — их подсвечиваем: спор чаще всего именно о них. */
+const AUTHOR_ROLES = new Set(["composer", "lyricist", "composerlyricist", "writer", "author", "producer", "publisher"]);
+
+function RoleBadge({ role }: { role: string }) {
+  const isAuthor = AUTHOR_ROLES.has(role.toLowerCase().replace(/[\s_-]/g, ""));
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 border-b border-border/25 last:border-0">
+    <span
+      className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+        isAuthor
+          ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+          : "bg-muted/40 text-muted-foreground border-border/40"
+      }`}
+    >
+      {role}
+    </span>
+  );
+}
+
+/** Строка площадки: название-ссылка на трек + отдельные ссылки на альбом и артистов. */
+function FoundOnRow({ platform, links }: { platform: string; links: PlatformLink[] }) {
+  const info = dspInfo(platform);
+  const primary = links.find((l) => l.kind === "track");
+  const extras = links.filter((l) => l !== primary);
+
+  const dot = <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: info.color }} />;
+
+  return (
+    <div className="flex items-start justify-between gap-4 py-1.5 border-b border-border/25 last:border-0">
       <span className="text-xs text-muted-foreground shrink-0">Found On</span>
-      {url ? (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={`Открыть на ${info.label}`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline underline-offset-2"
-          style={{ color: info.color }}
-          data-testid={`acr-found-on-${platform}`}
-        >
-          {inner}
-          <ExternalLink className="h-3 w-3 opacity-70" />
-        </a>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: info.color }}>
-          {inner}
-        </span>
-      )}
+      <div className="flex flex-col items-end gap-1 min-w-0">
+        {primary ? (
+          <a
+            href={primary.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Открыть на ${info.label}`}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline underline-offset-2"
+            style={{ color: info.color }}
+            data-testid={`acr-found-on-${platform}`}
+          >
+            {dot}{info.label}<ExternalLink className="h-3 w-3 opacity-70" />
+          </a>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: info.color }}>
+            {dot}{info.label}
+          </span>
+        )}
+        {extras.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-1">
+            {extras.map((l) => (
+              <a
+                key={l.url}
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={l.kind === "album" ? `Альбом на ${info.label}` : `Артист на ${info.label}`}
+                className="px-1.5 py-0.5 rounded text-[10px] border border-border/40 bg-muted/30 text-muted-foreground hover:text-foreground hover:border-border truncate max-w-[160px]"
+              >
+                {l.kind === "album" ? "💿 " : "👤 "}{l.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export function MatchCard({ m }: { m: RichMatch }) {
+  const searchLinks = buildSearchLinks(m.title, m.artist, m.isrc);
+  const hasSegmentTable = m.segmentsDetail.some((s) => s.dbFromMs != null || s.sampleFromMs != null);
+
   return (
     <div className="rounded-lg border border-border/50 bg-background/40 overflow-hidden">
       <div className="px-3 py-2 bg-muted/30 flex items-center justify-between gap-2 border-b border-border/40">
@@ -347,6 +513,7 @@ export function MatchCard({ m }: { m: RichMatch }) {
           </Badge>
         )}
       </div>
+
       <div className="px-3 py-1">
         <FieldRow label="Scanned Segments" value={m.scannedSegments != null ? `${m.scannedSegments} Segments` : DASH} />
         <FieldRow label="Matched Segment" value={m.matchedSegment} />
@@ -355,11 +522,79 @@ export function MatchCard({ m }: { m: RichMatch }) {
         <FieldRow label="UPC" value={m.upc} mono />
         <FieldRow label="ISRC" value={m.isrc} mono />
         <FieldRow label="Release Date" value={m.releaseDate} />
+        {m.genres.length > 0 && <FieldRow label="Genres" value={m.genres.join(", ")} />}
+        {m.durationMs != null && <FieldRow label="Длительность оригинала" value={mmss(m.durationMs)} />}
         <FieldRow label="Confidence Score" value={m.confidence} />
         {m.foundOn.length > 0
-          ? m.foundOn.map((p) => <FoundOnRow key={p} platform={p} url={m.foundOnUrls[p]} />)
+          ? m.foundOn.map((p) => <FoundOnRow key={p} platform={p} links={m.platformLinks[p] ?? []} />)
           : <FieldRow label="Found On" value={DASH} />}
       </div>
+
+      {/* Авторы и роли — по ним видно, кто на самом деле написал музыку и текст. */}
+      {m.artistsDetailed.length > 0 && (
+        <div className="px-3 py-2 border-t border-border/30 bg-muted/10">
+          <div className="text-[11px] text-muted-foreground mb-1.5">Правообладатели и роли</div>
+          <div className="space-y-1.5">
+            {m.artistsDetailed.map((a, i) => (
+              <div key={`${a.name}-${i}`} className="flex items-start justify-between gap-3">
+                <span className="text-xs font-medium text-foreground shrink-0">{a.name}</span>
+                {a.roles.length > 0 && (
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {a.roles.map((r) => <RoleBadge key={r} role={r} />)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Где именно совпало: наш кусок против участка оригинала. */}
+      {hasSegmentTable && (
+        <div className="px-3 py-2 border-t border-border/30 bg-muted/10">
+          <div className="text-[11px] text-muted-foreground mb-1.5">
+            Совпавшие участки ({m.segmentsDetail.length})
+          </div>
+          <div className="space-y-1">
+            <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground/70 px-1">
+              <span>в нашем файле</span><span>в оригинале</span><span className="text-right">точность</span>
+            </div>
+            {m.segmentsDetail.map((s, i) => (
+              <div key={i} className="grid grid-cols-3 gap-2 text-[11px] font-mono px-1 py-1 rounded bg-background/40">
+                <span className="text-foreground">
+                  {s.sampleFromMs != null && s.sampleToMs != null ? `${mmss(s.sampleFromMs)}–${mmss(s.sampleToMs)}` : DASH}
+                </span>
+                <span className="text-amber-400">
+                  {s.dbFromMs != null && s.dbToMs != null ? `${mmss(s.dbFromMs)}–${mmss(s.dbToMs)}` : DASH}
+                </span>
+                <span className="text-right text-muted-foreground">{s.score != null ? `${s.score}%` : DASH}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Площадок, которых нет в тарифе ACRCloud, — только поиск, не подтверждение. */}
+      {searchLinks.length > 0 && (
+        <div className="px-3 py-2 border-t border-border/30 bg-muted/10">
+          <div className="text-[11px] text-muted-foreground mb-1.5">
+            Проверить вручную {m.isrc !== DASH ? "по ISRC" : "по названию"} — ACRCloud эти площадки не покрывает
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {searchLinks.map((l) => (
+              <a
+                key={l.label}
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] border border-border/40 bg-background/40 text-muted-foreground hover:text-foreground hover:border-border"
+              >
+                {l.label}<ExternalLink className="h-2.5 w-2.5 opacity-60" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,6 +31,30 @@ const storage = new ObjectStorageService();
  * Нормализованное совпадение — ровно те поля, которые показывает UI
  * (см. модалку «Music recognition matches by ACRCloud»).
  */
+/** Артист совпадения вместе с ролями (MainArtist, Composer, Lyricist, …). */
+export type AcrMatchArtist = {
+  name: string;
+  /** Роли из ACRCloud. Пустой массив — ролей не прислали. */
+  roles: string[];
+};
+
+/**
+ * Один совпавший участок.
+ *
+ * ACRCloud отдаёт по записи на каждый кусок, и у каждого свои таймкоды —
+ * и в нашем файле (`sample*`), и в оригинале (`db*`). Раньше мы это схлопывали
+ * в один диапазон и теряли главное: какой именно фрагмент чужой записи взят.
+ */
+export type AcrMatchSegment = {
+  /** Границы в НАШЕМ файле, мс. */
+  sampleFromMs: number | null;
+  sampleToMs: number | null;
+  /** Границы в ОРИГИНАЛЕ, мс — показывают, откуда именно вырезано. */
+  dbFromMs: number | null;
+  dbToMs: number | null;
+  score: number | null;
+};
+
 export type AcrFileScanMatch = {
   title: string | null;
   artist: string | null;
@@ -49,11 +73,19 @@ export type AcrFileScanMatch = {
    * Без него из плашки «Found On» некуда перейти.
    */
   externalMetadata: Record<string, unknown> | null;
+  /** Жанры по версии ACRCloud (у нашего трека может стоять другой). */
+  genres: string[];
+  /** Артисты с ролями: по ним видно настоящих автора музыки и текста. */
+  artistsDetailed: AcrMatchArtist[];
+  /** Длительность ОРИГИНАЛА, мс. Сравнение с нашим файлом показывает, фрагмент это или целиком. */
+  durationMs: number | null;
   /** Границы совпавшего участка в НАШЕМ файле, мс. */
   matchedFromMs: number | null;
   matchedToMs: number | null;
   /** Сколько отдельных участков файла совпало с этим треком. */
   segments: number;
+  /** Каждый участок отдельно — с таймкодами и в нашем файле, и в оригинале. */
+  segmentsDetail: AcrMatchSegment[];
   acrid: string | null;
 };
 
@@ -210,6 +242,32 @@ function asExternalMetadata(external: unknown): Record<string, unknown> | null {
   return external as Record<string, unknown>;
 }
 
+/** Жанры: `[{name:"Dance/House"}]` -> `["Dance/House"]`. */
+function extractGenres(v: unknown): string[] {
+  return asArray(v)
+    .map((g) => (g && typeof g === "object" ? firstString((g as Record<string, unknown>)["name"]) : firstString(g)))
+    .filter((s): s is string => s !== null);
+}
+
+/**
+ * Артисты с ролями.
+ *
+ * Роли — самое ценное для модерации: по ним видно, что «Composer» и «Lyricist»
+ * это совсем другие люди, чем заявленный у нас исполнитель.
+ */
+function extractArtists(v: unknown): AcrMatchArtist[] {
+  const out: AcrMatchArtist[] = [];
+  for (const a of asArray(v)) {
+    if (!a || typeof a !== "object") continue;
+    const rec = a as Record<string, unknown>;
+    const name = firstString(rec["name"]);
+    if (!name) continue;
+    const roles = asArray(rec["roles"]).map(firstString).filter((s): s is string => s !== null);
+    out.push({ name, roles });
+  }
+  return out;
+}
+
 /** «Found On» — ключи внешних сервисов, где ACRCloud нашёл этот трек. */
 function extractFoundOn(external: unknown): string[] {
   const meta = asExternalMetadata(external);
@@ -264,11 +322,23 @@ export function normalizeFileScanResults(results: unknown): AcrFileScanMatch[] {
 
     const score = typeof r["score"] === "number" ? r["score"] : null;
 
+    // Таймкоды в ОРИГИНАЛЬНОЙ записи: показывают, какой именно кусок чужого
+    // трека совпал с нашим файлом.
+    const num = (k: string): number | null => (typeof r[k] === "number" ? (r[k] as number) : null);
+    const segment: AcrMatchSegment = {
+      sampleFromMs: beginMs,
+      sampleToMs: endMs,
+      dbFromMs: num("db_begin_time_offset_ms"),
+      dbToMs: num("db_end_time_offset_ms"),
+      score,
+    };
+
     const key = acrid ?? `${title ?? "?"}|${artist ?? "?"}`;
     const existing = byKey.get(key);
 
     if (existing) {
       existing.segments += 1;
+      existing.segmentsDetail.push(segment);
       if (beginMs !== null && (existing.matchedFromMs === null || beginMs < existing.matchedFromMs)) existing.matchedFromMs = beginMs;
       if (endMs !== null && (existing.matchedToMs === null || endMs > existing.matchedToMs)) existing.matchedToMs = endMs;
       if (score !== null && (existing.confidence === null || score > existing.confidence)) existing.confidence = score;
@@ -286,15 +356,22 @@ export function normalizeFileScanResults(results: unknown): AcrFileScanMatch[] {
       confidence: score,
       foundOn: extractFoundOn(r["external_metadata"]),
       externalMetadata: asExternalMetadata(r["external_metadata"]),
+      genres: extractGenres(r["genres"]),
+      artistsDetailed: extractArtists(r["artists"]),
+      durationMs: typeof r["duration_ms"] === "number" ? r["duration_ms"] : null,
       matchedFromMs: beginMs,
       matchedToMs: endMs,
       segments: 1,
+      segmentsDetail: [segment],
       acrid,
     });
   }
 
+  const all = Array.from(byKey.values());
+  // Внутри совпадения участки идут по порядку звучания нашего файла.
+  for (const m of all) m.segmentsDetail.sort((a, b) => (a.sampleFromMs ?? 0) - (b.sampleFromMs ?? 0));
   // Самые уверенные — наверх, чтобы модератор сразу видел главное.
-  return Array.from(byKey.values()).sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  return all.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
 }
 
 // ── Основной сценарий ─────────────────────────────────────────────────────

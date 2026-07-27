@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScanSearch, Loader2, CheckCircle2, AlertTriangle, XCircle, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { MatchCard, mmss, fmtReleaseDate, buildFoundOnUrls, type RichMatch } from "./acr-matches-modal";
+import { MatchCard, mmss, fmtReleaseDate, buildPlatformLinks, type RichMatch, type MatchArtist, type MatchSegment } from "./acr-matches-modal";
 
 const DASH = "—";
 
@@ -35,6 +35,11 @@ type FsMatch = {
   foundOn: string[];
   /** Сырой external_metadata от ACRCloud — из него собираются ссылки на площадки. */
   externalMetadata?: Record<string, unknown> | null;
+  /** Ниже — поля, добавленные вместе с расширенной выдачей. У старых проверок их нет. */
+  genres?: string[] | null;
+  artistsDetailed?: MatchArtist[] | null;
+  durationMs?: number | null;
+  segmentsDetail?: MatchSegment[] | null;
   matchedFromMs: number | null;
   matchedToMs: number | null;
   segments: number;
@@ -101,9 +106,13 @@ function toRichMatch(m: FsMatch): RichMatch {
     releaseDate: fmtReleaseDate(m.releaseDate) ?? DASH,
     confidence: m.confidence != null ? String(m.confidence) : DASH,
     foundOn: m.foundOn ?? [],
-    // Проверки, сделанные до появления ссылок, externalMetadata не содержат —
-    // тогда плашки просто останутся некликабельными, без ошибок.
-    foundOnUrls: buildFoundOnUrls(m.externalMetadata),
+    // Проверки, сделанные до появления расширенной выдачи, этих полей не содержат —
+    // тогда соответствующие блоки просто не рисуются, без ошибок.
+    platformLinks: buildPlatformLinks(m.externalMetadata),
+    genres: m.genres ?? [],
+    artistsDetailed: m.artistsDetailed ?? [],
+    durationMs: m.durationMs ?? null,
+    segmentsDetail: m.segmentsDetail ?? [],
   };
 }
 
