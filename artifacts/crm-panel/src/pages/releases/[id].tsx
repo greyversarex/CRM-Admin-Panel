@@ -46,6 +46,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AcrMatchesModal } from "@/components/acr-matches-modal";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
 import { ModerationActionsBar } from "@/components/moderation-actions-bar";
+import { SmartlinkReleaseButton } from "@/components/smartlink-release-button";
 import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
 import { toast } from "@/hooks/use-toast";
 import { useLang } from "@/lib/i18n";
@@ -365,6 +366,9 @@ export default function ReleaseDetail() {
                 >
                   <Edit3 className="h-3.5 w-3.5 mr-1.5" /> {RV.editRelease}
                 </Button>
+                {/* Смартлинк показываем только у одобренного релиза: до этого
+                    ссылок на витрины ещё не существует, страницу нечем наполнить. */}
+                <SmartlinkReleaseButton releaseId={id} />
                 <Button
                   size="sm" variant="outline"
                   className="bg-card h-8 text-xs"

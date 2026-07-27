@@ -2221,7 +2221,7 @@ const translations = {
       publishing_group: "Паблишинг",
       marketing_group: "Маркетинг",
       presave: "Pre-save кампании",
-      smart_links: "Smart Links",
+      smart_links: "Смартлинки",
       promo_assets: "Промо-материалы",
       transfer: "Импорт трека",
       release_cal: "Календарь релизов",

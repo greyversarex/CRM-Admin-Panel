@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import InviteAccept from "@/pages/invite";
+import SmartLinkPage from "@/pages/l/[slug]";
 import AdminSignups from "@/pages/admin/signups";
 import AdminKyc from "@/pages/admin/kyc";
 import AdminAudit from "@/pages/admin/audit";
@@ -116,6 +117,12 @@ function Router() {
           пользователей не редиректим: им тоже может понадобиться открыть ссылку. */}
       <Route path="/invite/:token">
         <InviteAccept />
+      </Route>
+
+      {/* Public — страница смартлинка. Её открывают слушатели без аккаунта,
+          поэтому ни ProtectedRoute, ни Layout здесь быть не должно. */}
+      <Route path="/l/:slug">
+        <SmartLinkPage />
       </Route>
 
       <ProtectedRoute path="/"               component={Dashboard} />

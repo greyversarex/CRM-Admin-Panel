@@ -49,6 +49,7 @@ import managerPermissionsRouter from "./manager-permissions";
 import takedownsRouter from "./takedowns";
 import labelMembersRouter, { labelMembersPublicRouter } from "./label-members";
 import marketingRouter from "./marketing";
+import smartLinksPublicRouter from "./smart-links-public";
 import analyticsMarketingRouter from "./analytics-marketing";
 import broma16Router from "./broma16";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -71,6 +72,9 @@ router.use(storageUploadRouter);
 // DDEX inbound webhook. Аутентификация по HMAC-подписи партнёра (X-DDEX-Signature),
 // не по cookie — поэтому ДО requireAuth.
 router.use(ddexInboundRouter);
+// Публичные страницы смартлинков: их открывают слушатели без аккаунта.
+// Отдают только то, что и так предназначено для публикации (см. сам роутер).
+router.use(smartLinksPublicRouter);
 
 // Apply security policy (ip whitelist + dynamic session timeout) before auth.
 router.use(securityPolicy);
