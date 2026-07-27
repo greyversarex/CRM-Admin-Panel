@@ -115,6 +115,14 @@ const DSP_BRANDS: Record<string, { label: string; color: string }> = {
   tidal:       { label: "Tidal",        color: "#38BDF8" },
   soundcloud:  { label: "SoundCloud",   color: "#FF5500" },
   musicbrainz: { label: "MusicBrainz",  color: "#BA478F" },
+  // Набор площадок зависит от конкретной записи, а не только от тарифа:
+  // ACRCloud может прислать и то, чего нет в настройках аккаунта.
+  lyricfind:   { label: "LyricFind",    color: "#22D3EE" },
+  yandex:      { label: "Яндекс Музыка", color: "#FFCC00" },
+  qq:          { label: "QQ Music",     color: "#31C27C" },
+  netease:     { label: "NetEase",      color: "#C20C0C" },
+  boomplay:    { label: "Boomplay",     color: "#F25822" },
+  discogs:     { label: "Discogs",      color: "#333333" },
 };
 function dspInfo(key: string): { label: string; color: string } {
   const k = key.toLowerCase();
