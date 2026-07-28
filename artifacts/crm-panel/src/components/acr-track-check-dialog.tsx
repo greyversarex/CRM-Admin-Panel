@@ -121,6 +121,20 @@ function readMatches(check: AcrCheck | undefined): FsMatch[] {
   return Array.isArray(raw) ? (raw as FsMatch[]) : [];
 }
 
+/**
+ * Скан не переживает перезапуск сервера: строка остаётся в 'pending', и без
+ * этой проверки кнопка «Проверить» была бы заблокирована навсегда. Сервер
+ * снимает такие проверки сам (раз в 5 минут), а здесь — подстраховка на
+ * случай, если оператор смотрит на экран раньше уборщика.
+ */
+const STALE_PENDING_MS = 20 * 60 * 1000;
+
+function isStalePending(check: AcrCheck | undefined): boolean {
+  if (!check || check.status !== "pending") return false;
+  const started = new Date(check.scannedAt).getTime();
+  return Number.isFinite(started) && Date.now() - started > STALE_PENDING_MS;
+}
+
 export interface AcrTrackCheckDialogProps {
   trackId: number;
   trackTitle: string;
@@ -141,7 +155,7 @@ export function AcrTrackCheckDialog({ trackId, trackTitle, open, onOpenChange }:
     refetchInterval: (query) => {
       const data = query.state.data as ChecksResponse | undefined;
       const latest = data?.checks?.find((c) => c.engine === "acrcloud_fs");
-      return latest?.status === "pending" ? 5_000 : false;
+      return latest?.status === "pending" && !isStalePending(latest) ? 5_000 : false;
     },
   });
 
@@ -152,7 +166,8 @@ export function AcrTrackCheckDialog({ trackId, trackTitle, open, onOpenChange }:
   const latest = fsChecks[0];
   const matches = useMemo(() => readMatches(latest).map(toRichMatch), [latest]);
   const configured = q.data?.fileScanConfigured ?? false;
-  const scanning = latest?.status === "pending";
+  const stalePending = isStalePending(latest);
+  const scanning = latest?.status === "pending" && !stalePending;
 
   const scan = useMutation({
     mutationFn: () => jpost(`/api/distribution/acr/file-scan`, { trackId }),
@@ -204,6 +219,16 @@ export function AcrTrackCheckDialog({ trackId, trackTitle, open, onOpenChange }:
             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Сканируем трек по базе ACRCloud…</p>
             <p className="text-xs text-muted-foreground mt-1">Файл отправлен целиком — обычно занимает 1–3 минуты.</p>
+          </div>
+        ) : stalePending ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />Проверка прервалась
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Она не завершилась — скорее всего, сервер перезапустили, пока файл обрабатывался.
+              Нажмите «Проверить заново», результат придёт сюда.
+            </p>
           </div>
         ) : !latest ? (
           <div className="py-10 text-center text-sm text-muted-foreground">

@@ -7,6 +7,7 @@ import { startFraudEngine, stopFraudEngine } from "./services/fraud-engine";
 import { startPaymentAutomation, stopPaymentAutomation } from "./services/payment-automation";
 import { startBroma16PushWorker, stopBroma16PushWorker } from "./workers/broma16-push-worker";
 import { startBroma16Schedulers, stopBroma16Schedulers } from "./services/broma16/scheduler";
+import { reclaimOrphanedAcrChecks, startAcrStaleSweeper, stopAcrStaleSweeper } from "./services/acr-stale-checks";
 import { bootstrapManagerPermissions } from "./lib/manager-permissions";
 import { assertIntegrationEncryptionConfigured } from "./lib/crypto";
 import { isDemoLoginEnabled } from "./lib/demo-login";
@@ -53,6 +54,10 @@ const server = app.listen(port, "0.0.0.0", async (err) => {
   // Broma16 (ROD API): фоновый воркер пуша релизов + планировщик словарей/статистики.
   startBroma16PushWorker().catch((e) => logger.error({ err: e }, "startBroma16PushWorker failed"));
   startBroma16Schedulers();
+  // ACR-проверки не переживают рестарт процесса: снимаем осиротевшие 'pending',
+  // иначе кнопка «Проверить» у трека остаётся заблокированной навсегда.
+  reclaimOrphanedAcrChecks().catch((e) => logger.error({ err: e }, "reclaimOrphanedAcrChecks failed"));
+  startAcrStaleSweeper();
   // Manager permissions: гарантируем строки в БД для всех ключей (default enabled=true).
   bootstrapManagerPermissions().catch((e) => logger.error({ err: e }, "bootstrapManagerPermissions failed"));
 });
@@ -71,6 +76,7 @@ async function shutdown(signal: string) {
   } catch (e) {
     logger.error({ err: e }, "stopAckPoller failed");
   }
+  try { stopAcrStaleSweeper(); } catch (e) { logger.error({ err: e }, "stopAcrStaleSweeper failed"); }
   try { stopFraudEngine(); } catch (e) { logger.error({ err: e }, "stopFraudEngine failed"); }
   try { stopPaymentAutomation(); } catch (e) { logger.error({ err: e }, "stopPaymentAutomation failed"); }
   try { await stopBroma16PushWorker(); } catch (e) { logger.error({ err: e }, "stopBroma16PushWorker failed"); }

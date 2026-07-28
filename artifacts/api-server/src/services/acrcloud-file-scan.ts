@@ -17,6 +17,7 @@
  * Документация: https://docs.acrcloud.com/reference/console-api/file-scanning
  */
 
+import { openAsBlob } from "node:fs";
 import { db, acrChecksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -126,11 +127,16 @@ export async function isFileScanConfigured(): Promise<boolean> {
 // ── Чтение аудио целиком ──────────────────────────────────────────────────
 
 /**
- * Читает весь аудиофайл в память.
- * Локальные `/objects/...` — прямо из хранилища, внешние URL — через HTTP
- * с SSRF-guard. Оба пути ограничены MAX_UPLOAD_BYTES.
+ * Готовит аудио к отправке в ACRCloud.
+ *
+ * ВАЖНО про память: прод-сервер живёт на 1 ГБ RAM, а треки в lossless весят
+ * 30–50 МБ. Раньше файл читался в Buffer целиком, потом копировался в
+ * Uint8Array, потом в Blob — три копии по 50 МБ плюс сборка multipart-тела.
+ * Процесс умирал на середине скана, и проверка навсегда оставалась 'pending'.
+ * Поэтому локальные файлы отдаём через openAsBlob(): Blob держит ссылку на
+ * файл, а undici читает его с диска потоком уже во время отправки.
  */
-async function readWholeAudio(audioUrl: string): Promise<Buffer> {
+async function buildAudioBlob(audioUrl: string): Promise<{ blob: Blob; bytes: number }> {
   if (audioUrl.startsWith("/objects/")) {
     let file;
     try {
@@ -140,24 +146,16 @@ async function readWholeAudio(audioUrl: string): Promise<Buffer> {
       throw e;
     }
     const [meta] = await file.getMetadata();
-    if (typeof meta.size === "number" && meta.size > MAX_UPLOAD_BYTES) {
-      throw new Error(`Файл слишком большой (${(meta.size / 1024 / 1024).toFixed(0)} МБ), лимит ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ`);
+    const size = typeof meta.size === "number" ? meta.size : 0;
+    if (size > MAX_UPLOAD_BYTES) {
+      throw new Error(`Файл слишком большой (${(size / 1024 / 1024).toFixed(0)} МБ), лимит ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ`);
     }
-    const chunks: Buffer[] = [];
-    let total = 0;
-    const stream = file.createReadStream();
-    await new Promise<void>((resolve, reject) => {
-      stream.on("data", (chunk: Buffer) => {
-        total += chunk.length;
-        if (total > MAX_UPLOAD_BYTES) { stream.destroy(); reject(new Error("Файл превысил лимит размера при чтении")); return; }
-        chunks.push(chunk);
-      });
-      stream.on("end", resolve);
-      stream.on("error", reject);
-    });
-    return Buffer.concat(chunks);
+    const blob = await openAsBlob(file.fullPath(), { type: "application/octet-stream" });
+    return { blob, bytes: size || blob.size };
   }
 
+  // Внешний URL (перенос каталога) — тут потоково не выйдет, читаем в память,
+  // но без лишних копий: Buffer уже Uint8Array, Blob скопирует его один раз.
   await assertSafeAudioUrl(audioUrl);
   const resp = await fetch(audioUrl, { signal: AbortSignal.timeout(120_000), redirect: "manual" });
   if (resp.status >= 300 && resp.status < 400) throw new Error(`Скачивание аудио заблокировано (редирект ${resp.status})`);
@@ -166,7 +164,7 @@ async function readWholeAudio(audioUrl: string): Promise<Buffer> {
   if (cl && parseInt(cl, 10) > MAX_UPLOAD_BYTES) throw new Error("Файл слишком большой для проверки");
   const buf = Buffer.from(await resp.arrayBuffer());
   if (buf.length > MAX_UPLOAD_BYTES) throw new Error("Файл слишком большой для проверки");
-  return buf;
+  return { blob: new Blob([buf], { type: "application/octet-stream" }), bytes: buf.length };
 }
 
 // ── Вызовы ACRCloud ───────────────────────────────────────────────────────
@@ -176,11 +174,11 @@ function fsHeaders(cfg: FsConfig): Record<string, string> {
 }
 
 /** Загружает файл в контейнер. Возвращает id файла в ACRCloud. */
-async function uploadFile(cfg: FsConfig, audio: Buffer, fileName: string): Promise<string> {
+async function uploadFile(cfg: FsConfig, audio: Blob, fileName: string): Promise<string> {
   const form = new FormData();
   form.append("data_type", "audio");
   form.append("name", fileName);
-  form.append("file", new Blob([new Uint8Array(audio)]), fileName);
+  form.append("file", audio, fileName);
 
   const url = `https://${cfg.host}/api/fs-containers/${encodeURIComponent(cfg.containerId)}/files`;
   const res = await fetch(url, {
@@ -408,11 +406,11 @@ export async function runFileScan(
   };
 
   try {
-    const audio = await readWholeAudio(audioUrl);
-    meta["file_bytes"] = audio.length;
+    const audio = await buildAudioBlob(audioUrl);
+    meta["file_bytes"] = audio.bytes;
 
     const safeName = `${trackTitle || "track"}`.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(0, 80);
-    const fileId = await uploadFile(cfg, audio, `${safeName}.audio`);
+    const fileId = await uploadFile(cfg, audio.blob, `${safeName}.audio`);
     meta["fs_file_id"] = fileId;
     meta["uploaded_at_utc"] = new Date().toISOString();
 
