@@ -93,13 +93,16 @@ function RiskBadge({ score }: { score: number | null }) {
 export function ModerationTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<"pending_review" | "approved" | "rejected" | "all">("pending_review");
+  // "takedown_requested,removed" — снятые релизы (бэкенд принимает список статусов
+  // через запятую). Отдельная вкладка нужна, чтобы админ мог найти снятый релиз
+  // и восстановить его из карточки модерации.
+  const [statusFilter, setStatusFilter] = useState<"pending_review" | "approved" | "rejected" | "takedown_requested,removed" | "all">("pending_review");
   const [search, setSearch] = useState("");
   const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const listQ = useQuery({
     queryKey: ["moderation", statusFilter],
-    queryFn: () => jget<{ items: ModerationItem[] }>(`/api/distribution/moderation?status=${statusFilter}&limit=100`),
+    queryFn: () => jget<{ items: ModerationItem[] }>(`/api/distribution/moderation?status=${encodeURIComponent(statusFilter)}&limit=100`),
     refetchInterval: 15_000,
   });
 
@@ -150,6 +153,7 @@ export function ModerationTab() {
           <TabsTrigger value="pending_review" data-testid="tab-pending">Ожидают <Badge className="ml-2" variant="secondary">{statusFilter === "pending_review" ? counts.total : ""}</Badge></TabsTrigger>
           <TabsTrigger value="approved" data-testid="tab-approved">Одобренные</TabsTrigger>
           <TabsTrigger value="rejected" data-testid="tab-rejected">Отклонённые</TabsTrigger>
+          <TabsTrigger value="takedown_requested,removed" data-testid="tab-takendown">Снятые</TabsTrigger>
           <TabsTrigger value="all" data-testid="tab-all">Все</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -177,7 +181,15 @@ export function ModerationTab() {
             {items.map((r) => (
               <TableRow key={r.id} data-testid={`row-moderation-${r.id}`}>
                 <TableCell>
-                  <div className="font-medium">{r.title}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {r.title}
+                    {r.status === "takedown_requested" && (
+                      <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-300">запрошено снятие</Badge>
+                    )}
+                    {r.status === "removed" && (
+                      <Badge variant="outline" className="bg-red-500/15 text-red-700 dark:text-red-300">снят с площадок</Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">{r.artistName || "—"}</div>
                 </TableCell>
                 <TableCell><Badge variant="outline" className="capitalize">{r.releaseType}</Badge></TableCell>

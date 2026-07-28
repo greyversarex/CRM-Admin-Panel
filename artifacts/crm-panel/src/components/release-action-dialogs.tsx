@@ -1,11 +1,11 @@
 /**
- * Общие диалоги действий над релизом: Deliver to DSPs и Take Down.
+ * Общие диалоги действий над релизом: Deliver to DSPs, Take Down и Restore.
  * Вынесены из pages/releases/[id].tsx, чтобы использоваться также
  * в модалке модерации (pages/distribution/moderation-detail-dialog.tsx).
  */
 import { useState } from "react";
 import { useDeliverRelease, type DeliveryTarget } from "@workspace/api-client-react";
-import { Send, ShieldAlert } from "lucide-react";
+import { Send, ShieldAlert, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -98,6 +98,89 @@ export function TakeDownDialog({ releaseId, onClose }: { releaseId: number; onCl
           }}
         >
           Take Down
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+// ─── Restore dialog ───────────────────────────────────────────────────────
+// Отмена снятия. Доступно только админу/менеджеру и только для релизов в
+// статусах takedown_requested / removed — на бэкенде это POST /restore.
+// Куда именно вернётся релиз, решает сервер (live или approved) и сообщает
+// в поле restoredTo: показываем это админу человеческим текстом.
+export function RestoreDialog({
+  releaseId,
+  status,
+  onClose,
+}: {
+  releaseId: number;
+  status: string;
+  onClose: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [note, setNote] = useState("");
+  const notYetRemoved = status === "takedown_requested";
+
+  return (
+    <DialogContent className="bg-card border-border max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Восстановить релиз</DialogTitle>
+        <DialogDescription>
+          {notYetRemoved
+            ? "Снятие ещё не выполнено — заявка будет отменена, и релиз вернётся в прежнее состояние."
+            : "Релиз уже убран с площадок. Он вернётся в статус «Одобрен» — чтобы он снова появился на площадках, отгрузите его заново (Deliver to DSPs)."}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="text-xs text-muted-foreground bg-emerald-500/10 border border-emerald-500/30 rounded p-3 space-y-1">
+        <div className="font-semibold text-emerald-400">Что произойдёт:</div>
+        <ul className="list-disc pl-4">
+          <li>{notYetRemoved ? "Статус вернётся на «В эфире» или «Одобрен»." : "Статус сменится на «Одобрен»."}</li>
+          <li>Артист и лейбл получат уведомление о восстановлении.</li>
+          <li>Действие попадёт в журнал аудита.</li>
+        </ul>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">Комментарий (не обязательно)</label>
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Например: «Снятие было ошибочным, права подтверждены»"
+          rows={3}
+          className="bg-background/40"
+          data-testid="textarea-restore-note"
+        />
+      </div>
+
+      <DialogFooter className="gap-2">
+        <Button variant="outline" onClick={onClose}>Отмена</Button>
+        <Button
+          disabled={pending}
+          onClick={async () => {
+            setPending(true);
+            try {
+              const res = await adminApi<{ restoredTo?: string }>(`/api/releases/${releaseId}/restore`, {
+                method: "POST",
+                body: JSON.stringify({ note: note.trim() || undefined }),
+              });
+              toast({
+                title: "Релиз восстановлен",
+                description: res?.restoredTo === "live"
+                  ? "Снятие отменено, релиз остаётся на площадках."
+                  : "Релиз вернулся в статус «Одобрен». Чтобы вернуть его на площадки, нажмите Deliver to DSPs.",
+              });
+              onClose();
+            } catch (e) {
+              toast({ variant: "destructive", title: "Не удалось восстановить релиз", description: (e as Error).message });
+              setPending(false);
+            }
+          }}
+          data-testid="button-restore-confirm"
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          {pending ? "Восстанавливаем…" : "Восстановить"}
         </Button>
       </DialogFooter>
     </DialogContent>

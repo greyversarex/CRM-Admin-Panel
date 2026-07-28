@@ -22,6 +22,7 @@ import {
   X, CheckCircle2, XCircle, AlertCircle, ShieldAlert, FileMusic, Music2, ScanSearch,
   Image as ImageIcon, Calendar, Globe, Disc3, Hash, Loader2, ExternalLink, Languages,
   PenTool, Mic, Sliders, ChevronDown, PauseCircle, AlertTriangle, LogOut, UploadCloud,
+  RotateCcw,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +36,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FailReturnDialog } from "@/components/fail-return-dialog";
-import { DeliverDialog, TakeDownDialog } from "@/components/release-action-dialogs";
+import { DeliverDialog, TakeDownDialog, RestoreDialog } from "@/components/release-action-dialogs";
 import { Broma16DistributionControl } from "@/components/broma16-push-card";
 import { AudioQcPanel, type AudioQcResult } from "@/components/waveform-player";
 import { AcrTrackCheckDialog } from "@/components/acr-track-check-dialog";
@@ -134,7 +135,9 @@ function extFromMime(mime: string): string {
 function statusLabel(s: string): string {
   return ({
     draft: "Черновик", pending_review: "На модерации", approved: "Одобрен",
-    rejected: "Отклонён", delivering: "Доставляется", live: "В эфире",
+    rejected: "Отклонён", delivering: "Доставляется", delivered: "Доставлен",
+    live: "В эфире", parked: "Отложен", error: "Ошибка",
+    takedown_requested: "Запрошено снятие", removed: "Снят с площадок",
   } as Record<string, string>)[s] ?? s;
 }
 
@@ -155,6 +158,7 @@ export function ModerationDetailDialog({
   const [failReturnOpen, setFailReturnOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [takedownOpen, setTakedownOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   const q = useQuery({
     queryKey: ["moderation-detail", releaseId],
@@ -262,6 +266,18 @@ export function ModerationDetailDialog({
                     data-testid="button-takedown"
                   >
                     <XCircle className="mr-2 h-4 w-4" /> Take Down
+                  </Button>
+                )}
+                {/* Восстановление снятого релиза. Показываем только там, где
+                    оно имеет смысл: заявка на снятие подана либо уже выполнена. */}
+                {["takedown_requested", "removed"].includes(q.data.release.status) && (
+                  <Button
+                    variant="outline"
+                    className="bg-card border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+                    onClick={() => setRestoreOpen(true)}
+                    data-testid="button-restore"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" /> Восстановить релиз
                   </Button>
                 )}
                 <div className="ml-auto">
@@ -377,6 +393,20 @@ export function ModerationDetailDialog({
                   releaseId={releaseId}
                   onClose={() => {
                     setTakedownOpen(false);
+                    qc.invalidateQueries({ queryKey: ["moderation"] });
+                    qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
+                  }}
+                />
+              </Dialog>
+            )}
+
+            {restoreOpen && (
+              <Dialog open onOpenChange={(o) => !o && setRestoreOpen(false)}>
+                <RestoreDialog
+                  releaseId={releaseId}
+                  status={q.data.release.status}
+                  onClose={() => {
+                    setRestoreOpen(false);
                     qc.invalidateQueries({ queryKey: ["moderation"] });
                     qc.invalidateQueries({ queryKey: ["moderation-detail", releaseId] });
                   }}

@@ -242,7 +242,7 @@ export type AuditAction =
   | "send"
   | "bulk_edit"
   | "acr_scan" | "acr_scan_full" | "acr_file_scan" | "acr_drop" | "acr_manual_result" | "musicbrainz_isrc_check"
-  | "resolve" | "reopen"
+  | "resolve" | "reopen" | "restore"
   | "import"
   | "pro_register" | "pro_register_failed" | "pro_register_network_error"
   | "broma16_push";

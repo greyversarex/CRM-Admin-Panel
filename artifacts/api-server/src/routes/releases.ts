@@ -1199,6 +1199,76 @@ router.post("/releases/:id/request-takedown", async (req, res): Promise<void> =>
   res.json(enriched);
 });
 
+// POST /releases/:id/restore — отменить снятие релиза. Только admin/manager:
+// восстановление затрагивает публикацию на площадках, владелец сам этого делать
+// не должен. Доступно из 'takedown_requested' (снятие ещё не выполнено — просто
+// отменяем заявку) и из 'removed' (релиз уже убран с DSP — возвращаем в
+// 'approved', дальше модератор жмёт Deliver to DSPs).
+router.post("/releases/:id/restore", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const params = UpdateReleaseStatusParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+
+  const [existing] = await db.select().from(releasesTable).where(eq(releasesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Release not found" }); return; }
+
+  if (existing.status !== "takedown_requested" && existing.status !== "removed") {
+    res.status(409).json({
+      error: `Release in status '${existing.status}' cannot be restored. Only 'takedown_requested' or 'removed' releases can be restored.`,
+    });
+    return;
+  }
+
+  // Куда возвращать. Если снятие ещё не выполнено и релиз реально был на
+  // площадках (есть успешная отгрузка) — он там и остался, возвращаем 'live'.
+  // Во всех остальных случаях — 'approved': на площадках релиза нет, и его
+  // придётся отгрузить заново.
+  let target: "live" | "approved" = "approved";
+  if (existing.status === "takedown_requested") {
+    const delivered = await db.select({ id: deliveriesTable.id })
+      .from(deliveriesTable)
+      .where(and(
+        eq(deliveriesTable.releaseId, existing.id),
+        inArray(deliveriesTable.status, ["sent", "delivered"]),
+      ))
+      .limit(1);
+    if (delivered.length > 0) target = "live";
+  }
+
+  const updated = await db.update(releasesTable)
+    .set({ status: target, statusNote: note || null })
+    .where(and(
+      eq(releasesTable.id, params.data.id),
+      eq(releasesTable.status, existing.status),
+    ))
+    .returning();
+
+  const release = updated[0];
+  if (!release) {
+    res.status(409).json({ error: "Release status changed concurrently. Reload and try again." });
+    return;
+  }
+
+  void auditMutation(req, { action: "restore", entityType: "release", entityId: release.id, before: existing, after: release });
+
+  const ownerPayload = {
+    type: "release_restored",
+    title: `✅ Релиз «${release.title}» восстановлен`,
+    body: target === "live"
+      ? `Снятие отменено, релиз остаётся на площадках.${note ? ` Комментарий: ${note}` : ""}`
+      : `Снятие отменено. Релиз вернулся в статус «Одобрен» — для возврата на площадки нужна повторная отгрузка.${note ? ` Комментарий: ${note}` : ""}`,
+    entityType: "release" as const,
+    entityId: release.id,
+    link: `/releases/${release.id}`,
+  };
+  void notifyByArtistId(release.artistId, ownerPayload);
+  if (release.labelId) void notifyByLabelId(release.labelId, ownerPayload);
+
+  const enriched = await enrichRelease(release);
+  res.json({ ...enriched, restoredTo: target });
+});
+
 // State-machine допустимых переходов для админ/manager PATCH /releases/:id/status.
 // Submit (артист draft|rejected → pending_review) идёт через POST /releases/:id/submit.
 // Delivery (approved/error → delivering) ставит сам POST /releases/:id/deliver.
@@ -1222,8 +1292,11 @@ export const RELEASE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   delivered:          ["live", "error"],
   live:               ["takedown_requested"],
   error:              ["rejected", "draft"],
-  takedown_requested: ["removed", "live"],
-  removed:            [],
+  takedown_requested: ["removed", "live", "approved"],
+  // removed → approved: восстановление снятого релиза (POST /restore). Релиз
+  // возвращается в 'approved', а не сразу в 'live': с площадок он уже удалён,
+  // и вернуть его туда можно только повторной отгрузкой (Deliver to DSPs).
+  removed:            ["approved"],
 };
 
 router.patch("/releases/:id/status", requireRole("admin", "manager"), async (req, res): Promise<void> => {
