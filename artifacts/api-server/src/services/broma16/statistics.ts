@@ -312,9 +312,46 @@ export async function ingestReportFile(outputFileUrl: string, fallbackPeriod: st
 
 const POLL_INTERVAL_MS = 30_000;
 const POLL_MAX_MS = 10 * 60_000;
+const DOWNLOAD_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_MS = 5_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Скачивает готовый отчёт, переспрашивая ссылку между попытками.
+ *
+ * Broma16 отдаёт подписанный URL на S3 со сроком жизни 5 минут, поэтому
+ * переиспользовать ту же ссылку после сбоя нельзя — за ней нужно идти заново.
+ * Без этого одна сетевая ошибка стоила бы суток статистики: ночной cron
+ * просто завершался с ошибкой и до следующего запуска не возвращался.
+ */
+async function ingestWithRetry(
+  reportId: string,
+  firstUrl: string,
+  fallbackPeriod: string,
+  c: Broma16Client,
+): Promise<IngestResult> {
+  let url: string | null = firstUrl;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+    if (!url) throw new Broma16ApiError(0, "Broma16: отчёт готов, но нет ссылки на файл");
+    try {
+      return await ingestReportFile(url, fallbackPeriod);
+    } catch (e) {
+      lastError = e;
+      if (attempt === DOWNLOAD_ATTEMPTS) break;
+      logger.warn(
+        { reportId, attempt, err: (e as Error).message },
+        "[broma16] не удалось забрать файл отчёта, обновляю ссылку и повторяю",
+      );
+      await sleep(DOWNLOAD_RETRY_MS);
+      url = (await checkReportStatus(reportId, c)).outputFile;
+    }
+  }
+  throw lastError;
 }
 
 /** Дожидается готовности отчёта (poll) и загружает его. */
@@ -329,7 +366,7 @@ export async function downloadAndParseReport(
     const st = await checkReportStatus(reportId, c);
     if (DONE_STATUSES.has(st.status)) {
       if (!st.outputFile) throw new Broma16ApiError(0, "Broma16: отчёт готов, но нет ссылки на файл");
-      return ingestReportFile(st.outputFile, fallbackPeriod);
+      return ingestWithRetry(reportId, st.outputFile, fallbackPeriod, c);
     }
     if (FAILED_STATUSES.has(st.status)) {
       throw new Broma16ApiError(0, `Broma16: формирование отчёта завершилось ошибкой (status=${st.status})`);
