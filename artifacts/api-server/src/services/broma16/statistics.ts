@@ -2,17 +2,27 @@
  * Сбор статистики из Broma16 (ROD API).
  *
  * Поток: POST .../report (создать) → poll GET .../report/{id} (ждём status=done)
- * → скачиваем output_file (CSV/XLSX) → парсим → пишем в usage_reports,
- * матчим строки по ISRC / broma16_recording_id с нашими треками.
+ * → скачиваем output_file → парсим → пишем в usage_reports, матчим строки по
+ * ISRC / broma16_recording_id с нашими треками.
  *
- * Cron: ежедневно в 00:30 (pullDailyStatistics) запрашивает отчёт за вчера.
+ * Два факта о формате, выясненных на живом аккаунте:
+ *  - список витрин (outlets) ОБЯЗАТЕЛЕН: без него Broma16 отвечает 422
+ *    "The data about the showcase does not meet the requirements";
+ *  - output_file — это ZIP с недельными CSV внутри, а не XLSX. Колонки:
+ *    date, outlet, raw_title, territory_code, performers, release_name,
+ *    isrc, streams. Выручки в отчёте нет — только прослушивания.
+ *
+ * Cron: ежедневно в 00:30 (pullDailyStatistics) перезапрашивает скользящее окно
+ * за последние 30 дней, потому что данные по витринам доезжают с задержкой.
  */
 
 import * as XLSX from "xlsx";
+import { parse as parseCsv } from "csv-parse/sync";
 import { db } from "@workspace/db";
 import { tracksTable, usageReportsTable } from "@workspace/db";
 import { and, eq, isNull, isNotNull, or } from "drizzle-orm";
 import { logger } from "../../lib/logger";
+import { isZip, readZipEntries } from "../../lib/zip";
 import { Broma16ApiError } from "./errors";
 import { createBroma16Client, type Broma16Client } from "./client";
 
@@ -46,10 +56,13 @@ export async function requestStatisticsReport(
 ): Promise<string> {
   const c = client ?? (await createBroma16Client());
   const accountId = await c.getAccountId();
-  const body: Record<string, unknown> = { dateFrom, dateTo };
-  if (outletCodes && outletCodes.length > 0) {
-    body.outlets = `[${outletCodes.join(",")}]`;
+  // Broma16 отклоняет запрос без витрин (422 "The data about the showcase does
+  // not meet the requirements"), поэтому по умолчанию берём весь список.
+  const outlets = outletCodes && outletCodes.length > 0 ? outletCodes : await listOutletCodes(c);
+  if (outlets.length === 0) {
+    throw new Broma16ApiError(0, "Broma16: не удалось получить список витрин для отчёта");
   }
+  const body: Record<string, unknown> = { dateFrom, dateTo, outlets: `[${outlets.join(",")}]` };
   const data = await c.request<unknown>("POST", `${reportBase(accountId)}/report`, { body });
   const reportId = extractReportId(data);
   logger.info({ reportId, dateFrom, dateTo }, "[broma16] отчёт статистики создан");
@@ -69,6 +82,15 @@ export async function checkReportStatus(reportId: string, client?: Broma16Client
 export async function getStatisticsOutlets(client?: Broma16Client): Promise<unknown> {
   const c = client ?? (await createBroma16Client());
   return c.request<unknown>("GET", "/stat/v1/statistics/outlets");
+}
+
+/** Коды всех витрин, по которым Broma16 умеет отдавать статистику. */
+export async function listOutletCodes(client?: Broma16Client): Promise<string[]> {
+  const data = await getStatisticsOutlets(client);
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((o) => (o && typeof o === "object" ? (o as Record<string, unknown>).code : o))
+    .filter((code): code is string => typeof code === "string" && code.length > 0);
 }
 
 // ── Парсинг файла отчёта ─────────────────────────────────────────
@@ -146,16 +168,49 @@ export type IngestResult = {
   written: number;
 };
 
+/**
+ * Разбирает тело отчёта в плоский список строк.
+ *
+ * Реальный формат Broma16 — ZIP с недельными CSV. XLSX оставлен как запасной
+ * вариант: он же обрабатывает одиночный CSV (SheetJS определяет его сам).
+ */
+function parseReportBuffer(buf: Buffer): Record<string, unknown>[] {
+  if (isZip(buf)) {
+    const rows: Record<string, unknown>[] = [];
+    for (const entry of readZipEntries(buf)) {
+      if (!/\.csv$/i.test(entry.name)) continue;
+      // BOM ломает имя первой колонки, а CRLF оставляет "\r" в последнем поле
+      // строки — нормализуем и то, и другое.
+      const text = entry.data.toString("utf8").replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+      if (!text.trim()) continue;
+      try {
+        rows.push(
+          ...parseCsv(text, {
+            columns: true,
+            skip_empty_lines: true,
+            relax_column_count: true,
+            bom: true,
+          }) as Record<string, unknown>[],
+        );
+      } catch (e) {
+        logger.warn({ file: entry.name, err: (e as Error).message }, "[broma16] не разобрал CSV из архива");
+      }
+    }
+    return rows;
+  }
+
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) return [];
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: null });
+}
+
 /** Скачивает файл отчёта и пишет агрегаты в usage_reports. */
 export async function ingestReportFile(outputFileUrl: string, fallbackPeriod: string): Promise<IngestResult> {
   const res = await fetch(outputFileUrl, { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Broma16ApiError(res.status, `Broma16: не удалось скачать файл отчёта (HTTP ${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
-  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) return { totalRows: 0, matched: 0, unmatched: 0, written: 0 };
-  const sheet = wb.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
+  const rows = parseReportBuffer(buf);
   if (rows.length === 0) return { totalRows: 0, matched: 0, unmatched: 0, written: 0 };
 
   const keys = Object.keys(rows[0]);
@@ -217,9 +272,11 @@ export async function ingestReportFile(outputFileUrl: string, fallbackPeriod: st
   for (const a of agg.values()) {
     // Идемпотентный upsert по уникальному индексу (platform, period, track, country):
     // сначала пытаемся обновить (повторный пул заменяет значения), иначе вставляем.
+    // Выручки в отчёте витрин нет — если колонки не было, не затираем нулём то,
+    // что могло попасть в строку из финансового импорта.
     const updated = await db
       .update(usageReportsTable)
-      .set({ streams: a.streams, revenue: a.revenue.toFixed(4) })
+      .set(col.revenue ? { streams: a.streams, revenue: a.revenue.toFixed(4) } : { streams: a.streams })
       .where(
         and(
           eq(usageReportsTable.platform, a.platform),
@@ -322,11 +379,20 @@ export async function requestAndIngest(
   return run;
 }
 
-/** Cron: ежедневный сбор статистики за вчерашний день. */
+/** За сколько дней назад перезапрашиваем статистику при ежедневном сборе. */
+const DAILY_WINDOW_DAYS = 30;
+
+/**
+ * Cron: ежедневный сбор статистики.
+ *
+ * Запрашиваем не «вчера», а скользящее окно: витрины досылают данные с
+ * задержкой в недели, а сама Broma16 отдаёт отчёт понедельными файлами.
+ * Запись идемпотентна, поэтому повторный проход просто обновляет цифры.
+ */
 export async function pullDailyStatistics(): Promise<void> {
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const day = ymd(yesterday);
-  logger.info({ day }, "[broma16] ежедневный сбор статистики");
-  const result = await requestAndIngest(day, day);
-  logger.info({ day, ...result }, "[broma16] ежедневный сбор статистики завершён");
+  const dateTo = ymd(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const dateFrom = ymd(new Date(Date.now() - DAILY_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+  logger.info({ dateFrom, dateTo }, "[broma16] ежедневный сбор статистики");
+  const result = await requestAndIngest(dateFrom, dateTo);
+  logger.info({ dateFrom, dateTo, ...result }, "[broma16] ежедневный сбор статистики завершён");
 }
