@@ -99,9 +99,27 @@ function mapStatus(rel: BromaRelease): string {
   return "pending_review";
 }
 
+/**
+ * Типы релиза Broma16 (/dictionaries/release-types):
+ * 2 Альбом · 42 Рингбэктон · 43 Рингтон · 51 Сингл · 64 EP · 69 Компиляция · 70 TikTok.
+ */
+const RELEASE_TYPE_BY_ID: Record<number, string> = {
+  2: "album",
+  51: "single",
+  64: "ep",
+  69: "compilation",
+};
+
+/**
+ * Типы, которые не заводим отдельным релизом: это дополнительные доставки уже
+ * существующей песни (та же фонограмма и тот же ISRC, отличается лишь
+ * штрихкод). В CRM они выглядели бы дублями каталога, а статистика всё равно
+ * приходит по ISRC основного сингла.
+ */
+const SECONDARY_RELEASE_TYPE_IDS = new Set([42, 43, 70]);
+
 function mapReleaseType(rel: BromaRelease): string {
-  // 51 = Сингл, 2 = Альбом (см. /dictionaries/release-types).
-  return rel.release_type_id === 2 ? "album" : "single";
+  return RELEASE_TYPE_BY_ID[rel.release_type_id ?? 51] ?? "single";
 }
 
 // ── Результат ───────────────────────────────────────────────────────
@@ -113,6 +131,8 @@ export type CatalogImportResult = {
   artistsCreated: string[];
   releasesCreated: { id: number | null; title: string; upc: string | null }[];
   releasesLinked: { id: number; title: string }[];
+  /** TikTok/рингтон-версии: та же песня, отдельным релизом не заводим. */
+  secondarySkipped: { title: string; typeId: number; upc: string | null }[];
   tracksCreated: { id: number | null; title: string; isrc: string | null }[];
   tracksLinked: { id: number; isrc: string | null }[];
   warnings: string[];
@@ -139,6 +159,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
     artistsCreated: [],
     releasesCreated: [],
     releasesLinked: [],
+    secondarySkipped: [],
     tracksCreated: [],
     tracksLinked: [],
     warnings: [],
@@ -149,12 +170,23 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
   const artistByName = new Map<string, number>();
   for (const a of artistRows) artistByName.set(normalize(a.name), a.id);
 
+  // В предпросмотре записи не происходит, поэтому уже «запланированных» артистов
+  // помним отдельно — иначе один и тот же человек попадёт в отчёт по разу на
+  // каждый свой релиз.
+  const plannedArtists = new Set<string>();
+
   async function resolveArtist(name: string): Promise<number | null> {
     const key = normalize(name);
     const existing = artistByName.get(key);
     if (existing != null) return existing;
+    if (dryRun) {
+      if (!plannedArtists.has(key)) {
+        plannedArtists.add(key);
+        result.artistsCreated.push(name);
+      }
+      return null;
+    }
     result.artistsCreated.push(name);
-    if (dryRun) return null;
     const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     const [created] = await db.insert(artistsTable).values({ name, slug }).returning({ id: artistsTable.id });
     artistByName.set(key, created.id);
@@ -180,10 +212,20 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
     if (r.catalogNumber) takenCatalogNumbers.add(r.catalogNumber);
   }
 
-  /** Название релиза → наш release.id (для привязки фонограмм). */
+  /**
+   * Название релиза → наш release.id (для привязки фонограмм). В предпросмотре
+   * настоящего id ещё нет, поэтому кладём PLANNED_ID: важно лишь то, что релиз
+   * с таким названием будет существовать, иначе отчёт наврёт про «не нашла свой
+   * релиз» на каждой фонограмме.
+   */
+  const PLANNED_ID = -1;
   const releaseIdByTitle = new Map<string, number>();
 
   for (const rel of bromaReleases) {
+    if (SECONDARY_RELEASE_TYPE_IDS.has(rel.release_type_id ?? 0)) {
+      result.secondarySkipped.push({ title: rel.title, typeId: rel.release_type_id ?? 0, upc: rel.ean ?? null });
+      continue;
+    }
     const performer = primaryPerformer(rel);
     if (!performer) {
       result.warnings.push(`Релиз «${rel.title}» (${rel.id}) без исполнителя — пропущен`);
@@ -212,6 +254,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
     if (catalogNumber) takenCatalogNumbers.add(catalogNumber);
 
     result.releasesCreated.push({ id: null, title: rel.title, upc: rel.ean ?? null });
+    if (!releaseIdByTitle.has(normalize(rel.title))) releaseIdByTitle.set(normalize(rel.title), PLANNED_ID);
     if (dryRun || artistId == null) continue;
 
     const [created] = await db
@@ -231,7 +274,9 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
       .returning({ id: releasesTable.id });
     if (rel.ean) releaseByUpc.set(rel.ean, created.id);
     releaseByBromaId.set(rel.id, created.id);
-    if (!releaseIdByTitle.has(normalize(rel.title))) releaseIdByTitle.set(normalize(rel.title), created.id);
+    // Заготовку PLANNED_ID заменяем настоящим id первого созданного релиза.
+    const titleKey = normalize(rel.title);
+    if ((releaseIdByTitle.get(titleKey) ?? PLANNED_ID) === PLANNED_ID) releaseIdByTitle.set(titleKey, created.id);
     result.releasesCreated[result.releasesCreated.length - 1].id = created.id;
   }
 
