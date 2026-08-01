@@ -106,20 +106,28 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  // Ручной запуск сбора статистики из Broma16 (за вчерашний день). Опрос отчёта
-  // идёт в фоне на сервере, поэтому здесь просто запускаем процесс.
+  // Ручной запуск сбора статистики из Broma16 за выбранный период: витрины
+  // досылают данные неделями, поэтому «за вчера» почти всегда пусто, а выбрав
+  // «за год» можно догрузить историю. Опрос отчёта идёт в фоне на сервере.
   const syncStatistics = async () => {
     setSyncing(true);
     try {
+      const days = { "7d": 7, "30d": 30, "90d": 90, "180d": 180, "1y": 365 }[period];
+      const ymd = (d: Date) => d.toISOString().slice(0, 10);
       const res = await fetch(`/api/broma16/statistics/sync`, {
         method: "POST",
         credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dateFrom: ymd(new Date(Date.now() - days * 86_400_000)),
+          dateTo: ymd(new Date(Date.now() - 86_400_000)),
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
       toast({
         title: "Синхронизация запущена",
-        description: "Статистика из Broma16 собирается в фоне — данные появятся через несколько минут.",
+        description: "Статистика из Broma16 за выбранный период собирается в фоне — данные появятся через несколько минут.",
       });
     } catch (e) {
       toast({ variant: "destructive", title: "Не удалось запустить синхронизацию", description: (e as Error).message });

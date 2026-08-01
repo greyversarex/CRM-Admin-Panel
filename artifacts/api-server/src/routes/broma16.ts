@@ -190,7 +190,9 @@ broma16Router.post("/broma16/statistics/ingest", ...staff, async (req, res) => {
 
 // POST /broma16/statistics/sync — ручной запуск полного цикла (запрос → опрос →
 // загрузка) в фоне. Опрос отчёта может занять минуты, поэтому не держим запрос
-// открытым: запускаем в фоне и сразу отвечаем. По умолчанию — за вчерашний день.
+// открытым: запускаем в фоне и сразу отвечаем. По умолчанию — окно в 30 дней,
+// как у ночного сбора: витрины досылают данные неделями, и «за вчера» пусто.
+const SYNC_DEFAULT_DAYS = 30;
 const syncSchema = z.object({ dateFrom: dateStr.optional(), dateTo: dateStr.optional() });
 broma16Router.post("/broma16/statistics/sync", ...staff, async (req, res) => {
   const parsed = syncSchema.safeParse(req.body ?? {});
@@ -198,9 +200,9 @@ broma16Router.post("/broma16/statistics/sync", ...staff, async (req, res) => {
     res.status(400).json({ error: "Некорректные параметры", details: parsed.error.issues });
     return;
   }
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const dateFrom = parsed.data.dateFrom ?? yesterday;
-  const dateTo = parsed.data.dateTo ?? dateFrom;
+  const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const dateTo = parsed.data.dateTo ?? ymd(Date.now() - 24 * 60 * 60 * 1000);
+  const dateFrom = parsed.data.dateFrom ?? ymd(Date.now() - SYNC_DEFAULT_DAYS * 24 * 60 * 60 * 1000);
   // Проверяем настроенность интеграции до фонового запуска, чтобы вернуть
   // читаемую ошибку, а не молча запустить нерабочий фон.
   const creds = await getBroma16Credentials();
