@@ -21,6 +21,7 @@ import { db } from "@workspace/db";
 import { artistsTable, releasesTable, tracksTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
+import { getDictionary } from "./dictionaries";
 
 // ── Формы данных Broma16 ────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ type BromaRelease = {
   moderation_status?: string;
   statuses?: string[];
   release_type_id?: number;
+  genres?: number[];
 };
 
 type BromaRecording = {
@@ -49,6 +51,14 @@ type BromaRecording = {
   published_date?: string | null;
   is_instrumental?: number;
   parental_warning_type?: string;
+  genres?: number[];
+};
+
+type BromaComposition = {
+  id: number;
+  title: string;
+  iswc?: string;
+  authors?: string[];
 };
 
 type AssetPage<T> = { total?: number; data?: T[] };
@@ -133,6 +143,12 @@ export type CatalogImportResult = {
   releasesLinked: { id: number; title: string }[];
   /** TikTok/рингтон-версии: та же песня, отдельным релизом не заводим. */
   secondarySkipped: { title: string; typeId: number; upc: string | null }[];
+  /**
+   * Авторы, которых Broma16 знает по произведению. Доли (share) она не отдаёт,
+   * а выдумывать их нельзя — это данные о правах. Поэтому только показываем,
+   * чтобы оператор внёс проценты руками.
+   */
+  authorsToFill: { track: string; authors: string[] }[];
   tracksCreated: { id: number | null; title: string; isrc: string | null }[];
   tracksLinked: { id: number; isrc: string | null }[];
   warnings: string[];
@@ -147,10 +163,27 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
   const c = await createBroma16Client();
   const accountId = await c.getAccountId();
 
-  const [bromaReleases, bromaRecordings] = await Promise.all([
+  const [bromaReleases, bromaRecordings, bromaCompositions, genreDict] = await Promise.all([
     fetchAssets<BromaRelease>(c, accountId, "releases"),
     fetchAssets<BromaRecording>(c, accountId, "recordings"),
+    fetchAssets<BromaComposition>(c, accountId, "compositions"),
+    getDictionary("genre"),
   ]);
+
+  // id жанра Broma16 → человекочитаемое название из нашего кэша словарей.
+  const genreNameById = new Map<string, string>();
+  for (const g of genreDict) genreNameById.set(g.externalId, g.name);
+  const genreNames = (ids: number[] | undefined): { genre: string | null; subgenre: string | null } => {
+    const names = (ids ?? []).map((id) => genreNameById.get(String(id))).filter((n): n is string => !!n);
+    return { genre: names[0] ?? null, subgenre: names[1] ?? null };
+  };
+
+  // Произведения дают ISWC и авторов; связи с фонограммой в API нет — по названию.
+  const compositionByTitle = new Map<string, BromaComposition>();
+  for (const comp of bromaCompositions) {
+    const key = normalize(comp.title ?? "");
+    if (key && !compositionByTitle.has(key)) compositionByTitle.set(key, comp);
+  }
 
   const result: CatalogImportResult = {
     dryRun,
@@ -160,6 +193,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
     releasesCreated: [],
     releasesLinked: [],
     secondarySkipped: [],
+    authorsToFill: [],
     tracksCreated: [],
     tracksLinked: [],
     warnings: [],
@@ -268,6 +302,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
         catalogNumber,
         releaseDate: rel.release_date ?? null,
         originalReleaseDate: rel.release_original_date ?? null,
+        ...genreNames(rel.genres),
         broma16ReleaseId: rel.id,
         broma16ModerationStatus: rel.moderation_status ?? null,
       })
@@ -320,6 +355,13 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
       result.warnings.push(`Фонограмма «${rec.title}» (ISRC ${isrc}) не нашла свой релиз по названию`);
     }
 
+    // Произведение даёт ISWC (факт) и имена авторов. Доли Broma16 не отдаёт,
+    // поэтому writers не заполняем — это данные о правах, их нельзя угадывать.
+    const composition = compositionByTitle.get(normalize(rec.title));
+    if (composition?.authors?.length) {
+      result.authorsToFill.push({ track: rec.title, authors: composition.authors });
+    }
+
     result.tracksCreated.push({ id: null, title: rec.title, isrc });
     if (dryRun || artistId == null) continue;
 
@@ -333,6 +375,8 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
         trackNumber: 1,
         isExplicit: rec.parental_warning_type === "explicit",
         audioStyle: rec.is_instrumental ? "instrumental" : null,
+        iswc: composition?.iswc?.trim() || null,
+        ...genreNames(rec.genres),
         broma16RecordingId: rec.id,
       })
       .returning({ id: tracksTable.id });

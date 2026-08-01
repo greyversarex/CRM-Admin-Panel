@@ -16,7 +16,11 @@ import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
-import { Download, TrendingUp, TrendingDown, Play, Music, Globe2, DollarSign, Lock, RefreshCw } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Download, TrendingUp, TrendingDown, Play, Music, Globe2, DollarSign, Lock, RefreshCw, DownloadCloud } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSearch } from "wouter";
 import { UgcMapCard } from "@/components/dashboard-sections";
@@ -36,6 +40,21 @@ async function api<T>(path: string): Promise<T> {
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Period = "7d" | "30d" | "90d" | "180d" | "1y";
+
+/** Ответ POST /api/broma16/catalog/import (см. services/broma16/catalog-import.ts). */
+interface CatalogImportResult {
+  dryRun: boolean;
+  bromaReleases: number;
+  bromaRecordings: number;
+  artistsCreated: string[];
+  releasesCreated: { id: number | null; title: string; upc: string | null }[];
+  releasesLinked: { id: number; title: string }[];
+  secondarySkipped: { title: string; typeId: number; upc: string | null }[];
+  authorsToFill: { track: string; authors: string[] }[];
+  tracksCreated: { id: number | null; title: string; isrc: string | null }[];
+  tracksLinked: { id: number; isrc: string | null }[];
+  warnings: string[];
+}
 
 interface StreamsResp {
   totalStreams: number;
@@ -105,6 +124,39 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Импорт каталога из Broma16: сперва предпросмотр, запись — только после
+  // подтверждения. Создание записей доступно администратору.
+  const [importPreview, setImportPreview] = useState<CatalogImportResult | null>(null);
+  const [importing, setImporting] = useState(false);
+  const canImportCatalog = role === "admin";
+
+  const runCatalogImport = async (dryRun: boolean) => {
+    setImporting(true);
+    try {
+      const res = await fetch(`/api/broma16/catalog/import`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      if (dryRun) {
+        setImportPreview(j as CatalogImportResult);
+      } else {
+        setImportPreview(null);
+        const r = j as CatalogImportResult;
+        toast({
+          title: "Каталог импортирован",
+          description: `Добавлено: ${r.releasesCreated.length} релизов, ${r.tracksCreated.length} треков, ${r.artistsCreated.length} артистов. Статистика по ним подтянется при следующей синхронизации.`,
+        });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Импорт не удался", description: (e as Error).message });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   // Ручной запуск сбора статистики из Broma16 за выбранный период: витрины
   // досылают данные неделями, поэтому «за вчера» почти всегда пусто, а выбрав
@@ -237,6 +289,18 @@ export default function AnalyticsPage() {
                 {syncing ? "Синхронизация…" : "Синхронизировать статистику"}
               </Button>
             )}
+            {canImportCatalog && (
+              <Button
+                variant="outline"
+                className="bg-card"
+                onClick={() => void runCatalogImport(true)}
+                disabled={importing}
+                title="Перенести релизы и треки из кабинета Broma16 в CRM. Сначала покажем, что будет добавлено."
+              >
+                <DownloadCloud className={`mr-2 h-4 w-4 ${importing ? "animate-pulse" : ""}`} aria-hidden="true" />
+                {importing ? "Проверяю…" : "Импорт из Broma16"}
+              </Button>
+            )}
             <Button
               variant="outline"
               className="bg-card"
@@ -249,6 +313,96 @@ export default function AnalyticsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Предпросмотр импорта каталога: показываем, что именно появится, до записи. */}
+        <AlertDialog open={importPreview !== null} onOpenChange={(open) => { if (!open) setImportPreview(null); }}>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Импорт каталога из Broma16</AlertDialogTitle>
+              <AlertDialogDescription>
+                В кабинете Broma16 найдено {importPreview?.bromaReleases ?? 0} релизов и{" "}
+                {importPreview?.bromaRecordings ?? 0} фонограмм. Ниже — что появится в CRM.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="max-h-[50vh] overflow-y-auto text-sm space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Релизов", value: importPreview?.releasesCreated.length ?? 0 },
+                  { label: "Треков", value: importPreview?.tracksCreated.length ?? 0 },
+                  { label: "Артистов", value: importPreview?.artistsCreated.length ?? 0 },
+                ].map((x) => (
+                  <div key={x.label} className="rounded-lg border border-border bg-card p-3 text-center">
+                    <div className="text-2xl font-bold">{x.value}</div>
+                    <div className="text-xs text-muted-foreground">{x.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {importPreview && importPreview.releasesCreated.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Новые релизы</div>
+                  <ul className="text-muted-foreground space-y-0.5">
+                    {importPreview.releasesCreated.map((r, i) => (
+                      <li key={i}>• {r.title} {r.upc ? `— UPC ${r.upc}` : "— без UPC"}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview && importPreview.secondarySkipped.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">
+                    Пропускаем ({importPreview.secondarySkipped.length}) — та же песня, отдельная доставка
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    TikTok- и рингтон-версии используют ту же фонограмму и тот же ISRC, поэтому статистика
+                    по ним придёт на основной релиз. Отдельными записями в каталоге они не нужны.
+                  </p>
+                </div>
+              )}
+
+              {importPreview && importPreview.authorsToFill.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Авторы — доли нужно проставить вручную</div>
+                  <p className="text-muted-foreground text-xs mb-1">
+                    Broma16 отдаёт имена авторов, но не отдаёт проценты. Придумывать их нельзя — это права,
+                    поэтому заполните доли в карточке трека.
+                  </p>
+                  <ul className="text-muted-foreground space-y-0.5">
+                    {importPreview.authorsToFill.map((a, i) => (
+                      <li key={i}>• {a.track}: {a.authors.join(", ")}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview && importPreview.warnings.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1 text-amber-500">Предупреждения</div>
+                  <ul className="text-muted-foreground space-y-0.5">
+                    {importPreview.warnings.map((w, i) => <li key={i}>• {w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                Обложки, аудиофайлы и права Broma16 через API не отдаёт — их переносить нечем.
+                Уже заполненные поля импорт не трогает и релиз с известным UPC повторно не создаёт.
+              </p>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={importing}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void runCatalogImport(false); }}
+                disabled={importing}
+              >
+                {importing ? "Импортирую…" : "Импортировать"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {error && (
           <Card className="border-rose-500/30 bg-rose-500/5">
