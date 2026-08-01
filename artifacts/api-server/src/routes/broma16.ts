@@ -28,6 +28,7 @@ import {
   downloadAndParseReport,
   requestAndIngest,
 } from "../services/broma16/statistics";
+import { importBromaCatalog } from "../services/broma16/catalog-import";
 import { enqueueBroma16Push } from "../workers/broma16-push-worker";
 import { logger } from "../lib/logger";
 
@@ -214,6 +215,31 @@ broma16Router.post("/broma16/statistics/sync", ...staff, async (req, res) => {
     .then((r) => logger.info({ dateFrom, dateTo, ...r }, "[broma16] ручная синхронизация статистики завершена"))
     .catch((e) => logger.error({ err: e, dateFrom, dateTo }, "[broma16] ручная синхронизация статистики не удалась"));
   res.json({ ok: true, started: true, dateFrom, dateTo });
+});
+
+// POST /broma16/catalog/import — перенос релизов и фонограмм из кабинета
+// Broma16 в нашу базу. Каталог заказчика частично заводился там напрямую, а
+// статистика цепляется к трекам только по ISRC — без импорта её не к чему
+// привязать. Создание записей — операция администратора; предпросмотр
+// (dryRun) ничего не пишет и доступен всему staff.
+const importSchema = z.object({ dryRun: z.boolean().optional() });
+broma16Router.post("/broma16/catalog/import", ...staff, async (req, res) => {
+  const parsed = importSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Некорректные параметры", details: parsed.error.issues });
+    return;
+  }
+  // По умолчанию — предпросмотр: реальную запись нужно запросить явно.
+  const dryRun = parsed.data.dryRun ?? true;
+  if (!dryRun && req.session?.user?.role !== "admin") {
+    res.status(403).json({ error: "Импорт каталога может выполнить только администратор" });
+    return;
+  }
+  try {
+    res.json(await importBromaCatalog(dryRun));
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
 });
 
 // ── Пуш релиза ─────────────────────────────────────────────────────
