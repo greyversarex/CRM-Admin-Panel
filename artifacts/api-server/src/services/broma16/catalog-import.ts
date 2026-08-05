@@ -22,44 +22,18 @@ import { artistsTable, releasesTable, tracksTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
 import { getDictionary } from "./dictionaries";
-
-// ── Формы данных Broma16 ────────────────────────────────────────────
-
-type BromaArtistRef = { id?: number; title?: string };
-
-type BromaRelease = {
-  id: number;
-  title: string;
-  performers?: string[];
-  artists?: BromaArtistRef[];
-  ean?: string;
-  catalogue_number?: string;
-  release_date?: string;
-  release_original_date?: string;
-  moderation_status?: string;
-  statuses?: string[];
-  release_type_id?: number;
-  genres?: number[];
-};
-
-type BromaRecording = {
-  id: number;
-  title: string;
-  isrc?: string;
-  performers?: string[];
-  artists?: BromaArtistRef[];
-  published_date?: string | null;
-  is_instrumental?: number;
-  parental_warning_type?: string;
-  genres?: number[];
-};
-
-type BromaComposition = {
-  id: number;
-  title: string;
-  iswc?: string;
-  authors?: string[];
-};
+import {
+  mapReleaseType,
+  mapStatus,
+  normalize,
+  pickBromaDuplicate,
+  primaryPerformer,
+  SECONDARY_RELEASE_TYPE_IDS,
+  type BromaComposition,
+  type BromaDuplicate,
+  type BromaRecording,
+  type BromaRelease,
+} from "./catalog-match";
 
 type AssetPage<T> = { total?: number; data?: T[] };
 
@@ -78,58 +52,17 @@ async function fetchAssets<T>(c: Broma16Client, accountId: string, type: string)
   return out;
 }
 
-// ── Нормализация и сопоставление ────────────────────────────────────
+// ── Защита от дублей перед отправкой ────────────────────────────────
 
-/** Ключ для сравнения названий/имён: без регистра, диакритики и пунктуации. */
-function normalize(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLocaleLowerCase("en")
-    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
-    .trim();
-}
-
-/** Первое имя исполнителя: Broma16 кладёт их и в performers, и в artists. */
-function primaryPerformer(item: { performers?: string[]; artists?: BromaArtistRef[] }): string | null {
-  const raw = item.performers?.[0] ?? item.artists?.[0]?.title ?? null;
-  if (!raw) return null;
-  // «Qobiljon Zaripov; Komiljon Zaripov» — берём первого как главного.
-  const first = raw.split(";")[0]?.trim();
-  return first && first.length > 0 ? first : null;
-}
-
-/** Наш статус релиза по статусам Broma16. */
-function mapStatus(rel: BromaRelease): string {
-  const moderation = (rel.moderation_status ?? "").toLowerCase();
-  const statuses = (rel.statuses ?? []).map((s) => s.toLowerCase());
-  if (statuses.includes("shipped")) return "live";
-  if (moderation === "approved") return "approved";
-  if (moderation === "rejected") return "rejected";
-  return "pending_review";
-}
-
-/**
- * Типы релиза Broma16 (/dictionaries/release-types):
- * 2 Альбом · 42 Рингбэктон · 43 Рингтон · 51 Сингл · 64 EP · 69 Компиляция · 70 TikTok.
- */
-const RELEASE_TYPE_BY_ID: Record<number, string> = {
-  2: "album",
-  51: "single",
-  64: "ep",
-  69: "compilation",
-};
-
-/**
- * Типы, которые не заводим отдельным релизом: это дополнительные доставки уже
- * существующей песни (та же фонограмма и тот же ISRC, отличается лишь
- * штрихкод). В CRM они выглядели бы дублями каталога, а статистика всё равно
- * приходит по ISRC основного сингла.
- */
-const SECONDARY_RELEASE_TYPE_IDS = new Set([42, 43, 70]);
-
-function mapReleaseType(rel: BromaRelease): string {
-  return RELEASE_TYPE_BY_ID[rel.release_type_id ?? 51] ?? "single";
+/** Загружает каталог Broma16 и ищет в нём дубль нашего релиза. */
+export async function findBromaDuplicate(
+  target: { upc?: string | null; title: string; performer?: string | null },
+  client?: Broma16Client,
+): Promise<BromaDuplicate | null> {
+  const c = client ?? (await createBroma16Client());
+  const accountId = await c.getAccountId();
+  const releases = await fetchAssets<BromaRelease>(c, accountId, "releases");
+  return pickBromaDuplicate(releases, target);
 }
 
 // ── Результат ───────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ import {
   resolveReleaseTypeId,
 } from "./dictionaries";
 import { fetchAssetBytes, buildFileForm } from "./files";
+import { findBromaDuplicate } from "./catalog-import";
 
 /** Приводит дату (строка из БД или Date) к формату YYYY-MM-DD для Broma16. */
 function toBroma16Date(value: unknown): string | undefined {
@@ -279,6 +280,26 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   if (broma16ReleaseId) {
     await client.request("PUT", `/repertoire/release/${broma16ReleaseId}`, { body: releaseBody });
   } else {
+    // Первая отправка. Broma16 не отличает релиз, заведённый у неё в кабинете,
+    // от пришедшего по API, и молча создаст второй — с новым штрихкодом, но той
+    // же музыкой. На витринах это две разные записи с разделённой статистикой,
+    // поэтому проверяем сами. Повторный пуш сюда не попадает: у него уже есть
+    // broma16ReleaseId и он идёт через PUT.
+    const duplicate = await findBromaDuplicate(
+      { upc: release.upc, title: release.title, performer: primaryArtists[0]?.name ?? null },
+      client,
+    );
+    if (duplicate) {
+      const how = duplicate.matchedBy === "upc"
+        ? `с тем же UPC ${duplicate.upc}`
+        : `с тем же названием и исполнителем (UPC ${duplicate.upc ?? "не указан"})`;
+      throw new Broma16ApiError(
+        409,
+        `В Broma16 уже есть релиз ${how}: «${duplicate.title}» (id ${duplicate.id}). ` +
+        `Повторная отправка создаст дубль — две записи одной песни с разной статистикой. ` +
+        `Свяжите релизы кнопкой «Импорт из Broma16» на странице Аналитика, либо укажите другой UPC, если это действительно другой релиз.`,
+      );
+    }
     const data = await client.request<unknown>("POST", "/repertoire/release", { body: releaseBody });
     broma16ReleaseId = extractId(data);
     if (!broma16ReleaseId) throw new Broma16ApiError(0, "Broma16: не удалось получить id созданного релиза");
