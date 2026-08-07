@@ -116,8 +116,8 @@ function SharedStreamsSection({ scopeKey }: { scopeKey: DashboardScopeKey }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 8, right: 10, left: -14, bottom: 0 }}>
                     <CartesianGrid vertical={false} stroke="#e7e9ee" />
-                    <XAxis dataKey="month" tick={{ fill: "#697386", fontSize: 9 }} axisLine={{ stroke: "#cbd0d9" }} tickLine={false} />
-                    <YAxis tick={{ fill: "#697386", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => compact(value)} />
+                    <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={{ stroke: "hsl(var(--border))" }} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => compact(value)} />
                     <Tooltip contentStyle={{ borderRadius: 8, borderColor: "#d7dbe2", fontSize: 11 }} formatter={(value: number) => value.toLocaleString()} />
                     {platforms.map((platform, index) => {
                       const color = index === 0 ? "#f1c64d" : platformMeta(platform, index).color;
@@ -405,8 +405,8 @@ function UgcMetricChart({ title, total, points, metric, bars = false }: { title:
             {bars ? (
               <BarChart data={data} margin={{ top: 8, right: 12, left: 2, bottom: 8 }}>
                 <CartesianGrid vertical={false} stroke="#2a2d34" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={compact} />
+                <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} />
                 <Tooltip contentStyle={{ backgroundColor: "#111319", borderColor: "#292d36", borderRadius: 8, fontSize: 11 }} />
                 <Bar dataKey="value" fill="#bd1552" radius={[2, 2, 0, 0]} />
               </BarChart>
@@ -414,8 +414,8 @@ function UgcMetricChart({ title, total, points, metric, bars = false }: { title:
               <AreaChart data={data} margin={{ top: 8, right: 12, left: 2, bottom: 8 }}>
                 <defs><linearGradient id={`ugc-${metric}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#00e5ee" stopOpacity=".28" /><stop offset="1" stopColor="#00e5ee" stopOpacity="0" /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke="#2a2d34" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={compact} />
+                <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} />
                 <Tooltip contentStyle={{ backgroundColor: "#111319", borderColor: "#292d36", borderRadius: 8, fontSize: 11 }} />
                 <Area type="monotone" dataKey="value" stroke="#00e5ee" strokeWidth={2.5} fill={`url(#ugc-${metric})`} dot={false} />
               </AreaChart>
@@ -490,8 +490,8 @@ function SocialUgcCard({ group, entries, loading }: { group: "tiktok" | "meta"; 
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 5, right: 5, left: -6, bottom: 5 }}>
               <CartesianGrid vertical={false} stroke="#2a2d34" strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#737985", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={compact} />
+              <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={compact} />
               <Tooltip contentStyle={{ backgroundColor: "#111319", borderColor: "#292d36", borderRadius: 8, fontSize: 11 }} />
               {platforms.map((platform, index) => <Bar key={platform} dataKey={platform} stackId="views" fill={isTikTok ? (index % 2 === 0 ? "#ff2757" : "#10b6cf") : platformMeta(platform, index).color} radius={index === platforms.length - 1 ? [7, 7, 0, 0] : 0} />)}
             </BarChart>

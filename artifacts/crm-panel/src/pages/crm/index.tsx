@@ -397,8 +397,8 @@ function CrmGrowthPanel() {
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(v: string) => v.slice(5)} />
+              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
               <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #30304a", fontSize: 12 }} />
               <Legend iconType="square" wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="artists"  name="Артисты"       fill="#6366f1" radius={[2,2,0,0]} />
