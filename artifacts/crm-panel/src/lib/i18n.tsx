@@ -898,7 +898,8 @@ const translations = {
       tabs: {
         streams: "Streams",
         revenue: "Revenue",
-        geo: "Geography",
+        // Вкладка показывает не только страны, но и возраст, пол, устройства.
+        geo: "Audience",
         tracks: "Top Tracks",
         ugc: "YouTube UGC",
         tiktok: "TikTok",
@@ -3057,7 +3058,8 @@ const translations = {
       tabs: {
         streams: "Стримы",
         revenue: "Выручка",
-        geo: "География",
+        // Вкладка показывает не только страны, но и возраст, пол, устройства.
+        geo: "Аудитория",
         tracks: "Топ треки",
         ugc: "YouTube UGC",
         tiktok: "TikTok",

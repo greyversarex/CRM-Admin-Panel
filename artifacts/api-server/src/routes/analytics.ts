@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, usageReportsTable, tracksTable, artistsTable } from "@workspace/db";
 import { sql, eq, gte, desc, inArray, and, between, isNotNull } from "drizzle-orm";
+import { getAudienceStats } from "../services/broma16/live-stats";
 
 const router = Router();
 
@@ -29,6 +30,23 @@ const COUNTRY_NAMES: Record<string, string> = {
   DE: "Germany", US: "United States", AF: "Afghanistan", TR: "Turkey",
   GB: "United Kingdom", AE: "UAE",
 };
+
+// ─── /analytics/audience — возраст, пол, устройства, подписка ───────────────
+// Данные считает сама Broma16 и отдаёт агрегатами: своей копии мы не храним,
+// поэтому запрашиваем на лету. Раздел дополняющий — если витрины молчат или
+// интеграция не настроена, отдаём пустые списки, а не ошибку, чтобы вкладка
+// «Аудитория» показала географию из usage_reports как обычно.
+router.get("/analytics/audience", async (req, res): Promise<void> => {
+  const days = periodToDays(req.query.period as string);
+  const start = startDateFor(days);
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  try {
+    const stats = await getAudienceStats(ymd(start), ymd(new Date()));
+    res.json(stats);
+  } catch {
+    res.json({ age: [], subscribed: null, notSubscribed: null, devices: [] });
+  }
+});
 
 // ─── /analytics/streams — daily breakdown ───────────────────────────────────
 

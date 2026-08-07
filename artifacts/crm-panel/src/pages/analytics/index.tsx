@@ -42,6 +42,14 @@ async function api<T>(path: string): Promise<T> {
 type Period = "7d" | "30d" | "90d" | "180d" | "1y";
 
 /** Ответ POST /api/broma16/catalog/import (см. services/broma16/catalog-import.ts). */
+/** Ответ GET /api/analytics/audience — агрегаты считает Broma16. */
+interface AudienceResp {
+  age: { range: string; male: number; female: number; percent: number; streams: number }[];
+  subscribed: number | null;
+  notSubscribed: number | null;
+  devices: { device: string; percent: number }[];
+}
+
 interface CatalogImportResult {
   dryRun: boolean;
   bromaReleases: number;
@@ -79,6 +87,19 @@ const COUNTRY_FLAGS: Record<string, string> = {
   TJ: "🇹🇯", RU: "🇷🇺", UZ: "🇺🇿", KZ: "🇰🇿",
   DE: "🇩🇪", US: "🇺🇸", AF: "🇦🇫", TR: "🇹🇷",
   GB: "🇬🇧", AE: "🇦🇪",
+};
+
+/** Broma16 отдаёт типы устройств по-английски. */
+const DEVICE_NAMES: Record<string, string> = {
+  "Mobile phone": "Телефон",
+  "Computer": "Компьютер",
+  "Tablet": "Планшет",
+  "TV": "Телевизор",
+  "Game console": "Игровая консоль",
+  "Speaker": "Колонка",
+  "Wearable": "Часы",
+  "Car": "Автомобиль",
+  "Unknown": "Неизвестно",
 };
 
 const fmtInt = (n: number) => n.toLocaleString("en-US");
@@ -121,6 +142,7 @@ export default function AnalyticsPage() {
   const [platforms, setPlatforms] = useState<PlatformRow[] | null>(null);
   const [geo, setGeo] = useState<GeoRow[] | null>(null);
   const [tracks, setTracks] = useState<TopTrack[] | null>(null);
+  const [audience, setAudience] = useState<AudienceResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -193,6 +215,11 @@ export default function AnalyticsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Аудиторию просим отдельно: её считает Broma16, и если она не ответит,
+    // остальная аналитика должна показаться как обычно.
+    api<AudienceResp>(`/api/analytics/audience?period=${period}`)
+      .then((a) => { if (!cancelled) setAudience(a); })
+      .catch(() => { if (!cancelled) setAudience(null); });
     Promise.all([
       api<StreamsResp>(`/api/analytics/streams?period=${period}`),
       api<PlatformRow[]>(`/api/analytics/platforms?period=${period}`),
@@ -633,6 +660,87 @@ export default function AnalyticsPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Кто слушает: данные считает Broma16, у нас своей копии нет.
+                Карточки показываем только когда витрины реально отдали цифры. */}
+            {audience && (audience.age.length > 0 || audience.devices.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2 mt-4">
+                {audience.age.length > 0 && (
+                  <Card className="card-surface border-border/60 md:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Возраст и пол слушателей</CardTitle>
+                      <CardDescription>По данным витрин за выбранный период</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {audience.age.map((a) => (
+                          <div key={a.range} className="flex items-center gap-4">
+                            <span className="text-sm font-medium w-16 shrink-0 tabular-nums">{a.range}</span>
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden flex" role="progressbar" aria-valuenow={a.percent} aria-valuemin={0} aria-valuemax={100}>
+                              <div className="h-full bg-primary transition-all duration-700" style={{ width: `${a.percent * (a.male / 100)}%` }} />
+                              <div className="h-full bg-[hsl(271_80%_68%)] transition-all duration-700" style={{ width: `${a.percent * (a.female / 100)}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground w-24 text-right shrink-0 tabular-nums">
+                              М {a.male}% · Ж {a.female}%
+                            </span>
+                            <span className="text-sm text-muted-foreground tabular-nums w-20 text-right shrink-0">{fmtCompact(a.streams)}</span>
+                            <span className="text-xs text-muted-foreground w-12 text-right shrink-0 tabular-nums">{a.percent.toFixed(1)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-full bg-primary inline-block" />Мужчины</span>
+                        <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded-full bg-[hsl(271_80%_68%)] inline-block" />Женщины</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {audience.devices.length > 0 && (
+                  <Card className="card-surface border-border/60">
+                    <CardHeader>
+                      <CardTitle>Устройства</CardTitle>
+                      <CardDescription>С чего слушают</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {audience.devices.map((d) => (
+                          <div key={d.device} className="flex items-center gap-3">
+                            <span className="text-sm font-medium w-28 shrink-0">{DEVICE_NAMES[d.device] ?? d.device}</span>
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={d.percent} aria-valuemin={0} aria-valuemax={100}>
+                              <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${d.percent}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground w-12 text-right shrink-0 tabular-nums">{d.percent}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {audience.subscribed != null && (
+                  <Card className="card-surface border-border/60">
+                    <CardHeader>
+                      <CardTitle>Подписка</CardTitle>
+                      <CardDescription>Доля слушателей с платным аккаунтом</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-bold">{audience.subscribed}%</span>
+                        <span className="text-sm text-muted-foreground">по подписке</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden mt-4" role="progressbar" aria-valuenow={audience.subscribed} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="h-full bg-emerald-400 rounded-full transition-all duration-700" style={{ width: `${audience.subscribed}%` }} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Остальные {audience.notSubscribed}% слушают бесплатно. Платные прослушивания приносят
+                        заметно больше на трек, поэтому рост этой доли важнее роста общего числа.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
           </TabsContent>
 
           {/* ─── Top Tracks ─── */}
