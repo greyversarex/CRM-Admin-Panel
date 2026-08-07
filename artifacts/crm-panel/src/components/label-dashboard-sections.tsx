@@ -105,7 +105,7 @@ function SharedStreamsSection({ scopeKey }: { scopeKey: DashboardScopeKey }) {
           <div className="rounded-lg overflow-hidden bg-white text-slate-900">
             <div className="px-3 pt-2">
               <h2 className="text-lg font-semibold leading-tight">Streams</h2>
-              <p className="text-[10px] text-slate-400">thousands</p>
+              <p className="text-[11px] text-slate-400">thousands</p>
             </div>
             <div className="h-[285px] w-full px-1 pb-1">
               {monthLoading ? (
@@ -215,7 +215,7 @@ function SharedPlaylistAndDspSection({ scopeKey }: { scopeKey: DashboardScopeKey
                   {row.artistImageUrl ? <img src={assetHref(row.artistImageUrl)} alt="" className="h-full w-full object-cover" /> : <ListMusic className="h-4 w-4 text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-white/55 truncate">{row.playlistName}</p>
+                  <p className="text-xs text-white/75 truncate">{row.playlistName}</p>
                   <p className="text-xs font-semibold text-white/75 truncate">{row.artistName || platformMeta(row.dsp).label}</p>
                 </div>
                 <div className="text-right leading-tight">
@@ -294,7 +294,7 @@ function SharedLatestReleasesSection({ scopeKey }: { scopeKey: DashboardScopeKey
                 </div>
                 <div className="p-3 min-h-[82px] space-y-1">
                   <p className="text-[11px] font-semibold truncate">{release.title}</p>
-                  <p className="text-[10px] text-white/45 truncate">{release.artist.name}</p>
+                  <p className="text-[11px] text-white/45 truncate">{release.artist.name}</p>
                   {release.barcode && <p className="text-[9px] text-white/35 truncate">Barcode: {release.barcode}</p>}
                   {release.labelName && <p className="text-[9px] text-white/35 truncate">Label: {release.labelName}</p>}
                 </div>
@@ -436,7 +436,7 @@ function LabelYoutubeUgcSection({ entries, loading }: { entries: UgcPlatformSeri
     <Card className="card-surface border-border/60 overflow-hidden">
       <CardHeader className="px-5 py-4 bg-[#151a22]">
         <CardTitle className="text-sm">UGC Обзор</CardTitle>
-        <p className="text-[10px] text-muted-foreground">Использование вашей музыки в Reels, Shorts и TikTok за 6 месяцев</p>
+        <p className="text-[11px] text-muted-foreground">Использование вашей музыки в Reels, Shorts и TikTok за 6 месяцев</p>
       </CardHeader>
       <div className="flex items-center gap-3 border-y border-border/50 px-8 py-2.5">
         <span className="h-6 w-8 rounded-md bg-red-500 flex items-center justify-center"><Youtube className="h-4 w-4 fill-white text-white" /></span>
@@ -483,7 +483,7 @@ function SocialUgcCard({ group, entries, loading }: { group: "tiktok" | "meta"; 
         <span className={`h-7 w-7 rounded-lg border flex items-center justify-center ${isTikTok ? "border-fuchsia-500 text-fuchsia-400" : "border-blue-500 text-blue-500"}`}>
           {isTikTok ? <Music2 className="h-4 w-4" /> : <span className="text-lg font-bold leading-none">∞</span>}
         </span>
-        <div className="text-right leading-tight"><p className="text-xs font-semibold">Views</p><p className="text-[10px]">Total {total.toLocaleString()}</p></div>
+        <div className="text-right leading-tight"><p className="text-xs font-semibold">Views</p><p className="text-[11px]">Total {total.toLocaleString()}</p></div>
       </div>
       <div className="h-[235px] px-5 pt-3">
         {loading ? <Skeleton className="h-full w-full" /> : rows.length === 0 ? <EmptyPanel text={`Нет данных ${isTikTok ? "TikTok" : "Meta"}`} /> : (

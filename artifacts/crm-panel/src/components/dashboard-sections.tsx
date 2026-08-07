@@ -264,7 +264,7 @@ export function LatestReleasesGridCard() {
                 </div>
                 <div className="mt-1.5 px-0.5">
                   <p className="text-[12px] font-medium truncate group-hover:text-primary transition-colors">{r.title}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{r.artist.name}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{r.artist.name}</p>
                 </div>
               </a>
             ))}
@@ -319,17 +319,17 @@ export function TopTracksCard() {
           <div className="space-y-1">
             {data.slice(0, 6).map((t, i) => (
               <div key={t.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1 transition-colors cursor-default">
-                <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
+                <span className="text-[11px] font-bold text-muted-foreground/70 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="w-8 h-8 rounded-lg overflow-hidden bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
                   {t.coverUrl ? <img src={assetHref(t.coverUrl)} alt={t.title} className="w-full h-full object-cover" /> : <Music2 className="h-3.5 w-3.5 text-violet-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{t.title}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{t.artist.name}{t.release.title ? ` · ${t.release.title}` : ""}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t.artist.name}{t.release.title ? ` · ${t.release.title}` : ""}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[12px] font-semibold tabular-nums">{fmtCompact(t.streams)}</p>
-                  <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${t.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  <p className="text-[13px] font-semibold tabular-nums">{fmtCompact(t.streams)}</p>
+                  <p className={`text-[11px] font-medium flex items-center justify-end gap-0.5 ${t.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {t.trend >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                     {t.trend >= 0 ? "+" : ""}{t.trend}%
                   </p>
@@ -377,19 +377,19 @@ export function TopArtistsCard() {
           <div className="space-y-1">
             {data.slice(0, 6).map((a, i) => (
               <div key={a.id} className="flex items-center gap-3 py-2 border-b border-border/25 last:border-0 hover:bg-white/[0.025] rounded-lg px-1 transition-colors cursor-default">
-                <span className="text-[11px] font-bold text-muted-foreground/35 w-4 text-right shrink-0">{i + 1}</span>
+                <span className="text-[11px] font-bold text-muted-foreground/70 w-4 text-right shrink-0">{i + 1}</span>
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
                   {a.imageUrl ? <img src={assetHref(a.imageUrl)} alt={a.name} className="w-full h-full object-cover" /> : <UsersIcon className="h-3.5 w-3.5 text-violet-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{a.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
+                  <p className="text-[11px] text-muted-foreground truncate">
                     {fmtCompact(a.totalStreams)} streams{a.country ? ` · ${a.country}` : ""}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[12px] font-semibold tabular-nums text-emerald-400">${a.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                  <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${a.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  <p className="text-[13px] font-semibold tabular-nums text-emerald-400">${a.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                  <p className={`text-[11px] font-medium flex items-center justify-end gap-0.5 ${a.trend >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {a.trend >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                     {a.trend >= 0 ? "+" : ""}{a.trend}%
                   </p>
@@ -442,7 +442,7 @@ export function RoyaltySummaryCard() {
           <div className="space-y-4">
             {/* Hero totals */}
             <div className="rounded-lg border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Royalties</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Total Royalties</p>
               <p className="text-3xl font-bold mt-1 tabular-nums">${data.totalRoyalties.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
               <div className="flex items-center gap-4 mt-2 text-[11px]">
                 <span className="text-muted-foreground">DSP: <span className="text-foreground font-semibold tabular-nums">${data.dspRoyalties.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></span>
@@ -453,7 +453,7 @@ export function RoyaltySummaryCard() {
             {/* Top Earners grid */}
             <div className="grid gap-4 md:grid-cols-3">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Earning Artists</p>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Earning Artists</p>
                 <div className="space-y-1.5">
                   {data.topArtists.length === 0 && <p className="text-[11px] text-muted-foreground">Нет данных</p>}
                   {data.topArtists.map((a, i) => (
@@ -467,7 +467,7 @@ export function RoyaltySummaryCard() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Labels Earnings</p>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Labels Earnings</p>
                 <div className="space-y-1.5">
                   {(!data.topLabels || data.topLabels.length === 0) && <p className="text-[11px] text-muted-foreground">Нет данных</p>}
                   {(data.topLabels ?? []).map((l, i) => (
@@ -481,7 +481,7 @@ export function RoyaltySummaryCard() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Earning Releases</p>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Top Earning Releases</p>
                 <div className="space-y-1.5">
                   {data.topReleases.length === 0 && <p className="text-[11px] text-muted-foreground">Нет данных</p>}
                   {data.topReleases.map((r, i) => (
@@ -571,19 +571,19 @@ export function UgcSummaryCard() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Просмотры</div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Просмотры</div>
                 <div className="text-lg font-bold tabular-nums">{fmtCompact(totals.views)}</div>
               </div>
               <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Видео</div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Видео</div>
                 <div className="text-lg font-bold tabular-nums">{fmtCompact(totals.videos)}</div>
               </div>
               <div className="rounded-md border border-border/40 bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Лайки</div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Лайки</div>
                 <div className="text-base font-semibold tabular-nums">{fmtCompact(totals.likes)}</div>
               </div>
               <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">Доход</div>
+                <div className="text-[11px] uppercase tracking-wider text-emerald-300/80">Доход</div>
                 <div className="text-base font-semibold tabular-nums text-emerald-300">
                   ${revenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
@@ -635,14 +635,14 @@ export function ArtistsStatsTableCard() {
             <Table>
               <TableHeader className="bg-background/30">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-[10px] uppercase tracking-wider">Artist</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Genre</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Country</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">DSPs</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider text-right">Releases</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider text-right">Streams</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider text-right">Revenue</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Artist</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Genre</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Country</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">DSPs</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-right">Releases</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-right">Streams</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider text-right">Revenue</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -652,7 +652,7 @@ export function ArtistsStatsTableCard() {
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7 border border-border/50 shrink-0">
                           <AvatarImage src={a.imageUrl ?? ""} alt={a.name} />
-                          <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-bold">
+                          <AvatarFallback className="bg-primary/15 text-primary text-[11px] font-bold">
                             {a.name.substring(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -660,7 +660,7 @@ export function ArtistsStatsTableCard() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {a.genre ? <Badge variant="outline" className="text-[10px]">{a.genre}</Badge> : <span className="text-muted-foreground/50 text-[11px]">—</span>}
+                      {a.genre ? <Badge variant="outline" className="text-[11px]">{a.genre}</Badge> : <span className="text-muted-foreground/50 text-[11px]">—</span>}
                     </TableCell>
                     <TableCell className="text-[12px]">
                       {a.country ? <span className="flex items-center gap-1.5"><span className="text-sm">{flagEmoji(a.country)}</span>{a.country}</span> : <span className="text-muted-foreground/50">—</span>}
@@ -759,7 +759,7 @@ export function PerformanceOverviewCard() {
                 <li>• Импорт CSV-отчётов DSP (Spotify, Apple, YouTube, TikTok)</li>
                 <li>• UGC-платформы (Reels / Shorts / TikTok)</li>
               </ul>
-              <p className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/40">
+              <p className="text-[11px] text-muted-foreground/70 pt-1 border-t border-border/40">
                 Данные появляются после синхронизации Broma16 или импорта отчёта DSP.
               </p>
             </PopoverContent>
@@ -774,7 +774,7 @@ export function PerformanceOverviewCard() {
               {isLoading ? (
                 <Skeleton className="h-full w-full" />
               ) : !hasData ? (
-                <div className="h-full flex items-center justify-center text-[12px] text-muted-foreground/60">Нет данных</div>
+                <div className="h-full flex items-center justify-center text-[12px] text-muted-foreground">Нет данных</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -805,9 +805,9 @@ export function PerformanceOverviewCard() {
           </div>
           {/* DSP list beside chart */}
           <div className="lg:col-span-1 lg:border-l lg:border-border/40 lg:pl-4">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-2">Площадки (по стримам)</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70 mb-2">Площадки (по стримам)</p>
             {dspRows.length === 0 ? (
-              <div className="h-[240px] flex items-center justify-center text-[11px] text-muted-foreground/60">Нет данных</div>
+              <div className="h-[240px] flex items-center justify-center text-[11px] text-muted-foreground">Нет данных</div>
             ) : (
               <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
                 {dspRows.map((r) => {
@@ -872,11 +872,11 @@ export function PlaylistPlacementsCard() {
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-medium truncate">{p.playlistName}</p>
-                    <p className="text-[10px] text-muted-foreground">{meta.label} · {fmtCompact(p.followers)} подписчиков</p>
+                    <p className="text-[11px] text-muted-foreground">{meta.label} · {fmtCompact(p.followers)} подписчиков</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[12px] font-semibold tabular-nums">{fmtCompact(p.streams)}</p>
-                    <p className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${p.trendPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    <p className={`text-[11px] font-medium flex items-center justify-end gap-0.5 ${p.trendPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                       {p.trendPct >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
                       {p.trendPct >= 0 ? "+" : ""}{p.trendPct.toFixed(1)}%
                     </p>
@@ -933,7 +933,7 @@ function UgcMiniChart({
   return (
     <div className="rounded-lg border border-border/40 bg-white/[0.018] p-3">
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
         <p className="text-[12px] font-semibold tabular-nums">
           {dataKey === "watchTimeSeconds"
             ? `${fmtCompact(data.reduce((sum, point) => sum + point.watchTimeSeconds, 0) / 3600)} ч`
@@ -1019,7 +1019,7 @@ function UgcPlatformPanel({
           <h3 className="text-sm font-semibold">{title}</h3>
         </div>
         <div className="text-right">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Просмотры</p>
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Просмотры</p>
           <p className="text-sm font-semibold tabular-nums">{fmtCompact(views)}</p>
         </div>
       </div>
@@ -1043,7 +1043,7 @@ function UgcPlatformPanel({
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+          <div className="grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
             <span><Video className="inline h-3 w-3 mr-1" />{fmtCompact(series.reduce((s, p) => s + p.videos, 0))} видео</span>
             <span><Heart className="inline h-3 w-3 mr-1" />{fmtCompact(engagement)} реакций</span>
             <span><Clock3 className="inline h-3 w-3 mr-1" />{fmtCompact(series.reduce((s, p) => s + p.watchTimeSeconds, 0) / 3600)} ч</span>
@@ -1092,7 +1092,7 @@ export function UgcMapCard() {
           <Skeleton className="h-[520px] w-full" />
         ) : !hasData ? (
           <div className="min-h-[290px] flex flex-col items-center justify-center text-center px-6">
-            <Video className="h-8 w-8 text-muted-foreground/35 mb-3" />
+            <Video className="h-8 w-8 text-muted-foreground/70 mb-3" />
             <p className="text-sm font-medium">UGC-данные ещё не импортированы</p>
             <p className="text-[11px] text-muted-foreground mt-1 max-w-md">
               Блок заполнится только отчётами платформ, связанными с треками этого лейбла. Случайные значения и Spotify popularity здесь не используются.
@@ -1173,12 +1173,12 @@ export function UsersRankingCard() {
             <Table>
               <TableHeader className="bg-background/30">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-[10px] uppercase tracking-wider w-8">#</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Пользователь</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Роль</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Статус</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Регистрация</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Последний вход</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider w-8">#</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Пользователь</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Роль</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Статус</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Регистрация</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-wider">Последний вход</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1189,18 +1189,18 @@ export function UsersRankingCard() {
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7 border border-border/50 shrink-0">
                           <AvatarImage src={u.avatarUrl ? assetHref(u.avatarUrl) : ""} alt={u.name} />
-                          <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-bold">
+                          <AvatarFallback className="bg-primary/15 text-primary text-[11px] font-bold">
                             {u.name.substring(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium truncate">{u.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{u.email}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-[10px]">{ROLE_RU[u.role] ?? u.role}</Badge>
+                      <Badge variant="outline" className="text-[11px]">{ROLE_RU[u.role] ?? u.role}</Badge>
                     </TableCell>
                     <TableCell><StatusBadge status={u.status} /></TableCell>
                     <TableCell className="text-[12px] tabular-nums text-muted-foreground">{fmtDate(u.createdAt)}</TableCell>

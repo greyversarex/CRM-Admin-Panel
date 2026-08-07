@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 
 function EmptyChart({ message }: { message: string }) {
   return (
-    <div className="h-full w-full flex items-center justify-center text-[12px] text-muted-foreground/60">
+    <div className="h-full w-full flex items-center justify-center text-[12px] text-muted-foreground">
       {message}
     </div>
   );
@@ -76,7 +76,7 @@ export default function Dashboard() {
                 </Badge>
               )}
               {role !== "admin" && role !== "manager" && (
-                <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-amber-500/30 text-amber-400 bg-amber-500/8 px-2 py-0.5">
+                <Badge variant="outline" className="text-[11px] uppercase tracking-wider border-amber-500/30 text-amber-400 bg-amber-500/8 px-2 py-0.5">
                   {ROLE_LABELS[role]} · {d.my_data_only}
                 </Badge>
               )}
@@ -185,7 +185,7 @@ export default function Dashboard() {
           <Card className="col-span-4 card-surface border-border/60">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-muted-foreground/60" />
+                <Layers className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-base font-semibold">
                   {role === "artist" ? d.my_activity : d.recent_activity}
                 </CardTitle>
@@ -193,7 +193,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               {activity.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground/60 py-8 text-center">{d.empty_activity}</p>
+                <p className="text-[12px] text-muted-foreground py-8 text-center">{d.empty_activity}</p>
               ) : (
                 <div className="space-y-0">
                   {activity.map((item) => (
@@ -204,7 +204,7 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[12px] font-medium leading-snug">{item.title}</p>
-                          <time className="text-[10px] text-muted-foreground/60 shrink-0 tabular-nums">
+                          <time className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
                             {new Date(item.timestamp).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
                           </time>
                         </div>
@@ -237,7 +237,7 @@ export default function Dashboard() {
                 <div className="flex items-end justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-white tracking-tight">Publishing Catalog</h2>
-                    <p className="text-[12px] text-white/55">Регистрация прав, роялти и метаданные произведений</p>
+                    <p className="text-[12px] text-white/75">Регистрация прав, роялти и метаданные произведений</p>
                   </div>
                   <a href="/publishing" className="text-[12px] text-primary hover:underline">Открыть Паблишинг →</a>
                 </div>
@@ -401,7 +401,7 @@ function LatestPublishingWorksCard() {
             />
           </div>
           <div className="flex items-center gap-1 rounded-md border border-border/50 bg-background/60 px-2 h-8">
-            <span className="text-[11px] text-white/55">Status:</span>
+            <span className="text-[11px] text-white/75">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -423,7 +423,7 @@ function LatestPublishingWorksCard() {
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="border-b border-border/40 text-left text-[10px] uppercase tracking-wider text-white/45 bg-white/[0.015]">
+              <tr className="border-b border-border/40 text-left text-[11px] uppercase tracking-wider text-white/45 bg-white/[0.015]">
                 <th className="pl-5 pr-2 py-2.5 w-8"><input type="checkbox" className="accent-primary cursor-pointer" /></th>
                 <th className="px-3 py-2.5 font-semibold">Work Title</th>
                 <th className="px-3 py-2.5 font-semibold">Composer(s)</th>
@@ -475,7 +475,7 @@ function LatestPublishingWorksCard() {
                     </td>
                     <td className="px-3 py-2.5">{renderNames(composers)}</td>
                     <td className="px-3 py-2.5">{renderNames(lyricists)}</td>
-                    <td className="px-3 py-2.5 font-mono text-[11px] text-white/55 tabular-nums">
+                    <td className="px-3 py-2.5 font-mono text-[11px] text-white/75 tabular-nums">
                       {w.isrc ?? <span className="text-white/30">—</span>}
                       {w.iswc && <div className="text-white/35">{w.iswc}</div>}
                     </td>
@@ -497,7 +497,7 @@ function LatestPublishingWorksCard() {
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-white/85">{Math.round(totalShare)}%</td>
                     <td className="px-3 py-2.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${pill.cls}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${pill.cls}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
                         {pill.label}
                       </span>
@@ -512,7 +512,7 @@ function LatestPublishingWorksCard() {
           </table>
         </div>
         <div className="flex flex-col gap-3 px-5 py-3 border-t border-border/40 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2 text-[12px] text-white/55">
+          <div className="flex items-center gap-2 text-[12px] text-white/75">
             <span>Show</span>
             <select
               value={perPage}
@@ -526,7 +526,7 @@ function LatestPublishingWorksCard() {
             <span>per page</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[12px] text-white/55 mr-2">{from}–{to} of {total.toLocaleString()}</span>
+            <span className="text-[12px] text-white/75 mr-2">{from}–{to} of {total.toLocaleString()}</span>
             <button
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
