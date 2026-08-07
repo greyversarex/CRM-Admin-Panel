@@ -158,12 +158,12 @@ function SharedStreamsSection({ scopeKey }: { scopeKey: DashboardScopeKey }) {
           ) : (
             <div>
               {dspData.slice(0, 5).map((row, index) => (
-                <div key={row.platform} className="flex items-center gap-3 py-3 border-b border-dashed border-white/35 last:border-0">
+                <div key={row.platform} className="flex items-center gap-3 py-3 border-b border-dashed border-white/10 last:border-0">
                   <DspGlyph platform={row.platform} index={index} />
-                  <span className="flex-1 min-w-0 truncate text-sm font-medium text-white/65">{platformMeta(row.platform, index).label}</span>
+                  <span className="flex-1 min-w-0 truncate text-sm font-medium text-white/90">{platformMeta(row.platform, index).label}</span>
                   <div className="text-right shrink-0 leading-tight">
-                    <p className="text-sm tabular-nums text-white/25">{row.streams.toLocaleString()}</p>
-                    <p className="text-xs font-medium text-white/70">Streams</p>
+                    <p className="text-sm font-semibold tabular-nums text-white">{row.streams.toLocaleString()}</p>
+                    <p className="text-[11px] text-white/50">Streams</p>
                   </div>
                 </div>
               ))}
@@ -210,7 +210,7 @@ function SharedPlaylistAndDspSection({ scopeKey }: { scopeKey: DashboardScopeKey
             <EmptyPanel text="Нет импортированных данных по плейлистам" />
           ) : (
             playlists.slice(0, 5).map((row) => (
-              <div key={row.id} className="flex items-center gap-3 py-2.5 border-b border-dashed border-white/35 last:border-0">
+              <div key={row.id} className="flex items-center gap-3 py-2.5 border-b border-dashed border-white/10 last:border-0">
                 <div className="h-10 w-10 overflow-hidden rounded-sm bg-white/5 flex items-center justify-center shrink-0">
                   {row.artistImageUrl ? <img src={assetHref(row.artistImageUrl)} alt="" className="h-full w-full object-cover" /> : <ListMusic className="h-4 w-4 text-primary" />}
                 </div>
@@ -219,8 +219,8 @@ function SharedPlaylistAndDspSection({ scopeKey }: { scopeKey: DashboardScopeKey
                   <p className="text-xs font-semibold text-white/75 truncate">{row.artistName || platformMeta(row.dsp).label}</p>
                 </div>
                 <div className="text-right leading-tight">
-                  <p className="text-xs tabular-nums text-white/25">{row.streams.toLocaleString()}</p>
-                  <p className="text-[11px] text-white/65">Streams</p>
+                  <p className="text-xs font-semibold tabular-nums text-white">{row.streams.toLocaleString()}</p>
+                  <p className="text-[11px] text-white/50">Streams</p>
                 </div>
               </div>
             ))
@@ -294,9 +294,9 @@ function SharedLatestReleasesSection({ scopeKey }: { scopeKey: DashboardScopeKey
                 </div>
                 <div className="p-3 min-h-[82px] space-y-1">
                   <p className="text-[11px] font-semibold truncate">{release.title}</p>
-                  <p className="text-[11px] text-white/45 truncate">{release.artist.name}</p>
-                  {release.barcode && <p className="text-[9px] text-white/35 truncate">Barcode: {release.barcode}</p>}
-                  {release.labelName && <p className="text-[9px] text-white/35 truncate">Label: {release.labelName}</p>}
+                  <p className="text-[11px] text-white/70 truncate">{release.artist.name}</p>
+                  {release.barcode && <p className="text-[10px] text-white/50 truncate">Barcode: {release.barcode}</p>}
+                  {release.labelName && <p className="text-[10px] text-white/50 truncate">Label: {release.labelName}</p>}
                 </div>
               </a>
             ))}
@@ -326,17 +326,17 @@ function RankingCard({ title, loading, rows }: { title: string; loading: boolean
           <EmptyPanel text="Нет статистики по стримам" />
         ) : (
           rows.slice(0, 5).map((row) => (
-            <div key={row.id} className="flex items-center gap-3 py-3 border-b border-dashed border-white/35 last:border-0">
+            <div key={row.id} className="flex items-center gap-3 py-3 border-b border-dashed border-white/10 last:border-0">
               <div className="h-8 w-8 rounded-md overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
                 {row.imageUrl ? <img src={assetHref(row.imageUrl)} alt="" className="h-full w-full object-cover" /> : <Music2 className="h-3.5 w-3.5 text-primary" />}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white/70 truncate">{row.name}</p>
-                {row.subtitle && <p className="text-[9px] text-white/35 truncate">{row.subtitle}</p>}
+                <p className="text-[13px] font-medium text-white truncate">{row.name}</p>
+                {row.subtitle && <p className="text-[11px] text-white/60 truncate">{row.subtitle}</p>}
               </div>
               <div className="text-right leading-tight shrink-0">
-                <p className="text-xs tabular-nums text-white/25">{row.streams.toLocaleString()}</p>
-                <p className="text-[11px] text-white/65">Streams</p>
+                <p className="text-xs font-semibold tabular-nums text-white">{row.streams.toLocaleString()}</p>
+                <p className="text-[11px] text-white/50">Streams</p>
               </div>
             </div>
           ))
