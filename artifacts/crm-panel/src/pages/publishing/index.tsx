@@ -18,8 +18,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search, Plus, BookMarked, FileCheck2, Clock, AlertTriangle, FileText,
-  Pencil, Loader2, Trash2 as RemoveIcon,
+  Pencil, Loader2, Trash2 as RemoveIcon, DownloadCloud,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +38,16 @@ interface Writer {
   role: string;
   share: number;
   caeIpi?: string | null;
+}
+
+/** Ответ POST /api/publishing/import — см. services/broma16/publishing-import.ts */
+interface PublishingImportResult {
+  dryRun: boolean;
+  bromaCompositions: number;
+  created: { id: number | null; title: string; authors: string[]; linkedTrack: boolean }[];
+  linked: { id: number; title: string }[];
+  skippedNoAuthors: string[];
+  matchedTracks: number;
 }
 
 interface PublishingWork {
@@ -143,6 +157,41 @@ export default function Publishing() {
 
   const [editor, setEditor] = useState<PublishingWork | "new" | null>(null);
 
+  // Импорт произведений из Broma16: заводит записи о правах, поэтому доступен
+  // только администратору, а не всем, кто видит раздел.
+  const canImport = user?.role === "admin";
+  const [importPreview, setImportPreview] = useState<PublishingImportResult | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  async function runPublishingImport(dryRun: boolean) {
+    setImporting(true);
+    try {
+      const res = await fetch("/api/publishing/import", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      if (dryRun) {
+        setImportPreview(j as PublishingImportResult);
+      } else {
+        const r = j as PublishingImportResult;
+        setImportPreview(null);
+        toast({
+          title: "Произведения импортированы",
+          description: `Добавлено ${r.created.length}, связано с треками ${r.matchedTracks}. Проставьте доли авторов — без них произведение не отправить.`,
+        });
+        void reload();
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Импорт не удался", description: e?.message ?? "" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function reload() {
     setLoading(true);
     try {
@@ -216,11 +265,97 @@ export default function Publishing() {
             </h1>
             <p className="text-muted-foreground mt-1.5 text-sm">{t.publishing.subtitle}</p>
           </div>
-          <Button className="gap-2" onClick={() => setEditor("new")}>
-            <Plus className="h-4 w-4" />
-            {t.publishing.new_work}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canImport && (
+              <Button
+                variant="outline"
+                className="gap-2 bg-card"
+                onClick={() => void runPublishingImport(true)}
+                disabled={importing}
+                title="Перенести произведения из кабинета Broma16. Сначала покажем, что будет добавлено."
+              >
+                <DownloadCloud className={`h-4 w-4 ${importing ? "animate-pulse" : ""}`} />
+                {importing ? "Проверяю…" : "Импорт из Broma16"}
+              </Button>
+            )}
+            <Button className="gap-2" onClick={() => setEditor("new")}>
+              <Plus className="h-4 w-4" />
+              {t.publishing.new_work}
+            </Button>
+          </div>
         </div>
+
+        {/* Предпросмотр импорта произведений: показываем, что появится, до записи. */}
+        <AlertDialog open={importPreview !== null} onOpenChange={(open) => { if (!open) setImportPreview(null); }}>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Импорт произведений из Broma16</AlertDialogTitle>
+              <AlertDialogDescription>
+                В кабинете Broma16 найдено {importPreview?.bromaCompositions ?? 0} произведений.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="max-h-[50vh] overflow-y-auto text-sm space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Добавим", value: importPreview?.created.length ?? 0 },
+                  { label: "Уже есть", value: importPreview?.linked.length ?? 0 },
+                  { label: "Свяжем с треком", value: importPreview?.matchedTracks ?? 0 },
+                ].map((x) => (
+                  <div key={x.label} className="rounded-lg border border-border bg-card p-3 text-center">
+                    <div className="text-2xl font-bold">{x.value}</div>
+                    <div className="text-xs text-muted-foreground">{x.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <div className="font-medium text-amber-500 mb-1">Доли авторов придётся проставить вручную</div>
+                <p className="text-muted-foreground text-xs">
+                  Broma16 отдаёт только имена авторов, без процентов. Выдумывать доли нельзя — это данные
+                  о правах, поэтому произведения приедут со статусом «черновик» и нулевыми долями.
+                  Пока сумма долей не равна 100%, система не даст отправить произведение дальше.
+                </p>
+              </div>
+
+              {importPreview && importPreview.created.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Новые произведения</div>
+                  <ul className="text-muted-foreground space-y-0.5">
+                    {importPreview.created.slice(0, 40).map((w, i) => (
+                      <li key={i}>
+                        • {w.title} — {w.authors.join(", ")}
+                        {w.linkedTrack && <span className="text-emerald-400"> · есть трек</span>}
+                      </li>
+                    ))}
+                    {importPreview.created.length > 40 && (
+                      <li className="text-xs">…и ещё {importPreview.created.length - 40}</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview && importPreview.skippedNoAuthors.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Пропускаем — без авторов ({importPreview.skippedNoAuthors.length})</div>
+                  <p className="text-muted-foreground text-xs">
+                    Произведение без авторов зарегистрировать невозможно, заводить такую запись нет смысла.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={importing}>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void runPublishingImport(false); }}
+                disabled={importing}
+              >
+                {importing ? "Импортирую…" : "Импортировать"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Tabs defaultValue="works" className="w-full">
           <TabsList>

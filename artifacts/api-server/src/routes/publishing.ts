@@ -5,6 +5,7 @@ import { CreatePublishingWorkBody, UpdatePublishingWorkBody, GetPublishingWorkPa
 import { getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { pushCompositionToBroma16 } from "../services/broma16/composition-pusher";
+import { importBromaPublishing } from "../services/broma16/publishing-import";
 import { sendBroma16Error } from "./broma16";
 
 const router = Router();
@@ -307,6 +308,34 @@ router.post("/publishing/works/:id/push-broma16", async (req, res): Promise<void
     });
     res.json(formatWork(updated ?? existing));
     void result;
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
+});
+
+// POST /publishing/import — перенос произведений из кабинета Broma16.
+// Вторая половина каталога (авторские права) заводилась только там, поэтому в
+// нашем реестре её нет. Импорт по умолчанию — предпросмотр; запись создаёт
+// только администратор, потому что заводит записи о правах.
+router.post("/publishing/import", async (req, res): Promise<void> => {
+  const scope = getDataScope(req);
+  const dryRun = (req.body as { dryRun?: boolean } | undefined)?.dryRun ?? true;
+  if (!scope.fullAccess) {
+    res.status(403).json({ error: "Импорт произведений доступен только администратору" });
+    return;
+  }
+  try {
+    const result = await importBromaPublishing(dryRun);
+    if (!dryRun) {
+      void auditMutation(req, {
+        action: "import",
+        entityType: "publishing_work",
+        entityId: 0,
+        before: null,
+        after: { created: result.created.length, linked: result.linked.length },
+      });
+    }
+    res.json(result);
   } catch (e) {
     sendBroma16Error(res, e);
   }
