@@ -69,11 +69,22 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); msg = j?.error ?? msg; } catch { /* noop */ }
-    throw new Error(msg);
+    let payload: Record<string, unknown> | null = null;
+    try {
+      payload = await res.json() as Record<string, unknown>;
+      msg = (payload?.error as string) ?? msg;
+    } catch { /* noop */ }
+    // Тело ответа нужно вызывающему: сервер возвращает код ошибки и подробности
+    // (например, список треков без авторов), по которым строится диалог.
+    const err = new Error(msg) as Error & { payload?: Record<string, unknown> | null };
+    err.payload = payload;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
+
+/** Трек, который уйдёт в Broma16 без определённого правообладателя. */
+type TrackWithoutWriters = { id: number; title: string; reason: string };
 
 // Человекочитаемые названия шагов 9-этапной отправки.
 const STEP_LABELS: Record<string, string> = {
@@ -146,21 +157,33 @@ export function Broma16DistributionControl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOpen]);
 
+  // Треки без авторов: сервер отклоняет первую попытку и присылает список.
+  // Отправка повторяется только после осознанного подтверждения.
+  const [ccTracks, setCcTracks] = useState<TrackWithoutWriters[] | null>(null);
+  const [pendingOutlets, setPendingOutlets] = useState<string[]>([]);
+
   const sendMutation = useMutation({
     // Витрины передаём в теле: пушер сохранит их (release.broma16DistributionOutlets)
     // и поставит релиз в очередь. Пустой набор → базовые витрины по умолчанию.
-    mutationFn: (outlets: string[]) =>
+    mutationFn: ({ outlets, acknowledge }: { outlets: string[]; acknowledge?: boolean }) =>
       apiPost<{ ok: boolean; jobId: number; status: string }>(
-        `/api/broma16/releases/${releaseId}/push`, { outlets },
+        `/api/broma16/releases/${releaseId}/push`,
+        acknowledge ? { outlets, acknowledgeCopyrightControl: true } : { outlets },
       ),
     onSuccess: () => {
       toast({ title: "Отправка запущена", description: "Релиз поставлен в очередь на отправку в Broma16." });
       setModalOpen(false);
+      setCcTracks(null);
       queryClient.invalidateQueries({ queryKey: ["broma16-push", releaseId] });
       // Синхронизируем сводку площадок на странице релиза / «Выбор площадок».
       queryClient.invalidateQueries({ queryKey: ["release-outlets", releaseId] });
     },
     onError: (e) => {
+      const payload = (e as Error & { payload?: Record<string, unknown> | null }).payload;
+      if (payload?.code === "writers_missing") {
+        setCcTracks((payload.tracks as TrackWithoutWriters[]) ?? []);
+        return;
+      }
       toast({ variant: "destructive", title: "Не удалось запустить отправку", description: (e as Error).message });
     },
   });
@@ -170,7 +193,8 @@ export function Broma16DistributionControl({
     // пока словарь пуст (Broma16 не подключён) — шлём как есть.
     const known = new Set(outletOptions.map((o) => o.value));
     const outletsToSend = outletOptions.length > 0 ? draft.filter((c) => known.has(c)) : draft;
-    sendMutation.mutate(outletsToSend);
+    setPendingOutlets(outletsToSend);
+    sendMutation.mutate({ outlets: outletsToSend });
   };
 
   const checkModerationMutation = useMutation({
@@ -354,6 +378,56 @@ export function Broma16DistributionControl({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Предупреждение про Copyright Control. Не запрещаем отправку — для
+          каверов и лицензионных треков «правообладатель не определён» и есть
+          правильное значение, — но требуем подтвердить осознанно. */}
+      <Dialog open={ccTracks !== null} onOpenChange={(open) => { if (!open) setCcTracks(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
+              Авторы не указаны
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <p className="text-muted-foreground">
+              У этих треков нет авторов или доли не дают в сумме 100%. В Broma16 они уйдут
+              как <span className="text-foreground font-medium">Copyright Control</span> — правообладатель
+              не определён, и авторские отчисления по ним собрать не получится.
+            </p>
+
+            <ul className="space-y-1 max-h-52 overflow-y-auto">
+              {(ccTracks ?? []).map((t) => (
+                <li key={t.id} className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span><span className="font-medium">{t.title}</span> — {t.reason}</span>
+                </li>
+              ))}
+            </ul>
+
+            <p className="text-muted-foreground text-[13px] border-t border-border pt-3">
+              Это нормально для каверов и лицензионных записей: право на фонограмму есть,
+              а на произведение — нет. Если же песня своя, лучше вернуться и заполнить авторов
+              с долями: потом изменить их в Broma16 сложнее.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCcTracks(null)} disabled={sendMutation.isPending}>
+              Вернуться и заполнить
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => sendMutation.mutate({ outlets: pendingOutlets, acknowledge: true })}
+              disabled={sendMutation.isPending}
+            >
+              {sendMutation.isPending ? "Отправляю…" : "Всё равно отправить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

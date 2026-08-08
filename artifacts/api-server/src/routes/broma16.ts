@@ -7,7 +7,7 @@
 import { Router, type IRouter, type Response } from "express";
 import { z } from "zod/v4";
 import { and, desc, eq } from "drizzle-orm";
-import { db, releasesTable, broma16PushJobsTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, broma16PushJobsTable } from "@workspace/db";
 import { requireRole } from "../lib/auth";
 import { requireManagerPermission } from "../lib/manager-permissions";
 import { createBroma16Client } from "../services/broma16/client";
@@ -248,7 +248,40 @@ broma16Router.post("/broma16/catalog/import", ...staff, async (req, res) => {
 // Необязательное тело { outlets: string[] } — выбранные витрины (коды из словаря
 // outlet); сохраняем их в релиз перед постановкой в очередь, чтобы пушер взял
 // именно их.
-const pushBodySchema = z.object({ outlets: z.array(z.string()).optional() });
+const pushBodySchema = z.object({
+  outlets: z.array(z.string()).optional(),
+  /**
+   * Осознанное согласие отправить треки без авторов. Такие уходят в Broma16 с
+   * «Copyright Control» — правообладатель не определён, авторские по ним никто
+   * не соберёт. Иногда это правда (кавер, лицензия), поэтому не запрещаем, но
+   * требуем подтвердить.
+   */
+  acknowledgeCopyrightControl: z.boolean().optional(),
+});
+
+/**
+ * Треки, которые уйдут как «Copyright Control»: без авторов или с долями, не
+ * дающими в сумме 100%. Та же логика, что и в buildContributors у пушера.
+ */
+async function tracksWithoutWriters(releaseId: number): Promise<{ id: number; title: string; reason: string }[]> {
+  const rows = await db
+    .select({ id: tracksTable.id, title: tracksTable.title, writers: tracksTable.writers })
+    .from(tracksTable)
+    .where(eq(tracksTable.releaseId, releaseId));
+  const out: { id: number; title: string; reason: string }[] = [];
+  for (const t of rows) {
+    const writers = (t.writers ?? []) as { share?: number }[];
+    if (writers.length === 0) {
+      out.push({ id: t.id, title: t.title, reason: "авторы не указаны" });
+      continue;
+    }
+    const total = writers.reduce((sum, w) => sum + (Number(w.share) || 0), 0);
+    if (Math.abs(total - 100) > 0.01) {
+      out.push({ id: t.id, title: t.title, reason: `сумма долей ${total}% вместо 100%` });
+    }
+  }
+  return out;
+}
 broma16Router.post("/broma16/releases/:id/push", ...adminOnly, async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) {
@@ -276,6 +309,23 @@ broma16Router.post("/broma16/releases/:id/push", ...adminOnly, async (req, res) 
     });
     return;
   }
+  // Авторы и доли: без них трек уедет как «Copyright Control», и авторская
+  // половина денег останется несобранной. Не запрещаем — бывает законно
+  // (кавер, лицензия), — но не даём отправить по невнимательности.
+  if (!parsed.data.acknowledgeCopyrightControl) {
+    const problems = await tracksWithoutWriters(id);
+    if (problems.length > 0) {
+      res.status(409).json({
+        error:
+          `У ${problems.length} трек(ов) не заполнены авторы. Они уйдут в Broma16 как «Copyright Control» — ` +
+          `правообладатель не определён, и авторские отчисления по ним собрать не получится.`,
+        code: "writers_missing",
+        tracks: problems,
+      });
+      return;
+    }
+  }
+
   // Сохраняем витрины, если ключ outlets присутствует в теле (даже пустой
   // массив): пустой список явно сбрасывает ранее выбранные витрины, и пушер
   // тогда возьмёт базовый набор по умолчанию (resolveOutletCodes).
