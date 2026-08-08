@@ -48,6 +48,7 @@ interface PublishingImportResult {
   linked: { id: number; title: string }[];
   skippedNoAuthors: string[];
   matchedTracks: number;
+  lyricsFilled: string[];
 }
 
 interface PublishingWork {
@@ -332,6 +333,19 @@ export default function Publishing() {
                       <li className="text-xs">…и ещё {importPreview.created.length - 40}</li>
                     )}
                   </ul>
+                </div>
+              )}
+
+              {importPreview && importPreview.lyricsFilled.length > 0 && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <div className="font-medium text-emerald-400 mb-1">
+                    Заодно подставим тексты песен ({importPreview.lyricsFilled.length})
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Broma16 хранит тексты в произведениях. Площадкам они нужны для караоке и подсветки
+                    строк. Заполним только там, где у трека текста ещё нет: {importPreview.lyricsFilled.slice(0, 6).join(", ")}
+                    {importPreview.lyricsFilled.length > 6 && ` и ещё ${importPreview.lyricsFilled.length - 6}`}.
+                  </p>
                 </div>
               )}
 

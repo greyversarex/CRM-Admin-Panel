@@ -49,6 +49,8 @@ export type PublishingImportResult = {
   skippedNoAuthors: string[];
   /** Сколько удалось привязать к нашим трекам по названию. */
   matchedTracks: number;
+  /** Треки, которым проставили текст песни из произведения. */
+  lyricsFilled: string[];
 };
 
 /**
@@ -69,16 +71,24 @@ export async function importBromaPublishing(dryRun = true): Promise<PublishingIm
     linked: [],
     skippedNoAuthors: [],
     matchedTracks: 0,
+    lyricsFilled: [],
   };
 
   // Наши треки — для привязки произведения к записи по названию.
   const trackRows = await db
-    .select({ id: tracksTable.id, title: tracksTable.title, isrc: tracksTable.isrc })
+    .select({
+      id: tracksTable.id,
+      title: tracksTable.title,
+      isrc: tracksTable.isrc,
+      lyrics: tracksTable.lyrics,
+    })
     .from(tracksTable);
-  const trackByTitle = new Map<string, { id: number; isrc: string | null }>();
+  const trackByTitle = new Map<string, { id: number; isrc: string | null; lyrics: string | null }>();
   for (const t of trackRows) {
     const key = normalize(t.title);
-    if (key && !trackByTitle.has(key)) trackByTitle.set(key, { id: t.id, isrc: t.isrc });
+    if (key && !trackByTitle.has(key)) {
+      trackByTitle.set(key, { id: t.id, isrc: t.isrc, lyrics: t.lyrics });
+    }
   }
 
   // Уже существующие произведения: по id в Broma16 и по названию.
@@ -110,6 +120,18 @@ export async function importBromaPublishing(dryRun = true): Promise<PublishingIm
     const key = normalize(title);
     const track = trackByTitle.get(key) ?? null;
     if (track) result.matchedTracks++;
+
+    // Текст песни Broma16 отдаёт прямо в списке произведений, а площадкам он
+    // нужен для караоке и подсветки строк. Заполняем только пустое — свой текст
+    // мог быть выверен вручную.
+    const lyrics = comp.lyrics?.trim();
+    if (track && lyrics && !track.lyrics?.trim()) {
+      result.lyricsFilled.push(title);
+      if (!dryRun) {
+        await db.update(tracksTable).set({ lyrics }).where(eq(tracksTable.id, track.id));
+        track.lyrics = lyrics;
+      }
+    }
 
     const already = byBromaId.get(String(comp.id)) ?? byTitle.get(key);
     if (already) {
@@ -148,7 +170,13 @@ export async function importBromaPublishing(dryRun = true): Promise<PublishingIm
   }
 
   logger.info(
-    { dryRun, created: result.created.length, linked: result.linked.length, matchedTracks: result.matchedTracks },
+    {
+      dryRun,
+      created: result.created.length,
+      linked: result.linked.length,
+      matchedTracks: result.matchedTracks,
+      lyricsFilled: result.lyricsFilled.length,
+    },
     "[broma16] импорт произведений завершён",
   );
   return result;

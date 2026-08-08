@@ -40,6 +40,9 @@ export type BromaComposition = {
   title: string;
   iswc?: string;
   authors?: string[];
+  /** Полный текст песни — Broma16 отдаёт его прямо в списке произведений. */
+  lyrics?: string | null;
+  statuses?: string[];
 };
 
 /** Ключ для сравнения названий/имён: без регистра, диакритики и пунктуации. */
