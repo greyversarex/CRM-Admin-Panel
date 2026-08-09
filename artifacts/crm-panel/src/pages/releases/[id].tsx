@@ -1242,33 +1242,27 @@ function TrackRow({
         </div>
       </CardHeader>
 
+      {/* Поля идут одной сеткой в четыре колонки. Раньше здесь было шесть
+          отдельных блоков по 3, 1, 2, 4, 2 и 3 колонки — колонки не совпадали
+          между строками, и карточка читалась как набор разрозненных надписей.
+          Порядок осмысленный: сначала что за трек, потом кто его исполняет,
+          потом авторы и права, в конце — технические коды. */}
       <CardContent className="space-y-4 pt-0">
-        {/* Row 1: Track Title / Mix Version / Metadata Language */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">
+          {/* Что за трек */}
           <TrackField label={RV.trackTitle} value={t.title || DASH} />
           <TrackField label={RV.mixVersion} value={trackVer || DASH} />
-          <TrackField label={RV.metadataLanguage} value={t.language || release.language || DEFAULT_METADATA_LANGUAGE} />
-        </div>
+          <TrackField label={RV.genre} value={t.genre || release.genre || DASH} />
+          <TrackField label={RV.subgenre} value={(t as any).subgenre || release.subgenre || DASH} />
 
-        {/* Row 2: Primary Artist */}
-        <div>
+          {/* Кто исполняет */}
           <TrackField
             label={RV.primary}
             value={primaries.length ? primaries.map(p => p.name).join(", ") : (release.artistName || DASH)}
             chip
           />
-        </div>
-
-        {/* Row 3: Featuring / Remixer */}
-        <div className="grid grid-cols-2 gap-4">
           <TrackField label={RV.featuring} value={namesOrDash(featurings)} />
           <TrackField label={RV.remixer} value={namesOrDash(remixers)} />
-        </div>
-
-        {/* Row 4: 4-col contributors */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-          <TrackField label={RV.explicitStatusLabel} value={explicitLabel} />
-          <TrackField label={RV.writers} value={writers.length ? writers.map((w: any) => w.name).join(", ") : DASH} />
           <TrackField
             label={RV.performersProduction}
             value={
@@ -1277,6 +1271,9 @@ function TrackRow({
                 : [...performers, ...production].map((p: any) => p.name).join(", ")
             }
           />
+
+          {/* Авторы, текст, язык */}
+          <TrackField label={RV.writers} value={writers.length ? writers.map((w: any) => w.name).join(", ") : DASH} />
           <div className="space-y-0.5">
             <div className="text-[11px] text-muted-foreground">{RV.lyrics}</div>
             <div className="text-sm font-medium text-foreground">
@@ -1286,18 +1283,14 @@ function TrackRow({
               <div className="text-[11px] text-muted-foreground">{RV.noLyrics}</div>
             )}
           </div>
+          <TrackField label={RV.metadataLanguage} value={t.language || release.language || DEFAULT_METADATA_LANGUAGE} />
+          <TrackField label={RV.explicitStatusLabel} value={explicitLabel} />
         </div>
 
-        {/* Row 5: Genre / Subgenre */}
-        <div className="grid grid-cols-2 gap-4">
-          <TrackField label={RV.genre} value={t.genre || release.genre || DASH} />
-          <TrackField label={RV.subgenre} value={(t as any).subgenre || release.subgenre || DASH} />
-        </div>
-
-        {/* Row 6-8: Recorded / ISRC / Stereo AI Use */}
-        <div className="grid grid-cols-3 gap-4">
-          <TrackField label={RV.recorded} value={recYear ? String(recYear) : DASH} />
+        {/* Технические данные отделены чертой: их читают отдельно от творческих. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 pt-3 border-t border-border/40">
           <TrackField label="ISRC" value={t.isrc ? <span className="font-mono text-xs">{t.isrc}</span> : DASH} />
+          <TrackField label={RV.recorded} value={recYear ? String(recYear) : DASH} />
           <TrackField
             label={RV.stereoAiUse}
             value={(t as any).aiUsage === "some" ? RV.aiSome : (t as any).aiUsage === "all" ? RV.aiAll : DASH}
