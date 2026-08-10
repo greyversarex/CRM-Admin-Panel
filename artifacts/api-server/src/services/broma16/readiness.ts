@@ -200,15 +200,25 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
         .filter(Boolean)
         .map((g) => (g as string).trim()),
     )];
+    // Предупреждаем только когда жанр действительно теряется — то есть уходит
+    // в общий «World»/«Ethnic» из чего-то конкретного. «Synth Pop» → «SynthPop»
+    // и «Tajik Pop» → «Pop» это то же самое другими словами, и сообщать не о
+    // чем: предупреждение, которое горит на каждом релизе, перестают читать.
+    const compactKey = (s: string) => norm(s).replace(/[^\p{Letter}\p{Number}]+/gu, "");
+    const GENERIC = new Set(["world", "ethnic"]);
     for (const g of used) {
       const [canon] = await resolveGenres([g]);
-      if (canon && norm(canon) !== norm(g)) {
+      if (!canon || compactKey(canon) === compactKey(g)) continue;
+      const becameGeneric = GENERIC.has(norm(canon));
+      const wasAlreadyGeneric = /world|ethnic|этно|мировая/i.test(g);
+      if (becameGeneric && !wasAlreadyGeneric) {
         add({
           section: "release",
           field: "genre",
           message:
-            `Жанр «${g}» Broma16 не знает — он уйдёт как «${canon}». Релиз примут, но на площадках он будет ` +
-            `числиться в этом жанре. Выберите значение из справочника, если это важно.`,
+            `Жанр «${g}» Broma16 не знает — он уйдёт как «${canon}», то есть потеряет конкретику. ` +
+            `На площадках трек попадёт в общую категорию и хуже найдётся в рекомендациях. ` +
+            `Выберите ближайший жанр из справочника.`,
           severity: "warning",
         });
       }
