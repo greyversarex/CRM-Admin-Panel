@@ -38,6 +38,7 @@ import {
   resolveReleaseTypeId,
 } from "./dictionaries";
 import { fetchAssetBytes, buildFileForm } from "./files";
+import { describeMixedScript } from "../../lib/mixed-script";
 import { findBromaDuplicate } from "./catalog-import";
 
 /** Приводит дату (строка из БД или Date) к формату YYYY-MM-DD для Broma16. */
@@ -212,6 +213,31 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   // Preflight: Broma16 при модерации требует продюсера (producer/party_id) на
   // каждой записи. Если данных нет — даём оператору понятную ошибку заранее,
   // вместо непрозрачной 422 от Broma16 в самом конце пуша.
+  // Названия проверяем до первого запроса. Broma16 сверяет название записи с
+  // названием релиза на четвёртом шаге, когда черновик у неё уже создан, и
+  // релиз остаётся висеть недоделанным. Её ответ «title: does not match»
+  // причину не объясняет — тем более когда различие в одной букве не той
+  // раскладки, которую глазом не отличить.
+  const titleChecks: [string, string | null][] = [
+    ["релиза", release.title],
+    ...tracks.map((t) => [`трека «${t.title}»`, t.title] as [string, string | null]),
+  ];
+  for (const [label, value] of titleChecks) {
+    const mixed = describeMixedScript(`Название ${label}`, value);
+    if (mixed) throw new Broma16ApiError(422, mixed);
+  }
+  if (release.releaseType === "single" && tracks.length === 1) {
+    const trackTitle = (tracks[0].title ?? "").trim();
+    const releaseTitle = (release.title ?? "").trim();
+    if (trackTitle !== releaseTitle) {
+      throw new Broma16ApiError(
+        422,
+        `Для сингла Broma16 требует, чтобы название трека совпадало с названием релиза. ` +
+        `Сейчас релиз — «${releaseTitle}», трек — «${trackTitle}». Приведите их к одному написанию и отправьте снова.`,
+      );
+    }
+  }
+
   const tracksWithoutProducer = tracks.filter((t) => !buildProducer(t));
   if (tracksWithoutProducer.length > 0) {
     const titles = tracksWithoutProducer.map((t) => `«${t.title}»`).join(", ");

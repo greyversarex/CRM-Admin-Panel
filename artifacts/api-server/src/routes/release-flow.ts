@@ -8,6 +8,7 @@ import { z } from "zod/v4";
 import { getDataScope } from "../lib/auth";
 import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
+import { describeMixedScript } from "../lib/mixed-script";
 import { equivalentUpcValues, validateUpc } from "../lib/upc";
 import { releaseEditableReason } from "./releases";
 
@@ -164,6 +165,13 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
   // Release-level
   if (!release.title?.trim())
     issues.push({ section: "release", field: "title", message: "Не указано название релиза.", severity: "error" });
+
+  // Смешанная раскладка в названии. Одна кириллическая буква среди латинских
+  // не видна глазом, но Broma16 отклоняет отправку, а по её ответу
+  // «title: does not match» причину не найти.
+  const releaseTitleScript = describeMixedScript("Название релиза", release.title);
+  if (releaseTitleScript)
+    issues.push({ section: "release", field: "title", message: releaseTitleScript, severity: "error" });
   if (!release.coverUrl)
     issues.push({ section: "release", field: "coverUrl", message: "Загрузите обложку релиза (минимум 3000×3000 px).", severity: "error" });
   if (!release.genre)
@@ -196,10 +204,30 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
   if (tracks.length === 0) {
     issues.push({ section: "tracks", field: null, message: "В релизе нет треков. Добавьте минимум один трек.", severity: "error" });
   }
+  // Для сингла Broma16 требует, чтобы название трека совпадало с названием
+  // релиза символ в символ, иначе отправка падает на шаге метаданных записи.
+  if (release.releaseType === "single" && tracks.length === 1) {
+    const trackTitle = (tracks[0].title ?? "").trim();
+    const releaseTitle = (release.title ?? "").trim();
+    if (trackTitle && releaseTitle && trackTitle !== releaseTitle) {
+      issues.push({
+        section: "tracks",
+        field: `track:${tracks[0].id}:title`,
+        message:
+          `Для сингла название трека должно совпадать с названием релиза. ` +
+          `Сейчас релиз — «${releaseTitle}», трек — «${trackTitle}». Broma16 отклонит отправку.`,
+        severity: "error",
+      });
+    }
+  }
+
   for (const t of tracks) {
     const prefix = `Трек «${t.title || `#${t.id}`}»`;
     if (!t.title?.trim())
       issues.push({ section: "tracks", field: `track:${t.id}:title`, message: `${prefix}: не указано название.`, severity: "error" });
+    const trackTitleScript = describeMixedScript(`${prefix}: название`, t.title);
+    if (trackTitleScript)
+      issues.push({ section: "tracks", field: `track:${t.id}:title`, message: trackTitleScript, severity: "error" });
     if (!t.audioUrl)
       issues.push({ section: "tracks", field: `track:${t.id}:audioUrl`, message: `${prefix}: не загружен аудиофайл (WAV/FLAC, 16/24-bit, 44.1+ kHz).`, severity: "error" });
     if (!t.durationSeconds || t.durationSeconds < 30)
