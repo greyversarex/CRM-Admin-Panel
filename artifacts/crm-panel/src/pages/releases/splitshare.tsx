@@ -7,6 +7,9 @@ import {
   type ReleaseDetail, type Track, type Split,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
+import {
+  addShareRow, redistribute, removeShareRow, setShare, splitEvenly, sumShares,
+} from "@/lib/split-shares";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +28,14 @@ import {
 import { toast } from "@/hooks/use-toast";
 
 type EntityType = "artist" | "label" | "distributor" | "producer" | "author" | "custom";
-type Participant = { entityType: EntityType; entityId: number | null; entityName: string; percentage: number };
+/** `locked` — долю задали руками, автораспределение её не трогает. */
+type Participant = {
+  entityType: EntityType;
+  entityId: number | null;
+  entityName: string;
+  percentage: number;
+  locked: boolean;
+};
 
 function trackArtistNames(t: Track): string {
   const names = (t.displayArtists ?? []).map((d) => d.name).filter(Boolean);
@@ -52,27 +62,36 @@ function AssignSplitDialog({
   const [busy, setBusy] = useState(false);
 
   const [participants, setParticipants] = useState<Participant[]>([
-    { entityType: "artist", entityId: null, entityName: "", percentage: 100 },
+    { entityType: "artist", entityId: null, entityName: "", percentage: 100, locked: false },
   ]);
 
-  const sum = useMemo(
-    () => participants.reduce((acc, p) => acc + (Number.isFinite(p.percentage) ? p.percentage : 0), 0),
-    [participants],
-  );
+  const sum = useMemo(() => sumShares(participants), [participants]);
   const sumOk = Math.abs(sum - 100) < 0.001;
   const allNamesOk = participants.every((p) => p.entityName.trim().length > 0);
+  const hasLocked = participants.some((p) => p.locked);
 
+  // Доли считаются сами: остаток до 100% делится поровну между теми, кого не
+  // трогали руками. Выставленное вручную не пересчитывается — иначе правка
+  // одного участника ломала бы уже согласованные с другими цифры.
   function addRow() {
-    setParticipants((p) => [...p, { entityType: "artist", entityId: null, entityName: "", percentage: 0 }]);
+    setParticipants((p) =>
+      addShareRow(p, { entityType: "artist", entityId: null, entityName: "", percentage: 0, locked: false }),
+    );
   }
   function removeRow(idx: number) {
-    setParticipants((p) => p.filter((_, i) => i !== idx));
+    setParticipants((p) => removeShareRow(p, idx));
   }
   function patchRow(idx: number, patch: Partial<Participant>) {
     setParticipants((p) => p.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
   }
+  function setPercentage(idx: number, value: number) {
+    setParticipants((p) => setShare(p, idx, value));
+  }
+  function unlockRow(idx: number) {
+    setParticipants((p) => redistribute(p.map((row, i) => (i === idx ? { ...row, locked: false } : row))));
+  }
   function reset() {
-    setParticipants([{ entityType: "artist", entityId: null, entityName: "", percentage: 100 }]);
+    setParticipants([{ entityType: "artist", entityId: null, entityName: "", percentage: 100, locked: false }]);
   }
 
   async function submit() {
@@ -145,18 +164,28 @@ function AssignSplitDialog({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs text-muted-foreground">Участники</label>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
-              <Plus className="h-3 w-3 mr-1" /> Добавить
-            </Button>
+            <div className="flex items-center gap-1">
+              {hasLocked && (
+                <Button
+                  variant="ghost" size="sm" className="h-7 text-xs"
+                  onClick={() => setParticipants((p) => splitEvenly(p))}
+                  title="Снять все ручные значения и разделить поровну"
+                >
+                  Поровну
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
+                <Plus className="h-3 w-3 mr-1" /> Добавить
+              </Button>
+            </div>
           </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Доли считаются сами: остаток до 100% делится поровну между участниками. Как только вы
+            вписали долю вручную, она фиксируется — её не изменит ни добавление нового участника,
+            ни правка чужой доли. Вернуть её в автоматический расчёт можно ссылкой «авто» рядом с полем.
+          </p>
           <div className="space-y-2 max-h-[44vh] overflow-y-auto pr-1">
             {participants.map((p, idx) => {
-              // Сумма остальных участников — используется для ограничения ввода
-              const otherSum = participants.reduce(
-                (acc, row, i) => i !== idx ? acc + (Number.isFinite(row.percentage) ? row.percentage : 0) : acc,
-                0,
-              );
-              const maxForRow = Math.max(0, 100 - otherSum);
               return (
               <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-3">
@@ -209,18 +238,32 @@ function AssignSplitDialog({
                   />
                 )}
 
-                <Input
-                  type="number"
-                  min={0}
-                  max={maxForRow}
-                  step={0.01}
-                  className={`col-span-3 h-9 text-xs text-right ${p.percentage > maxForRow + 0.001 ? "border-rose-500 focus-visible:ring-rose-500" : ""}`}
-                  value={p.percentage}
-                  onChange={(e) => {
-                    const val = Math.min(maxForRow, Math.max(0, Number(e.target.value)));
-                    patchRow(idx, { percentage: val });
-                  }}
-                />
+                {/* Ввод не ограничиваем остатком: доля соседей пересчитается
+                    сама, а перебор виден в сумме внизу. Раньше при двух
+                    участниках во второе поле нельзя было ввести вообще ничего,
+                    пока не уменьшишь первое. */}
+                <div className="col-span-3 flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    className="h-9 text-xs text-right"
+                    value={p.percentage}
+                    onChange={(e) => setPercentage(idx, Number(e.target.value))}
+                    title={p.locked ? "Доля задана вручную — автораспределение её не меняет" : "Доля считается автоматически"}
+                  />
+                  {p.locked && (
+                    <button
+                      type="button"
+                      onClick={() => unlockRow(idx)}
+                      className="text-[10px] text-primary hover:underline shrink-0"
+                      title="Вернуть долю в автоматический расчёт"
+                    >
+                      авто
+                    </button>
+                  )}
+                </div>
                 <Button
                   variant="ghost" size="icon" className="col-span-1 h-7 w-7 text-rose-400"
                   aria-label="Удалить участника"
