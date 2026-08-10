@@ -16,6 +16,7 @@ import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { notifyByReleaseId } from "../services/notifications";
 import { pushReleaseToBroma16, type PushProgress } from "../services/broma16/release-pusher";
+import { explainBroma16Error } from "../services/broma16/error-hints";
 
 const TICK_MS = 30_000;
 const BATCH_SIZE = 3;
@@ -71,14 +72,18 @@ async function processOne(jobId: number): Promise<void> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Broma16 отвечает правилами вида «title: does not match» — оператору это
+    // ничего не говорит, поэтому в интерфейс кладём объяснение с действием,
+    // сохраняя исходный текст для логов и переписки с поддержкой.
+    const explained = explainBroma16Error(msg);
     const next = attempts < MAX_ATTEMPTS ? new Date(Date.now() + Math.pow(2, attempts) * 60_000) : null;
     await db
       .update(broma16PushJobsTable)
-      .set({ status: "failed", attempts, lastError: msg.slice(0, 1000), nextRetryAt: next })
+      .set({ status: "failed", attempts, lastError: explained.slice(0, 1000), nextRetryAt: next })
       .where(eq(broma16PushJobsTable.id, jobId));
     await db
       .update(releasesTable)
-      .set({ broma16LastError: msg.slice(0, 1000) })
+      .set({ broma16LastError: explained.slice(0, 1000) })
       .where(eq(releasesTable.id, claimed.releaseId));
     logger.warn({ jobId, releaseId: claimed.releaseId, attempts, err: msg, nextRetryAt: next }, "[broma16] push job failed");
 
@@ -86,7 +91,7 @@ async function processOne(jobId: number): Promise<void> {
       void notifyByReleaseId(claimed.releaseId, {
         type: "delivery_failed",
         title: "Не удалось отправить релиз в Broma16",
-        body: `После ${attempts} попыток отправка не удалась. Ошибка: ${msg.slice(0, 200)}`,
+        body: `После ${attempts} попыток отправка не удалась. ${explained.slice(0, 300)}`,
         entityType: "release",
         entityId: claimed.releaseId,
         link: `/releases/${claimed.releaseId}`,

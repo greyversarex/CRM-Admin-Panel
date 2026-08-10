@@ -39,7 +39,12 @@ type AssetPage<T> = { total?: number; data?: T[] };
 
 const PAGE_LIMIT = 200;
 
-async function fetchAssets<T>(c: Broma16Client, accountId: string, type: string): Promise<T[]> {
+/**
+ * Постранично забирает раздел активов аккаунта: releases, recordings или
+ * compositions. Единственный способ читать каталог — поштучные GET-методы
+ * репертуара Broma16 не поддерживает (отвечают 405).
+ */
+export async function fetchAssets<T>(c: Broma16Client, accountId: string, type: string): Promise<T[]> {
   const out: T[] = [];
   for (let page = 1; page <= 20; page++) {
     const res = await c.request<AssetPage<T>>("GET", `/accounts/${accountId}/assets`, {

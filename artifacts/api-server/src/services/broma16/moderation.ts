@@ -16,7 +16,8 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import { db, releasesTable, tracksTable, auditLogTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
-import { createBroma16Client } from "./client";
+import { createBroma16Client, type Broma16Client } from "./client";
+import { fetchAssets } from "./catalog-import";
 import { fireTriggerAndForget } from "../triggers";
 import { notifyByArtistId, notifyByLabelId } from "../notifications";
 
@@ -232,12 +233,55 @@ async function readBackAssignedCodes(releaseId: number, data: unknown): Promise<
 }
 
 /**
+ * Снимок каталога Broma16: релизы по их id и все фонограммы аккаунта.
+ *
+ * Читаем именно списком, потому что поштучный `GET /repertoire/release/{id}`
+ * Broma16 не поддерживает — отвечает 405, и почасовая проверка модерации из-за
+ * этого падала на каждом релизе, ничего не обновляя.
+ */
+export type ModerationSource = {
+  releases: Map<number, Record<string, unknown>>;
+  recordings: { id: number; isrc?: string }[];
+};
+
+export async function fetchModerationSource(client: Broma16Client): Promise<ModerationSource> {
+  const accountId = await client.getAccountId();
+  const [releases, recordings] = await Promise.all([
+    fetchAssets<Record<string, unknown>>(client, accountId, "releases"),
+    fetchAssets<{ id: number; isrc?: string }>(client, accountId, "recordings"),
+  ]);
+  return {
+    releases: new Map(releases.map((r) => [Number(r.id), r])),
+    recordings,
+  };
+}
+
+/**
+ * Приводит запись из списка активов к форме, которую понимают
+ * deriveModerationVerdict и readBackAssignedCodes: у списка свои имена полей
+ * (ean, catalogue_number), а фонограммы лежат отдельным разделом.
+ */
+function toReleasePayload(rel: Record<string, unknown>, source: ModerationSource): Record<string, unknown> {
+  return {
+    ...rel,
+    upc: rel.ean,
+    catalog_number: rel.catalogue_number,
+    // Передаём все фонограммы аккаунта: read-back сам выбирает нужные по
+    // broma16RecordingId наших треков, лишние он просто не найдёт.
+    recordings: source.recordings,
+  };
+}
+
+/**
  * Проверяет модерацию одного релиза. Возвращает результат проверки.
  * Бросает при сетевых/конфигурационных ошибках Broma16 (для ручного эндпоинта).
+ *
+ * `source` — заранее загруженный снимок каталога: при обходе десятков релизов
+ * незачем тянуть список для каждого.
  */
 export async function checkReleaseModeration(
   releaseId: number,
-  opts: { userId?: number | null } = {},
+  opts: { userId?: number | null; source?: ModerationSource } = {},
 ): Promise<{ checked: boolean; changed: boolean; verdict: ModerationVerdict; raw: string | null; reason?: string }> {
   const [rel] = await db
     .select({
@@ -259,7 +303,21 @@ export async function checkReleaseModeration(
   }
 
   const client = await createBroma16Client();
-  const data = await client.request<unknown>("GET", `/repertoire/release/${rel.broma16ReleaseId}`);
+  const source = opts.source ?? (await fetchModerationSource(client));
+  const bromaRelease = source.releases.get(rel.broma16ReleaseId);
+
+  // Релиза нет в каталоге — значит отправка не дошла до конца и в Broma16 он
+  // остался черновиком. Это не ошибка связи, а незавершённая доставка, и
+  // оператору надо сказать именно так.
+  if (!bromaRelease) {
+    logger.info(
+      { releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId },
+      "[broma16] модерация: релиза нет в каталоге — остался черновиком",
+    );
+    return { checked: false, changed: false, verdict: "pending", raw: null, reason: "draft" };
+  }
+
+  const data = toReleasePayload(bromaRelease, source);
 
   // Считываем коды, присвоенные Broma16 (ISRC/UPC/каталожный №), при каждом успешном
   // опросе — независимо от вердикта модерации. Не критично для основного цикла.
@@ -290,11 +348,22 @@ export async function pollPendingModeration(): Promise<{ total: number; changed:
     .from(releasesTable)
     .where(and(eq(releasesTable.broma16ModerationStatus, "pending"), isNotNull(releasesTable.broma16ReleaseId)));
 
+  if (pending.length === 0) return { total: 0, changed: 0, errors: 0 };
+
+  // Каталог тянем один раз на весь обход, а не на каждый релиз.
+  let source: ModerationSource;
+  try {
+    source = await fetchModerationSource(await createBroma16Client());
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, "[broma16] модерация: не удалось получить каталог");
+    return { total: pending.length, changed: 0, errors: pending.length };
+  }
+
   let changed = 0;
   let errors = 0;
   for (const { id } of pending) {
     try {
-      const r = await checkReleaseModeration(id);
+      const r = await checkReleaseModeration(id, { source });
       if (r.changed) changed += 1;
     } catch (e) {
       errors += 1;
