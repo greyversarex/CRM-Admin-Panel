@@ -23,7 +23,7 @@ import {
   type Track,
 } from "@workspace/db";
 import { describeMixedScript } from "../../lib/mixed-script";
-import { getDictionary, resolveCountryId, resolveOutletCodes } from "./dictionaries";
+import { getDictionary, resolveCountryId, resolveGenres, resolveOutletCodes } from "./dictionaries";
 
 export type ReadinessIssue = {
   section: "release" | "tracks" | "distribution";
@@ -162,6 +162,10 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
   }
 
   // ── Жанры ─────────────────────────────────────────────────────────
+  // resolveGenres никогда не отправляет в Broma16 неизвестный жанр: сначала
+  // ищет прямое совпадение, потом региональный эквивалент, потом подставляет
+  // общий «World». Отклонения по жанру поэтому не будет — но подмена меняет
+  // то, как релиз выглядит на площадках, и оператор должен об этом знать.
   const genreDict = await getDictionary("genre");
   if (genreDict.length === 0) {
     add({
@@ -171,18 +175,20 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
       severity: "error",
     });
   } else {
-    const known = new Set(genreDict.flatMap((g) => [norm(g.name), g.code ? norm(g.code) : ""].filter(Boolean)));
-    const used = new Set(
+    const used = [...new Set(
       [release.genre, release.subgenre, ...tracks.flatMap((t) => [t.genre, t.subgenre])]
         .filter(Boolean)
-        .map((g) => norm(g as string)),
-    );
+        .map((g) => (g as string).trim()),
+    )];
     for (const g of used) {
-      if (!known.has(g)) {
+      const [canon] = await resolveGenres([g]);
+      if (canon && norm(canon) !== norm(g)) {
         add({
           section: "release",
           field: "genre",
-          message: `Жанр «${g}» отсутствует в справочнике Broma16 — она может его отклонить. Выберите значение из списка.`,
+          message:
+            `Жанр «${g}» Broma16 не знает — он уйдёт как «${canon}». Релиз примут, но на площадках он будет ` +
+            `числиться в этом жанре. Выберите значение из справочника, если это важно.`,
           severity: "warning",
         });
       }
