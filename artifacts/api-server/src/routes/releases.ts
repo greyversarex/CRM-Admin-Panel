@@ -25,6 +25,7 @@ const router = Router();
 // Единая проверка видимости релиза — см. lib/release-scope (OR-семантика для лейбла).
 import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope";
 import { getDictionary } from "../services/broma16/dictionaries";
+import { blockingIssues, checkBroma16Readiness } from "../services/broma16/readiness";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -929,6 +930,19 @@ router.post("/releases/:id/submit", async (req, res): Promise<void> => {
     res.status(409).json({
       error: "Release is not ready for submission. Required fields are missing.",
       missing,
+    });
+    return;
+  }
+
+  // Требования Broma16 проверяем уже здесь, а не только перед отправкой:
+  // модератору незачем одобрять релиз, который дистрибьютор потом отклонит,
+  // а автору проще исправить, пока релиз ещё в его руках.
+  const broma16Blocking = blockingIssues(await checkBroma16Readiness(existing.id));
+  if (broma16Blocking.length > 0) {
+    res.status(409).json({
+      error: "Релиз не пройдёт проверку Broma16 — исправьте перед отправкой на модерацию.",
+      code: "broma16_not_ready",
+      issues: broma16Blocking,
     });
     return;
   }
