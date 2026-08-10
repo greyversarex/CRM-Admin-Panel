@@ -706,6 +706,13 @@ export default function TrackEditPage() {
             {/* Writers */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">{L.writers}</h4>
+              {/* Правило легко нарушить по невнимательности, а цена — незарегистрированное
+                  произведение, поэтому объясняем причину прямо у поля, а не только сверху. */}
+              <p className="text-[13px] text-amber-400/90 leading-relaxed">
+                Имя и фамилия обязательны. Произведение регистрируется в авторском обществе
+                по юридическому имени автора — по одному слову оно не отличит его от однофамильцев,
+                и отчисления начислить будет некому. Если автор неизвестен, укажите «Traditional».
+              </p>
               <WritersEditor hideTitle value={f.writers} onChange={(v) => setF({ ...f, writers: v })} />
             </div>
 

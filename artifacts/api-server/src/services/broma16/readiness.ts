@@ -23,6 +23,7 @@ import {
   type Track,
 } from "@workspace/db";
 import { describeMixedScript } from "../../lib/mixed-script";
+import { checkWriterName } from "../../lib/writer-name";
 import { getDictionary, resolveCountryId, resolveGenres, resolveOutletCodes } from "./dictionaries";
 
 export type ReadinessIssue = {
@@ -120,6 +121,25 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
         `«Производство» — без него Broma16 не пропустит релиз на модерацию.`,
       severity: "error",
     });
+  }
+
+  // ── Имена авторов ─────────────────────────────────────────────────
+  // Broma16 передаёт авторов в общества, а те регистрируют произведение по
+  // юридическому имени. Одного слова недостаточно: отчисления просто не на
+  // кого начислить. Исполнителя это не касается — сценическое имя нормально.
+  for (const t of tracks) {
+    const writers = (t.writers ?? []) as { name?: string }[];
+    for (const w of writers) {
+      const check = checkWriterName(w.name);
+      if (!check.ok) {
+        add({
+          section: "tracks",
+          field: `track:${t.id}:writers`,
+          message: `Трек «${t.title}», автор: ${check.reason}`,
+          severity: "error",
+        });
+      }
+    }
   }
 
   // ── Перенос каталога: оригинальные коды обязательны ───────────────

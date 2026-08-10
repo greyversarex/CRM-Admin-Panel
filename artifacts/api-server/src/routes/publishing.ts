@@ -6,6 +6,7 @@ import { getDataScope } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { pushCompositionToBroma16 } from "../services/broma16/composition-pusher";
 import { importBromaPublishing } from "../services/broma16/publishing-import";
+import { checkWriterName } from "../lib/writer-name";
 import { sendBroma16Error } from "./broma16";
 
 const router = Router();
@@ -20,6 +21,10 @@ function validateWriters(writers: { name: string; share: number; caeIpi?: string
   for (const w of writers) {
     const name = (w.name ?? "").trim();
     if (!name) return "Writer name is required";
+    // Авторское общество регистрирует произведение по юридическому имени —
+    // одного слова недостаточно, чтобы отличить одного автора от другого.
+    const nameCheck = checkWriterName(name);
+    if (!nameCheck.ok) return nameCheck.reason;
     const share = Number(w.share);
     if (!Number.isFinite(share) || share < 0 || share > 100) {
       return `Writer "${name}" has invalid share (must be 0–100)`;
