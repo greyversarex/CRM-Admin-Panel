@@ -194,6 +194,23 @@ function MetadataTranslationsEditor({
   );
 }
 
+/**
+ * Ряды полей формы выравниваются по блокам участников (авторы, исполнители,
+ * продакшн): там сетка «1fr 1fr 36px», где последние 36 пикселей отведены под
+ * кнопку удаления строки. Без этого запаса поля формы получались шире ровно на
+ * эти 36 пикселей, и правый край страницы «гулял» сверху вниз.
+ */
+const FIELD_ROW_2: React.CSSProperties = {
+  display: "grid",
+  gap: "0.5rem",
+  gridTemplateColumns: "1fr 1fr 36px",
+};
+const FIELD_ROW_3: React.CSSProperties = {
+  display: "grid",
+  gap: "0.5rem",
+  gridTemplateColumns: "1fr 1fr 1fr 36px",
+};
+
 // ─── Page ───────────────────────────────────────────────────────────────
 export default function TrackEditPage() {
   const params = useParams<{ id: string; tid: string }>();
@@ -489,7 +506,7 @@ export default function TrackEditPage() {
             <h3 className="text-lg font-semibold">{L.audioDetails}</h3>
 
             {/* Audio file row + AI radios */}
-            <div className="grid grid-cols-2 gap-6 items-start">
+            <div className="items-start" style={FIELD_ROW_2}>
               {/* Left */}
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">{L.audioFile}</Label>
@@ -560,7 +577,7 @@ export default function TrackEditPage() {
             )}
 
             {/* ISRC + Clip Start Time — два равных столбца */}
-            <div className="grid grid-cols-2 gap-6 items-end">
+            <div className="items-end" style={FIELD_ROW_2}>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">ISRC</Label>
                 <div className="flex gap-2 items-center">
@@ -626,7 +643,7 @@ export default function TrackEditPage() {
             {/* Track Details */}
             <div className="space-y-4">
             <h3 className="text-lg font-semibold">{L.trackDetails}</h3>
-            <div className="grid grid-cols-3 gap-4 items-end">
+            <div className="items-end" style={FIELD_ROW_3}>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground inline-flex items-center gap-1">
                   {L.songName} <InfoTip text={L.songNameTip} />
@@ -744,7 +761,7 @@ export default function TrackEditPage() {
             {/* Genre */}
             <div className="space-y-4">
             <h3 className="text-lg font-semibold">{L.genre}</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div style={FIELD_ROW_2}>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">{L.genre}</Label>
                 <DictionaryCombobox
@@ -771,7 +788,7 @@ export default function TrackEditPage() {
             {/* Recording */}
             <div className="space-y-4">
             <h3 className="text-lg font-semibold">{L.recording}</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div style={FIELD_ROW_2}>
               <div className="space-y-1.5">
                 <Label className="text-sm text-muted-foreground">{L.recordingYear}</Label>
                 <Select
@@ -804,7 +821,7 @@ export default function TrackEditPage() {
             <h3 className="text-lg font-semibold">{L.classification}</h3>
 
             {/* Audio Style + Explicit Status side by side */}
-            <div className="grid grid-cols-2 gap-6">
+            <div style={FIELD_ROW_2}>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold inline-flex items-center gap-1">
                   {L.audioStyle} <InfoTip text={L.audioStyleTip} />
