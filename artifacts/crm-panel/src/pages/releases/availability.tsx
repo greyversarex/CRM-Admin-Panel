@@ -31,7 +31,7 @@ import { useCatalogOptions } from "@/components/release-wizard/use-catalog";
 import { COUNTRIES, countryName } from "@/lib/countries";
 import { useLang } from "@/lib/i18n";
 import { toast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronDown, AlertTriangle, Pencil, Save, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, AlertTriangle, HelpCircle, Pencil, Save, Search, X } from "lucide-react";
 
 function normalizeHHMM(t?: string | null): string | null {
   const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec((t ?? "").trim());
@@ -200,6 +200,12 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   const dspTouched = useRef(false);
   const [showPartners, setShowPartners] = useState(false);
   const allOutletCodes = useMemo(() => outletOptions.map((o) => o.value), [outletOptions]);
+  // Площадки, на которые релиз не поедет, и признак «выбраны все».
+  const notSelected = useMemo(
+    () => outletOptions.filter((o) => !dsps.includes(o.value)),
+    [outletOptions, dsps],
+  );
+  const allSelected = outletOptions.length > 0 && notSelected.length === 0;
   useEffect(() => {
     if (!dspTouched.current) {
       if (serverDsps.length > 0) {
@@ -382,33 +388,63 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
 
       {/* ── 3. Partner Selection ─────────────────────────────────────────── */}
       <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
-        <CardContent className="p-6 space-y-4">
-          <div className="flex flex-row items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold">Выбор площадок</h3>
-              <div className="text-sm text-muted-foreground mt-0.5">
-                <span className="font-semibold text-primary">{dsps.length}</span>{" "}
-                {dsps.length === 1 ? "площадка выбрана" : "площадок выбрано"}
-              </div>
-            </div>
+        <CardContent className="p-6 space-y-5">
+          <h3 className="text-lg font-semibold">Выбор площадок</h3>
+
+          {/* Сводка по центру: сколько выбрано и кнопка раскрытия. Пока список
+              свёрнут, главное — понять охват одним взглядом, а не читать
+              описание. */}
+          <div className="flex flex-col items-center gap-2 py-2">
+            <p className="text-sm">
+              {allSelected ? (
+                <>
+                  <span className="font-semibold text-emerald-400">Все</span>
+                  {" "}площадки выбраны
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-primary">{dsps.length}</span>
+                  {" "}из {outletOptions.length}{" "}
+                  {dsps.length === 1 ? "площадка выбрана" : "площадок выбрано"}
+                </>
+              )}
+            </p>
             <Button variant="outline" size="sm" className="bg-card" onClick={() => setShowPartners((v) => !v)}>
               <Pencil className="h-4 w-4 mr-1.5" />
               {showPartners ? "Скрыть площадки" : "Показать площадки"}
             </Button>
           </div>
-          {showPartners ? (
+
+          {showPartners && (
             <div className="pt-2 border-t border-border/40">
               <OutletPickerInline
                 value={dsps}
                 onChange={(codes) => { dspTouched.current = true; setDsps(codes); }}
               />
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Нажмите «Показать площадки», чтобы выбрать витрины Broma16 для
-              дистрибуции этого релиза. Показаны только реально доступные
-              площадки — те, куда можно отправить релиз после подключения Broma16.
-            </p>
+          )}
+
+          {/* Невыбранные площадки — то, куда релиз НЕ поедет. Это важнее
+              списка выбранных: пропущенную витрину замечают уже после
+              публикации, когда исправлять поздно. */}
+          {!showPartners && notSelected.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="text-sm font-medium text-muted-foreground">
+                Не выбрано <span className="text-foreground">{notSelected.length}</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {notSelected.map((o) => (
+                  <div
+                    key={o.value}
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                    title="Релиз не будет отправлен на эту площадку"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="truncate">{o.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
