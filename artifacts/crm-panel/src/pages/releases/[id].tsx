@@ -2392,10 +2392,21 @@ function ReleaseAvailabilitySummaryCard({
   if (!release.releaseDate) {
     issues.push(RV.issueNoDate);
   } else {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const rd = new Date(`${String(release.releaseDate).slice(0, 10)}T00:00:00`);
-    if (rd < today) issues.push(RV.issueDatePast);
+    // Дата в прошлом — проблема не всегда. При переносе каталога она обязана
+    // быть прошлой: сохраняется оригинальная дата выхода, иначе площадки
+    // сочтут релиз новым и он потеряет накопленную историю. У уже вышедшего
+    // релиза прошедшая дата — просто факт. Предупреждаем только там, где это
+    // действительно похоже на ошибку: релиз ещё не опубликован и не перенос.
+    // isTransfer сервер отдаёт (GET /releases/:id возвращает строку целиком),
+    // но в сгенерированном клиентском типе поля нет — читаем явно.
+    const isTransfer = Boolean((release as { isTransfer?: boolean }).isTransfer);
+    const alreadyOut = ["live", "delivered", "delivering", "takedown_requested"].includes(release.status);
+    if (!isTransfer && !alreadyOut) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const rd = new Date(`${String(release.releaseDate).slice(0, 10)}T00:00:00`);
+      if (rd < today) issues.push(RV.issueDatePast);
+    }
   }
   if (!isWorldWide && territories.length === 0) issues.push(RV.issueNoTerritories);
   if (storeCount === 0) issues.push(RV.issueNoStores);
