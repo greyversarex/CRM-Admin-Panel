@@ -152,6 +152,9 @@ const labelNavGroups: NavGroup[] = [
     titleKey: "overview",
     items: [
       { nameKey: "dashboard", href: "/", icon: LayoutDashboard, iconColor: "text-blue-400" },
+      // Аналитику держим рядом с дашбордом, как у администратора: обе отвечают
+      // на вопрос «как идут дела», и разносить их по разным группам незачем.
+      { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
     ],
   },
   {
@@ -167,12 +170,6 @@ const labelNavGroups: NavGroup[] = [
     titleKey: "publishing_group",
     items: [
       { nameKey: "publishing", href: "/publishing", icon: BookMarked, iconColor: "text-violet-400" },
-    ],
-  },
-  {
-    titleKey: "analytics_group",
-    items: [
-      { nameKey: "analytics", href: "/analytics", icon: BarChart3, iconColor: "text-blue-400" },
     ],
   },
   {

@@ -395,17 +395,17 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               свёрнут, главное — понять охват одним взглядом, а не читать
               описание. */}
           <div className="flex flex-col items-center gap-2 py-2">
-            <p className="text-sm">
+            <p className="text-xl">
               {allSelected ? (
                 <>
-                  <span className="font-semibold text-emerald-400">Все</span>
-                  {" "}площадки выбраны
+                  <span className="font-bold text-emerald-400">Все</span>
+                  {" "}<span className="font-medium">площадки выбраны</span>
                 </>
               ) : (
                 <>
-                  <span className="font-semibold text-primary">{dsps.length}</span>
-                  {" "}из {outletOptions.length}{" "}
-                  {dsps.length === 1 ? "площадка выбрана" : "площадок выбрано"}
+                  <span className="font-bold text-primary">{dsps.length}</span>
+                  {" "}<span className="font-medium">из {outletOptions.length}{" "}
+                  {dsps.length === 1 ? "площадка выбрана" : "площадок выбрано"}</span>
                 </>
               )}
             </p>
