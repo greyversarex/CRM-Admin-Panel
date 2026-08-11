@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   db, releasesTable, tracksTable, artistsTable, releaseArtistsTable,
-  releaseDspsTable, splitsTable,
+  releaseDspsTable, splitsTable, assetsTable, publishingWorksTable,
 } from "@workspace/db";
 import { eq, and, ilike, ne, or, inArray, asc, sql } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -263,6 +263,71 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
       } else if (Math.abs(total - 100) > 0.01) {
         issues.push({ section: "contributors", field: `split:${s.id}`, message: `Сумма долей в split #${s.id} = ${total}% (должна быть 100%).`, severity: "error" });
       }
+    }
+  }
+
+  // ── Обложка не должна повторяться у разных релизов ──────────────────
+  // Площадки считают повторное использование обложки основанием для отказа:
+  // слушатель не отличит один релиз от другого. Файлы у нас уже
+  // хешируются (assets.sha256), так что достаточно поискать тот же хеш.
+  if (release.coverUrl) {
+    const [coverAsset] = await db
+      .select({ sha256: assetsTable.sha256 })
+      .from(assetsTable)
+      .where(eq(assetsTable.objectPath, release.coverUrl))
+      .limit(1);
+    if (coverAsset?.sha256) {
+      const sameArt = await db
+        .select({ id: releasesTable.id, title: releasesTable.title })
+        .from(assetsTable)
+        .innerJoin(releasesTable, eq(releasesTable.id, assetsTable.releaseId))
+        .where(and(eq(assetsTable.sha256, coverAsset.sha256), ne(releasesTable.id, id)));
+      if (sameArt.length > 0) {
+        const names = sameArt.map((r) => `«${r.title}»`).join(", ");
+        issues.push({
+          section: "release",
+          field: "coverUrl",
+          message:
+            `Эта обложка уже используется в релизах: ${names}. У каждого релиза должна быть своя обложка — ` +
+            `площадки отклоняют повторы, а слушатели путают релизы. Исключение — переиздания оригинального альбома.`,
+          severity: "warning",
+        });
+      }
+    }
+  }
+
+  // ── Авторские права: заявлены ли произведения ───────────────────────
+  // Пока произведение не заведено и не зарегистрировано, авторская половина
+  // денег не собирается. Деньги за прослушивания при этом идут, поэтому
+  // пропажу замечают не сразу — отсюда предупреждение.
+  const tracksWithWriters = tracks.filter((t) => Array.isArray(t.writers) && (t.writers as unknown[]).length > 0);
+  if (tracksWithWriters.length > 0) {
+    const works = await db
+      .select({ trackId: publishingWorksTable.trackId, status: publishingWorksTable.status })
+      .from(publishingWorksTable)
+      .where(inArray(publishingWorksTable.trackId, tracksWithWriters.map((t) => t.id)));
+    const byTrack = new Map(works.map((w) => [w.trackId, w.status]));
+    const missing = tracksWithWriters.filter((t) => !byTrack.has(t.id));
+    if (missing.length > 0) {
+      issues.push({
+        section: "contributors",
+        field: "publishing",
+        message:
+          `Произведения не заведены в разделе Паблишинг для треков: ${missing.map((t) => `«${t.title}»`).join(", ")}. ` +
+          `Авторы указаны, но пока произведение не заявлено, авторские отчисления по нему никто не соберёт.`,
+        severity: "warning",
+      });
+    }
+    const draft = tracksWithWriters.filter((t) => byTrack.get(t.id) === "draft");
+    if (draft.length > 0) {
+      issues.push({
+        section: "contributors",
+        field: "publishing",
+        message:
+          `Произведения в статусе «черновик»: ${draft.map((t) => `«${t.title}»`).join(", ")}. ` +
+          `Проставьте доли авторов и отправьте на регистрацию — иначе авторские не собираются.`,
+        severity: "warning",
+      });
     }
   }
 
