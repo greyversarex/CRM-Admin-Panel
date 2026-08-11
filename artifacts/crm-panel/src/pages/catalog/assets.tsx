@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Search } from "lucide-react";
+import { assetHref } from "@/components/asset-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +15,18 @@ type Asset = {
   filename: string;
   mimeType: string;
   sizeBytes: number;
+  /** Путь в хранилище — из него строится ссылка на прослушивание и скачивание. */
+  objectPath: string | null;
   releaseId: number | null;
   trackId: number | null;
   artistId: number | null;
   labelId: number | null;
   createdAt: string;
 };
+
+/** Аудио отличаем по MIME, а не по kind: загрузить звук могли и как «other». */
+const isAudio = (a: Asset) => a.mimeType?.startsWith("audio/") || a.kind === "audio";
+const isImage = (a: Asset) => a.mimeType?.startsWith("image/");
 
 function formatSize(b: number): string {
   if (b < 1024) return `${b} B`;
@@ -107,11 +114,12 @@ export function CatalogAssetsPanel({ initialKindOverride }: { initialKindOverrid
                 <th className="px-3 py-2">Размер</th>
                 <th className="px-3 py-2">Связан с</th>
                 <th className="px-3 py-2">Создан</th>
+                <th className="px-3 py-2 w-[260px]">Прослушать / скачать</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-xs text-muted-foreground">
                   {loading ? "Загрузка..." : "Нет ассетов"}
                 </td></tr>
               )}
@@ -130,6 +138,33 @@ export function CatalogAssetsPanel({ initialKindOverride }: { initialKindOverrid
                     {!a.releaseId && !a.trackId && !a.artistId && !a.labelId && "—"}
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(a.createdAt).toLocaleString("ru-RU")}</td>
+                  <td className="px-3 py-2">
+                    {a.objectPath ? (
+                      <div className="flex items-center gap-2">
+                        {isAudio(a) && (
+                          // preload="none" — иначе таблица из сотни треков
+                          // потянула бы их все при открытии страницы.
+                          <audio src={assetHref(a.objectPath)} controls preload="none" className="h-8 w-[190px]" />
+                        )}
+                        {isImage(a) && (
+                          <a href={assetHref(a.objectPath)} target="_blank" rel="noopener noreferrer" title="Открыть изображение">
+                            <img src={assetHref(a.objectPath)} alt={a.filename} className="h-8 w-8 rounded object-cover border border-border/60" />
+                          </a>
+                        )}
+                        <a
+                          href={assetHref(a.objectPath)}
+                          download={a.filename}
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+                          title={`Скачать ${a.filename}`}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Скачать
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">файл недоступен</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

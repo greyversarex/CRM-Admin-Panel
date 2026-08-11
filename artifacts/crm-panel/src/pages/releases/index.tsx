@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   Search, Download, Image as ImageIcon, MoreHorizontal,
   FileEdit, Send, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight,
-  ArrowUpRight, Upload,
+  Upload,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -157,12 +157,8 @@ export function ReleasesPanel() {
             <p className="text-muted-foreground mt-1 max-w-2xl">{pageSubtitle}</p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            {!isArtist && !isLabel && (
-              <Button variant="outline" className="bg-card" onClick={() => setLocation("/releases/transfer")} data-testid="button-transfer-track">
-                <ArrowUpRight className="mr-2 h-4 w-4" />
-                {t.releases.transfer_track}
-              </Button>
-            )}
+            {/* «Перенести трек» переехал на страницу Каталога: это операция над
+                каталогом целиком, а не действие внутри списка релизов. */}
             {!isArtist && !isLabel && (
               <Button
                 variant="outline"

@@ -9,6 +9,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useMemo } from "react";
 import {
   Disc3, Music2, Mic2, Building2, FileBox, Clapperboard, Files, Hash, Layers, Library,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -36,6 +37,9 @@ const HUB_CARDS: LinkCard[] = [
   { href: "/catalog/duplicates",   title: "Дубликаты",   description: "Поиск дублей по имени, ISRC, UPC, sha256",          icon: Files,       color: "text-rose-400" },
   { href: "/catalog/codes",        title: "Генератор кодов", description: "Получить новый ISRC или UPC код",              icon: Hash,        color: "text-violet-400" },
   { href: "/catalog/bulk-edit",    title: "Массовое редактирование", description: "Применить изменения к множеству объектов сразу", icon: Layers,      color: "text-cyan-400" },
+  // Перенос каталога — операция над каталогом целиком, а не действие внутри
+  // списка релизов, поэтому живёт здесь, рядом с остальными его инструментами.
+  { href: "/releases/transfer/new", title: "Перенести трек", description: "Забрать релиз от другого дистрибьютора с его UPC и ISRC", icon: ArrowRightLeft, color: "text-orange-400" },
 ];
 
 type CatalogTab = "hub" | "releases" | "artists" | "labels" | "videos";
