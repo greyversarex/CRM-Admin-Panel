@@ -368,7 +368,7 @@ export function SidebarNav() {
                   )}>
                     <GIcon className={cn("h-[15px] w-[15px] transition-all duration-220",
                       hasActiveChild
-                        ? cn(gColor, "opacity-100 drop-shadow-[0_0_8px_currentColor]")
+                        ? cn(gColor, "opacity-100")
                         : cn(gColor, "opacity-55 group-hover:opacity-90")
                     )} strokeWidth={1.9} />
                   </span>
@@ -485,7 +485,7 @@ export function SidebarNav() {
                         "transition-all duration-220",
                         collapsed ? "h-[18px] w-[18px]" : "h-[15px] w-[15px]",
                         isActive
-                          ? cn(item.iconColor ?? "text-primary", "opacity-100 drop-shadow-[0_0_8px_currentColor]")
+                          ? cn(item.iconColor ?? "text-primary", "opacity-100")
                           : item.iconColor
                             ? cn(item.iconColor, "opacity-55 group-hover:opacity-90")
                             : "text-white/58 group-hover:text-white/90"
