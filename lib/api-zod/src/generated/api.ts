@@ -2274,6 +2274,22 @@ export const ImportReleaseByUpcResponse = zod.object({
 });
 
 /**
+ * @summary Resolve a store link (Deezer/Spotify/Apple) to a UPC
+ */
+export const ResolveReleaseLinkBody = zod.object({
+  url: zod.string(),
+});
+
+export const ResolveReleaseLinkResponse = zod.object({
+  upc: zod.string(),
+  title: zod.string().nullish(),
+  artist: zod.string().nullish(),
+  platform: zod.enum(["deezer", "spotify", "apple"]),
+  existingReleaseId: zod.number().nullish(),
+  existingReleaseTitle: zod.string().nullish(),
+});
+
+/**
  * @summary Get release counts grouped by status
  */
 export const GetReleaseCountsResponse = zod.object({

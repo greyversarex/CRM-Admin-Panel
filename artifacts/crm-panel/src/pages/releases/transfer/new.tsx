@@ -11,6 +11,7 @@ import { useState } from "react";
 import {
   useCreateTransferImport,
   useImportReleaseByUpc,
+  resolveReleaseLink,
   spotifySearchReleases,
   useListLabels,
   getListTransferImportsQueryKey,
@@ -52,10 +53,41 @@ export default function NewImport() {
   const trimmedInput = link.trim();
   const compactInput = trimmedInput.replace(/[-\s]/g, "");
   const isUpcInput = canImportUpc && /^\d{8,14}$/.test(compactInput);
+  // Ссылку отличаем от имени артиста до отправки: иначе адрес уходил бы в
+  // поиск по названию и находил чужие каверы вместо нужного релиза.
+  const isLinkInput = canImportUpc && /^(https?:\/\/|spotify:)/i.test(trimmedInput);
 
-  const handleImportUpc = async () => {
+  const [resolving, setResolving] = useState(false);
+  const [resolved, setResolved] = useState<{
+    upc: string;
+    title?: string | null;
+    artist?: string | null;
+    existingReleaseId?: number | null;
+    existingReleaseTitle?: string | null;
+  } | null>(null);
+
+  // Ссылка разбирается отдельным шагом: сначала показываем, что нашлось,
+  // и только по кнопке заводим релиз — вставить не ту ссылку слишком легко.
+  const handleResolveLink = async () => {
+    setResolving(true);
+    setResolved(null);
     try {
-      const created = await importByUpc.mutateAsync({ data: { upc: compactInput, source: upcSource } });
+      const r = await resolveReleaseLink({ url: trimmedInput });
+      setResolved(r);
+    } catch (e: any) {
+      toast({
+        title: tt.toast_search_failed,
+        description: e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc,
+        variant: "destructive",
+      });
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const handleImportUpc = async (upcOverride?: string) => {
+    try {
+      const created = await importByUpc.mutateAsync({ data: { upc: upcOverride ?? compactInput, source: upcSource } });
       queryClient.invalidateQueries({ queryKey: getListTransferImportsQueryKey() });
       toast({
         title: tt.toast_upc_imported,
@@ -82,6 +114,11 @@ export default function NewImport() {
     // Если ввели UPC — импортируем релиз напрямую.
     if (isUpcInput) {
       await handleImportUpc();
+      return;
+    }
+    // Ссылка на площадку — сперва достаём из неё UPC.
+    if (isLinkInput) {
+      await handleResolveLink();
       return;
     }
     setSearching(true);
@@ -184,8 +221,13 @@ export default function NewImport() {
                 className="bg-background/40 font-mono text-xs"
                 data-testid="input-spotify-link"
               />
-              <Button onClick={handleSearch} disabled={!trimmedInput || searching || importByUpc.isPending} variant="outline" className="bg-background/40" data-testid="button-search">
-                {importByUpc.isPending ? tt.importing_upc : searching ? tt.searching : isUpcInput ? tt.import_upc_btn : tt.find_artist}
+              <Button onClick={handleSearch} disabled={!trimmedInput || searching || resolving || importByUpc.isPending} variant="outline" className="bg-background/40" data-testid="button-search">
+                {importByUpc.isPending ? tt.importing_upc
+                  : resolving ? tt.searching
+                  : searching ? tt.searching
+                  : isUpcInput ? tt.import_upc_btn
+                  : isLinkInput ? "Найти по ссылке"
+                  : tt.find_artist}
               </Button>
             </div>
             {isUpcInput && (
@@ -203,8 +245,46 @@ export default function NewImport() {
                 <span className="text-[11px] text-muted-foreground">{tt.source_hint}</span>
               </div>
             )}
+            {isLinkInput && !resolved && (
+              <p className="text-[11px] text-muted-foreground pt-1">
+                Ссылки Deezer работают напрямую. У Spotify и Apple Music UPC в ссылке нет —
+                найдите релиз на Deezer или укажите UPC.
+              </p>
+            )}
           </CardContent>
         </Card>
+
+        {resolved && (
+          <Card className="bg-card/50 backdrop-blur border-border/50" data-testid="card-resolved-link">
+            <CardContent className="p-4 space-y-3">
+              <div className="text-xs text-muted-foreground">Найден релиз по ссылке</div>
+              <div className="space-y-0.5">
+                <div className="font-medium">{resolved.title ?? "—"}</div>
+                <div className="text-sm text-muted-foreground">{resolved.artist ?? "—"}</div>
+                <div className="font-mono text-xs text-muted-foreground pt-1">UPC {resolved.upc}</div>
+              </div>
+              {resolved.existingReleaseId ? (
+                <div className="flex items-center gap-2 text-xs text-amber-300">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Этот релиз уже в каталоге — «{resolved.existingReleaseTitle}».{" "}
+                    <button className="underline" onClick={() => setLocation(`/releases/${resolved.existingReleaseId}`)}>
+                      Открыть
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <Button
+                  onClick={() => handleImportUpc(resolved.upc)}
+                  disabled={importByUpc.isPending}
+                  data-testid="button-import-resolved"
+                >
+                  {importByUpc.isPending ? tt.importing_upc : tt.import_upc_btn}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {result && (
           <>

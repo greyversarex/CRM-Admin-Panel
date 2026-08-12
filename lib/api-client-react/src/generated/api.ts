@@ -96,6 +96,8 @@ import type {
   ReleaseArtistRef,
   ReleaseCounts,
   ReleaseDetail,
+  ResolveLinkBody,
+  ResolvedLink,
   RevenueByMonth,
   RoyaltyByDsp,
   RoyaltyByRelease,
@@ -2851,6 +2853,92 @@ export const useImportReleaseByUpc = <
   TContext
 > => {
   return useMutation(getImportReleaseByUpcMutationOptions(options));
+};
+
+/**
+ * @summary Resolve a store link (Deezer/Spotify/Apple) to a UPC
+ */
+export const getResolveReleaseLinkUrl = () => {
+  return `/api/releases/resolve-link`;
+};
+
+export const resolveReleaseLink = async (
+  resolveLinkBody: ResolveLinkBody,
+  options?: RequestInit,
+): Promise<ResolvedLink> => {
+  return customFetch<ResolvedLink>(getResolveReleaseLinkUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resolveLinkBody),
+  });
+};
+
+export const getResolveReleaseLinkMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveReleaseLink>>,
+    TError,
+    { data: BodyType<ResolveLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resolveReleaseLink>>,
+  TError,
+  { data: BodyType<ResolveLinkBody> },
+  TContext
+> => {
+  const mutationKey = ["resolveReleaseLink"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resolveReleaseLink>>,
+    { data: BodyType<ResolveLinkBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resolveReleaseLink(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResolveReleaseLinkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resolveReleaseLink>>
+>;
+export type ResolveReleaseLinkMutationBody = BodyType<ResolveLinkBody>;
+export type ResolveReleaseLinkMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Resolve a store link (Deezer/Spotify/Apple) to a UPC
+ */
+export const useResolveReleaseLink = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveReleaseLink>>,
+    TError,
+    { data: BodyType<ResolveLinkBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resolveReleaseLink>>,
+  TError,
+  { data: BodyType<ResolveLinkBody> },
+  TContext
+> => {
+  return useMutation(getResolveReleaseLinkMutationOptions(options));
 };
 
 /**

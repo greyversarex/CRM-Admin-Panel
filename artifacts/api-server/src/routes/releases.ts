@@ -19,6 +19,7 @@ import { itunesLookupByUpc, itunesHighResCover, parseItunesCopyright } from "../
 import { logger } from "../lib/logger";
 import { resolveLabelTreeIds } from "../lib/label-scope";
 import { equivalentUpcValues, validateUpc } from "../lib/upc";
+import { parseMusicLink, type ParsedMusicLink } from "../lib/music-links";
 
 const router = Router();
 
@@ -2031,6 +2032,108 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     _rawSource: alb,
   };
 }
+
+/**
+ * Ссылка на площадку → UPC релиза, с которым дальше работает импорт.
+ *
+ * Работает только Deezer, и это осознанно: его API открыт, не требует ключей
+ * и отдаёт UPC прямо в объекте альбома. Spotify UPC отдаёт только по токену,
+ * Apple — вообще не отдаёт. MusicBrainz умеет раскрывать ссылки Spotify в
+ * штрихкод, но каталога Центральной Азии в нём нет: проверено на артистах
+ * заказчика — ни одного совпадения. Поэтому вместо тихой деградации в
+ * бесполезный поиск по названию отдаём внятную причину отказа.
+ */
+async function resolveUpcFromMusicLink(link: ParsedMusicLink): Promise<
+  | { ok: true; upc: string; title: string | null; artist: string | null }
+  | { ok: false; reason: string; message: string }
+> {
+  if (link.platform !== "deezer") {
+    const where = link.platform === "spotify" ? "Spotify" : "Apple Music";
+    return {
+      ok: false,
+      reason: "platform_unsupported",
+      message: `Ссылки ${where} не содержат UPC, а без него релиз не опознать. `
+        + "Найдите этот же релиз на Deezer и вставьте ссылку оттуда — либо укажите UPC вручную.",
+    };
+  }
+  if (link.kind === "artist") {
+    return {
+      ok: false,
+      reason: "artist_link",
+      message: "Это ссылка на артиста, а не на релиз. Откройте нужный альбом или трек и скопируйте ссылку на него.",
+    };
+  }
+
+  let albumId = link.id;
+  if (link.kind === "track") {
+    const tRes = await fetch(`https://api.deezer.com/track/${encodeURIComponent(link.id)}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!tRes.ok) return { ok: false, reason: "deezer_error", message: `Deezer ответил ${tRes.status}.` };
+    const t = await tRes.json() as { album?: { id?: number }; error?: unknown };
+    if (!t || t.error || !t.album?.id) {
+      return { ok: false, reason: "not_found", message: "Deezer не знает такой трек." };
+    }
+    albumId = String(t.album.id);
+  }
+
+  const aRes = await fetch(`https://api.deezer.com/album/${encodeURIComponent(albumId)}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!aRes.ok) return { ok: false, reason: "deezer_error", message: `Deezer ответил ${aRes.status}.` };
+  // Deezer отвечает 200 с телом {error:{...}}, когда объекта нет.
+  const a = await aRes.json() as { upc?: string; title?: string; artist?: { name?: string }; error?: unknown };
+  if (!a || a.error) return { ok: false, reason: "not_found", message: "Deezer не знает такой релиз." };
+  if (!a.upc) {
+    return {
+      ok: false,
+      reason: "no_upc",
+      message: "Deezer не отдал UPC для этого релиза — укажите код вручную.",
+    };
+  }
+  return { ok: true, upc: a.upc, title: a.title ?? null, artist: a.artist?.name ?? null };
+}
+
+/**
+ * Разбор ссылки без импорта: панель показывает, что нашлось, и только потом
+ * заводит релиз. Отдельный шаг нужен, чтобы пользователь увидел название и
+ * артиста до создания записей — ссылка легко копируется не та.
+ */
+router.post("/releases/resolve-link", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
+  const raw = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+  if (!raw) { res.status(400).json({ error: "missing_url", message: "Вставьте ссылку на релиз." }); return; }
+
+  const link = parseMusicLink(raw);
+  if (!link) {
+    res.status(400).json({
+      error: "unrecognized_link",
+      message: "Не удалось разобрать ссылку. Поддерживаются Deezer, Spotify и Apple Music; "
+        + "короткие ссылки (link.deezer.com) сначала откройте в браузере и скопируйте полный адрес.",
+    });
+    return;
+  }
+
+  try {
+    const resolved = await resolveUpcFromMusicLink(link);
+    if (!resolved.ok) {
+      res.status(422).json({ error: resolved.reason, message: resolved.message, platform: link.platform });
+      return;
+    }
+    // Дубль показываем сразу здесь, не доводя до импорта.
+    const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
+      .from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(resolved.upc))).limit(1);
+    res.json({
+      upc: resolved.upc,
+      title: resolved.title,
+      artist: resolved.artist,
+      platform: link.platform,
+      existingReleaseId: existing?.id ?? null,
+      existingReleaseTitle: existing?.title ?? null,
+    });
+  } catch (e) {
+    res.status(502).json({ error: "lookup_failed", message: `Не удалось обратиться к Deezer: ${(e as Error).message}` });
+  }
+});
 
 // Импорт релиза по UPC из внешних каталогов (Spotify / MusicBrainz). Создаёт
 // в БД реальные записи artist/label/release/tracks в одной транзакции. Источник

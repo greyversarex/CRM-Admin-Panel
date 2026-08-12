@@ -653,6 +653,28 @@ export interface ImportByUpcBody {
   source?: ImportByUpcBodySource;
 }
 
+export interface ResolveLinkBody {
+  url: string;
+}
+
+export type ResolvedLinkPlatform =
+  (typeof ResolvedLinkPlatform)[keyof typeof ResolvedLinkPlatform];
+
+export const ResolvedLinkPlatform = {
+  deezer: "deezer",
+  spotify: "spotify",
+  apple: "apple",
+} as const;
+
+export interface ResolvedLink {
+  upc: string;
+  title?: string | null;
+  artist?: string | null;
+  platform: ResolvedLinkPlatform;
+  existingReleaseId?: number | null;
+  existingReleaseTitle?: string | null;
+}
+
 export interface ReleaseCounts {
   all: number;
   draft: number;
