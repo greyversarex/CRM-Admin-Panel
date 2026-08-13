@@ -402,8 +402,16 @@ export default function ReleaseDetail() {
                 </Button>
               </>
             )}
-            {release.isEditable && (
-              <DeleteReleaseButton releaseId={release.id} releaseTitle={release.title} onDeleted={() => setLocation("/releases")} />
+            {/* Сервер разрешает админу и менеджеру удалить релиз в любом статусе,
+                остальным — только черновик или отклонённый. Кнопка раньше жила по
+                более узкому правилу, и на живом релизе её просто не было. */}
+            {(release.isEditable || user?.role === "admin" || user?.role === "manager") && (
+              <DeleteReleaseButton
+                releaseId={release.id}
+                releaseTitle={release.title}
+                releaseStatus={release.status}
+                onDeleted={() => setLocation("/releases")}
+              />
             )}
           </div>
         </div>
@@ -1022,8 +1030,8 @@ function KV({
 
 // ─── Delete Release button + confirmation dialog ─────────────────────────
 function DeleteReleaseButton({
-  releaseId, releaseTitle, onDeleted,
-}: { releaseId: number; releaseTitle: string; onDeleted: () => void }) {
+  releaseId, releaseTitle, releaseStatus, onDeleted,
+}: { releaseId: number; releaseTitle: string; releaseStatus?: string; onDeleted: () => void }) {
   const { t: TT } = useLang();
   const RV = TT.releaseView;
   const [open, setOpen] = useState(false);
@@ -1062,6 +1070,21 @@ function DeleteReleaseButton({
               {RV.deleteReleaseWarn.replace("{title}", releaseTitle)}
             </DialogDescription>
           </DialogHeader>
+          {releaseStatus && !["draft", "rejected"].includes(releaseStatus) && (
+            // Удаление стирает релиз только у нас. С площадок он снимается
+            // через дистрибьютора (takedown), и не сказать об этом — значит
+            // оставить релиз жить в магазинах без записи о нём в каталоге.
+            <div className="flex items-start gap-2 rounded p-3 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                Релиз в статусе «{releaseStatus}» — он уже ушёл дальше черновика.
+                Удаление уберёт его только из нашего каталога; с площадок релиз
+                снимается через дистрибьютора. Если он уже опубликован, сначала
+                оформите снятие с публикации, иначе он останется в магазинах,
+                а у нас пропадёт вместе со всей статистикой.
+              </span>
+            </div>
+          )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               {RV.cancel}
