@@ -225,6 +225,40 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     }
   }
 
+  // ── Язык ──────────────────────────────────────────────────────────
+  // Пустой язык не блокирует отправку — но и не остаётся пустым: при отправке
+  // подставляется английский. Для таджикского каталога это молча неверные
+  // данные на площадках, поэтому спрашиваем до отправки, а не после.
+  const withoutLanguage = tracks.filter((t) => !(t.vocalLanguage ?? t.language));
+  if (withoutLanguage.length > 0) {
+    add({
+      section: "tracks",
+      field: withoutLanguage.length === tracks.length ? "language" : `track:${withoutLanguage[0].id}:language`,
+      message:
+        (withoutLanguage.length === tracks.length
+          ? "Не указан язык вокала ни у одного трека. "
+          : `Не указан язык вокала у ${withoutLanguage.length} из ${tracks.length} треков. `) +
+        "При отправке будет проставлен английский — на площадках это скажется на " +
+        "подборках и текстах. Укажите язык явно, инструментальные помечайте как таковые.",
+      severity: "warning",
+    });
+  }
+
+  // ── Поджанр ───────────────────────────────────────────────────────
+  // Ни один открытый каталог поджанр не публикует: Deezer и iTunes отдают
+  // только широкий жанр. Значит после импорта это поле всегда пустое, и
+  // заполнить его может только оператор.
+  if (release.genre && !release.subgenre) {
+    add({
+      section: "release",
+      field: "subgenre",
+      message:
+        `Не указан поджанр (жанр — «${release.genre}»). Внешние каталоги поджанр не отдают, ` +
+        "поэтому после импорта его нужно выбрать вручную: он уточняет, в какие подборки попадёт релиз.",
+      severity: "warning",
+    });
+  }
+
   // ── Витрины ───────────────────────────────────────────────────────
   const outlets = await resolveOutletCodes(release.broma16DistributionOutlets);
   if (outlets.length === 0) {

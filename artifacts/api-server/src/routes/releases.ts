@@ -1717,7 +1717,16 @@ interface ImportedReleaseData {
   subgenre: string | null;
   /** Тип релиза из источника (single/album/ep/compilation), если он его сообщает. */
   releaseType: "single" | "album" | "ep" | "compilation" | null;
-  tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[];
+  tracks: {
+    title: string;
+    trackNumber: number;
+    isrc: string | null;
+    explicit: boolean;
+    /** Длительность в секундах. Deezer отдаёт её в списке треков альбома. */
+    durationSeconds?: number | null;
+  }[];
+  /** Приглашённые исполнители (роль в источнике — не Main). */
+  featuredArtists?: string[];
   source: "spotify" | "musicbrainz" | "deezer";
   /** ℗ фонографический копирайт — из iTunes Search API. */
   pLine: string | null;
@@ -2087,12 +2096,13 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     cover_big?: string;
     artist?: { name?: string };
     genres?: { data?: { name?: string }[] };
+    contributors?: { name?: string; role?: string }[];
     error?: { type?: string; message?: string };
   };
   // Deezer возвращает HTTP 200 с телом {error:{...}}, когда релиз не найден.
   if (!alb || alb.error || !alb.id) return null;
 
-  const tracks: { title: string; trackNumber: number; isrc: string | null; explicit: boolean }[] = [];
+  const tracks: ImportedReleaseData["tracks"] = [];
   let next: string | null = `https://api.deezer.com/album/${alb.id}/tracks?limit=100`;
   let guard = 0;
   while (next && guard < 10) {
@@ -2102,7 +2112,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     const tRes: Response = await fetch(next, { signal: AbortSignal.timeout(15_000) });
     if (!tRes.ok) break;
     const tj = await tRes.json() as {
-      data?: { title?: string; track_position?: number; isrc?: string; explicit_lyrics?: boolean }[];
+      data?: { title?: string; track_position?: number; isrc?: string; explicit_lyrics?: boolean; duration?: number }[];
       next?: string;
     };
     for (const t of tj.data ?? []) {
@@ -2111,6 +2121,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
         trackNumber: t.track_position ?? tracks.length + 1,
         isrc: t.isrc ?? null,
         explicit: !!t.explicit_lyrics,
+        durationSeconds: t.duration && t.duration > 0 ? t.duration : null,
       });
     }
     next = tj.next ?? null;
@@ -2126,6 +2137,12 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     ...mapSourceGenre((alb.genres?.data ?? []).map((g) => g.name)),
     releaseType: normalizeReleaseType(alb.record_type),
     tracks: tracks.length > 0 ? tracks : [{ title: alb.title ?? "Unknown release", trackNumber: 1, isrc: null, explicit: false }],
+    // Deezer перечисляет всех исполнителей релиза с ролями; Main — это тот, кто
+    // уже стал основным, остальные (feat.) без этого просто терялись.
+    featuredArtists: (alb.contributors ?? [])
+      .filter((c) => (c.role ?? "").toLowerCase() !== "main" && c.name && c.name !== alb.artist?.name)
+      .map((c) => c.name!)
+      .filter((n, i, arr) => arr.indexOf(n) === i),
     source: "deezer",
     pLine: null,
     cLine: null,
@@ -2696,6 +2713,22 @@ router.post("/releases/import-upc", requireRole("admin", "manager", "label", "ar
         position: 0,
       }).onConflictDoNothing();
 
+      // Приглашённые исполнители (feat.). Раньше они терялись, и релиз с
+      // дуэтом приезжал с одним артистом — а Broma16 сверяет состав.
+      let featPosition = 1;
+      for (const name of found.featuredArtists ?? []) {
+        const feat = await findOrCreateArtist(tx, name, labelId);
+        if (feat.created && feat.row) {
+          pendingAudits.push({ action: "create", entityType: "artist", entityId: feat.id, before: null, after: feat.row });
+        }
+        await tx.insert(releaseArtistsTable).values({
+          releaseId: release.id,
+          artistId: feat.id,
+          role: "featured",
+          position: featPosition++,
+        }).onConflictDoNothing();
+      }
+
       const trackRows = found.tracks.slice(0, 100).map((t, idx) => ({
         title: t.title,
         releaseId: release.id,
@@ -2706,6 +2739,7 @@ router.post("/releases/import-upc", requireRole("admin", "manager", "label", "ar
         subgenre: found.subgenre ?? undefined,
         isExplicit: t.explicit,
         explicitStatus: t.explicit ? "explicit" : null,
+        durationSeconds: t.durationSeconds ?? undefined,
       }));
       const inserted = await tx.insert(tracksTable).values(trackRows).returning({ id: tracksTable.id });
       for (const tr of inserted) {
