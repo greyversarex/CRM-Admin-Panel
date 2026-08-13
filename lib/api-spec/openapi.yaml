@@ -2895,6 +2895,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SpotifyReleaseResult"
+        source:
+          type: string
+          enum: [spotify, deezer]
+          description: Catalog the results came from; Deezer is used when Spotify keys are absent.
       required: [artistId, artistName, releases]
 
     SpotifyReleaseResult:

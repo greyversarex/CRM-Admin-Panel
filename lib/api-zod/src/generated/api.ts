@@ -2389,6 +2389,12 @@ export const SpotifySearchReleasesResponse = zod.object({
         ),
     }),
   ),
+  source: zod
+    .enum(["spotify", "deezer"])
+    .optional()
+    .describe(
+      "Catalog the results came from; Deezer is used when Spotify keys are absent.",
+    ),
 });
 
 /**

@@ -173,6 +173,7 @@ export * from "./splitParticipantEntityType";
 export * from "./spotifyReleaseResult";
 export * from "./spotifySearchReleasesParams";
 export * from "./spotifySearchResult";
+export * from "./spotifySearchResultSource";
 export * from "./statusCount";
 export * from "./streamAnalytics";
 export * from "./streamAnalyticsByDayItem";

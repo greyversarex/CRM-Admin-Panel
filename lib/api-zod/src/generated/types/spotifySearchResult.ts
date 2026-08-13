@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SpotifyReleaseResult } from "./spotifyReleaseResult";
+import type { SpotifySearchResultSource } from "./spotifySearchResultSource";
 
 export interface SpotifySearchResult {
   artistId: string;
   artistName: string;
   artistImage?: string | null;
   releases: SpotifyReleaseResult[];
+  /** Catalog the results came from; Deezer is used when Spotify keys are absent. */
+  source?: SpotifySearchResultSource;
 }

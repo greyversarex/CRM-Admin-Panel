@@ -311,6 +311,19 @@ export default function NewImport() {
                     </Select>
                   </div>
                 </div>
+                {result.source === "deezer" && (
+                  // У Deezer артисты-тёзки слиты в одну страницу: под именем
+                  // «Yasmina» там лежат релизы нескольких разных исполнителей.
+                  // Поэтому список обязательно смотреть глазами, а не грузить целиком.
+                  <div className="text-xs flex items-start gap-2 rounded p-2 bg-amber-500/10 border border-amber-500/30 text-amber-200">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Поиск шёл по Deezer (ключи Spotify не заданы). Deezer объединяет
+                      исполнителей с одинаковыми именами — проверьте список, среди релизов
+                      могут оказаться чужие. Надёжнее переносить по ссылке или UPC.
+                    </span>
+                  </div>
+                )}
                 {labelMismatch && (
                   <div className="text-xs flex items-start gap-2 rounded p-2 bg-amber-500/10 border border-amber-500/30 text-amber-200">
                     <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />

@@ -573,6 +573,97 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
   res.status(201).json(serializeTransferImport(inserted));
 });
 
+type TransferSearchRelease = {
+  upc: string;
+  title: string;
+  artist: string;
+  label: string | null;
+  tracks: number;
+  coverUrl: string | null;
+  releaseDate: string;
+};
+
+/** Помечает релизы, чей UPC уже есть в каталоге, чтобы не импортировать дубли. */
+async function markAlreadyInCatalog(releases: TransferSearchRelease[]) {
+  const realUpcs = releases.map((r) => r.upc).filter((u) => !!u && !/^(SPOTIFY|DEEZER)-/.test(u));
+  const existingUpcs = new Set<string>();
+  if (realUpcs.length > 0) {
+    const rows = await db.select({ upc: releasesTable.upc }).from(releasesTable)
+      .where(inArray(releasesTable.upc, realUpcs));
+    for (const row of rows) if (row.upc) existingUpcs.add(row.upc);
+  }
+  return releases.map((r) => ({ ...r, alreadyInCatalog: existingUpcs.has(r.upc) }));
+}
+
+/**
+ * Поиск релизов артиста в Deezer — бесплатная замена поиску через Spotify.
+ *
+ * Spotify требует ключи из developer.spotify.com, а получить их удалось не
+ * всем; без них весь этот сценарий («вбил имя — получил все релизы пачкой»)
+ * просто отвечал 503. Deezer отдаёт то же самое без ключей и регистрации.
+ *
+ * UPC в списке альбомов Deezer не отдаёт, только в карточке альбома, поэтому
+ * дальше идёт по запросу на альбом — так же, как это делает ветка Spotify.
+ */
+async function searchReleasesViaDeezer(query: string) {
+  const linkMatch = query.match(/deezer\.com\/(?:[a-z]{2}\/)?artist\/(\d+)/i);
+  let artistId = linkMatch ? linkMatch[1] : null;
+  let artistName = query;
+  let artistImage: string | null = null;
+
+  const dz = async <T>(url: string): Promise<T> => {
+    const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!r.ok) throw new Error(`Deezer ${r.status}`);
+    return await r.json() as T;
+  };
+
+  if (!artistId) {
+    const sj = await dz<{ data?: { id: number; name: string; picture_xl?: string }[] }>(
+      `https://api.deezer.com/search/artist?q=${encodeURIComponent(query)}&limit=1`,
+    );
+    const hit = sj.data?.[0];
+    if (!hit) return null;
+    artistId = String(hit.id);
+    artistName = hit.name;
+    artistImage = hit.picture_xl ?? null;
+  } else {
+    const aj = await dz<{ name?: string; picture_xl?: string }>(`https://api.deezer.com/artist/${artistId}`);
+    artistName = aj.name ?? query;
+    artistImage = aj.picture_xl ?? null;
+  }
+
+  const albj = await dz<{ data?: { id: number; title: string; release_date?: string; nb_tracks?: number; cover_xl?: string }[] }>(
+    `https://api.deezer.com/artist/${artistId}/albums?limit=30`,
+  );
+  const albums = albj.data ?? [];
+
+  // Пачками по 5: Deezer режет частые запросы, а 30 параллельных сразу
+  // упираются в его лимит и часть альбомов возвращается без UPC.
+  const releases: TransferSearchRelease[] = [];
+  for (let i = 0; i < albums.length; i += 5) {
+    const chunk = await Promise.all(albums.slice(i, i + 5).map(async (alb) => {
+      let upc = ""; let label: string | null = null;
+      try {
+        const dj = await dz<{ upc?: string; label?: string }>(`https://api.deezer.com/album/${alb.id}`);
+        upc = dj.upc ?? "";
+        label = dj.label ?? null;
+      } catch { /* без UPC релиз всё равно покажем, просто импортировать нельзя */ }
+      return {
+        upc: upc || `DEEZER-${alb.id}`,
+        title: alb.title,
+        artist: artistName,
+        label,
+        tracks: alb.nb_tracks ?? 0,
+        coverUrl: alb.cover_xl ?? null,
+        releaseDate: alb.release_date ?? "",
+      };
+    }));
+    releases.push(...chunk);
+  }
+
+  return { artistId, artistName, artistImage, releases: await markAlreadyInCatalog(releases) };
+}
+
 router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
   const parsed = SpotifySearchReleasesQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -586,16 +677,24 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     token = await getSpotifyToken(cfg);
   } catch (e: any) {
     if (e instanceof SpotifyNotConfiguredError) {
-      res.status(503).json({
-        error: "spotify_not_configured",
-        message: "Интеграция со Spotify не настроена. Заполните Настройки → Spotify (Client ID и Client Secret).",
-      });
-    } else {
-      res.status(502).json({
-        error: "spotify_upstream_error",
-        message: `Spotify недоступен или отклонил запрос: ${e?.message ?? "unknown"}`,
-      });
+      // Без ключей Spotify не отказываем, а ищем в Deezer: сценарий тот же,
+      // а ключи для него не нужны вовсе.
+      try {
+        const viaDeezer = await searchReleasesViaDeezer(query);
+        if (!viaDeezer) {
+          res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден." });
+          return;
+        }
+        res.json({ ...viaDeezer, source: "deezer" });
+      } catch (de: any) {
+        res.status(502).json({ error: "deezer_error", message: `Deezer недоступен: ${de?.message ?? "unknown"}` });
+      }
+      return;
     }
+    res.status(502).json({
+      error: "spotify_upstream_error",
+      message: `Spotify недоступен или отклонил запрос: ${e?.message ?? "unknown"}`,
+    });
     return;
   }
 

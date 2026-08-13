@@ -730,6 +730,17 @@ export interface CreateTransferImportBody {
   items: TransferImportItem[];
 }
 
+/**
+ * Catalog the results came from; Deezer is used when Spotify keys are absent.
+ */
+export type SpotifySearchResultSource =
+  (typeof SpotifySearchResultSource)[keyof typeof SpotifySearchResultSource];
+
+export const SpotifySearchResultSource = {
+  spotify: "spotify",
+  deezer: "deezer",
+} as const;
+
 export interface SpotifyReleaseResult {
   upc: string;
   title: string;
@@ -747,6 +758,8 @@ export interface SpotifySearchResult {
   artistName: string;
   artistImage?: string | null;
   releases: SpotifyReleaseResult[];
+  /** Catalog the results came from; Deezer is used when Spotify keys are absent. */
+  source?: SpotifySearchResultSource;
 }
 
 export interface PaginatedReleases {
