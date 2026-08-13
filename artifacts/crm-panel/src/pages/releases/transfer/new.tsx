@@ -75,10 +75,15 @@ export default function NewImport() {
       const r = await resolveReleaseLink({ url: trimmedInput });
       setResolved(r);
     } catch (e: any) {
+      const code = String(e?.response?.data?.error ?? "");
+      const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
+      // Ссылка Spotify/Apple — это не сбой, а ожидаемое ограничение площадки:
+      // красный «Поиск не удался» пугает и выглядит как поломка системы.
+      const isExpected = code === "platform_unsupported" || code === "artist_link";
       toast({
-        title: tt.toast_search_failed,
-        description: e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc,
-        variant: "destructive",
+        title: isExpected ? "Так не сработает" : tt.toast_search_failed,
+        description: msg,
+        variant: isExpected ? "default" : "destructive",
       });
     } finally {
       setResolving(false);

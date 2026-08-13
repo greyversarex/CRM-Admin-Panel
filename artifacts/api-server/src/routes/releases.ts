@@ -671,30 +671,31 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     return;
   }
   const query = parsed.data.query.trim();
+
+  // Deezer — не только замена отсутствующим ключам, но и запасной путь при
+  // любом отказе Spotify. С этого сервера Spotify отвечает 403 (блокировка по
+  // стране), и ключи тут ни при чём: они заданы и валидны. Пользователю в
+  // любом случае нужен список релизов, а не текст ошибки.
+  const fallbackToDeezer = async (why: string): Promise<void> => {
+    logger.warn({ why, query }, "поиск релизов: уходим в Deezer");
+    try {
+      const viaDeezer = await searchReleasesViaDeezer(query);
+      if (!viaDeezer) {
+        res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден." });
+        return;
+      }
+      res.json({ ...viaDeezer, source: "deezer" });
+    } catch (de: any) {
+      res.status(502).json({ error: "deezer_error", message: `Deezer недоступен: ${de?.message ?? "unknown"}` });
+    }
+  };
+
   const cfg = await loadSpotifyConfig();
   let token: string;
   try {
     token = await getSpotifyToken(cfg);
   } catch (e: any) {
-    if (e instanceof SpotifyNotConfiguredError) {
-      // Без ключей Spotify не отказываем, а ищем в Deezer: сценарий тот же,
-      // а ключи для него не нужны вовсе.
-      try {
-        const viaDeezer = await searchReleasesViaDeezer(query);
-        if (!viaDeezer) {
-          res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден." });
-          return;
-        }
-        res.json({ ...viaDeezer, source: "deezer" });
-      } catch (de: any) {
-        res.status(502).json({ error: "deezer_error", message: `Deezer недоступен: ${de?.message ?? "unknown"}` });
-      }
-      return;
-    }
-    res.status(502).json({
-      error: "spotify_upstream_error",
-      message: `Spotify недоступен или отклонил запрос: ${e?.message ?? "unknown"}`,
-    });
+    await fallbackToDeezer(e instanceof SpotifyNotConfiguredError ? "ключи не заданы" : `токен: ${e?.message}`);
     return;
   }
 
@@ -707,20 +708,20 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
       const sr = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=1`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!sr.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${sr.status}` }); return; }
+      if (!sr.ok) { await fallbackToDeezer(`поиск артиста: Spotify ${sr.status}`); return; }
       const sj = await sr.json() as { artists?: { items: { id: string }[] } };
       artistId = sj.artists?.items?.[0]?.id ?? null;
-      if (!artistId) { res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден в Spotify." }); return; }
+      if (!artistId) { await fallbackToDeezer("артист не найден в Spotify"); return; }
     }
 
     const ar = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!ar.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${ar.status}` }); return; }
+    if (!ar.ok) { await fallbackToDeezer(`карточка артиста: Spotify ${ar.status}`); return; }
     const aj = await ar.json() as { name: string; images?: { url: string }[] };
 
     const albr = await fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=30`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!albr.ok) { res.status(502).json({ error: "spotify_error", message: `Spotify ${albr.status}` }); return; }
+    if (!albr.ok) { await fallbackToDeezer(`альбомы артиста: Spotify ${albr.status}`); return; }
     const albj = await albr.json() as { items: { id: string; name: string; release_date: string; total_tracks: number; images?: { url: string }[]; artists: { name: string }[]; external_ids?: { upc?: string }; label?: string }[] };
 
     // Spotify /albums doesn't always include UPC — fetch each album's full payload to extract external_ids.upc and label.
@@ -763,9 +764,10 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
       artistName: aj.name,
       artistImage: aj.images?.[0]?.url ?? null,
       releases: releasesWithDedup,
+      source: "spotify",
     });
   } catch (e: any) {
-    res.status(502).json({ error: "spotify_error", message: e?.message ?? "Spotify request failed" });
+    await fallbackToDeezer(e?.message ?? "Spotify request failed");
   }
 });
 
