@@ -7,5 +7,6 @@
  */
 
 export interface ResolveLinkBody {
-  url: string;
+  /** Store link, UPC or ISRC. */
+  query: string;
 }

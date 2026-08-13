@@ -2134,100 +2134,144 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
   };
 }
 
-/**
- * Ссылка на площадку → UPC релиза, с которым дальше работает импорт.
- *
- * Работает только Deezer, и это осознанно: его API открыт, не требует ключей
- * и отдаёт UPC прямо в объекте альбома. Spotify UPC отдаёт только по токену,
- * Apple — вообще не отдаёт. MusicBrainz умеет раскрывать ссылки Spotify в
- * штрихкод, но каталога Центральной Азии в нём нет: проверено на артистах
- * заказчика — ни одного совпадения. Поэтому вместо тихой деградации в
- * бесполезный поиск по названию отдаём внятную причину отказа.
- */
-async function resolveUpcFromMusicLink(link: ParsedMusicLink): Promise<
-  | { ok: true; upc: string; title: string | null; artist: string | null }
-  | { ok: false; reason: string; message: string }
-> {
-  if (link.platform !== "deezer") {
-    const where = link.platform === "spotify" ? "Spotify" : "Apple Music";
-    return {
-      ok: false,
-      reason: "platform_unsupported",
-      message: `Ссылки ${where} не содержат UPC, а без него релиз не опознать. `
-        + "Найдите этот же релиз на Deezer и вставьте ссылку оттуда — либо укажите UPC вручную.",
-    };
-  }
-  if (link.kind === "artist") {
-    return {
-      ok: false,
-      reason: "artist_link",
-      message: "Это ссылка на артиста, а не на релиз. Откройте нужный альбом или трек и скопируйте ссылку на него.",
-    };
-  }
+type ResolveFailure = { ok: false; reason: string; message: string };
 
-  let albumId = link.id;
-  if (link.kind === "track") {
-    const tRes = await fetch(`https://api.deezer.com/track/${encodeURIComponent(link.id)}`, {
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!tRes.ok) return { ok: false, reason: "deezer_error", message: `Deezer ответил ${tRes.status}.` };
-    const t = await tRes.json() as { album?: { id?: number }; error?: unknown };
-    if (!t || t.error || !t.album?.id) {
-      return { ok: false, reason: "not_found", message: "Deezer не знает такой трек." };
-    }
-    albumId = String(t.album.id);
-  }
-
-  const aRes = await fetch(`https://api.deezer.com/album/${encodeURIComponent(albumId)}`, {
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!aRes.ok) return { ok: false, reason: "deezer_error", message: `Deezer ответил ${aRes.status}.` };
+const dzGet = async <T>(url: string): Promise<T | null> => {
+  const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!r.ok) throw new Error(`Deezer ${r.status}`);
   // Deezer отвечает 200 с телом {error:{...}}, когда объекта нет.
-  const a = await aRes.json() as { upc?: string; title?: string; artist?: { name?: string }; error?: unknown };
-  if (!a || a.error) return { ok: false, reason: "not_found", message: "Deezer не знает такой релиз." };
-  if (!a.upc) {
-    return {
-      ok: false,
-      reason: "no_upc",
-      message: "Deezer не отдал UPC для этого релиза — укажите код вручную.",
-    };
+  const j = await r.json() as T & { error?: unknown };
+  return j && !j.error ? j : null;
+};
+
+type DeezerTrack = { id?: number; title?: string; isrc?: string; duration?: number; explicit_lyrics?: boolean; album?: { id?: number } };
+type DeezerAlbum = {
+  id?: number; upc?: string; title?: string; label?: string; release_date?: string;
+  nb_tracks?: number; record_type?: string; cover_xl?: string; cover_big?: string;
+  artist?: { name?: string }; genres?: { data?: { name?: string }[] };
+};
+
+/**
+ * Карточка релиза до импорта: что именно нашлось по ссылке, UPC или ISRC.
+ *
+ * Раньше ввод кода сразу создавал релиз и уводил в редактор — ошибиться в
+ * одной цифре и обнаружить это уже внутри созданной записи было слишком легко.
+ * Теперь сначала показываем найденное, импорт — отдельным подтверждением.
+ *
+ * Источник один, Deezer, и это осознанно: его API открыт, не требует ключей и
+ * отдаёт UPC с ISRC напрямую. Spotify выдаёт UPC только по токену и с этого
+ * сервера отвечает 403, Apple не отдаёт вовсе, а в MusicBrainz каталога
+ * Центральной Азии просто нет — проверено на артистах заказчика.
+ */
+async function resolveReleasePreview(query: string): Promise<
+  | { ok: true; preview: Record<string, unknown> }
+  | ResolveFailure
+> {
+  // ISRC: две буквы страны, три знака регистранта, пять цифр года и номера.
+  const isrcCandidate = query.replace(/[-\s]/g, "").toUpperCase();
+  const isIsrc = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrcCandidate);
+  const upcCheck = validateUpc(query.replace(/[-\s]/g, ""));
+
+  let albumId: string | null = null;
+  let track: DeezerTrack | null = null;
+  let album: DeezerAlbum | null = null;
+
+  if (isIsrc) {
+    track = await dzGet<DeezerTrack>(`https://api.deezer.com/track/isrc:${encodeURIComponent(isrcCandidate)}`);
+    if (!track?.album?.id) {
+      return { ok: false, reason: "not_found", message: `Трек с ISRC ${isrcCandidate} в Deezer не найден.` };
+    }
+    albumId = String(track.album.id);
+  } else if (upcCheck.ok) {
+    album = await dzGet<DeezerAlbum>(`https://api.deezer.com/album/upc:${encodeURIComponent(upcCheck.value)}`);
+    if (!album?.id) return { ok: false, reason: "not_found", message: `Релиз с UPC ${upcCheck.value} в Deezer не найден.` };
+    albumId = String(album.id);
+  } else {
+    const link = parseMusicLink(query);
+    if (!link) {
+      return {
+        ok: false,
+        reason: "unrecognized_query",
+        message: "Не похоже ни на ссылку, ни на UPC, ни на ISRC. Вставьте ссылку с Deezer, "
+          + "13-значный UPC или 12-значный ISRC — либо введите имя исполнителя для поиска.",
+      };
+    }
+    if (link.platform !== "deezer") {
+      const where = link.platform === "spotify" ? "Spotify" : "Apple Music";
+      return {
+        ok: false,
+        reason: "platform_unsupported",
+        message: `Ссылки ${where} не содержат UPC, а без него релиз не опознать. `
+          + "Найдите этот же релиз на Deezer и вставьте ссылку оттуда — либо укажите UPC или ISRC.",
+      };
+    }
+    if (link.kind === "artist") {
+      return {
+        ok: false,
+        reason: "artist_link",
+        message: "Это ссылка на артиста, а не на релиз. Откройте нужный альбом или трек и скопируйте ссылку на него.",
+      };
+    }
+    if (link.kind === "track") {
+      track = await dzGet<DeezerTrack>(`https://api.deezer.com/track/${encodeURIComponent(link.id)}`);
+      if (!track?.album?.id) return { ok: false, reason: "not_found", message: "Deezer не знает такой трек." };
+      albumId = String(track.album.id);
+    } else {
+      albumId = link.id;
+    }
   }
-  return { ok: true, upc: a.upc, title: a.title ?? null, artist: a.artist?.name ?? null };
+
+  if (!album) album = await dzGet<DeezerAlbum>(`https://api.deezer.com/album/${encodeURIComponent(albumId!)}`);
+  if (!album) return { ok: false, reason: "not_found", message: "Deezer не знает такой релиз." };
+  if (!album.upc) {
+    return { ok: false, reason: "no_upc", message: "Deezer не отдал UPC для этого релиза — укажите код вручную." };
+  }
+
+  return {
+    ok: true,
+    preview: {
+      upc: album.upc,
+      title: album.title ?? null,
+      artist: album.artist?.name ?? null,
+      label: album.label ?? null,
+      coverUrl: album.cover_xl ?? album.cover_big ?? null,
+      releaseDate: album.release_date ?? null,
+      trackCount: album.nb_tracks ?? null,
+      releaseType: album.record_type ?? null,
+      genres: (album.genres?.data ?? []).map((g) => g.name).filter((n): n is string => !!n),
+      // Заполнены только когда искали по треку — по ISRC или по ссылке на трек.
+      isrc: track?.isrc ?? null,
+      trackTitle: track?.title ?? null,
+      durationSec: track?.duration ?? null,
+      explicit: track ? !!track.explicit_lyrics : null,
+      platform: "deezer",
+    },
+  };
 }
 
 /**
- * Разбор ссылки без импорта: панель показывает, что нашлось, и только потом
- * заводит релиз. Отдельный шаг нужен, чтобы пользователь увидел название и
- * артиста до создания записей — ссылка легко копируется не та.
+ * Предпросмотр без импорта. Панель показывает, что нашлось, и заводит релиз
+ * только по отдельной кнопке.
  */
 router.post("/releases/resolve-link", requireRole("admin", "manager", "label", "artist"), async (req, res): Promise<void> => {
-  const raw = typeof req.body?.url === "string" ? req.body.url.trim() : "";
-  if (!raw) { res.status(400).json({ error: "missing_url", message: "Вставьте ссылку на релиз." }); return; }
-
-  const link = parseMusicLink(raw);
-  if (!link) {
-    res.status(400).json({
-      error: "unrecognized_link",
-      message: "Не удалось разобрать ссылку. Поддерживаются Deezer, Spotify и Apple Music; "
-        + "короткие ссылки (link.deezer.com) сначала откройте в браузере и скопируйте полный адрес.",
-    });
-    return;
-  }
+  // Поле `url` осталось от версии, понимавшей только ссылки; теперь сюда
+  // приходит любой ввод — ссылка, UPC или ISRC.
+  const raw = typeof req.body?.query === "string" ? req.body.query.trim()
+    : typeof req.body?.url === "string" ? req.body.url.trim() : "";
+  if (!raw) { res.status(400).json({ error: "missing_query", message: "Вставьте ссылку, UPC или ISRC." }); return; }
 
   try {
-    const resolved = await resolveUpcFromMusicLink(link);
+    const resolved = await resolveReleasePreview(raw);
     if (!resolved.ok) {
-      res.status(422).json({ error: resolved.reason, message: resolved.message, platform: link.platform });
+      res.status(422).json({ error: resolved.reason, message: resolved.message });
       return;
     }
     // Дубль показываем сразу здесь, не доводя до импорта.
+    const upc = resolved.preview.upc as string;
     const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
-      .from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(resolved.upc))).limit(1);
+      .from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(upc))).limit(1);
     res.json({
-      upc: resolved.upc,
-      title: resolved.title,
-      artist: resolved.artist,
-      platform: link.platform,
+      ...resolved.preview,
       existingReleaseId: existing?.id ?? null,
       existingReleaseTitle: existing?.title ?? null,
     });

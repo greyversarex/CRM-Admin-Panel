@@ -654,7 +654,8 @@ export interface ImportByUpcBody {
 }
 
 export interface ResolveLinkBody {
-  url: string;
+  /** Store link, UPC or ISRC. */
+  query: string;
 }
 
 export type ResolvedLinkPlatform =
@@ -670,6 +671,17 @@ export interface ResolvedLink {
   upc: string;
   title?: string | null;
   artist?: string | null;
+  label?: string | null;
+  coverUrl?: string | null;
+  releaseDate?: string | null;
+  trackCount?: number | null;
+  releaseType?: string | null;
+  genres?: string[];
+  /** Present only when the lookup started from a track (ISRC or track link). */
+  isrc?: string | null;
+  trackTitle?: string | null;
+  durationSec?: number | null;
+  explicit?: boolean | null;
   platform: ResolvedLinkPlatform;
   existingReleaseId?: number | null;
   existingReleaseTitle?: string | null;

@@ -2277,13 +2277,28 @@ export const ImportReleaseByUpcResponse = zod.object({
  * @summary Resolve a store link (Deezer/Spotify/Apple) to a UPC
  */
 export const ResolveReleaseLinkBody = zod.object({
-  url: zod.string(),
+  query: zod.string().describe("Store link, UPC or ISRC."),
 });
 
 export const ResolveReleaseLinkResponse = zod.object({
   upc: zod.string(),
   title: zod.string().nullish(),
   artist: zod.string().nullish(),
+  label: zod.string().nullish(),
+  coverUrl: zod.string().nullish(),
+  releaseDate: zod.string().nullish(),
+  trackCount: zod.number().nullish(),
+  releaseType: zod.string().nullish(),
+  genres: zod.array(zod.string()).optional(),
+  isrc: zod
+    .string()
+    .nullish()
+    .describe(
+      "Present only when the lookup started from a track (ISRC or track link).",
+    ),
+  trackTitle: zod.string().nullish(),
+  durationSec: zod.number().nullish(),
+  explicit: zod.boolean().nullish(),
   platform: zod.enum(["deezer", "spotify", "apple"]),
   existingReleaseId: zod.number().nullish(),
   existingReleaseTitle: zod.string().nullish(),

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, AlertCircle, ImageIcon, Music2 } from "lucide-react";
+import { ChevronLeft, AlertCircle, ImageIcon, Music2, Copy, Check } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { useLocation } from "wouter";
 import { useState } from "react";
@@ -16,12 +16,47 @@ import {
   useListLabels,
   getListTransferImportsQueryKey,
 } from "@workspace/api-client-react";
-import type { SpotifySearchResult } from "@workspace/api-client-react";
+import type { SpotifySearchResult, ResolvedLink } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
+
+/** Подпись + значение в карточке предпросмотра. Пустые поля не прячем: их
+ *  отсутствие — тоже информация, релиз придётся дозаполнять руками. */
+function PreviewField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={cn("truncate", !value && "text-muted-foreground")} title={value ?? undefined}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+/** Код с кнопкой копирования — их переносят в чужие системы вручную. */
+function CodeChip({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="inline-flex items-center gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-mono text-xs">{value}</span>
+      <button
+        className="text-muted-foreground hover:text-foreground"
+        title={`Скопировать ${label}`}
+        onClick={() => {
+          void navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
 
 export default function NewImport() {
   const [, setLocation] = useLocation();
@@ -53,26 +88,25 @@ export default function NewImport() {
   const trimmedInput = link.trim();
   const compactInput = trimmedInput.replace(/[-\s]/g, "");
   const isUpcInput = canImportUpc && /^\d{8,14}$/.test(compactInput);
+  // ISRC: две буквы страны, три знака регистранта, пять цифр года и номера.
+  const isIsrcInput = canImportUpc && /^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$/.test(compactInput);
   // Ссылку отличаем от имени артиста до отправки: иначе адрес уходил бы в
   // поиск по названию и находил чужие каверы вместо нужного релиза.
   const isLinkInput = canImportUpc && /^(https?:\/\/|spotify:)/i.test(trimmedInput);
+  // Всё, что опознаёт релиз однозначно, идёт через предпросмотр.
+  const isPreviewInput = isUpcInput || isIsrcInput || isLinkInput;
 
   const [resolving, setResolving] = useState(false);
-  const [resolved, setResolved] = useState<{
-    upc: string;
-    title?: string | null;
-    artist?: string | null;
-    existingReleaseId?: number | null;
-    existingReleaseTitle?: string | null;
-  } | null>(null);
+  const [resolved, setResolved] = useState<ResolvedLink | null>(null);
 
-  // Ссылка разбирается отдельным шагом: сначала показываем, что нашлось,
-  // и только по кнопке заводим релиз — вставить не ту ссылку слишком легко.
+  // Сначала показываем, что нашлось, и только по кнопке заводим релиз:
+  // ошибиться в одной цифре кода и увидеть это уже внутри созданной записи
+  // слишком легко.
   const handleResolveLink = async () => {
     setResolving(true);
     setResolved(null);
     try {
-      const r = await resolveReleaseLink({ url: trimmedInput });
+      const r = await resolveReleaseLink({ query: trimmedInput });
       setResolved(r);
     } catch (e: any) {
       const code = String(e?.response?.data?.error ?? "");
@@ -116,13 +150,9 @@ export default function NewImport() {
 
   const handleSearch = async () => {
     if (!trimmedInput) return;
-    // Если ввели UPC — импортируем релиз напрямую.
-    if (isUpcInput) {
-      await handleImportUpc();
-      return;
-    }
-    // Ссылка на площадку — сперва достаём из неё UPC.
-    if (isLinkInput) {
+    // Ссылка, UPC или ISRC опознают конкретный релиз — показываем карточку,
+    // импорт пойдёт отдельным подтверждением.
+    if (isPreviewInput) {
       await handleResolveLink();
       return;
     }
@@ -228,13 +258,19 @@ export default function NewImport() {
               />
               <Button onClick={handleSearch} disabled={!trimmedInput || searching || resolving || importByUpc.isPending} variant="outline" className="bg-background/40" data-testid="button-search">
                 {importByUpc.isPending ? tt.importing_upc
-                  : resolving ? tt.searching
-                  : searching ? tt.searching
-                  : isUpcInput ? tt.import_upc_btn
-                  : isLinkInput ? "Найти по ссылке"
+                  : resolving || searching ? tt.searching
+                  : isPreviewInput ? "Найти релиз"
                   : tt.find_artist}
               </Button>
             </div>
+            {isPreviewInput && !resolved && (
+              <p className="text-[11px] text-muted-foreground pt-1">
+                {isIsrcInput ? "Похоже на ISRC — найдём трек и его релиз."
+                  : isUpcInput ? "Похоже на UPC — найдём релиз целиком."
+                  : "Ссылки Deezer работают напрямую. У Spotify и Apple Music UPC в ссылке нет — возьмите ссылку с Deezer либо укажите UPC или ISRC."}
+                {" "}Сначала покажем, что нашлось, импорт — отдельной кнопкой.
+              </p>
+            )}
             {isUpcInput && (
               <div className="flex items-center gap-2 pt-1">
                 <label className="text-xs text-muted-foreground whitespace-nowrap">{tt.source_label}</label>
@@ -250,26 +286,47 @@ export default function NewImport() {
                 <span className="text-[11px] text-muted-foreground">{tt.source_hint}</span>
               </div>
             )}
-            {isLinkInput && !resolved && (
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Ссылки Deezer работают напрямую. У Spotify и Apple Music UPC в ссылке нет —
-                найдите релиз на Deezer или укажите UPC.
-              </p>
-            )}
           </CardContent>
         </Card>
 
         {resolved && (
           <Card className="bg-card/50 backdrop-blur border-border/50" data-testid="card-resolved-link">
-            <CardContent className="p-4 space-y-3">
-              <div className="text-xs text-muted-foreground">Найден релиз по ссылке</div>
-              <div className="space-y-0.5">
-                <div className="font-medium">{resolved.title ?? "—"}</div>
-                <div className="text-sm text-muted-foreground">{resolved.artist ?? "—"}</div>
-                <div className="font-mono text-xs text-muted-foreground pt-1">UPC {resolved.upc}</div>
+            <CardContent className="p-5 space-y-5">
+              <div className="flex gap-5">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="text-lg font-semibold truncate">{resolved.trackTitle ?? resolved.title ?? "—"}</div>
+                  {resolved.artist && <div className="text-sm text-muted-foreground">от {resolved.artist}</div>}
+                  {resolved.releaseDate && (
+                    <div className="text-sm text-muted-foreground">
+                      Вышел {new Date(resolved.releaseDate).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+                    </div>
+                  )}
+                </div>
+                {resolved.coverUrl && (
+                  <img src={resolved.coverUrl} alt="" className="h-24 w-24 rounded-md object-cover border border-border/60 shrink-0" />
+                )}
               </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <CodeChip label="UPC" value={resolved.upc} />
+                {resolved.isrc && <CodeChip label="ISRC" value={resolved.isrc} />}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <PreviewField label="Лейбл" value={resolved.label} />
+                <PreviewField label="Жанры" value={resolved.genres?.length ? resolved.genres.join(", ") : null} />
+                <PreviewField label="Треков" value={resolved.trackCount != null ? String(resolved.trackCount) : null} />
+                <PreviewField label="Тип" value={resolved.releaseType} />
+                {resolved.durationSec != null && (
+                  <PreviewField label="Длительность" value={`${Math.floor(resolved.durationSec / 60)}м ${resolved.durationSec % 60}с`} />
+                )}
+                {resolved.explicit != null && (
+                  <PreviewField label="Ненормативная лексика" value={resolved.explicit ? "Да" : "Нет"} />
+                )}
+              </div>
+
               {resolved.existingReleaseId ? (
-                <div className="flex items-center gap-2 text-xs text-amber-300">
+                <div className="flex items-center gap-2 text-xs text-amber-300 rounded p-2 bg-amber-500/10 border border-amber-500/30">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   <span>
                     Этот релиз уже в каталоге — «{resolved.existingReleaseTitle}».{" "}
@@ -279,13 +336,18 @@ export default function NewImport() {
                   </span>
                 </div>
               ) : (
-                <Button
-                  onClick={() => handleImportUpc(resolved.upc)}
-                  disabled={importByUpc.isPending}
-                  data-testid="button-import-resolved"
-                >
-                  {importByUpc.isPending ? tt.importing_upc : tt.import_upc_btn}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => handleImportUpc(resolved.upc)}
+                    disabled={importByUpc.isPending}
+                    data-testid="button-import-resolved"
+                  >
+                    {importByUpc.isPending ? tt.importing_upc : "Импортировать в каталог"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setResolved(null)} disabled={importByUpc.isPending}>
+                    Отмена
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
