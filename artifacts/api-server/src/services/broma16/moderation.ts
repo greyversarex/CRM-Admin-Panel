@@ -296,14 +296,40 @@ export async function fetchDraftData(
   bromaReleaseId: number,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const res = await client.request<{ data?: Record<string, unknown> }>(
+    const res = await client.request<Record<string, unknown>>(
       "GET",
       `/repertoire/release/${bromaReleaseId}/data`,
     );
-    return res?.data ?? null;
+    // Этот метод, в отличие от остальных, отдаёт поля черновика прямо в корне
+    // ответа, без обёртки `data` — на неё запрос молча возвращал пустоту.
+    if (!res || typeof res !== "object") return null;
+    const nested = (res as { data?: Record<string, unknown> }).data;
+    return nested && typeof nested === "object" ? nested : res;
   } catch (e) {
     logger.warn({ bromaReleaseId, err: String(e) }, "[broma16] черновик недоступен");
     return null;
+  }
+}
+
+/**
+ * Все незавершённые черновики аккаунта — с шагом, на котором каждый застрял.
+ *
+ * Это прямой ответ на вопрос заказчика «как увидеть, где встал черновик»:
+ * шаг приходит полем `step` (file / tracks / check / confirm).
+ */
+export async function fetchAccountDrafts(client: Broma16Client): Promise<Record<string, unknown>[]> {
+  const accountId = await client.getAccountId();
+  try {
+    const res = await client.request<{ data?: Record<string, unknown>[] } | Record<string, unknown>[]>(
+      "GET",
+      `/accounts/${accountId}/assets/drafts/all`,
+    );
+    if (Array.isArray(res)) return res;
+    const list = (res as { data?: Record<string, unknown>[] })?.data;
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    logger.warn({ err: String(e) }, "[broma16] список черновиков недоступен");
+    return [];
   }
 }
 

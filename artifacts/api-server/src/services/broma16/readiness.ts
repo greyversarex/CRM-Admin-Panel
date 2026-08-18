@@ -31,6 +31,7 @@ import {
   resolveCountryId,
   resolveGenres,
   resolveOutletCodes,
+  resolveReleaseTypeId,
 } from "./dictionaries";
 
 export type ReadinessIssue = {
@@ -351,7 +352,10 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
   }
 
   // ── Витрины ───────────────────────────────────────────────────────
-  const outlets = await resolveOutletCodes(release.broma16DistributionOutlets);
+  // Тип релиза важен: у рингтонов и TikTok свой набор витрин, и без него
+  // отбор шёл бы по общему списку.
+  const releaseTypeId = await resolveReleaseTypeId(release.releaseType);
+  const outlets = await resolveOutletCodes(release.broma16DistributionOutlets, { releaseTypeId });
   if (outlets.length === 0) {
     add({
       section: "distribution",

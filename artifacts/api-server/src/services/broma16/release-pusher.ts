@@ -422,7 +422,9 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
 
   // ── Шаг 8: дистрибуция ───────────────────────────────────────────
   await onStep("distribution");
-  const outlets = await resolveOutletCodes(release.broma16DistributionOutlets);
+  const outlets = await resolveOutletCodes(release.broma16DistributionOutlets, {
+    releaseTypeId: await resolveReleaseTypeId(release.releaseType),
+  });
   if (!progress.distributionDone) {
     // Broma16 ждёт верхнеуровневый список витрин `outlets` (required_unless: update).
     // `distribution_outlets` — необязательный, только для персональных дат отгрузки

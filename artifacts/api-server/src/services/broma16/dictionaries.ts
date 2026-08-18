@@ -257,6 +257,43 @@ export async function resolveLanguageId(code?: string | null): Promise<number> {
 
 import { pickOutletIds, restrictedOutletName } from "./outlets";
 
+/**
+ * Витрины, доступные конкретному типу релиза, — из справочника Broma16.
+ *
+ * У `/dictionaries/outlets` есть параметр `release_type_id`, и он отвечает
+ * ровно на вопрос, который мы раньше решали своим списком: для сингла,
+ * альбома и EP доступны 33 витрины из 39, а рингтонам и TikTok — по одной-три
+ * собственных. Остальные Broma16 отвергает с «an incorrect release
+ * distribution identifier», и релиз остаётся черновиком.
+ *
+ * Ответ кэшируется в памяти на час: справочник меняется редко, а обращение к
+ * нему идёт на каждую проверку готовности.
+ */
+const outletsByTypeCache = new Map<number, { ids: Set<string>; at: number }>();
+const OUTLETS_BY_TYPE_TTL_MS = 60 * 60 * 1000;
+
+export async function allowedOutletIdsForReleaseType(releaseTypeId: number): Promise<Set<string> | null> {
+  const cached = outletsByTypeCache.get(releaseTypeId);
+  if (cached && Date.now() - cached.at < OUTLETS_BY_TYPE_TTL_MS) return cached.ids;
+  try {
+    const client = await createBroma16Client();
+    const res = await client.request<{ data?: { id?: unknown; external_id?: unknown }[] }>(
+      "GET",
+      "/dictionaries/outlets",
+      { query: { category: "audio", language: "ru", release_type_id: releaseTypeId } },
+    );
+    const list = res?.data ?? [];
+    if (!Array.isArray(list) || list.length === 0) return null;
+    const ids = new Set(list.map((o) => String(o.id ?? o.external_id)));
+    outletsByTypeCache.set(releaseTypeId, { ids, at: Date.now() });
+    return ids;
+  } catch (e) {
+    // Справочник недоступен — не роняем отправку, откатываемся на свой список.
+    logger.warn({ releaseTypeId, err: String(e) }, "[broma16] витрины по типу релиза недоступны");
+    return null;
+  }
+}
+
 const DEFAULT_OUTLETS = ["spotify", "apple", "yandex", "vk"];
 
 /** Витрины, недоступные обычному релизу, среди выбранных. */
@@ -274,7 +311,7 @@ export async function outletsNeedingOwnReleaseType(requested?: string[] | null):
  */
 export async function resolveOutletCodes(
   requested?: string[] | null,
-  opts: { keepRestricted?: boolean } = {},
+  opts: { keepRestricted?: boolean; releaseTypeId?: number } = {},
 ): Promise<string[]> {
   const dict = await getDictionary("outlet");
   const wanted = (requested && requested.length > 0 ? requested : DEFAULT_OUTLETS).map(norm);
@@ -289,6 +326,16 @@ export async function resolveOutletCodes(
   // Она отправляла в Broma16 в том числе рингтонные витрины и служебные
   // записи с отрицательными id, и релиз падал целиком. Пустой список честнее:
   // на него отчёт готовности ругается понятным текстом до первого запроса.
-  return pickOutletIds(dict, wanted, opts);
+  const picked = pickOutletIds(dict, wanted, { keepRestricted: true });
+  if (opts.keepRestricted) return picked;
+
+  // Точный ответ — из справочника Broma16 по типу релиза. Свой список
+  // (pickOutletIds без keepRestricted) остаётся запасным на случай, когда
+  // справочник недоступен.
+  if (opts.releaseTypeId != null) {
+    const allowed = await allowedOutletIdsForReleaseType(opts.releaseTypeId);
+    if (allowed) return picked.filter((id) => allowed.has(id));
+  }
+  return pickOutletIds(dict, wanted);
 }
 
