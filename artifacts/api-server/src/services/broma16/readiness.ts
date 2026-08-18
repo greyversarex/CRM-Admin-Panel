@@ -25,7 +25,13 @@ import {
 } from "@workspace/db";
 import { describeMixedScript } from "../../lib/mixed-script";
 import { checkWriterName } from "../../lib/writer-name";
-import { getDictionary, resolveCountryId, resolveGenres, resolveOutletCodes } from "./dictionaries";
+import {
+  getDictionary,
+  outletsNeedingOwnReleaseType,
+  resolveCountryId,
+  resolveGenres,
+  resolveOutletCodes,
+} from "./dictionaries";
 
 export type ReadinessIssue = {
   section: "release" | "tracks" | "distribution";
@@ -352,6 +358,22 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
       field: "outlets",
       message: "Не выбрано ни одной площадки для дистрибуции — Broma16 не примет релиз без списка витрин.",
       severity: "error",
+    });
+  }
+
+  // Рингтон-витрины и TikTok требуют отдельного типа релиза. Если их не убрать,
+  // Broma16 отвечает «an incorrect release distribution identifier» и релиз
+  // целиком остаётся черновиком — так застрял релиз #48 «Ochai Khushruyum».
+  const restricted = await outletsNeedingOwnReleaseType(release.broma16DistributionOutlets);
+  if (restricted.length > 0) {
+    add({
+      section: "distribution",
+      field: "outlets",
+      message:
+        `Эти витрины требуют отдельного релиза своего типа (RBT / рингтон / TikTok) и в обычную ` +
+        `поставку не войдут: ${restricted.join(", ")}. Остальные площадки уедут как обычно; ` +
+        `для рингтонов и TikTok нужен отдельный релиз.`,
+      severity: "warning",
     });
   }
 

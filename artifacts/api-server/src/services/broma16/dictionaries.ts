@@ -255,28 +255,40 @@ export async function resolveLanguageId(code?: string | null): Promise<number> {
   return 1;
 }
 
+import { pickOutletIds, restrictedOutletName } from "./outlets";
+
 const DEFAULT_OUTLETS = ["spotify", "apple", "yandex", "vk"];
 
-/** Коды витрин для дистрибуции, отфильтрованные по словарю. */
-export async function resolveOutletCodes(requested?: string[] | null): Promise<string[]> {
+/** Витрины, недоступные обычному релизу, среди выбранных. */
+export async function outletsNeedingOwnReleaseType(requested?: string[] | null): Promise<string[]> {
+  const ids = await resolveOutletCodes(requested, { keepRestricted: true });
+  return ids.map(restrictedOutletName).filter((n): n is string => n !== null);
+}
+
+/**
+ * Идентификаторы витрин для дистрибуции.
+ *
+ * Возвращает именно externalId словаря: у витрин Broma16 поле `code` пустое, а
+ * прежняя реализация на совпадении по названию отдавала само название — то
+ * есть в запрос уходило «Spotify» вместо 6140.
+ */
+export async function resolveOutletCodes(
+  requested?: string[] | null,
+  opts: { keepRestricted?: boolean } = {},
+): Promise<string[]> {
   const dict = await getDictionary("outlet");
   const wanted = (requested && requested.length > 0 ? requested : DEFAULT_OUTLETS).map(norm);
   if (dict.length === 0) {
     return Array.from(new Set(wanted));
   }
-  const validByCode = new Map<string, string>();
-  for (const d of dict) {
-    if (d.code) validByCode.set(norm(d.code), d.code);
-    validByCode.set(norm(d.name), d.code ?? d.name);
-    validByCode.set(norm(d.externalId), d.code ?? d.externalId);
-  }
-  const out: string[] = [];
-  for (const w of wanted) {
-    const found = validByCode.get(w);
-    if (found) out.push(found);
-  }
-  if (out.length > 0) return Array.from(new Set(out));
-  // Ничего не совпало — отдаём все доступные коды словаря (лучше, чем пусто).
-  return Array.from(new Set(dict.map((d) => d.code ?? d.externalId)));
+  // Витрины под отдельный тип релиза отсеиваются внутри pickOutletIds:
+  // включать их в обычную поставку нельзя, а сообщить о них — задача отчёта
+  // готовности.
+  //
+  // Прежде здесь была ещё ветка «ничего не совпало — отдаём весь словарь».
+  // Она отправляла в Broma16 в том числе рингтонные витрины и служебные
+  // записи с отрицательными id, и релиз падал целиком. Пустой список честнее:
+  // на него отчёт готовности ругается понятным текстом до первого запроса.
+  return pickOutletIds(dict, wanted, opts);
 }
 
