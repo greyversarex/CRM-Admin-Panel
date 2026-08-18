@@ -16,6 +16,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   artistsTable,
+  assetsTable,
   releaseArtistsTable,
   releasesTable,
   tracksTable,
@@ -95,18 +96,55 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     if (mixedTrack) add({ section: "tracks", field: `track:${t.id}:title`, message: mixedTrack, severity: "error" });
   }
 
-  // Для сингла Broma16 сверяет название записи с названием релиза.
-  if (release.releaseType === "single" && tracks.length === 1) {
-    const trackTitle = (tracks[0].title ?? "").trim();
-    if (trackTitle && releaseTitle && trackTitle !== releaseTitle) {
+  // Требования Broma16 к синглам («Критерии готовности релиза», документация
+  // прислана 18.08.2026): у типов Сингл/RBT/RT/TikTok должна быть ровно одна
+  // фонограмма, а её название, версия и состав исполнителей обязаны совпадать
+  // с релизом. Проверяем всё это до отправки — Broma16 иначе отклоняет.
+  if (release.releaseType === "single") {
+    if (tracks.length > 1) {
       add({
         section: "tracks",
-        field: `track:${tracks[0].id}:title`,
+        field: null,
         message:
-          `Для сингла название трека должно совпадать с названием релиза. ` +
-          `Сейчас релиз — «${releaseTitle}», трек — «${trackTitle}». Broma16 отклонит отправку.`,
+          `У сингла может быть только одна фонограмма, сейчас их ${tracks.length}. ` +
+          `Разделите релиз или смените тип на EP/альбом.`,
         severity: "error",
       });
+    }
+
+    if (tracks.length === 1) {
+      const track = tracks[0];
+      const trackTitle = (track.title ?? "").trim();
+      if (trackTitle && releaseTitle && trackTitle !== releaseTitle) {
+        add({
+          section: "tracks",
+          field: `track:${track.id}:title`,
+          message:
+            `Для сингла название трека должно совпадать с названием релиза. ` +
+            `Сейчас релиз — «${releaseTitle}», трек — «${trackTitle}». Broma16 отклонит отправку.`,
+          severity: "error",
+        });
+      }
+
+      // Версия (сабтайтл) сверяется так же строго, как и название.
+      const releaseVersion = (release.releaseVersion ?? "").trim();
+      const trackVersion = (track.trackVersion ?? "").trim();
+      if (releaseVersion !== trackVersion) {
+        add({
+          section: "tracks",
+          field: `track:${track.id}:trackVersion`,
+          message:
+            `Для сингла версия трека должна совпадать с версией релиза. ` +
+            `Сейчас у релиза «${releaseVersion || "пусто"}», у трека «${trackVersion || "пусто"}».`,
+          severity: "error",
+        });
+      }
+
+      // Третье требование Broma16 — совпадение состава исполнителей — здесь не
+      // проверяется: пушер отправляет фонограмме тот же список main_performer,
+      // что и релизу, поэтому разойтись они не могут. Проверка ловила бы не
+      // расхождение, а музыкантов из блока «Исполнители» (вокал, гитара), и
+      // ошибочно ругалась бы на исправные релизы.
     }
   }
 
@@ -223,6 +261,53 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
         });
       }
     }
+  }
+
+  // ── Обложка ───────────────────────────────────────────────────────
+  // Требования Broma16 (ответ поддержки 18.08.2026): JPG/JPEG/PNG, до 40 МБ,
+  // строго 1:1, не меньше 1500×1500, без логотипов, адресов сайтов, ссылок,
+  // штрихкодов, QR-кодов и любой рекламы.
+  if (release.coverUrl) {
+    const [cover] = await db
+      .select({ mimeType: assetsTable.mimeType, sizeBytes: assetsTable.sizeBytes, filename: assetsTable.filename })
+      .from(assetsTable)
+      .where(eq(assetsTable.objectPath, release.coverUrl))
+      .limit(1);
+
+    if (cover) {
+      const mime = norm(cover.mimeType ?? "");
+      if (mime && !["image/jpeg", "image/jpg", "image/png"].includes(mime)) {
+        add({
+          section: "release",
+          field: "coverUrl",
+          message: `Broma16 принимает обложку только в JPG, JPEG или PNG, а файл «${cover.filename}» — ${cover.mimeType}.`,
+          severity: "error",
+        });
+      }
+      const maxBytes = 40 * 1024 * 1024;
+      if (cover.sizeBytes > maxBytes) {
+        add({
+          section: "release",
+          field: "coverUrl",
+          message:
+            `Обложка весит ${(cover.sizeBytes / 1024 / 1024).toFixed(1)} МБ — Broma16 принимает до 40 МБ. ` +
+            `Пересохраните файл с меньшим качеством.`,
+          severity: "error",
+        });
+      }
+    }
+
+    // Размеры и содержимое картинки мы не читаем: ширина и высота при загрузке
+    // не сохраняются, а логотипы и QR-коды машиной не проверить. Поэтому не
+    // молчим, а показываем оператору сам список требований.
+    add({
+      section: "release",
+      field: "coverUrl",
+      message:
+        "Проверьте обложку по требованиям Broma16: квадрат 1:1, не меньше 1500×1500 пикселей, " +
+        "без логотипов, адресов сайтов, ссылок, штрихкодов, QR-кодов и рекламы.",
+      severity: "warning",
+    });
   }
 
   // ── Язык ──────────────────────────────────────────────────────────

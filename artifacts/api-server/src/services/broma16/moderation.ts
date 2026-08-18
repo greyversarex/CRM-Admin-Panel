@@ -7,10 +7,10 @@
  * его у нас: обновляет статус, пишет в audit_log, уведомляет владельца релиза
  * (артиста/лейбл) и запускает триггеры автоматизации (email через очередь).
  *
- * Поле статуса модерации в ответе Broma16 документально не закреплено, поэтому
- * вердикт извлекается консервативно: только при явных ключевых словах
- * «approve/reject» (и их синонимах). Любой неопознанный ответ оставляет релиз в
- * статусе pending и логируется — это исключает ложные «одобрения».
+ * Статусы Broma16 закреплены справочником (см. moderation-status.ts) — он и
+ * решает вердикт. Разбор по ключевым словам остался запасным вариантом на
+ * случай кода, которого в справочнике ещё нет: он консервативен, и любой
+ * неопознанный ответ оставляет релиз в pending, исключая ложные «одобрения».
  */
 
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -18,6 +18,7 @@ import { db, releasesTable, tracksTable, auditLogTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
 import { fetchAssets } from "./catalog-import";
+import { lookupBroma16Status } from "./moderation-status";
 import { fireTriggerAndForget } from "../triggers";
 import { notifyByArtistId, notifyByLabelId } from "../notifications";
 
@@ -59,6 +60,19 @@ const APPROVE_RE =
  *  неопознанное значение остаётся "pending" — ложное «одобрение» исключено. */
 export function deriveModerationVerdict(release: unknown): { verdict: ModerationVerdict; raw: string | null } {
   const candidates = collectStatusStrings(release);
+
+  // Известный код справочника решает всё: он точен, а разбор по подстрокам —
+  // лишь догадка. Отказ среди кодов важнее одобрения (релиз мог быть отгружен,
+  // а затем снят), поэтому сначала ищем отказ по всему списку.
+  const known = candidates
+    .map((c) => ({ raw: c, info: lookupBroma16Status(c) }))
+    .filter((x): x is { raw: string; info: NonNullable<ReturnType<typeof lookupBroma16Status>> } => x.info !== null);
+  const rejected = known.find((x) => x.info.verdict === "rejected");
+  if (rejected) return { verdict: "rejected", raw: rejected.raw };
+  const approved = known.find((x) => x.info.verdict === "approved");
+  if (approved) return { verdict: "approved", raw: approved.raw };
+  if (known.length > 0) return { verdict: "pending", raw: known[0].raw };
+
   let approveRaw: string | null = null;
   for (const c of candidates) {
     const s = c.toLowerCase();
@@ -244,6 +258,55 @@ export type ModerationSource = {
   recordings: { id: number; isrc?: string }[];
 };
 
+/**
+ * Карточка одного релиза — вместо перебора всего каталога.
+ *
+ * Broma16 отдаёт по нему больше, чем список: копирайты, обложку, признаки
+ * незавершённого обновления. Раньше такого метода мы не знали и на каждую
+ * проверку тянули весь каталог постранично.
+ *
+ * `null` — релиза среди импортированных нет (скорее всего застрял черновиком).
+ */
+export async function fetchReleaseCard(
+  client: Broma16Client,
+  bromaReleaseId: number,
+): Promise<Record<string, unknown> | null> {
+  const accountId = await client.getAccountId();
+  try {
+    const res = await client.request<{ data?: Record<string, unknown> }>(
+      "GET",
+      `/accounts/${accountId}/assets/releases/${bromaReleaseId}`,
+    );
+    return res?.data ?? null;
+  } catch (e) {
+    logger.warn({ bromaReleaseId, err: String(e) }, "[broma16] карточка релиза недоступна");
+    return null;
+  }
+}
+
+/**
+ * Заглядывает в незавершённый черновик: на каком шаге он остался.
+ *
+ * До сих пор мы могли сказать только «релиза нет в каталоге», и почему —
+ * приходилось выяснять в кабинете руками. Этот метод показан разработчиком
+ * Broma16 как штатный способ смотреть ещё не импортированный материал.
+ */
+export async function fetchDraftData(
+  client: Broma16Client,
+  bromaReleaseId: number,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await client.request<{ data?: Record<string, unknown> }>(
+      "GET",
+      `/repertoire/release/${bromaReleaseId}/data`,
+    );
+    return res?.data ?? null;
+  } catch (e) {
+    logger.warn({ bromaReleaseId, err: String(e) }, "[broma16] черновик недоступен");
+    return null;
+  }
+}
+
 export async function fetchModerationSource(client: Broma16Client): Promise<ModerationSource> {
   const accountId = await client.getAccountId();
   const [releases, recordings] = await Promise.all([
@@ -282,7 +345,15 @@ function toReleasePayload(rel: Record<string, unknown>, source: ModerationSource
 export async function checkReleaseModeration(
   releaseId: number,
   opts: { userId?: number | null; source?: ModerationSource } = {},
-): Promise<{ checked: boolean; changed: boolean; verdict: ModerationVerdict; raw: string | null; reason?: string }> {
+): Promise<{
+  checked: boolean;
+  changed: boolean;
+  verdict: ModerationVerdict;
+  raw: string | null;
+  reason?: string;
+  /** Сырые данные незавершённого черновика — чтобы показать, где он застрял. */
+  draft?: Record<string, unknown>;
+}> {
   const [rel] = await db
     .select({
       id: releasesTable.id,
@@ -310,11 +381,22 @@ export async function checkReleaseModeration(
   // остался черновиком. Это не ошибка связи, а незавершённая доставка, и
   // оператору надо сказать именно так.
   if (!bromaRelease) {
+    // Заглядываем в черновик: раньше здесь путь заканчивался словами «остался
+    // черновиком», и выяснять причину приходилось руками в кабинете Broma16.
+    const draft = await fetchDraftData(client, rel.broma16ReleaseId);
+    const draftStatus = draft ? pickString(draft, ["moderation_status", "status"]) : null;
     logger.info(
-      { releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId },
-      "[broma16] модерация: релиза нет в каталоге — остался черновиком",
+      { releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, draftStatus, draftFound: !!draft },
+      "[broma16] модерация: релиза нет среди импортированных — смотрим черновик",
     );
-    return { checked: false, changed: false, verdict: "pending", raw: null, reason: "draft" };
+    return {
+      checked: false,
+      changed: false,
+      verdict: "pending",
+      raw: draftStatus,
+      reason: "draft",
+      draft: draft ?? undefined,
+    };
   }
 
   const data = toReleasePayload(bromaRelease, source);
