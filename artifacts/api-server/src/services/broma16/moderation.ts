@@ -18,7 +18,7 @@ import { db, releasesTable, tracksTable, auditLogTable } from "@workspace/db";
 import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
 import { fetchAssets } from "./catalog-import";
-import { lookupBroma16Status } from "./moderation-status";
+import { isShipped, lookupBroma16Status } from "./moderation-status";
 import { fireTriggerAndForget } from "../triggers";
 import { notifyByArtistId, notifyByLabelId } from "../notifications";
 
@@ -353,6 +353,8 @@ export async function checkReleaseModeration(
   reason?: string;
   /** Сырые данные незавершённого черновика — чтобы показать, где он застрял. */
   draft?: Record<string, unknown>;
+  /** Доехал ли релиз до площадок. Одобрение и отгрузка — разные события. */
+  shipped?: boolean;
 }> {
   const [rel] = await db
     .select({
@@ -406,18 +408,21 @@ export async function checkReleaseModeration(
   await readBackAssignedCodes(rel.id, data);
 
   const { verdict, raw } = deriveModerationVerdict(data);
+  // Отгрузка живёт в отдельном массиве statuses: релиз может быть одобрен и
+  // при этом ещё не доехать до магазинов, и оператору важно видеть разницу.
+  const shipped = isShipped(bromaRelease.statuses);
 
   if (verdict === "pending") {
-    logger.info({ releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, raw }, "[broma16] модерация: ещё в обработке");
-    return { checked: true, changed: false, verdict, raw };
+    logger.info({ releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, raw, shipped }, "[broma16] модерация: ещё в обработке");
+    return { checked: true, changed: false, verdict, raw, shipped };
   }
 
   if (rel.broma16ModerationStatus === verdict) {
-    return { checked: true, changed: false, verdict, raw };
+    return { checked: true, changed: false, verdict, raw, shipped };
   }
 
   await applyVerdict(rel, verdict, raw, opts.userId ?? null);
-  return { checked: true, changed: true, verdict, raw };
+  return { checked: true, changed: true, verdict, raw, shipped };
 }
 
 /**

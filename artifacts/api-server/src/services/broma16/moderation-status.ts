@@ -1,25 +1,40 @@
 /**
- * Официальный справочник статусов материала Broma16.
+ * Статусы материала в Broma16 — их два разных набора, и их легко перепутать.
  *
- * До этого статус угадывался регулярками по подстрокам («approv», «reject» и
- * т.п.). На присланном разработчиком Broma16 списке видно, что так два статуса
- * разбираются неверно: `shipped` (отгружено на площадки) и `active` (активен)
- * не содержат ни одного «одобрительного» корня и молча считались ожиданием.
- * То есть релиз уже играл в магазинах, а у нас висел «на модерации».
+ * `moderation_status` — вердикт модерации, и только он решает судьбу релиза:
+ * approved / pending / rejected.
  *
- * Источник: DocGetPatrnerApi (Вероника Бунина, Broma16, 18.08.2026).
+ * `statuses` — массив стадий жизненного цикла сразу по нескольким осям:
+ * готовность материала, вердикт модерации и факт отгрузки. У живого релиза он
+ * выглядит как ["shipped", "approved", "ready"]. Значения этого массива
+ * перечислены в документации Broma16 (DocGetPatrnerApi, 18.08.2026) и
+ * используются ещё и как фильтр `?status=` в запросе списка материалов.
+ *
+ * Практическая польза от массива в том, что «одобрен» и «доехал до магазинов» —
+ * разные вещи: модерация может быть пройдена, а отгрузки ещё нет.
  */
 
 export type ModerationVerdict = "approved" | "rejected" | "pending";
 
-/** Что означает код статуса и как он ложится на наш вердикт. */
 export type Broma16StatusInfo = {
   /** Расшифровка из документации Broma16 — показываем оператору как есть. */
   label: string;
   verdict: ModerationVerdict;
 };
 
-export const BROMA16_STATUSES: Record<string, Broma16StatusInfo> = {
+/** Значения поля `moderation_status` — вердикт модерации. */
+export const BROMA16_MODERATION_STATUSES: Record<string, Broma16StatusInfo> = {
+  approved: { label: "одобрено",   verdict: "approved" },
+  pending:  { label: "на проверке", verdict: "pending" },
+  rejected: { label: "отклонено",  verdict: "rejected" },
+};
+
+/**
+ * Значения массива `statuses` и фильтра `?status=`.
+ * Вердикт указан для тех, что попадают и в moderation_status; для чисто
+ * жизненных стадий (ready, shipped, expired) он справочный.
+ */
+export const BROMA16_LIFECYCLE_STATUSES: Record<string, Broma16StatusInfo> = {
   draft_processing: { label: "ожидает обработки", verdict: "pending" },
   draft_verify:     { label: "в обработке",       verdict: "pending" },
   not_ready:        { label: "не готово",         verdict: "pending" },
@@ -30,24 +45,43 @@ export const BROMA16_STATUSES: Record<string, Broma16StatusInfo> = {
   expired:          { label: "закончился",        verdict: "rejected" },
   verify:           { label: "в обработке",       verdict: "pending" },
   draft:            { label: "на проверке",       verdict: "pending" },
-  rejected:         { label: "отклонено",         verdict: "rejected" },
   shipped:          { label: "отгружено",         verdict: "approved" },
   takendown:        { label: "снято",             verdict: "rejected" },
-  // В документации статус записан как «takendown», но в ответах встречается и
-  // «takedown» — принимаем оба, чтобы снятый релиз не считался ожидающим.
+  // В документации «takendown», но в ответах встречается и «takedown».
   takedown:         { label: "снято",             verdict: "rejected" },
 };
 
-/** Возвращает описание статуса, если код известен справочнику. */
+/**
+ * Вердикт по значению `moderation_status`. Только этот набор влияет на статус
+ * релиза у нас: значения из `statuses` сюда подставлять нельзя — там рядом с
+ * вердиктом лежат «ready» и «shipped», и релиз на модерации выглядел бы
+ * одобренным просто потому, что уже отгружен на площадки.
+ */
 export function lookupBroma16Status(raw: string | null | undefined): Broma16StatusInfo | null {
-  const key = (raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  return BROMA16_STATUSES[key] ?? null;
+  const key = normalizeCode(raw);
+  return BROMA16_MODERATION_STATUSES[key] ?? null;
 }
 
-/** Человеческая расшифровка статуса для интерфейса; неизвестный код — как есть. */
+/** Описание кода из массива `statuses` (или из фильтра `?status=`). */
+export function lookupLifecycleStatus(raw: string | null | undefined): Broma16StatusInfo | null {
+  const key = normalizeCode(raw);
+  return BROMA16_LIFECYCLE_STATUSES[key] ?? BROMA16_MODERATION_STATUSES[key] ?? null;
+}
+
+/** Доехал ли релиз до площадок: в `statuses` есть «shipped». */
+export function isShipped(statuses: unknown): boolean {
+  if (!Array.isArray(statuses)) return false;
+  return statuses.some((s) => normalizeCode(String(s)) === "shipped");
+}
+
+/** Человеческая расшифровка; неизвестный код отдаём как есть. */
 export function describeBroma16Status(raw: string | null | undefined): string | null {
   const value = (raw ?? "").trim();
   if (!value) return null;
-  const info = lookupBroma16Status(value);
+  const info = lookupLifecycleStatus(value);
   return info ? `${value} — ${info.label}` : value;
+}
+
+function normalizeCode(raw: string | null | undefined): string {
+  return (raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }

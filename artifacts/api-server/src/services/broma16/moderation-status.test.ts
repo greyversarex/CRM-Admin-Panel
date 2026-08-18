@@ -1,35 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lookupBroma16Status, describeBroma16Status, BROMA16_STATUSES } from "./moderation-status";
+import {
+  lookupBroma16Status,
+  lookupLifecycleStatus,
+  isShipped,
+  describeBroma16Status,
+} from "./moderation-status";
 
-test("отгруженный и активный релиз считаются одобренными", () => {
-  // Именно эти два регулярки раньше не ловили — релиз играл в магазинах,
-  // а у нас числился ожидающим модерации.
-  assert.equal(lookupBroma16Status("shipped")?.verdict, "approved");
-  assert.equal(lookupBroma16Status("active")?.verdict, "approved");
-});
-
-test("отклонённый, снятый и истёкший считаются отказом", () => {
+test("вердикт читается из moderation_status", () => {
+  assert.equal(lookupBroma16Status("approved")?.verdict, "approved");
+  assert.equal(lookupBroma16Status("pending")?.verdict, "pending");
   assert.equal(lookupBroma16Status("rejected")?.verdict, "rejected");
-  assert.equal(lookupBroma16Status("takendown")?.verdict, "rejected");
-  assert.equal(lookupBroma16Status("takedown")?.verdict, "rejected");
-  assert.equal(lookupBroma16Status("expired")?.verdict, "rejected");
 });
 
-test("рабочие стадии остаются ожиданием", () => {
-  for (const code of ["draft_processing", "draft_verify", "not_ready", "ready", "verify", "draft", "disputed"]) {
-    assert.equal(lookupBroma16Status(code)?.verdict, "pending", code);
+test("стадии жизненного цикла не считаются вердиктом модерации", () => {
+  // Главное отличие двух наборов: у живого релиза statuses выглядит как
+  // ["shipped","approved","ready"], и если пускать эти коды в вердикт, то
+  // релиз «на модерации» станет одобренным просто потому, что уже отгружен.
+  for (const code of ["shipped", "ready", "not_ready", "active", "takendown"]) {
+    assert.equal(lookupBroma16Status(code), null, code);
   }
 });
 
+test("те же коды опознаются как стадии", () => {
+  assert.equal(lookupLifecycleStatus("shipped")?.label, "отгружено");
+  assert.equal(lookupLifecycleStatus("not_ready")?.label, "не готово");
+  assert.equal(lookupLifecycleStatus("takedown")?.label, "снято");
+  // Вердикты тоже встречаются внутри statuses, поэтому опознаются и там.
+  assert.equal(lookupLifecycleStatus("approved")?.verdict, "approved");
+});
+
+test("отгрузка определяется по массиву statuses", () => {
+  assert.equal(isShipped(["shipped", "approved", "ready"]), true);
+  assert.equal(isShipped(["approved", "ready"]), false);
+  assert.equal(isShipped([]), false);
+  assert.equal(isShipped(null), false);
+  assert.equal(isShipped("shipped"), false);
+});
+
 test("регистр и пробелы не мешают", () => {
-  assert.equal(lookupBroma16Status(" Shipped ")?.verdict, "approved");
-  assert.equal(lookupBroma16Status("DRAFT-VERIFY")?.verdict, "pending");
+  assert.equal(lookupBroma16Status(" Approved ")?.verdict, "approved");
+  assert.equal(lookupLifecycleStatus("DRAFT-VERIFY")?.label, "в обработке");
 });
 
 test("неизвестный код не опознаётся", () => {
   assert.equal(lookupBroma16Status("что-то новое"), null);
-  assert.equal(lookupBroma16Status(""), null);
+  assert.equal(lookupLifecycleStatus(""), null);
   assert.equal(lookupBroma16Status(null), null);
 });
 
@@ -37,9 +53,4 @@ test("расшифровка читаема, неизвестный код от�
   assert.equal(describeBroma16Status("shipped"), "shipped — отгружено");
   assert.equal(describeBroma16Status("новый_статус"), "новый_статус");
   assert.equal(describeBroma16Status(null), null);
-});
-
-test("в справочнике все 13 статусов из документации", () => {
-  // takedown — второе написание takendown, поэтому ключей 14.
-  assert.equal(Object.keys(BROMA16_STATUSES).length, 14);
 });
