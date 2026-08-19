@@ -103,19 +103,31 @@ function extractId(data: unknown): number | null {
   return null;
 }
 
+/**
+ * Наши роли авторов → коды Broma16.
+ *
+ * Набор кодов закреплён их партнёрской спецификацией: A — автор слов,
+ * C — автор музыки, CA — автор слов и музыки, AR — аранжировщик,
+ * AD — адаптор, TR — переводчик. Раньше набор был известен только по догадке,
+ * и аранжировщик уходил как автор слов, а «songwriter» — парой кодов вместо
+ * предназначенного для него CA.
+ */
 const WRITER_ROLE_MAP: Record<TrackWriter["role"], string[]> = {
   composer: ["C"],
   lyricist: ["A"],
-  songwriter: ["C", "A"],
-  arranger: ["A"],
+  songwriter: ["CA"],
+  arranger: ["AR"],
 };
 
 type Contributor = {
   title: string;
+  /** Доля автора в процентах, строкой с двумя знаками: «50.00». */
   ownership: string;
   roles: string[];
   controlled_by_submitter: number;
-  ipi?: string;
+  /** Издатель и его доля — необязательны, заполняем только когда знаем. */
+  publisher?: string;
+  publisher_share?: string;
 };
 
 /** Строит список авторов трека с гарантией суммы долей = 100%. */
@@ -127,9 +139,8 @@ function buildContributors(track: Track): Contributor[] {
       return writers.map((w) => ({
         title: w.name,
         ownership: (Number(w.share) || 0).toFixed(2),
-        roles: WRITER_ROLE_MAP[w.role] ?? ["C", "A"],
+        roles: WRITER_ROLE_MAP[w.role] ?? ["CA"],
         controlled_by_submitter: 1,
-        ...(w.caeIpi ? { ipi: w.caeIpi } : {}),
       }));
     }
     logger.warn(
@@ -138,7 +149,9 @@ function buildContributors(track: Track): Contributor[] {
     );
   }
   // Фоллбэк: без данных об авторах Broma16 вернёт 422, поэтому ставим CC 100%.
-  return [{ title: "Copyright Control", ownership: "100.00", roles: ["C", "A"], controlled_by_submitter: 1 }];
+  // Он спасает отправку, но авторские по такому треку собирать некому — об
+  // этом предупреждает отчёт готовности, чтобы это не оставалось незамеченным.
+  return [{ title: "Copyright Control", ownership: "100.00", roles: ["CA"], controlled_by_submitter: 1 }];
 }
 
 /**

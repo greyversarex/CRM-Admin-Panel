@@ -168,6 +168,44 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     });
   }
 
+  // ── Авторы произведения ───────────────────────────────────────────
+  // Без авторов отправка не падает: пушер подставляет «Copyright Control» со
+  // стопроцентной долей, иначе Broma16 отвечает 422. Но это означает, что
+  // авторские отчисления по треку собирать некому — деньги просто не дойдут
+  // до автора. Молчать об этом нельзя.
+  const withoutWriters = tracks.filter((t) => ((t.writers ?? []) as unknown[]).length === 0);
+  if (withoutWriters.length > 0) {
+    add({
+      section: "tracks",
+      field: withoutWriters.length === tracks.length ? "writers" : `track:${withoutWriters[0].id}:writers`,
+      message:
+        (withoutWriters.length === tracks.length
+          ? "Ни у одного трека не указаны авторы. "
+          : `Не указаны авторы у ${withoutWriters.length} из ${tracks.length} треков: ` +
+            `${withoutWriters.slice(0, 3).map((t) => `«${t.title}»`).join(", ")}${withoutWriters.length > 3 ? " и др." : ""}. `) +
+        "Такие треки уйдут как «Copyright Control» — релиз примут, но авторские " +
+        "отчисления по ним получить будет некому. Укажите авторов и их доли.",
+      severity: "warning",
+    });
+  }
+
+  // Доли должны давать ровно 100%: иначе пушер так же уйдёт в Copyright Control.
+  for (const t of tracks) {
+    const writers = (t.writers ?? []) as { share?: number }[];
+    if (writers.length === 0) continue;
+    const sum = writers.reduce((acc, w) => acc + (Number(w.share) || 0), 0);
+    if (Math.abs(sum - 100) >= 0.01) {
+      add({
+        section: "tracks",
+        field: `track:${t.id}:writers`,
+        message:
+          `Трек «${t.title}»: доли авторов дают ${sum}% вместо 100%. ` +
+          `Пока сумма не сойдётся, трек уйдёт как «Copyright Control», и авторские по нему не соберутся.`,
+        severity: "error",
+      });
+    }
+  }
+
   // ── Имена авторов ─────────────────────────────────────────────────
   // Broma16 передаёт авторов в общества, а те регистрируют произведение по
   // юридическому имени. Одного слова недостаточно: отчисления просто не на
