@@ -94,7 +94,13 @@ type PendingRelease = {
   broma16ModerationStatus: string | null;
 };
 
-async function applyVerdict(rel: PendingRelease, verdict: "approved" | "rejected", raw: string | null, userId: number | null): Promise<void> {
+async function applyVerdict(
+  rel: PendingRelease,
+  verdict: "approved" | "rejected",
+  raw: string | null,
+  userId: number | null,
+  reasons: string[] = [],
+): Promise<void> {
   // Обновляем основной статус релиза консервативно: только из ожидаемого
   // предмодерационного состояния, чтобы не перетереть ручные переходы.
   const nextStatus =
@@ -102,9 +108,16 @@ async function applyVerdict(rel: PendingRelease, verdict: "approved" | "rejected
       ? (rel.status === "approved" ? "live" : rel.status)
       : (rel.status === "approved" || rel.status === "live" ? "rejected" : rel.status);
 
+  // Причину отказа кладём в заметку к статусу: без неё оператор видит только
+  // факт отклонения и идёт выяснять «почему» в кабинет Broma16.
+  const note = reasons.length > 0 ? reasons.join("; ").slice(0, 1000) : undefined;
   await db
     .update(releasesTable)
-    .set({ broma16ModerationStatus: verdict, status: nextStatus })
+    .set({
+      broma16ModerationStatus: verdict,
+      status: nextStatus,
+      ...(verdict === "rejected" && note ? { statusNote: note } : {}),
+    })
     .where(eq(releasesTable.id, rel.id));
 
   try {
@@ -117,6 +130,7 @@ async function applyVerdict(rel: PendingRelease, verdict: "approved" | "rejected
         moderationStatus: { from: rel.broma16ModerationStatus, to: verdict },
         releaseStatus: { from: rel.status, to: nextStatus },
         raw,
+        reasons,
       },
     });
   } catch (err) {
@@ -128,7 +142,9 @@ async function applyVerdict(rel: PendingRelease, verdict: "approved" | "rejected
     verdict === "approved"
       ? `✅ Релиз «${rel.title}» одобрен модерацией Broma16`
       : `❌ Релиз «${rel.title}» отклонён модерацией Broma16`;
-  const body = raw ? `Статус Broma16: ${raw}` : "";
+  const body = reasons.length > 0
+    ? reasons.join("; ")
+    : (raw ? `Статус Broma16: ${raw}` : "");
   const notif = {
     type: `broma16_moderation_${verdict}`,
     title,
@@ -333,6 +349,63 @@ export async function fetchAccountDrafts(client: Broma16Client): Promise<Record<
   }
 }
 
+/**
+ * Причины отклонения и список недостающих метаданных.
+ *
+ * Оба метода вне открытого API — их прислала Вероника Бунина (Broma16).
+ * В документации идентификатор назван heaven11_release_id, но проверка на
+ * живом аккаунте показала, что подходит обычный id материала, тот же самый,
+ * что мы храним в broma16_release_id. Для черновика статус приходит null.
+ *
+ * `notices` перечисляет, каких метаданных не хватило для публикации — это
+ * актуально для материалов в статусе «не готово».
+ */
+export async function fetchModerationDetails(
+  client: Broma16Client,
+  bromaReleaseId: number,
+): Promise<{ status: string | null; reasons: string[]; notices: string[] }> {
+  const accountId = await client.getAccountId();
+  const flatten = (v: unknown): string[] => {
+    if (!v) return [];
+    if (typeof v === "string") return [v];
+    if (Array.isArray(v)) return v.flatMap(flatten);
+    if (typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const text = o.message ?? o.text ?? o.reason ?? o.title ?? o.description;
+      if (typeof text === "string") return [text];
+      return Object.values(o).flatMap(flatten);
+    }
+    return [String(v)];
+  };
+
+  let status: string | null = null;
+  let reasons: string[] = [];
+  try {
+    const res = await client.request<{ status?: string | null; reason?: unknown }>(
+      "GET",
+      `/accounts/${accountId}/releases/${bromaReleaseId}/moderation`,
+    );
+    status = res?.status ?? null;
+    reasons = flatten(res?.reason);
+  } catch (e) {
+    logger.warn({ bromaReleaseId, err: String(e) }, "[broma16] причины модерации недоступны");
+  }
+
+  let notices: string[] = [];
+  try {
+    const res = await client.request<unknown>(
+      "GET",
+      `/accounts/${accountId}/releases/${bromaReleaseId}/notices`,
+      { query: { crucial: false, language: "ru" } },
+    );
+    notices = flatten(res);
+  } catch (e) {
+    logger.warn({ bromaReleaseId, err: String(e) }, "[broma16] замечания недоступны");
+  }
+
+  return { status, reasons, notices };
+}
+
 export async function fetchModerationSource(client: Broma16Client): Promise<ModerationSource> {
   const accountId = await client.getAccountId();
   const [releases, recordings] = await Promise.all([
@@ -381,6 +454,10 @@ export async function checkReleaseModeration(
   draft?: Record<string, unknown>;
   /** Доехал ли релиз до площадок. Одобрение и отгрузка — разные события. */
   shipped?: boolean;
+  /** Причины отказа модерации Broma16. */
+  reasons?: string[];
+  /** Чего Broma16 не хватает для публикации. */
+  notices?: string[];
 }> {
   const [rel] = await db
     .select({
@@ -439,16 +516,27 @@ export async function checkReleaseModeration(
   const shipped = isShipped(bromaRelease.statuses);
 
   if (verdict === "pending") {
-    logger.info({ releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, raw, shipped }, "[broma16] модерация: ещё в обработке");
-    return { checked: true, changed: false, verdict, raw, shipped };
+    // У ждущих релизов спрашиваем замечания: они показывают, чего Broma16 не
+    // хватает для публикации, ещё до того как дело дойдёт до отказа.
+    const { notices } = await fetchModerationDetails(client, rel.broma16ReleaseId);
+    logger.info(
+      { releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, raw, shipped, notices: notices.length },
+      "[broma16] модерация: ещё в обработке",
+    );
+    return { checked: true, changed: false, verdict, raw, shipped, notices };
   }
+
+  // Причину запрашиваем только при отказе — на одобренных она пуста.
+  const details = verdict === "rejected"
+    ? await fetchModerationDetails(client, rel.broma16ReleaseId)
+    : { reasons: [] as string[], notices: [] as string[] };
 
   if (rel.broma16ModerationStatus === verdict) {
-    return { checked: true, changed: false, verdict, raw, shipped };
+    return { checked: true, changed: false, verdict, raw, shipped, reasons: details.reasons, notices: details.notices };
   }
 
-  await applyVerdict(rel, verdict, raw, opts.userId ?? null);
-  return { checked: true, changed: true, verdict, raw, shipped };
+  await applyVerdict(rel, verdict, raw, opts.userId ?? null, details.reasons);
+  return { checked: true, changed: true, verdict, raw, shipped, reasons: details.reasons, notices: details.notices };
 }
 
 /**
