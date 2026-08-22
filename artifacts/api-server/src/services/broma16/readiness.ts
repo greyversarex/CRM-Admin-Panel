@@ -308,6 +308,31 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     }
   }
 
+  // ── Дата релиза ───────────────────────────────────────────────────
+  // Broma16 отклоняет дату продаж в прошлом, если релиз не помечен переносом:
+  // «To start the date of sales in the past — when postponing the release, you
+  // need the type of "transfer"». Так пять раз подряд не уехал релиз #48
+  // «Ochai Khushruyum» с датой 1 августа — и понять причину можно было только
+  // из ответа Broma16 после пятой неудачной попытки.
+  if (release.releaseDate) {
+    const raw = String(release.releaseDate).slice(0, 10);
+    const parsed = new Date(`${raw}T00:00:00Z`);
+    const today = new Date();
+    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    if (!Number.isNaN(parsed.getTime()) && parsed < todayUtc && !release.isTransfer) {
+      add({
+        section: "release",
+        field: "releaseDate",
+        message:
+          `Дата релиза ${raw} уже прошла, а релиз не помечен как перенос каталога. ` +
+          `Broma16 такое не примет: дату в прошлом она разрешает только переносам. ` +
+          `Либо перенесите дату на будущее, либо — если релиз уже выходил у другого ` +
+          `дистрибьютора — включите «Перенос каталога» и укажите его оригинальный UPC.`,
+        severity: "error",
+      });
+    }
+  }
+
   // ── Обложка ───────────────────────────────────────────────────────
   // Требования Broma16 (ответ поддержки 18.08.2026): JPG/JPEG/PNG, до 40 МБ,
   // строго 1:1, не меньше 1500×1500, без логотипов, адресов сайтов, ссылок,
