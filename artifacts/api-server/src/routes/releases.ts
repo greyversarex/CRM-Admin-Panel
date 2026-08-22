@@ -2153,6 +2153,67 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
 
 type ResolveFailure = { ok: false; reason: string; message: string };
 
+/**
+ * Карточка релиза из Spotify по ссылке на альбом или трек.
+ *
+ * Появилась, когда у нас наконец заработали ключи: `GET /albums/{id}` отдаёт
+ * `external_ids.upc`, то есть ссылка Spotify всё-таки приводит к штрихкоду —
+ * раньше мы честно отвечали, что это невозможно, потому что доступа не было.
+ *
+ * `null` — Spotify недоступен (нет ключей либо отказ, в том числе по стране
+ * сервера); вызывающий сам решает, что сказать оператору.
+ */
+async function fetchSpotifyAlbumPreview(
+  kind: "album" | "track",
+  id: string,
+): Promise<{ album: Record<string, any>; track: Record<string, any> | null } | null> {
+  let token: string;
+  try {
+    token = await getSpotifyToken(await loadSpotifyConfig());
+  } catch {
+    return null;
+  }
+  const h = { Authorization: `Bearer ${token}` };
+  const get = async (path: string): Promise<Record<string, any> | null> => {
+    const r = await fetch(`https://api.spotify.com/v1${path}`, { headers: h, signal: AbortSignal.timeout(15_000) });
+    if (!r.ok) {
+      logger.warn({ path, status: r.status }, "[spotify] запрос отклонён");
+      return null;
+    }
+    return await r.json() as Record<string, any>;
+  };
+
+  let track: Record<string, any> | null = null;
+  let albumId = id;
+  if (kind === "track") {
+    track = await get(`/tracks/${encodeURIComponent(id)}`);
+    if (!track?.album?.id) return null;
+    albumId = String(track.album.id);
+  }
+  const album = await get(`/albums/${encodeURIComponent(albumId)}`);
+  return album ? { album, track } : null;
+}
+
+/** Приводит альбом Spotify к той же карточке, что и релиз из Deezer. */
+function spotifyPreview(album: Record<string, any>, track: Record<string, any> | null) {
+  return {
+    upc: album.external_ids?.upc ?? null,
+    title: album.name ?? null,
+    artist: album.artists?.[0]?.name ?? null,
+    label: album.label ?? null,
+    coverUrl: album.images?.[0]?.url ?? null,
+    releaseDate: album.release_date ?? null,
+    trackCount: album.total_tracks ?? null,
+    releaseType: album.album_type ?? null,
+    genres: Array.isArray(album.genres) ? album.genres : [],
+    isrc: track?.external_ids?.isrc ?? null,
+    trackTitle: track?.name ?? null,
+    durationSec: track?.duration_ms != null ? Math.round(track.duration_ms / 1000) : null,
+    explicit: track ? !!track.explicit : null,
+    platform: "spotify",
+  };
+}
+
 const dzGet = async <T>(url: string): Promise<T | null> => {
   const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!r.ok) throw new Error(`Deezer ${r.status}`);
@@ -2213,15 +2274,43 @@ async function resolveReleasePreview(query: string): Promise<
           + "13-значный UPC или 12-значный ISRC — либо введите имя исполнителя для поиска.",
       };
     }
-    if (link.platform !== "deezer") {
-      const where = link.platform === "spotify" ? "Spotify" : "Apple Music";
+    if (link.platform === "apple") {
       return {
         ok: false,
         reason: "platform_unsupported",
-        message: `Ссылки ${where} не содержат UPC, а без него релиз не опознать. `
-          + "Найдите этот же релиз на Deezer и вставьте ссылку оттуда — либо укажите UPC или ISRC.",
+        message: "Ссылки Apple Music не содержат UPC, и Apple его не отдаёт. "
+          + "Найдите этот же релиз на Spotify или Deezer — либо укажите UPC или ISRC.",
       };
     }
+
+    if (link.platform === "spotify") {
+      if (link.kind === "artist") {
+        return {
+          ok: false,
+          reason: "artist_link",
+          message: "Это ссылка на артиста, а не на релиз. Откройте нужный альбом или трек и скопируйте ссылку на него.",
+        };
+      }
+      const found = await fetchSpotifyAlbumPreview(link.kind, link.id);
+      if (!found) {
+        return {
+          ok: false,
+          reason: "spotify_unavailable",
+          message: "Spotify сейчас недоступен для системы, поэтому его ссылку разобрать не получилось. "
+            + "Укажите UPC или ISRC релиза — либо вставьте ссылку с Deezer.",
+        };
+      }
+      const preview = spotifyPreview(found.album, found.track);
+      if (!preview.upc) {
+        return {
+          ok: false,
+          reason: "no_upc",
+          message: "Spotify не отдал UPC для этого релиза — укажите код вручную.",
+        };
+      }
+      return { ok: true, preview: preview as Record<string, unknown> };
+    }
+
     if (link.kind === "artist") {
       return {
         ok: false,

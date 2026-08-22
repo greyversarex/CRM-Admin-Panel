@@ -111,9 +111,10 @@ export default function NewImport() {
     } catch (e: any) {
       const code = String(e?.response?.data?.error ?? "");
       const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
-      // Ссылка Spotify/Apple — это не сбой, а ожидаемое ограничение площадки:
-      // красный «Поиск не удался» пугает и выглядит как поломка системы.
-      const isExpected = code === "platform_unsupported" || code === "artist_link";
+      // Ограничение площадки — не сбой системы: красный «Поиск не удался»
+      // пугает и выглядит как поломка.
+      const isExpected = code === "platform_unsupported" || code === "artist_link"
+        || code === "spotify_unavailable" || code === "no_upc";
       toast({
         title: isExpected ? "Так не сработает" : tt.toast_search_failed,
         description: msg,
@@ -267,7 +268,7 @@ export default function NewImport() {
               <p className="text-[11px] text-muted-foreground pt-1">
                 {isIsrcInput ? "Похоже на ISRC — найдём трек и его релиз."
                   : isUpcInput ? "Похоже на UPC — найдём релиз целиком."
-                  : "Ссылки Deezer работают напрямую. У Spotify и Apple Music UPC в ссылке нет — возьмите ссылку с Deezer либо укажите UPC или ISRC."}
+                  : "Ссылки Spotify и Deezer работают напрямую. Apple Music код релиза не отдаёт — для неё укажите UPC или ISRC."}
                 {" "}Сначала покажем, что нашлось, импорт — отдельной кнопкой.
               </p>
             )}
