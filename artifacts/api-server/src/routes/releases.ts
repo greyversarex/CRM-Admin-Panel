@@ -2224,21 +2224,26 @@ type PreviewTrack = {
 async function spotifyAlbumTracks(album: Record<string, any>, token: string): Promise<PreviewTrack[]> {
   const items: Record<string, any>[] = album.tracks?.items ?? [];
   if (items.length === 0) return [];
+
+  // Коды берём поштучно, хотя у Spotify есть и пакетный метод: нашему
+  // приложению `/tracks?ids=` отвечает 403, а `/tracks/{id}` работает.
+  // Идём пятёрками — чтобы не упереться в ограничение частоты запросов, —
+  // и не больше пятидесяти треков: длиннее альбомов у нас не бывает, а
+  // подвесить карточку на сотне запросов не хочется.
   const isrcById = new Map<string, string>();
-  const ids = items.map((t) => t.id).filter(Boolean).slice(0, 50);
-  if (ids.length > 0) {
-    try {
-      const r = await fetch(`https://api.spotify.com/v1/tracks?ids=${ids.join(",")}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (r.ok) {
-        const j = await r.json() as { tracks?: Record<string, any>[] };
-        for (const t of j.tracks ?? []) {
-          if (t?.id && t?.external_ids?.isrc) isrcById.set(String(t.id), String(t.external_ids.isrc));
-        }
-      }
-    } catch { /* без кодов список всё равно полезен */ }
+  const ids = items.map((t) => t.id).filter(Boolean).slice(0, 50) as string[];
+  for (let i = 0; i < ids.length; i += 5) {
+    await Promise.all(ids.slice(i, i + 5).map(async (id) => {
+      try {
+        const r = await fetch(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!r.ok) return;
+        const t = await r.json() as { external_ids?: { isrc?: string } };
+        if (t?.external_ids?.isrc) isrcById.set(id, String(t.external_ids.isrc));
+      } catch { /* без кода строка всё равно покажется */ }
+    }));
   }
   return items.map((t, i) => ({
     number: t.track_number ?? i + 1,
