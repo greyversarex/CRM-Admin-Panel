@@ -22,7 +22,27 @@ type SignupRequest = {
   legalName: string | null;
   inn: string | null;
   message: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "under_review" | "info_requested" | "approved" | "rejected";
+  website: string | null;
+  socialMedia: string | null;
+  contactPerson: string | null;
+  contactPosition: string | null;
+  whatsapp: string | null;
+  artistCount: number | null;
+  releaseCount: number | null;
+  trackCount: number | null;
+  genres: string | null;
+  currentDistributor: string | null;
+  reasonForMoving: string | null;
+  mainDsps: string | null;
+  territories: string | null;
+  monthlyReleases: string | null;
+  catalogSize: string | null;
+  hearAbout: string | null;
+  sourceIp: string | null;
+  internalNote: string | null;
+  infoRequest: string | null;
+  infoResponse: string | null;
   reviewedAt: string | null;
   reviewedBy: number | null;
   rejectionReason: string | null;
@@ -34,6 +54,34 @@ type ApproveResp = {
   user: { id: number; email: string; name: string; role: string };
   tempPassword: string;
 };
+
+const OPEN_STATUSES = ["pending", "under_review", "info_requested"];
+
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  pending:        { label: "Новая",          className: "bg-amber-500/10 border-amber-500/30 text-amber-400" },
+  under_review:   { label: "В работе",       className: "bg-sky-500/10 border-sky-500/30 text-sky-400" },
+  info_requested: { label: "Ждём данные",    className: "bg-violet-500/10 border-violet-500/30 text-violet-400" },
+};
+
+/** Что показывать в раскрытой анкете: подпись и поле. Пустые поля пропускаем. */
+const SURVEY_ROWS: [string, string][] = [
+  ["Контактное лицо", "contactPerson"],
+  ["Должность", "contactPosition"],
+  ["WhatsApp", "whatsapp"],
+  ["Сайт", "website"],
+  ["Соцсети", "socialMedia"],
+  ["Артистов", "artistCount"],
+  ["Релизов", "releaseCount"],
+  ["Треков", "trackCount"],
+  ["Жанры", "genres"],
+  ["Нынешний дистрибьютор", "currentDistributor"],
+  ["Почему уходят", "reasonForMoving"],
+  ["Основные площадки", "mainDsps"],
+  ["Территории", "territories"],
+  ["Релизов в месяц", "monthlyReleases"],
+  ["Размер каталога", "catalogSize"],
+  ["Откуда узнали", "hearAbout"],
+];
 
 type Props = { onCountChange?: (n: number) => void };
 
@@ -50,12 +98,19 @@ export function SignupsTab({ onCountChange }: Props) {
   const [rejectTarget, setRejectTarget] = useState<SignupRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
+  const [infoTarget, setInfoTarget] = useState<SignupRequest | null>(null);
+  const [infoMessage, setInfoMessage] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null);
+
   async function load() {
     setLoading(true);
     try {
-      const r = await api<{ data: SignupRequest[] }>("/api/signup-requests?status=pending");
-      setItems(r.data);
-      onCountChange?.(r.data.length);
+      // Заявка «в работе» и «запрошены данные» — тоже открытая: тянем всё и
+      // фильтруем на месте, чтобы не делать три запроса.
+      const r = await api<{ data: SignupRequest[] }>("/api/signup-requests");
+      const open = r.data.filter((x) => OPEN_STATUSES.includes(x.status));
+      setItems(open);
+      onCountChange?.(open.length);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Не удалось загрузить заявки", description: e.message });
       setItems([]);
@@ -107,6 +162,42 @@ export function SignupsTab({ onCountChange }: Props) {
     }
   }
 
+  async function setStatus(s: SignupRequest, status: "under_review") {
+    setBusyId(s.id);
+    try {
+      await api(`/api/signup-requests/${s.id}/status`, { method: "POST", body: JSON.stringify({ status }) });
+      await load();
+      toast({ title: "Заявка взята в работу" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Не получилось", description: e.message });
+    } finally { setBusyId(null); }
+  }
+
+  async function doRequestInfo() {
+    if (!infoTarget || infoMessage.trim().length < 3) return;
+    setBusyId(infoTarget.id);
+    try {
+      await api(`/api/signup-requests/${infoTarget.id}/request-info`, {
+        method: "POST", body: JSON.stringify({ message: infoMessage.trim() }),
+      });
+      setInfoTarget(null); setInfoMessage("");
+      await load();
+      toast({ title: "Запрос отправлен", description: "Заявителю ушло письмо со ссылкой для ответа." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Не получилось", description: e.message });
+    } finally { setBusyId(null); }
+  }
+
+  async function saveNote(s: SignupRequest, note: string) {
+    try {
+      await api(`/api/signup-requests/${s.id}/note`, { method: "POST", body: JSON.stringify({ note }) });
+      await load();
+      toast({ title: "Заметка сохранена" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Не получилось", description: e.message });
+    }
+  }
+
   async function copyPassword() {
     if (!credModal) return;
     try {
@@ -144,7 +235,9 @@ export function SignupsTab({ onCountChange }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="text-sm font-semibold">{s.name}</p>
-                      <Badge variant="outline" className="text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-400">Pending</Badge>
+                      <Badge variant="outline" className={`text-[10px] ${STATUS_BADGE[s.status]?.className ?? ""}`}>
+                        {STATUS_BADGE[s.status]?.label ?? s.status}
+                      </Badge>
                       <Badge variant="outline" className="text-[10px] capitalize">{s.entityType}</Badge>
                       <span className="text-[10px] font-mono text-muted-foreground">SR-{s.id}</span>
                     </div>
@@ -156,8 +249,54 @@ export function SignupsTab({ onCountChange }: Props) {
                       {s.inn && <span>ИНН: {s.inn}</span>}
                     </div>
                     {s.message && <p className="text-xs text-muted-foreground italic">«{s.message}»</p>}
+
+                    {s.infoRequest && (
+                      <div className="mt-2 rounded-md border border-violet-500/30 bg-violet-500/5 p-2 text-xs">
+                        <div className="text-violet-300">Запрошено: {s.infoRequest}</div>
+                        {s.infoResponse && <div className="mt-1">Ответ: {s.infoResponse}</div>}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline mt-1.5"
+                      onClick={() => setExpanded(expanded === s.id ? null : s.id)}
+                    >
+                      {expanded === s.id ? "Свернуть анкету" : "Показать анкету"}
+                    </button>
+
+                    {expanded === s.id && (
+                      <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2 text-xs">
+                        {SURVEY_ROWS.map(([label, value]) => {
+                          const v = (s as any)[value];
+                          if (v === null || v === undefined || v === "") return null;
+                          return (
+                            <div key={value} className="flex justify-between gap-3 border-b border-border/30 py-1">
+                              <span className="text-muted-foreground">{label}</span>
+                              <span className="text-right">{String(v)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {expanded === s.id && (
+                      <div className="mt-3">
+                        <Textarea
+                          className="text-xs"
+                          rows={2}
+                          placeholder="Внутренняя заметка (видна только сотрудникам)"
+                          defaultValue={s.internalNote ?? ""}
+                          onBlur={(e) => {
+                            if (e.target.value !== (s.internalNote ?? "")) void saveNote(s, e.target.value);
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <p className="text-[10px] text-muted-foreground/60 mt-1">
                       Подана {new Date(s.createdAt).toLocaleString()}
+                      {s.sourceIp ? ` · IP ${s.sourceIp}` : ""}
                     </p>
                   </div>
                 </div>
@@ -170,6 +309,18 @@ export function SignupsTab({ onCountChange }: Props) {
                     data-testid={`button-approve-signup-${s.id}`}
                   >
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Approve
+                  </Button>
+                  {s.status === "pending" && (
+                    <Button size="sm" variant="outline" disabled={busyId === s.id} onClick={() => void setStatus(s, "under_review")}>
+                      В работу
+                    </Button>
+                  )}
+                  <Button
+                    size="sm" variant="outline"
+                    disabled={busyId === s.id}
+                    onClick={() => { setInfoMessage(""); setInfoTarget(s); }}
+                  >
+                    Запросить данные
                   </Button>
                   <Button
                     size="sm"
@@ -187,6 +338,28 @@ export function SignupsTab({ onCountChange }: Props) {
           </Card>
         ))}
       </div>
+
+      {/* REQUEST INFO */}
+      <Dialog open={!!infoTarget} onOpenChange={(o) => !o && setInfoTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Запросить дополнительные данные</DialogTitle>
+            <DialogDescription>
+              Заявителю уйдёт письмо со ссылкой, по которой он ответит без регистрации.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={4}
+            placeholder="Например: пришлите свидетельство о регистрации компании и ссылку на каталог"
+            value={infoMessage}
+            onChange={(e) => setInfoMessage(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInfoTarget(null)}>Отмена</Button>
+            <Button disabled={infoMessage.trim().length < 3} onClick={doRequestInfo}>Отправить</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* APPROVE confirmation */}
       <Dialog open={!!approveTarget} onOpenChange={(o) => !o && setApproveTarget(null)}>

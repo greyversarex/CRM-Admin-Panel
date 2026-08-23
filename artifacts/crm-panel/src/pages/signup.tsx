@@ -12,6 +12,26 @@ import { CheckCircle2, ArrowLeft, Loader2, Send } from "lucide-react";
 
 type EntityType = "artist" | "label";
 
+/** Поля анкеты: ключ, подпись, вид. «long» занимает всю ширину. */
+const EXTRA_FIELDS: [string, string, "text" | "number" | "long"][] = [
+  ["contactPerson", "Контактное лицо", "text"],
+  ["contactPosition", "Должность", "text"],
+  ["whatsapp", "WhatsApp", "text"],
+  ["website", "Сайт", "text"],
+  ["socialMedia", "Соцсети", "long"],
+  ["artistCount", "Сколько артистов", "number"],
+  ["releaseCount", "Сколько релизов", "number"],
+  ["trackCount", "Сколько треков", "number"],
+  ["genres", "Основные жанры", "text"],
+  ["currentDistributor", "Нынешний дистрибьютор", "text"],
+  ["mainDsps", "Основные площадки", "text"],
+  ["territories", "Территории распространения", "text"],
+  ["monthlyReleases", "Релизов в месяц", "text"],
+  ["catalogSize", "Размер каталога", "text"],
+  ["hearAbout", "Откуда узнали о нас", "text"],
+  ["reasonForMoving", "Почему переходите к нам", "long"],
+];
+
 export default function Signup() {
   const [, navigate] = useLocation();
   const [entityType, setEntityType] = useState<EntityType>("artist");
@@ -23,6 +43,11 @@ export default function Signup() {
   const [inn, setInn]         = useState("");
   const [message, setMessage] = useState("");
   const [agree, setAgree]     = useState(false);
+  // Анкета целиком в одном объекте: полей много, а логики у них никакой.
+  const [extra, setExtra] = useState<Record<string, string>>({});
+  const [showExtra, setShowExtra] = useState(false);
+  const setField = (k: string) => (e: { target: { value: string } }) =>
+    setExtra((p) => ({ ...p, [k]: e.target.value }));
 
   const [loading, setLoading]   = useState(false);
   const [submitted, setSubmitted] = useState<{ requestId: number } | null>(null);
@@ -48,6 +73,15 @@ export default function Signup() {
           legalName: legalName || null,
           inn:       inn       || null,
           message:   message   || null,
+          // Пустые поля не отправляем: сервер ждёт либо значение, либо ничего.
+          ...Object.fromEntries(
+            EXTRA_FIELDS
+              .filter(([key]) => (extra[key] ?? "").trim() !== "")
+              .map(([key, , type]) => [
+                key,
+                type === "number" ? Number(extra[key]) : extra[key].trim(),
+              ]),
+          ),
         }),
       });
       const j: unknown = await res.json().catch(() => ({}));
@@ -181,6 +215,31 @@ export default function Signup() {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-lg border border-white/10 overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-[13px] text-white/70 hover:bg-white/5"
+                  onClick={() => setShowExtra((v) => !v)}
+                >
+                  <span>Подробнее о каталоге — ускорит рассмотрение</span>
+                  <span className="text-white/40">{showExtra ? "свернуть" : "заполнить"}</span>
+                </button>
+                {showExtra && (
+                  <div className="grid gap-3 md:grid-cols-2 p-3 pt-0">
+                    {EXTRA_FIELDS.map(([key, label, type]) => (
+                      <div key={key} className={type === "long" ? "md:col-span-2" : undefined}>
+                        <Label className="text-[12px] font-medium text-white/65 mb-1.5">{label}</Label>
+                        <Input
+                          type={type === "number" ? "number" : "text"}
+                          value={extra[key] ?? ""}
+                          onChange={setField(key)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div>
                 <Label className="text-[12px] font-medium text-white/65 mb-1.5">Сообщение менеджеру</Label>

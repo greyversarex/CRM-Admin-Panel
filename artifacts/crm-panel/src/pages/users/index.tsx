@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
@@ -24,7 +24,9 @@ import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useLang } from "@/lib/i18n";
 
+import { api } from "./_api";
 import { SignupsTab } from "./_signups-tab";
+import { ContractsTab } from "./_contracts-tab";
 import { KycTab } from "./_kyc-tab";
 import { ActivityTab } from "./_activity-tab";
 import { EditUserDialog } from "./_edit-user-dialog";
@@ -32,6 +34,20 @@ import { CreateUserDialog } from "./_create-user-dialog";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+
+const CONTRACT_SHORT: Record<string, string> = {
+  draft: "черновик", sent: "на подписи", signed: "подписан",
+  expired: "истёк", terminated: "расторгнут",
+};
+const RIGHTS_SHORT: Record<string, string> = {
+  pending: "на проверке", verified: "подтверждены",
+  rejected: "отклонены", info_requested: "нужны данные",
+};
+const RISK_SHORT: Record<string, string> = { medium: "средний", high: "высокий" };
+const RISK_CLASS: Record<string, string> = {
+  medium: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+  high: "bg-rose-500/10 border-rose-500/30 text-rose-400",
+};
 
 export default function Users() {
   const { t, lang } = useLang();
@@ -46,6 +62,18 @@ export default function Users() {
   const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
   const [blockTarget, setBlockTarget] = useState<User | null>(null);
   const [blockReason, setBlockReason] = useState("");
+
+  // Договор, права и риск живут не в /users, а в отдельной сводке — забираем
+  // её одним запросом и подмешиваем к строкам по id.
+  const [accessSummary, setAccessSummary] = useState<Record<string, {
+    contractStatus: string | null; rightsStatus: string | null;
+    confirmedViolations: number; restrictions: string[]; riskLevel: string;
+  }>>({});
+  useEffect(() => {
+    void api<{ data: typeof accessSummary }>("/api/users-access-summary")
+      .then((r) => setAccessSummary(r.data))
+      .catch(() => { /* сводка необязательна: без неё таблица просто беднее */ });
+  }, []);
 
   const [signupsCount, setSignupsCount] = useState<number>(0);
   const [kycPendingCount, setKycPendingCount] = useState<number>(0);
@@ -217,6 +245,9 @@ export default function Users() {
               <FileSignature className="h-3.5 w-3.5" /> {t.users.tab_kyc}
               {kycPendingCount > 0 && <Badge variant="outline" className="ml-1 h-4 text-[10px] bg-violet-500/10 border-violet-500/30 text-violet-400">{kycPendingCount}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="contracts" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+              <FileSignature className="h-3.5 w-3.5" /> Договоры
+            </TabsTrigger>
             <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Activity className="h-3.5 w-3.5" /> {t.users.tab_activity}
             </TabsTrigger>
@@ -286,6 +317,9 @@ export default function Users() {
                       <TableHead>{t.users.col_role}</TableHead>
                       <TableHead>{t.users.col_status}</TableHead>
                       <TableHead>{t.users.col_kyc}</TableHead>
+                      <TableHead>Договор</TableHead>
+                      <TableHead>Права</TableHead>
+                      <TableHead>Риск</TableHead>
                       <TableHead>{t.users.col_joined}</TableHead>
                       <TableHead>{t.users.col_last_login}</TableHead>
                       <TableHead className="text-right w-12"></TableHead>
@@ -294,12 +328,12 @@ export default function Users() {
                   <TableBody>
                     {isLoading && Array.from({ length: 6 }).map((_, i) => (
                       <TableRow key={`sk-${i}`}>
-                        <TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell>
+                        <TableCell colSpan={10}><Skeleton className="h-9 w-full" /></TableCell>
                       </TableRow>
                     ))}
                     {!isLoading && apiUsers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                           {t.users.empty}
                         </TableCell>
                       </TableRow>
@@ -307,6 +341,7 @@ export default function Users() {
                     {!isLoading && apiUsers.map((u) => {
                       const kycStatus = (u as any).kycStatus as string | undefined;
                       const role = u.role as Role;
+                      const summary = accessSummary[String(u.id)];
                       return (
                         <TableRow key={u.id} className="hover:bg-accent/20" data-testid={`row-user-${u.id}`}>
                           <TableCell>
@@ -315,8 +350,19 @@ export default function Users() {
                                 <span className="text-[10px] font-bold text-primary">{u.name.slice(0, 2).toUpperCase()}</span>
                               </div>
                               <div>
-                                <div className="text-sm font-medium">{u.name}</div>
+                                <button
+                                  type="button"
+                                  className="text-sm font-medium hover:text-primary text-left"
+                                  onClick={() => navigate(`/users/${u.id}`)}
+                                >
+                                  {u.name}
+                                </button>
                                 <div className="text-xs text-muted-foreground">{u.email}</div>
+                                {summary && summary.restrictions.length > 0 && (
+                                  <div className="text-[11px] text-amber-400 mt-0.5">
+                                    ограничений: {summary.restrictions.length}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </TableCell>
@@ -331,6 +377,13 @@ export default function Users() {
                             {(u.status as string) === "inactive" && <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> {t.users.status_inactive}</span>}
                           </TableCell>
                           <TableCell>{kycBadge(kycStatus)}</TableCell>
+                          <TableCell className="text-xs">{CONTRACT_SHORT[summary?.contractStatus ?? ""] ?? "—"}</TableCell>
+                          <TableCell className="text-xs">{RIGHTS_SHORT[summary?.rightsStatus ?? ""] ?? "—"}</TableCell>
+                          <TableCell>
+                            {summary && summary.riskLevel !== "low"
+                              ? <Badge variant="outline" className={RISK_CLASS[summary.riskLevel]}>{RISK_SHORT[summary.riskLevel]}</Badge>
+                              : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}
@@ -343,6 +396,9 @@ export default function Users() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => navigate(`/users/${u.id}`)}>
+                                  <Users2 className="h-3.5 w-3.5 mr-2" /> Карточка пользователя
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => setEditTarget(u)} data-testid={`menu-edit-${u.id}`}>
                                   <Edit3 className="h-3.5 w-3.5 mr-2" /> {t.users.menu_edit}
                                 </DropdownMenuItem>
@@ -387,6 +443,11 @@ export default function Users() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── CONTRACTS ── */}
+          <TabsContent value="contracts" className="mt-4">
+            <ContractsTab />
           </TabsContent>
 
           {/* ── SIGN UP REQUESTS ── */}

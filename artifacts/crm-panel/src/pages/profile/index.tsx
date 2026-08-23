@@ -19,6 +19,7 @@ import {
   Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Banknote, Receipt,
   Upload, Trash2, FileText, AlertTriangle, ExternalLink,
 } from "lucide-react";
+import { RightsTab } from "./_rights-tab";
 
 async function patchMe(body: Record<string, any>) {
   const res = await fetch("/api/users/me", {
@@ -338,6 +339,11 @@ export default function ProfilePage() {
             <TabsTrigger value="kyc" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" /> {t.profile.tabs.kyc}
             </TabsTrigger>
+            {!isAdmin && (
+              <TabsTrigger value="rights" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" /> Права
+              </TabsTrigger>
+            )}
             <TabsTrigger value="bank" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary gap-1.5">
               <Banknote className="h-3.5 w-3.5" /> {t.profile.tabs.bank}
             </TabsTrigger>
@@ -529,6 +535,12 @@ export default function ProfilePage() {
           </TabsContent>
 
           {/* ============== KYC TAB (Task #6) ============== */}
+          {!isAdmin && (
+            <TabsContent value="rights" className="mt-6">
+              <RightsTab userId={user.id} />
+            </TabsContent>
+          )}
+
           <TabsContent value="kyc" className="mt-6">
             <KycTab />
           </TabsContent>

@@ -342,6 +342,20 @@ router.patch("/violations/:vid", adminOnly, async (req, res): Promise<void> => {
 });
 
 // ─── Проверка прав ────────────────────────────────────────────────────────
+// Свою заявку клиент читает по /me: адрес с :id закрыт админским гардом,
+// и без этого маршрута кабинет всегда показывал бы пустую форму.
+router.get("/users/me/rights-verification", async (req, res): Promise<void> => {
+  const user = getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Требуется вход" }); return; }
+  const [row] = await db.select().from(rightsVerificationsTable)
+    .where(eq(rightsVerificationsTable.userId, user.id));
+  res.json({ data: row ? {
+    ...row,
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    submittedAt: row.submittedAt.toISOString(),
+  } : null });
+});
+
 router.get("/users/:id/rights-verification", adminOnly, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Неверный id" }); return; }

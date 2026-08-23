@@ -45,6 +45,9 @@ import Rights from "@/pages/rights";
 import Analytics from "@/pages/analytics";
 import Distribution from "@/pages/distribution";
 import Users from "@/pages/users";
+import UserProfile from "@/pages/users/[id]";
+import SignupRequestPage from "@/pages/signup-request";
+import MyContracts from "@/pages/contracts";
 import Settings from "@/pages/settings";
 import ProfilePage from "@/pages/profile";
 import SupportPage from "@/pages/support";
@@ -113,6 +116,12 @@ function Router() {
         {user ? <Redirect to="/" /> : <Signup />}
       </Route>
 
+      {/* Public — заявитель досылает данные по ссылке из письма. Аккаунта у
+          него ещё нет, поэтому доступ даёт токен в адресе. */}
+      <Route path="/signup/request/:token">
+        <SignupRequestPage />
+      </Route>
+
       {/* Public — приём приглашения в команду лейбла. Авторизованных
           пользователей не редиректим: им тоже может понадобиться открыть ссылку. */}
       <Route path="/invite/:token">
@@ -147,6 +156,8 @@ function Router() {
       <ProtectedRoute path="/artists"        component={Artists} />
       <ProtectedRoute path="/labels"         component={Labels} />
       <ProtectedRoute path="/users"          component={Users} />
+      <ProtectedRoute path="/users/:id"      component={UserProfile} />
+      <ProtectedRoute path="/contracts"      component={MyContracts} />
       <ProtectedRoute path="/publishing"     component={Publishing} />
       <ProtectedRoute path="/rights"         component={Rights} />
       <ProtectedRoute path="/crm"            component={CRM} />

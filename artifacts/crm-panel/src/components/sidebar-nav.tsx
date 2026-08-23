@@ -1,4 +1,5 @@
-import { Link, useLocation, useSearch } from "wouter";
+import {
+  Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -41,6 +42,7 @@ import {
   ArrowRightLeft,
   XCircle,
   FileUp,
+  FileSignature,
 } from "lucide-react";
 
 type NavItem = {
@@ -237,6 +239,8 @@ const artistNavGroups: NavGroup[] = [
   {
     titleKey: "account_group",
     items: [
+      // Договоры видит только клиент: у админа они в карточке пользователя.
+      { nameKey: "contracts", href: "/contracts", icon: FileSignature, iconColor: "text-pink-400" },
       { nameKey: "profile", href: "/profile", icon: CircleUser, iconColor: "text-pink-400" },
     ],
   },
