@@ -92,7 +92,11 @@ export default function NewImport() {
   const isIsrcInput = canImportUpc && /^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$/.test(compactInput);
   // Ссылку отличаем от имени артиста до отправки: иначе адрес уходил бы в
   // поиск по названию и находил чужие каверы вместо нужного релиза.
-  const isLinkInput = canImportUpc && /^(https?:\/\/|spotify:)/i.test(trimmedInput);
+  // Предпросмотр по ссылке доступен всем ролям: серверный /releases/resolve-link
+  // разрешён и лейблу, и артисту, а подсказка на странице просит вставить ссылку
+  // независимо от роли. Схемы может не быть — «deezer.com/album/1» тоже ссылка.
+  const isLinkInput = /^(https?:\/\/|spotify:)/i.test(trimmedInput)
+    || /^[\w.-]+\.(com|link|page)\//i.test(trimmedInput);
   // Всё, что опознаёт релиз однозначно, идёт через предпросмотр.
   const isPreviewInput = isUpcInput || isIsrcInput || isLinkInput;
 
@@ -109,8 +113,8 @@ export default function NewImport() {
       const r = await resolveReleaseLink({ query: trimmedInput });
       setResolved(r);
     } catch (e: any) {
-      const code = String(e?.response?.data?.error ?? "");
-      const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
+      const code = String(e?.data?.error ?? "");
+      const msg = e?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
       // Ограничение площадки — не сбой системы: красный «Поиск не удался»
       // пугает и выглядит как поломка.
       const isExpected = code === "platform_unsupported" || code === "artist_link"
@@ -135,8 +139,8 @@ export default function NewImport() {
       });
       setLocation(`/releases/${created.id}`);
     } catch (e: any) {
-      const code = String(e?.response?.data?.error ?? "");
-      const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_import_failed_desc;
+      const code = String(e?.data?.error ?? "");
+      const msg = e?.data?.message ?? e?.message ?? tt.toast_import_failed_desc;
       if (code === "already_exists") {
         toast({ title: tt.toast_upc_exists, description: tt.toast_upc_exists_desc, variant: "destructive" });
       } else if (code === "not_found") {
@@ -164,8 +168,8 @@ export default function NewImport() {
       // Не выбираем автоматически дубликаты (уже есть в каталоге).
       setSelected(new Set(r.releases.filter((rel) => !rel.alreadyInCatalog).slice(0, 2).map((rel) => rel.upc)));
     } catch (e: any) {
-      const msg = e?.response?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
-      const isNotConfigured = String(e?.response?.data?.error ?? "") === "spotify_not_configured";
+      const msg = e?.data?.message ?? e?.message ?? tt.toast_search_failed_desc;
+      const isNotConfigured = String(e?.data?.error ?? "") === "spotify_not_configured";
       toast({
         title: tt.toast_search_failed,
         description: isNotConfigured ? tt.spotify_not_configured : msg,
@@ -386,7 +390,7 @@ export default function NewImport() {
                   <div className="text-xs flex items-start gap-2 rounded p-2 bg-amber-500/10 border border-amber-500/30 text-amber-200">
                     <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                     <span>
-                      Поиск шёл по Deezer (ключи Spotify не заданы). Deezer объединяет
+                      Поиск шёл по Deezer — Spotify оказался недоступен. Deezer объединяет
                       исполнителей с одинаковыми именами — проверьте список, среди релизов
                       могут оказаться чужие. Надёжнее переносить по ссылке или UPC.
                     </span>

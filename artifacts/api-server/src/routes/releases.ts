@@ -468,7 +468,10 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
         // Реальные треки (с оригинальными ISRC) из Spotify, если удалось получить;
         // иначе — плейсхолдеры по количеству треков.
         const realTracks = realTracksByUpc.get(i.upc);
-        const isUpcReal = !!i.upc && !i.upc.startsWith("SPOTIFY-");
+        // Синтетические коды (SPOTIFY-…, DEEZER-…) подставляются, когда у
+        // площадки нет настоящего штрихкода. В каталог их писать нельзя:
+        // такой «UPC» уедет в Broma16 и в DDEX как настоящий.
+        const isUpcReal = !!i.upc && !/^(SPOTIFY|DEEZER)-/.test(i.upc);
         const releaseType = ((realTracks?.length ?? i.tracks ?? 1) > 1) ? "album" : "single";
         const [release] = await tx.insert(releasesTable).values({
           title: i.title,
@@ -588,9 +591,16 @@ async function markAlreadyInCatalog(releases: TransferSearchRelease[]) {
   const realUpcs = releases.map((r) => r.upc).filter((u) => !!u && !/^(SPOTIFY|DEEZER)-/.test(u));
   const existingUpcs = new Set<string>();
   if (realUpcs.length > 0) {
+    // Сверяем по всем эквивалентным написаниям кода: Deezer отдаёт 13 знаков
+    // с ведущим нулём, а у нас тот же релиз мог быть заведён как 12-значный —
+    // без этого дубль не распознавался и предлагался к импорту повторно.
+    const variants = [...new Set(realUpcs.flatMap((u) => equivalentUpcValues(u)))];
     const rows = await db.select({ upc: releasesTable.upc }).from(releasesTable)
-      .where(inArray(releasesTable.upc, realUpcs));
-    for (const row of rows) if (row.upc) existingUpcs.add(row.upc);
+      .where(inArray(releasesTable.upc, variants));
+    const known = new Set(rows.map((r) => r.upc).filter((u): u is string => !!u));
+    for (const u of realUpcs) {
+      if (equivalentUpcValues(u).some((v) => known.has(v))) existingUpcs.add(u);
+    }
   }
   return releases.map((r) => ({ ...r, alreadyInCatalog: existingUpcs.has(r.upc) }));
 }
@@ -2372,10 +2382,21 @@ router.post("/releases/resolve-link", requireRole("admin", "manager", "label", "
       res.status(422).json({ error: resolved.reason, message: resolved.message });
       return;
     }
-    // Дубль показываем сразу здесь, не доводя до импорта.
+    // Дубль показываем сразу здесь, не доводя до импорта. Но только по своему
+    // каталогу: без ограничения по владельцу лейбл или артист узнавал бы
+    // название чужого релиза и получал ссылку, которая всё равно отдаст 403.
     const upc = resolved.preview.upc as string;
-    const [existing] = await db.select({ id: releasesTable.id, title: releasesTable.title })
-      .from(releasesTable).where(inArray(releasesTable.upc, equivalentUpcValues(upc))).limit(1);
+    const [found] = await db
+      .select({
+        id: releasesTable.id,
+        title: releasesTable.title,
+        artistId: releasesTable.artistId,
+        labelId: releasesTable.labelId,
+      })
+      .from(releasesTable)
+      .where(inArray(releasesTable.upc, equivalentUpcValues(upc)))
+      .limit(1);
+    const existing = found && (await releaseInScope(getDataScope(req), found)) ? found : null;
     res.json({
       ...resolved.preview,
       existingReleaseId: existing?.id ?? null,
@@ -2806,14 +2827,25 @@ router.post("/releases/import-upc", requireRole("admin", "manager", "label", "ar
       // дуэтом приезжал с одним артистом — а Broma16 сверяет состав.
       let featPosition = 1;
       for (const name of found.featuredArtists ?? []) {
-        const feat = await findOrCreateArtist(tx, name, labelId);
+        // Заводим приглашённого в той же области видимости, что и основного
+        // артиста: без этого лейбл мог получить в свой релиз чужого артиста-
+        // тёзку из другого лейбла — ровно то, что запрещает PUT /releases/:id/artists.
+        // Артисту чужих исполнителей не заводим: он вправе работать только со
+        // своим профилем, и создание тёзки от его имени было бы обходом правила.
+        if (scope.role === "artist" && !scope.fullAccess) break;
+        const feat = scope.fullAccess
+          ? await findOrCreateArtist(tx, name, labelId)
+          : await findOrCreateArtistInLabelTree(tx, name, scope.labelId!, scopedLabelIds);
         if (feat.created && feat.row) {
           pendingAudits.push({ action: "create", entityType: "artist", entityId: feat.id, before: null, after: feat.row });
         }
         await tx.insert(releaseArtistsTable).values({
           releaseId: release.id,
           artistId: feat.id,
-          role: "featured",
+          // Роль называется "featuring" — так её понимают и схема, и панель,
+          // и выгрузка DDEX. С "featured" артист не показывался в блоке
+          // «Приглашённые» и уходил в DDEX как основной исполнитель.
+          role: "featuring",
           position: featPosition++,
         }).onConflictDoNothing();
       }

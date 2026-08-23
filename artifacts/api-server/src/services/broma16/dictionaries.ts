@@ -255,7 +255,7 @@ export async function resolveLanguageId(code?: string | null): Promise<number> {
   return 1;
 }
 
-import { pickOutletIds, restrictedOutletName } from "./outlets";
+import { outletNeedsOwnReleaseType, pickOutletIds, restrictedOutletName } from "./outlets";
 
 /**
  * Витрины, доступные конкретному типу релиза, — из справочника Broma16.
@@ -334,7 +334,11 @@ export async function resolveOutletCodes(
   // справочник недоступен.
   if (opts.releaseTypeId != null) {
     const allowed = await allowedOutletIdsForReleaseType(opts.releaseTypeId);
-    if (allowed) return picked.filter((id) => allowed.has(id));
+    // Свой список применяем и здесь: если Broma16 когда-нибудь перестанет
+    // учитывать release_type_id, справочник вернётся целиком, и рингтонные
+    // витрины снова попадут в обычную поставку — та самая ошибка, из-за
+    // которой релиз #48 не уезжал.
+    if (allowed) return picked.filter((id) => allowed.has(id) && !outletNeedsOwnReleaseType(id));
   }
   return pickOutletIds(dict, wanted);
 }
