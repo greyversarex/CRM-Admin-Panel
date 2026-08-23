@@ -2281,6 +2281,20 @@ export const ResolveReleaseLinkBody = zod.object({
 });
 
 export const ResolveReleaseLinkResponse = zod.object({
+  tracks: zod
+    .array(
+      zod.object({
+        number: zod.number(),
+        title: zod.string(),
+        isrc: zod.string().nullish(),
+        durationSec: zod.number().nullish(),
+        explicit: zod.boolean().nullish(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Track listing of the release, so the operator sees what will be imported.",
+    ),
   upc: zod.string(),
   title: zod.string().nullish(),
   artist: zod.string().nullish(),

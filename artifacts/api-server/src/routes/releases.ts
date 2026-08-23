@@ -2176,7 +2176,7 @@ type ResolveFailure = { ok: false; reason: string; message: string };
 async function fetchSpotifyAlbumPreview(
   kind: "album" | "track",
   id: string,
-): Promise<{ album: Record<string, any>; track: Record<string, any> | null } | null> {
+): Promise<{ album: Record<string, any>; track: Record<string, any> | null; token: string } | null> {
   let token: string;
   try {
     token = await getSpotifyToken(await loadSpotifyConfig());
@@ -2201,12 +2201,57 @@ async function fetchSpotifyAlbumPreview(
     albumId = String(track.album.id);
   }
   const album = await get(`/albums/${encodeURIComponent(albumId)}`);
-  return album ? { album, track } : null;
+  return album ? { album, track, token } : null;
 }
 
 /** Приводит альбом Spotify к той же карточке, что и релиз из Deezer. */
-function spotifyPreview(album: Record<string, any>, track: Record<string, any> | null) {
+/** Строка трека в карточке предпросмотра — то же для Spotify и для Deezer. */
+type PreviewTrack = {
+  number: number;
+  title: string;
+  isrc: string | null;
+  durationSec: number | null;
+  explicit: boolean | null;
+};
+
+/**
+ * Треки альбома из Spotify вместе с ISRC.
+ *
+ * В самом альбоме треки приходят в сокращённом виде, без ISRC — за кодами
+ * нужен отдельный запрос, зато один на весь альбом. Без них список выглядит
+ * красиво, но не показывает главного: с какими кодами релиз приедет в каталог.
+ */
+async function spotifyAlbumTracks(album: Record<string, any>, token: string): Promise<PreviewTrack[]> {
+  const items: Record<string, any>[] = album.tracks?.items ?? [];
+  if (items.length === 0) return [];
+  const isrcById = new Map<string, string>();
+  const ids = items.map((t) => t.id).filter(Boolean).slice(0, 50);
+  if (ids.length > 0) {
+    try {
+      const r = await fetch(`https://api.spotify.com/v1/tracks?ids=${ids.join(",")}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (r.ok) {
+        const j = await r.json() as { tracks?: Record<string, any>[] };
+        for (const t of j.tracks ?? []) {
+          if (t?.id && t?.external_ids?.isrc) isrcById.set(String(t.id), String(t.external_ids.isrc));
+        }
+      }
+    } catch { /* без кодов список всё равно полезен */ }
+  }
+  return items.map((t, i) => ({
+    number: t.track_number ?? i + 1,
+    title: t.name ?? "",
+    isrc: isrcById.get(String(t.id)) ?? null,
+    durationSec: t.duration_ms != null ? Math.round(t.duration_ms / 1000) : null,
+    explicit: typeof t.explicit === "boolean" ? t.explicit : null,
+  }));
+}
+
+function spotifyPreview(album: Record<string, any>, track: Record<string, any> | null, tracks: PreviewTrack[] = []) {
   return {
+    tracks,
     upc: album.external_ids?.upc ?? null,
     title: album.name ?? null,
     artist: album.artists?.[0]?.name ?? null,
@@ -2310,7 +2355,11 @@ async function resolveReleasePreview(query: string): Promise<
             + "Укажите UPC или ISRC релиза — либо вставьте ссылку с Deezer.",
         };
       }
-      const preview = spotifyPreview(found.album, found.track);
+      const preview = spotifyPreview(
+        found.album,
+        found.track,
+        await spotifyAlbumTracks(found.album, found.token),
+      );
       if (!preview.upc) {
         return {
           ok: false,
@@ -2343,9 +2392,26 @@ async function resolveReleasePreview(query: string): Promise<
     return { ok: false, reason: "no_upc", message: "Deezer не отдал UPC для этого релиза — укажите код вручную." };
   }
 
+  // Список треков: у Deezer он лежит отдельным методом и там же ISRC —
+  // в самом объекте альбома кодов нет.
+  let tracks: PreviewTrack[] = [];
+  try {
+    const tj = await dzGet<{ data?: { title?: string; track_position?: number; isrc?: string; duration?: number; explicit_lyrics?: boolean }[] }>(
+      `https://api.deezer.com/album/${encodeURIComponent(String(album.id))}/tracks?limit=100`,
+    );
+    tracks = (tj?.data ?? []).map((t, i) => ({
+      number: t.track_position ?? i + 1,
+      title: t.title ?? "",
+      isrc: t.isrc ?? null,
+      durationSec: t.duration && t.duration > 0 ? t.duration : null,
+      explicit: typeof t.explicit_lyrics === "boolean" ? t.explicit_lyrics : null,
+    }));
+  } catch { /* без списка карточка всё равно полезна */ }
+
   return {
     ok: true,
     preview: {
+      tracks,
       upc: album.upc,
       title: album.title ?? null,
       artist: album.artist?.name ?? null,

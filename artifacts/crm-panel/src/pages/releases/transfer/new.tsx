@@ -330,6 +330,39 @@ export default function NewImport() {
                 )}
               </div>
 
+              {resolved.tracks && resolved.tracks.length > 0 && (
+                <div className="rounded-md border border-border/60 overflow-hidden">
+                  <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground bg-background/40 border-b border-border/60">
+                    Треки релиза — {resolved.tracks.length}
+                  </div>
+                  {/* Список прокручивается: у альбома их бывает под сотню,
+                      а карточка не должна растягивать страницу. */}
+                  <div className="max-h-64 overflow-y-auto divide-y divide-border/40">
+                    {resolved.tracks.map((t) => (
+                      <div key={`${t.number}-${t.title}`} className="flex items-center gap-3 px-3 py-2 text-sm">
+                        <span className="w-6 shrink-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+                          {t.number}
+                        </span>
+                        <span className="flex-1 min-w-0 truncate" title={t.title}>{t.title}</span>
+                        {t.explicit && (
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-amber-500/15 text-amber-300">
+                            explicit
+                          </span>
+                        )}
+                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                          {t.isrc ?? "без ISRC"}
+                        </span>
+                        <span className="w-12 shrink-0 text-right font-mono text-[11px] text-muted-foreground tabular-nums">
+                          {t.durationSec != null
+                            ? `${Math.floor(t.durationSec / 60)}:${String(t.durationSec % 60).padStart(2, "0")}`
+                            : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {resolved.existingReleaseId ? (
                 <div className="flex items-center gap-2 text-xs text-amber-300 rounded p-2 bg-amber-500/10 border border-amber-500/30">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />

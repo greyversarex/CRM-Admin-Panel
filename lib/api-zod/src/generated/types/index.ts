@@ -158,6 +158,7 @@ export * from "./releaseRiskFactorsItemSeverity";
 export * from "./releaseStatus";
 export * from "./resolvedLink";
 export * from "./resolvedLinkPlatform";
+export * from "./resolvedLinkTracksItem";
 export * from "./resolveLinkBody";
 export * from "./revenueByMonth";
 export * from "./royaltyByDsp";

@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ResolvedLinkPlatform } from "./resolvedLinkPlatform";
+import type { ResolvedLinkTracksItem } from "./resolvedLinkTracksItem";
 
 export interface ResolvedLink {
+  /** Track listing of the release, so the operator sees what will be imported. */
+  tracks?: ResolvedLinkTracksItem[];
   upc: string;
   title?: string | null;
   artist?: string | null;

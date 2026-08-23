@@ -2760,6 +2760,26 @@ components:
     ResolvedLink:
       type: object
       properties:
+        tracks:
+          type: array
+          description: Track listing of the release, so the operator sees what will be imported.
+          items:
+            type: object
+            properties:
+              number:
+                type: integer
+              title:
+                type: string
+              isrc:
+                type: string
+                nullable: true
+              durationSec:
+                type: integer
+                nullable: true
+              explicit:
+                type: boolean
+                nullable: true
+            required: [number, title]
         upc:
           type: string
         title:

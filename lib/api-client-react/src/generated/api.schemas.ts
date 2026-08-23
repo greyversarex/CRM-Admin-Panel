@@ -658,6 +658,14 @@ export interface ResolveLinkBody {
   query: string;
 }
 
+export type ResolvedLinkTracksItem = {
+  number: number;
+  title: string;
+  isrc?: string | null;
+  durationSec?: number | null;
+  explicit?: boolean | null;
+};
+
 export type ResolvedLinkPlatform =
   (typeof ResolvedLinkPlatform)[keyof typeof ResolvedLinkPlatform];
 
@@ -668,6 +676,8 @@ export const ResolvedLinkPlatform = {
 } as const;
 
 export interface ResolvedLink {
+  /** Track listing of the release, so the operator sees what will be imported. */
+  tracks?: ResolvedLinkTracksItem[];
   upc: string;
   title?: string | null;
   artist?: string | null;
