@@ -8,6 +8,7 @@ import { pushCompositionToBroma16 } from "../services/broma16/composition-pusher
 import { importBromaPublishing } from "../services/broma16/publishing-import";
 import { checkWriterName } from "../lib/writer-name";
 import { sendBroma16Error } from "./broma16";
+import { requireFeature } from "../lib/account-access";
 
 const router = Router();
 
@@ -167,7 +168,7 @@ router.get("/publishing/works", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/publishing/works", async (req, res): Promise<void> => {
+router.post("/publishing/works", requireFeature("dist:publishing"), async (req, res): Promise<void> => {
   const parsed = CreatePublishingWorkBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

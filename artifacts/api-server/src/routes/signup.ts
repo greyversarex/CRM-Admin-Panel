@@ -7,9 +7,10 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db, signupRequestsTable, usersTable, artistsTable, labelsTable } from "@workspace/db";
-import { and, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { generateTempPassword } from "../lib/kycUtils";
@@ -40,7 +41,27 @@ const PublicSignupBody = z.object({
   legalName: z.string().max(255).optional().nullable(),
   inn:     z.string().max(40).optional().nullable(),
   message: z.string().max(2000).optional().nullable(),
+
+  // Анкета лейбла. Всё необязательное: артист-одиночка заполняет три поля,
+  // лейбл с каталогом — всё, и заявка от этого не ломается.
+  website: z.string().max(255).optional().nullable(),
+  socialMedia: z.string().max(500).optional().nullable(),
+  contactPerson: z.string().max(160).optional().nullable(),
+  contactPosition: z.string().max(120).optional().nullable(),
+  whatsapp: z.string().max(40).optional().nullable(),
+  artistCount: z.number().int().min(0).max(100_000).optional().nullable(),
+  releaseCount: z.number().int().min(0).max(1_000_000).optional().nullable(),
+  trackCount: z.number().int().min(0).max(10_000_000).optional().nullable(),
+  genres: z.string().max(300).optional().nullable(),
+  currentDistributor: z.string().max(200).optional().nullable(),
+  reasonForMoving: z.string().max(2000).optional().nullable(),
+  mainDsps: z.string().max(300).optional().nullable(),
+  territories: z.string().max(300).optional().nullable(),
+  monthlyReleases: z.string().max(60).optional().nullable(),
+  catalogSize: z.string().max(60).optional().nullable(),
+  hearAbout: z.string().max(200).optional().nullable(),
 }).strict();
+
 
 const ApproveBody = z.object({
   // Админ может переопределить роль для лейбла на «label» либо на «artist» (для физ.лица).
@@ -48,6 +69,9 @@ const ApproveBody = z.object({
   // Опциональный label_id — для привязки нового артиста к существующему лейблу.
   labelId: z.number().int().positive().optional().nullable(),
 }).strict();
+
+// Пока заявка в одном из этих статусов, её ещё можно одобрить или отклонить.
+const OPEN_STATUSES = ["pending", "under_review", "info_requested"];
 
 const RejectBody = z.object({
   reason: z.string().min(3).max(500),
@@ -71,7 +95,7 @@ router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> =
   // чтобы кнопка submit не плодила дубликаты от нетерпеливых пользователей.
   const [existing] = await db.select({ id: signupRequestsTable.id })
     .from(signupRequestsTable)
-    .where(and(eq(signupRequestsTable.email, data.email), eq(signupRequestsTable.status, "pending")));
+    .where(and(eq(signupRequestsTable.email, data.email), inArray(signupRequestsTable.status, OPEN_STATUSES)));
   if (existing) {
     res.status(409).json({ error: "Заявка с этим email уже отправлена и ждёт рассмотрения." });
     return;
@@ -94,6 +118,28 @@ router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> =
     legalName: data.legalName ?? null,
     inn:     data.inn ?? null,
     message: data.message ?? null,
+    website: data.website ?? null,
+    socialMedia: data.socialMedia ?? null,
+    contactPerson: data.contactPerson ?? null,
+    contactPosition: data.contactPosition ?? null,
+    whatsapp: data.whatsapp ?? null,
+    artistCount: data.artistCount ?? null,
+    releaseCount: data.releaseCount ?? null,
+    trackCount: data.trackCount ?? null,
+    genres: data.genres ?? null,
+    currentDistributor: data.currentDistributor ?? null,
+    reasonForMoving: data.reasonForMoving ?? null,
+    mainDsps: data.mainDsps ?? null,
+    territories: data.territories ?? null,
+    monthlyReleases: data.monthlyReleases ?? null,
+    catalogSize: data.catalogSize ?? null,
+    hearAbout: data.hearAbout ?? null,
+    // IP и браузер — чтобы админ видел, откуда пришла заявка, как просил заказчик.
+    sourceIp: req.ip ?? null,
+    userAgent: String(req.headers["user-agent"] ?? "").slice(0, 500) || null,
+    // Токен даёт заявителю доступ к своей заявке без пароля: по нему он
+    // дошлёт данные, если админ их запросит.
+    accessToken: randomUUID(),
   }).returning();
 
   // fire-and-forget audit (юзер не залогинен — userId/email в audit будут null,
@@ -162,7 +208,7 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
 
   const [request] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
   if (!request) { res.status(404).json({ error: "Заявка не найдена" }); return; }
-  if (request.status !== "pending") {
+  if (!OPEN_STATUSES.includes(request.status)) {
     res.status(409).json({ error: `Заявка уже в статусе ${request.status}` });
     return;
   }
@@ -332,7 +378,7 @@ router.post("/signup-requests/:id/reject", requireRole("admin", "manager"), asyn
 
   const [request] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
   if (!request) { res.status(404).json({ error: "Заявка не найдена" }); return; }
-  if (request.status !== "pending") {
+  if (!OPEN_STATUSES.includes(request.status)) {
     res.status(409).json({ error: `Заявка уже в статусе ${request.status}` });
     return;
   }
@@ -354,6 +400,166 @@ router.post("/signup-requests/:id/reject", requireRole("admin", "manager"), asyn
   });
 
   res.json({ ok: true, request: serializeRequest(updated) });
+});
+
+
+// ─── ADMIN: взять в работу / запросить данные / заметка ───────────────────
+const StatusBody = z.object({
+  status: z.enum(["pending", "under_review"]),
+}).strict();
+
+router.post("/signup-requests/:id/status", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = StatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [before] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
+  if (!before) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  if (!OPEN_STATUSES.includes(before.status)) {
+    res.status(409).json({ error: `Заявка уже в статусе ${before.status}` });
+    return;
+  }
+
+  const [updated] = await db.update(signupRequestsTable)
+    .set({ status: parsed.data.status })
+    .where(eq(signupRequestsTable.id, id)).returning();
+
+  void auditMutation(req, {
+    action: "update", entityType: "signup_request", entityId: id, before, after: updated,
+  });
+  res.json({ ok: true, request: serializeRequest(updated) });
+});
+
+const NoteBody = z.object({
+  note: z.string().max(4000),
+}).strict();
+
+router.post("/signup-requests/:id/note", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = NoteBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [updated] = await db.update(signupRequestsTable)
+    .set({ internalNote: parsed.data.note })
+    .where(eq(signupRequestsTable.id, id)).returning();
+  if (!updated) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  res.json({ ok: true, request: serializeRequest(updated) });
+});
+
+const RequestInfoBody = z.object({
+  message: z.string().min(3).max(2000),
+}).strict();
+
+// Просим заявителя дослать данные. Ссылка в письме ведёт на страницу заявки,
+// открывающуюся по токену — аккаунта у человека ещё нет, входить ему некуда.
+router.post("/signup-requests/:id/request-info", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = RequestInfoBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [before] = await db.select().from(signupRequestsTable).where(eq(signupRequestsTable.id, id));
+  if (!before) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  if (!OPEN_STATUSES.includes(before.status)) {
+    res.status(409).json({ error: `Заявка уже в статусе ${before.status}` });
+    return;
+  }
+
+  // У старых заявок токена нет — заводим при первом запросе данных.
+  const token = before.accessToken ?? randomUUID();
+  const [updated] = await db.update(signupRequestsTable)
+    .set({
+      status: "info_requested",
+      infoRequest: parsed.data.message,
+      infoRequestedAt: new Date(),
+      accessToken: token,
+    })
+    .where(eq(signupRequestsTable.id, id)).returning();
+
+  const link = `${process.env.PUBLIC_APP_URL ?? ""}/signup/request/${token}`;
+  sendMailAndForget({
+    to: before.email,
+    subject: "Нужны дополнительные данные по вашей заявке — Tajik Music",
+    text:
+      `Здравствуйте, ${before.name}!
+
+` +
+      `По вашей заявке на подключение к Tajik Music нужны дополнительные данные:
+
+` +
+      `${parsed.data.message}
+
+` +
+      `Ответьте по ссылке: ${link}
+`,
+  });
+
+  void auditMutation(req, {
+    action: "update", entityType: "signup_request", entityId: id, before, after: updated,
+  });
+  res.json({ ok: true, request: serializeRequest(updated) });
+});
+
+// ─── PUBLIC: заявитель смотрит свою заявку и досылает данные ──────────────
+router.get("/signup-requests/by-token/:token", async (req, res): Promise<void> => {
+  const token = String(req.params.token);
+  const [row] = await db.select().from(signupRequestsTable)
+    .where(eq(signupRequestsTable.accessToken, token));
+  if (!row) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  // Наружу отдаём только то, что человек и так про себя знает: внутренние
+  // заметки и данные проверяющего остаются в панели.
+  res.json({
+    data: {
+      id: row.id, name: row.name, email: row.email, status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      infoRequest: row.infoRequest,
+      infoResponse: row.infoResponse,
+      rejectionReason: row.status === "rejected" ? row.rejectionReason : null,
+    },
+  });
+});
+
+const InfoResponseBody = z.object({
+  response: z.string().min(2).max(4000),
+}).strict();
+
+router.post("/signup-requests/by-token/:token/respond", signupLimiter, async (req, res): Promise<void> => {
+  const token = String(req.params.token);
+  const parsed = InfoResponseBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [row] = await db.select().from(signupRequestsTable)
+    .where(eq(signupRequestsTable.accessToken, token));
+  if (!row) { res.status(404).json({ error: "Заявка не найдена" }); return; }
+  if (row.status !== "info_requested") {
+    res.status(409).json({ error: "По этой заявке дополнительные данные не запрашивались" });
+    return;
+  }
+
+  const [updated] = await db.update(signupRequestsTable)
+    .set({
+      infoResponse: parsed.data.response,
+      infoRespondedAt: new Date(),
+      // Ответ вернул заявку в работу — админ увидит её среди активных.
+      status: "under_review",
+    })
+    .where(eq(signupRequestsTable.id, row.id)).returning();
+
+  const adminEmail = getAdminNotificationEmail();
+  if (adminEmail) {
+    sendMailAndForget({
+      to: adminEmail,
+      subject: `[Tajik Music CRM] Ответ по заявке №${row.id}: ${row.name}`,
+      text: `${row.name} (${row.email}) прислал дополнительные данные:
+
+${parsed.data.response}
+`,
+    });
+  }
+
+  res.json({ ok: true, status: updated.status });
 });
 
 export default router;

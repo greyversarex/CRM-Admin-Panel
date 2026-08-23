@@ -25,6 +25,8 @@ import auditRouter from "./audit";
 import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
 import kycRouter from "./kyc";
+import accountsRouter from "./accounts";
+import contractsRouter from "./contracts";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
 import rightsRouter from "./rights";
@@ -99,6 +101,11 @@ router.use(audioQcRouter);            // Audio QC: /tracks/:id/audio-qc (scoped 
 // Per-route admin guard inside usersRouter so /users/me is accessible to all
 // authenticated users (their own profile / password change).
 router.use(usersRouter);
+// Карточка пользователя и договоры идут сразу за usersRouter и ДО глобальных
+// admin-гардов ниже: внутри есть маршруты для самого клиента — подача прав и
+// подписание договора, — гарды у них стоят по месту.
+router.use(accountsRouter);
+router.use(contractsRouter);
 // KYC и assets routes должны быть ДО integrationsRouter (который имеет
 // глобальный router.use(requireRole("admin","manager")) и иначе перехватывает
 // любой не-admin запрос — включая /users/me/kyc-* и /storage/objects/uploads/*

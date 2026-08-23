@@ -19,7 +19,37 @@ export const signupRequestsTable = pgTable("signup_requests", {
   legalName: text("legal_name"),                 // для лейблов / ИП
   inn: text("inn"),                              // налоговый номер (TJ/RU/UZ форматы)
   message: text("message"),                      // свободное «о себе»
-  status: text("status").notNull().default("pending"),  // pending | approved | rejected
+
+  // ─ анкета лейбла (ТЗ заказчика, лист «Label Registration & Onboarding») ─
+  website: text("website"),
+  socialMedia: text("social_media"),
+  contactPerson: text("contact_person"),
+  contactPosition: text("contact_position"),
+  whatsapp: text("whatsapp"),
+  artistCount: integer("artist_count"),
+  releaseCount: integer("release_count"),
+  trackCount: integer("track_count"),
+  genres: text("genres"),
+  currentDistributor: text("current_distributor"),
+  reasonForMoving: text("reason_for_moving"),
+  mainDsps: text("main_dsps"),
+  territories: text("territories"),
+  monthlyReleases: text("monthly_releases"),
+  catalogSize: text("catalog_size"),
+  hearAbout: text("hear_about"),
+
+  // ─ служебное: чем помочь админу при разборе заявки ─
+  sourceIp: text("source_ip"),
+  userAgent: text("user_agent"),
+  internalNote: text("internal_note"),
+  infoRequest: text("info_request"),             // что админ попросил дослать
+  infoRequestedAt: timestamp("info_requested_at", { withTimezone: true }),
+  infoResponse: text("info_response"),           // что ответил заявитель
+  infoRespondedAt: timestamp("info_responded_at", { withTimezone: true }),
+  accessToken: text("access_token"),             // ссылка «дослать данные» без пароля
+
+  // pending = новая. Дальше: under_review | info_requested | approved | rejected
+  status: text("status").notNull().default("pending"),
   // set null: ревьюера могут удалить, но история заявок сохраняется
   reviewedBy: integer("reviewed_by").references(() => usersTable.id, { onDelete: "set null" }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
@@ -35,7 +65,9 @@ export const signupRequestsTable = pgTable("signup_requests", {
 
 export const insertSignupRequestSchema = createInsertSchema(signupRequestsTable).omit({
   id: true, createdAt: true, status: true, reviewedBy: true, reviewedAt: true,
-  rejectionReason: true, createdUserId: true,
+  rejectionReason: true, createdUserId: true, sourceIp: true, userAgent: true,
+  internalNote: true, infoRequest: true, infoRequestedAt: true,
+  infoResponse: true, infoRespondedAt: true, accessToken: true,
 });
 export type InsertSignupRequest = z.infer<typeof insertSignupRequestSchema>;
 export type SignupRequest = typeof signupRequestsTable.$inferSelect;

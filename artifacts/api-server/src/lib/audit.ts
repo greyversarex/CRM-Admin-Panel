@@ -245,7 +245,9 @@ export type AuditAction =
   | "resolve" | "reopen" | "restore"
   | "import"
   | "pro_register" | "pro_register_failed" | "pro_register_network_error"
-  | "broma16_push";
+  | "broma16_push"
+  // приём лейблов и управление доступом
+  | "restrict" | "unrestrict" | "review" | "sign" | "terminate";
 
 export interface AuditOptions {
   action: AuditAction;

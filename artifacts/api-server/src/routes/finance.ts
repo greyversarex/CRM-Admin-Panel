@@ -13,6 +13,7 @@ import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/not
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { emitAlertAndForget } from "../services/alerts-emitter";
+import { requireFeature } from "../lib/account-access";
 
 const router = Router();
 
@@ -389,7 +390,7 @@ router.get("/payouts", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/payouts", async (req, res): Promise<void> => {
+router.post("/payouts", requireFeature("fin:payout_requests"), async (req, res): Promise<void> => {
   const parsed = CreatePayoutRequestBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

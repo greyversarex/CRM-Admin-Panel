@@ -7,7 +7,7 @@
 import { Router, type IRouter, type Response } from "express";
 import { z } from "zod/v4";
 import { and, desc, eq } from "drizzle-orm";
-import { db, releasesTable, tracksTable, broma16PushJobsTable } from "@workspace/db";
+import { db, releasesTable, tracksTable, usersTable, broma16PushJobsTable } from "@workspace/db";
 import { requireRole } from "../lib/auth";
 import { requireManagerPermission } from "../lib/manager-permissions";
 import { createBroma16Client } from "../services/broma16/client";
@@ -31,6 +31,7 @@ import {
 import { importBromaCatalog } from "../services/broma16/catalog-import";
 import { enqueueBroma16Push } from "../workers/broma16-push-worker";
 import { logger } from "../lib/logger";
+import { isRestricted } from "../lib/account-access";
 
 const broma16Router: IRouter = Router();
 const staff = [requireRole("admin", "manager"), requireManagerPermission("distribution")];
@@ -244,6 +245,28 @@ broma16Router.post("/broma16/catalog/import", ...staff, async (req, res) => {
 
 // ── Пуш релиза ─────────────────────────────────────────────────────
 
+/**
+ * Закрыта ли отдача на площадки владельцу релиза.
+ * Возвращает текст ошибки или null. Владельцем считаем пользователя лейбла,
+ * а для релиза без лейбла — пользователя-артиста.
+ */
+async function deliveryBlockedForOwner(labelId: number | null, artistId: number | null): Promise<string | null> {
+  const owners = labelId
+    ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.labelId, labelId))
+    : artistId
+      ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.artistId, artistId))
+      : [];
+  for (const owner of owners) {
+    if (await isRestricted(owner.id, "dist:delivery")) {
+      return `Отдача на площадки закрыта для «${owner.name}». Снимите ограничение в карточке пользователя.`;
+    }
+    if (await isRestricted(owner.id, "account:full_suspension")) {
+      return `Аккаунт «${owner.name}» заблокирован. Снимите блокировку в карточке пользователя.`;
+    }
+  }
+  return null;
+}
+
 // POST /broma16/releases/:id/push — поставить релиз в очередь на отправку.
 // Необязательное тело { outlets: string[] } — выбранные витрины (коды из словаря
 // outlet); сохраняем их в релиз перед постановкой в очередь, чтобы пушер взял
@@ -294,12 +317,19 @@ broma16Router.post("/broma16/releases/:id/push", ...adminOnly, async (req, res) 
     return;
   }
   const [release] = await db
-    .select({ id: releasesTable.id, status: releasesTable.status })
+    .select({ id: releasesTable.id, status: releasesTable.status, labelId: releasesTable.labelId, artistId: releasesTable.artistId })
     .from(releasesTable)
     .where(eq(releasesTable.id, id))
     .limit(1);
   if (!release) {
     res.status(404).json({ error: "Релиз не найден" });
+    return;
+  }
+  // Отправку запускает админ, но ограничение стоит на владельце каталога:
+  // если лейблу закрыли отдачу на площадки, релиз не уедет и по кнопке админа.
+  const blocked = await deliveryBlockedForOwner(release.labelId, release.artistId);
+  if (blocked) {
+    res.status(403).json({ error: blocked });
     return;
   }
   // Отправлять в Broma16 можно только одобренный релиз.
