@@ -7,7 +7,7 @@
 // реальные маршруты (загрузка релиза, перенос каталога, заявка на выплату),
 // иначе переключатель в панели ничего не значит.
 import type { RequestHandler } from "express";
-import { db, accountRestrictionsTable, type RestrictionFeature } from "@workspace/db";
+import { db, accountRestrictionsTable, usersTable, type RestrictionFeature } from "@workspace/db";
 import { and, eq, isNull, or, gt, inArray } from "drizzle-orm";
 import { getSessionUser } from "./auth";
 
@@ -49,6 +49,30 @@ const HUMAN_NAMES: Partial<Record<RestrictionFeature, string>> = {
   "fin:payout_requests": "заявки на выплату",
   "fin:payouts": "выплаты",
   "account:full_suspension": "работа с аккаунтом",
+};
+
+/**
+ * Пока аккаунт не активирован администратором, рабочие действия закрыты.
+ *
+ * Это девятый этап из ТЗ: доступ к кабинету появляется сразу после одобрения
+ * заявки — иначе человеку негде пройти KYC, — а загрузка релизов и деньги
+ * открываются только после проверки документов, прав и подписания договора.
+ */
+export const requireActiveAccount: RequestHandler = async (req, res, next) => {
+  const user = getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Требуется вход" }); return; }
+  if (user.role === "admin" || user.role === "manager") { next(); return; }
+
+  const [row] = await db.select({ status: usersTable.status })
+    .from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
+  if (row?.status === "review") {
+    res.status(403).json({
+      error: "Аккаунт ещё не активирован. Пройдите проверку документов, подтвердите права " +
+             "на каталог и подпишите договор — после этого администратор откроет доступ.",
+    });
+    return;
+  }
+  next();
 };
 
 /**

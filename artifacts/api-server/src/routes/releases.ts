@@ -27,7 +27,7 @@ const router = Router();
 import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope";
 import { getDictionary } from "../services/broma16/dictionaries";
 import { blockingIssues, checkBroma16Readiness } from "../services/broma16/readiness";
-import { requireFeature } from "../lib/account-access";
+import { requireActiveAccount, requireFeature } from "../lib/account-access";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -403,7 +403,7 @@ function isUniqueViolation(e: any): boolean {
   return false;
 }
 
-router.post("/releases/transfer-imports", requireRole("admin", "manager", "label", "artist"), requireFeature("dist:transfer"), async (req, res): Promise<void> => {
+router.post("/releases/transfer-imports", requireRole("admin", "manager", "label", "artist"), requireActiveAccount, requireFeature("dist:transfer"), async (req, res): Promise<void> => {
   const parsed = CreateTransferImportBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -782,7 +782,7 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
   }
 });
 
-router.post("/releases", requireFeature("dist:upload"), async (req, res): Promise<void> => {
+router.post("/releases", requireActiveAccount, requireFeature("dist:upload"), async (req, res): Promise<void> => {
   const parsed = CreateReleaseBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

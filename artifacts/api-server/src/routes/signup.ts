@@ -257,7 +257,10 @@ router.post("/signup-requests/:id/approve", requireRole("admin", "manager"), asy
         name: request.name,
         email: request.email,
         role,
-        status: "active",
+        // Одобренная заявка ещё не даёт права работать: сначала KYC, права и
+        // договор, потом администратор активирует аккаунт (этап 9 из ТЗ).
+        // Войти в кабинет при этом можно — иначе онбординг негде проходить.
+        status: "review",
         passwordHash,
         phone: request.phone,
         country: request.country,

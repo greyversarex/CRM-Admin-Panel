@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { SessionUser, AuthRole, ImpersonatorRef } from "../lib/auth";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, canSignIn } from "../lib/auth";
 import { maskBankInfoFor } from "../lib/kycUtils";
 import { auditMutation } from "../lib/audit";
 import { getPasswordPolicy, validatePassword } from "../lib/password-policy";
@@ -213,7 +213,7 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  if (user.status !== "active") {
+  if (!canSignIn(user.status)) {
     res.status(403).json({ error: "Аккаунт заблокирован или неактивен" });
     return;
   }
@@ -254,7 +254,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
   // If the account was disabled in DB, terminate the session immediately.
-  if (u.status !== "active") {
+  if (!canSignIn(u.status)) {
     req.session.destroy(() => {
       res.status(401).json({ error: "Аккаунт заблокирован" });
     });

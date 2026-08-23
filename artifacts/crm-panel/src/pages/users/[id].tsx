@@ -39,6 +39,13 @@ type Overview = {
   restrictions: string[];
 };
 
+type Onboarding = {
+  status: string;
+  steps: { key: string; label: string; done: boolean }[];
+  ready: boolean;
+  activated: boolean;
+};
+
 type Violation = {
   id: number; kind: string; severity: string; status: string; title: string;
   description: string | null; caseId: string | null; createdAt: string;
@@ -105,6 +112,10 @@ const ACCESS_GROUPS: { title: string; items: { key: string; label: string }[] }[
   },
 ];
 
+const STATUS_LABEL: Record<string, string> = {
+  active: "активен", review: "на проверке", limited: "ограничен",
+  suspended: "заблокирован", inactive: "выключен", closed: "закрыт",
+};
 const RISK_LABEL: Record<string, string> = { low: "низкий", medium: "средний", high: "высокий" };
 const RISK_CLASS: Record<string, string> = {
   low: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
@@ -135,12 +146,14 @@ export default function UserProfile() {
   const userId = Number(params?.id);
 
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [onboarding, setOnboarding] = useState<Onboarding | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setOverview(await api<Overview>(`/api/users/${userId}/overview`));
+      setOnboarding(await api<Onboarding>(`/api/users/${userId}/onboarding`));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить");
@@ -186,7 +199,7 @@ export default function UserProfile() {
             <Badge variant="outline" className={RISK_CLASS[overview.riskLevel]}>
               риск: {RISK_LABEL[overview.riskLevel]}
             </Badge>
-            <Badge variant="outline">{u.status === "active" ? "активен" : u.status === "suspended" ? "заблокирован" : u.status}</Badge>
+            <Badge variant="outline">{STATUS_LABEL[u.status] ?? u.status}</Badge>
             {overview.restrictions.length > 0 && (
               <Badge variant="outline" className="bg-amber-500/10 border-amber-500/30 text-amber-400">
                 ограничений: {overview.restrictions.length}
@@ -203,6 +216,45 @@ export default function UserProfile() {
               решите на вкладке «Доступ», что ограничить. Автоматически ничего не блокируется.
             </span>
           </div>
+        )}
+
+        {onboarding && !onboarding.activated && (
+          <Card className="card-surface no-lift border-amber-500/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Аккаунт ещё не активирован</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              {onboarding.steps.map((step) => (
+                <div key={step.key} className="flex items-center gap-2 text-sm">
+                  <span className={step.done ? "text-emerald-400" : "text-muted-foreground"}>
+                    {step.done ? "✓" : "○"}
+                  </span>
+                  <span className={step.done ? "" : "text-muted-foreground"}>{step.label}</span>
+                </div>
+              ))}
+              <Button
+                size="sm"
+                className="mt-2"
+                disabled={!onboarding.ready}
+                onClick={async () => {
+                  try {
+                    await api(`/api/users/${userId}/activate`, { method: "POST" });
+                    toast({ title: "Аккаунт активирован" });
+                    await load();
+                  } catch (e) {
+                    toast({ title: "Не получилось", description: e instanceof Error ? e.message : "", variant: "destructive" });
+                  }
+                }}
+              >
+                Активировать аккаунт
+              </Button>
+              {!onboarding.ready && (
+                <p className="text-xs text-muted-foreground">
+                  Кнопка включится, когда клиент закроет все шаги.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <Tabs defaultValue="overview">

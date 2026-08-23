@@ -157,6 +157,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   res.status(401).json({ error: "Unauthorized" });
 }
 
+/**
+ * Статусы, с которыми пускаем в кабинет.
+ *
+ * «review» — аккаунт одобрен, но ещё не активирован: человек обязан пройти
+ * KYC, подтвердить права и подписать договор, а сделать это можно только
+ * изнутри кабинета. Поэтому вход ему открыт, а рабочие действия закрыты
+ * (см. requireActiveAccount). «limited» — работает с ограничениями.
+ */
+export const SIGN_IN_STATUSES = ["active", "review", "limited"];
+
+export function canSignIn(status: string): boolean {
+  return SIGN_IN_STATUSES.includes(status);
+}
+
 export function requireRole(...roles: AuthRole[]): RequestHandler {
   return (req, res, next) => {
     const u = req.session?.user;

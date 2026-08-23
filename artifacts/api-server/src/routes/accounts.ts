@@ -513,4 +513,69 @@ router.get("/users-access-summary", adminOnly, async (_req, res): Promise<void> 
   res.json({ data: Object.fromEntries(byUser) });
 });
 
+
+// ─── Готовность к активации и сама активация ──────────────────────────────
+// Девятый этап из ТЗ: администратор видит галочки по всем шагам и включает
+// аккаунт. Пропустить незакрытый шаг нельзя — иначе проверка теряет смысл.
+router.get("/users/:id/onboarding", adminOnly, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Неверный id" }); return; }
+  res.json(await onboardingState(id));
+});
+
+async function onboardingState(id: number) {
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  if (!user) return null;
+
+  const [rights] = await db.select().from(rightsVerificationsTable)
+    .where(eq(rightsVerificationsTable.userId, id));
+  const [contract] = await db.select().from(contractsTable)
+    .where(and(eq(contractsTable.userId, id), eq(contractsTable.status, "signed")))
+    .orderBy(desc(contractsTable.signedAt)).limit(1);
+
+  const steps = [
+    { key: "kyc", label: "Проверка документов (KYC)", done: user.kycStatus === "verified" },
+    { key: "rights", label: "Права на каталог подтверждены", done: rights?.status === "verified" },
+    { key: "contract", label: "Договор подписан", done: Boolean(contract) },
+  ];
+  return {
+    status: user.status,
+    steps,
+    ready: steps.every((s) => s.done),
+    activated: user.status === "active",
+  };
+}
+
+router.post("/users/:id/activate", adminOnly, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Неверный id" }); return; }
+
+  const state = await onboardingState(id);
+  if (!state) { res.status(404).json({ error: "Пользователь не найден" }); return; }
+  if (!state.ready) {
+    const missing = state.steps.filter((s) => !s.done).map((s) => s.label).join(", ");
+    res.status(409).json({ error: `Не пройдены шаги: ${missing}` });
+    return;
+  }
+
+  const [before] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  const [updated] = await db.update(usersTable)
+    .set({ status: "active", blockReason: null, updatedAt: new Date() })
+    .where(eq(usersTable.id, id)).returning();
+
+  void auditMutation(req, {
+    action: "approve", entityType: "user", entityId: id, before, after: updated,
+  });
+  void createNotification({
+    userId: id,
+    type: "account_activated",
+    title: "Аккаунт активирован",
+    body: "Проверка пройдена. Загрузка релизов и отправка на площадки открыты.",
+    entityType: "general",
+    link: "/dashboard",
+  });
+
+  res.json({ ok: true, status: updated.status });
+});
+
 export default router;

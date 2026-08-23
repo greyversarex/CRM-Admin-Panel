@@ -3,7 +3,7 @@ import { db, takedownRequestsTable } from "@workspace/db";
 import { eq, desc, and, or } from "drizzle-orm";
 import { getDataScope } from "../lib/auth";
 import { notifyByArtistId, notifyByLabelId } from "../services/notifications";
-import { requireFeature } from "../lib/account-access";
+import { requireActiveAccount, requireFeature } from "../lib/account-access";
 
 const router = Router();
 
@@ -37,7 +37,7 @@ router.get("/takedowns", async (req, res): Promise<void> => {
   })));
 });
 
-router.post("/takedowns", requireFeature("dist:takedown"), async (req, res): Promise<void> => {
+router.post("/takedowns", requireActiveAccount, requireFeature("dist:takedown"), async (req, res): Promise<void> => {
   const scope = getDataScope(req);
   if (!req.session?.user?.id) { res.status(401).json({ error: "Unauthorized" }); return; }
 

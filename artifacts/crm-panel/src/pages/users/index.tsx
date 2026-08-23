@@ -133,6 +133,10 @@ export default function Users() {
     query: { queryKey: getListUsersQueryKey(params) },
   });
   const apiUsers: User[] = usersResp?.data ?? [];
+
+  // Считаем по уже загруженным данным: отдельный запрос ради двух чисел не нужен.
+  const reviewCount = apiUsers.filter((u) => (u.status as string) === "review").length;
+  const restrictedCount = Object.values(accessSummary).filter((x) => x.restrictions.length > 0).length;
   const totalUsers = usersResp?.pagination.total ?? apiUsers.length;
 
   function kycBadge(s: string | null | undefined) {
@@ -223,10 +227,12 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-5">
           <KpiCard label={t.users.kpi_total}    value={String(totalUsers)}      icon={Users2}        iconColor="text-primary"      iconBg="bg-primary/12"      iconBorder="border-primary/20" />
           <KpiCard label={t.users.kpi_signups}  value={String(signupsCount)}    icon={UserPlus}      iconColor="text-amber-400"    iconBg="bg-amber-500/12"    iconBorder="border-amber-500/20" />
           <KpiCard label={t.users.kpi_kyc}      value={String(kycPendingCount)} icon={FileSignature} iconColor="text-violet-400"   iconBg="bg-violet-500/12"   iconBorder="border-violet-500/20" />
+          <KpiCard label="На проверке"          value={String(reviewCount)}     icon={Clock}         iconColor="text-amber-400"    iconBg="bg-amber-500/12"    iconBorder="border-amber-500/20" />
+          <KpiCard label="С ограничениями"      value={String(restrictedCount)} icon={Ban}           iconColor="text-rose-400"     iconBg="bg-rose-500/12"     iconBorder="border-rose-500/20" />
         </div>
 
         <Tabs defaultValue="users">
@@ -295,6 +301,8 @@ export default function Users() {
                       <option value="all">{t.users.filter_all_statuses}</option>
                       <option value="active">{t.users.status_active}</option>
                       <option value="inactive">{t.users.status_inactive}</option>
+                      <option value="review">на проверке</option>
+                      <option value="limited">ограничен</option>
                       <option value="suspended">{t.users.status_suspended}</option>
                     </select>
                     <div className="relative w-64">
@@ -375,6 +383,8 @@ export default function Users() {
                             {u.status === "active" && <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> {t.users.status_active}</span>}
                             {u.status === "suspended" && <span className="text-xs text-rose-400 flex items-center gap-1"><Ban className="h-3 w-3" /> {t.users.status_suspended}</span>}
                             {(u.status as string) === "inactive" && <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> {t.users.status_inactive}</span>}
+                            {(u.status as string) === "review" && <span className="text-xs text-amber-400 flex items-center gap-1"><Clock className="h-3 w-3" /> на проверке</span>}
+                            {(u.status as string) === "limited" && <span className="text-xs text-amber-400 flex items-center gap-1"><Ban className="h-3 w-3" /> ограничен</span>}
                           </TableCell>
                           <TableCell>{kycBadge(kycStatus)}</TableCell>
                           <TableCell className="text-xs">{CONTRACT_SHORT[summary?.contractStatus ?? ""] ?? "—"}</TableCell>
