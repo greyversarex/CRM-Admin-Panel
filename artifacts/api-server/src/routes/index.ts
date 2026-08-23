@@ -26,6 +26,7 @@ import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
 import kycRouter from "./kyc";
 import accountsRouter from "./accounts";
+import verificationRouter from "./verification";
 import contractsRouter from "./contracts";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
@@ -105,6 +106,7 @@ router.use(usersRouter);
 // admin-гардов ниже: внутри есть маршруты для самого клиента — подача прав и
 // подписание договора, — гарды у них стоят по месту.
 router.use(accountsRouter);
+router.use(verificationRouter);
 router.use(contractsRouter);
 // KYC и assets routes должны быть ДО integrationsRouter (который имеет
 // глобальный router.use(requireRole("admin","manager")) и иначе перехватывает

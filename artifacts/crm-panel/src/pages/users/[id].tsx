@@ -27,6 +27,7 @@ type Overview = {
     id: number; name: string; email: string; role: string; status: string;
     blockReason: string | null; phone: string | null; country: string | null;
     city: string | null; kycStatus: string; lastLoginAt: string | null; createdAt: string;
+    labelId: number | null; artistId: number | null;
   };
   label: { id: number; name: string; country: string | null; status: string } | null;
   catalog: { releases: number; tracks: number; artists: number };
@@ -94,6 +95,16 @@ const ACCESS_GROUPS: { title: string; items: { key: string; label: string }[] }[
       { key: "dist:takedown", label: "Заявки на снятие" },
       { key: "dist:transfer", label: "Перенос каталога" },
       { key: "dist:publishing", label: "Паблишинг" },
+    ],
+  },
+  {
+    title: "Разделы кабинета",
+    items: [
+      { key: "app:dashboard", label: "Дашборд" },
+      { key: "app:catalog", label: "Каталог" },
+      { key: "app:analytics", label: "Аналитика" },
+      { key: "app:royalties", label: "Роялти" },
+      { key: "app:support", label: "Поддержка" },
     ],
   },
   {
@@ -260,6 +271,8 @@ export default function UserProfile() {
         <Tabs defaultValue="overview">
           <TabsList className="bg-card border border-border h-auto p-1 gap-1">
             <TabsTrigger value="overview" className="gap-1.5">Обзор</TabsTrigger>
+            <TabsTrigger value="catalog" className="gap-1.5">Каталог</TabsTrigger>
+            <TabsTrigger value="finance" className="gap-1.5">Финансы</TabsTrigger>
             <TabsTrigger value="access" className="gap-1.5"><Lock className="h-3.5 w-3.5" /> Доступ</TabsTrigger>
             <TabsTrigger value="violations" className="gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" /> Нарушения
@@ -271,10 +284,18 @@ export default function UserProfile() {
             </TabsTrigger>
             <TabsTrigger value="contracts" className="gap-1.5"><FileSignature className="h-3.5 w-3.5" /> Договоры</TabsTrigger>
             <TabsTrigger value="rights" className="gap-1.5"><Scale className="h-3.5 w-3.5" /> Права</TabsTrigger>
+            <TabsTrigger value="kyc" className="gap-1.5">KYC</TabsTrigger>
+            <TabsTrigger value="activity" className="gap-1.5">История</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4">
             <OverviewTab overview={overview} onNavigate={navigate} />
+          </TabsContent>
+          <TabsContent value="catalog" className="mt-4">
+            <CatalogTab overview={overview} onNavigate={navigate} />
+          </TabsContent>
+          <TabsContent value="finance" className="mt-4">
+            <FinanceTab overview={overview} />
           </TabsContent>
           <TabsContent value="access" className="mt-4">
             <AccessTab userId={userId} active={overview.restrictions} onChange={load} />
@@ -287,6 +308,12 @@ export default function UserProfile() {
           </TabsContent>
           <TabsContent value="rights" className="mt-4">
             <RightsTab userId={userId} onChange={load} />
+          </TabsContent>
+          <TabsContent value="kyc" className="mt-4">
+            <KycTab userId={userId} overview={overview} onChange={load} />
+          </TabsContent>
+          <TabsContent value="activity" className="mt-4">
+            <ActivityTab userId={userId} />
           </TabsContent>
         </Tabs>
       </div>
@@ -369,7 +396,36 @@ function AccessTab({ userId, active, onChange }: { userId: number; active: strin
   const [days, setDays] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Пакетное применение: одна причина на несколько запретов сразу — так это
+  // и описано в ТЗ («Apply Restriction» со списком галочек).
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchKeys, setBatchKeys] = useState<string[]>([]);
+
   const isRestricted = (key: string) => active.includes(key);
+
+  const applyBatch = async () => {
+    if (batchKeys.length === 0 || reason.trim().length < 3) return;
+    setBusy(true);
+    try {
+      const r = await api<{ applied: string[]; skipped: string[] }>(`/api/users/${userId}/restrictions/batch`, {
+        method: "POST",
+        body: JSON.stringify({
+          features: batchKeys,
+          reason: reason.trim(),
+          caseId: caseId.trim() || null,
+          durationDays: days ? Number(days) : null,
+        }),
+      });
+      toast({
+        title: `Применено ограничений: ${r.applied.length}`,
+        description: r.skipped.length ? `Уже действовали: ${r.skipped.length}` : undefined,
+      });
+      setBatchOpen(false); setBatchKeys([]); setReason(""); setCaseId(""); setDays("");
+      onChange();
+    } catch (e) {
+      toast({ title: "Не получилось", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    } finally { setBusy(false); }
+  };
 
   const applyRestriction = async () => {
     if (!pending || reason.trim().length < 3) return;
@@ -406,9 +462,14 @@ function AccessTab({ userId, active, onChange }: { userId: number; active: strin
 
   return (
     <>
-      <p className="text-[13px] text-muted-foreground mb-3">
-        Переключатель включён — функция доступна. Выключаете — система спросит причину и запишет её в журнал.
-      </p>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-[13px] text-muted-foreground">
+          Переключатель включён — функция доступна. Выключаете — система спросит причину и запишет её в журнал.
+        </p>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setBatchOpen(true)}>
+          Применить несколько
+        </Button>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {ACCESS_GROUPS.map((group) => (
           <Card key={group.title} className="card-surface no-lift">
@@ -435,6 +496,48 @@ function AccessTab({ userId, active, onChange }: { userId: number; active: strin
           </Card>
         ))}
       </div>
+
+      <Dialog open={batchOpen} onOpenChange={(o) => { if (!o) setBatchOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Применить ограничения</DialogTitle>
+            <DialogDescription>Отметьте всё, что нужно закрыть. Причина будет одна на все пункты.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[40vh] overflow-y-auto space-y-3 pr-1">
+            {ACCESS_GROUPS.map((group) => (
+              <div key={group.title}>
+                <p className="text-xs text-muted-foreground mb-1">{group.title}</p>
+                {group.items.map((item) => (
+                  <label key={item.key} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      disabled={isRestricted(item.key)}
+                      checked={batchKeys.includes(item.key)}
+                      onChange={(e) => setBatchKeys((prev) =>
+                        e.target.checked ? [...prev, item.key] : prev.filter((k) => k !== item.key))}
+                    />
+                    <span className={isRestricted(item.key) ? "text-muted-foreground line-through" : ""}>
+                      {item.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            <Textarea placeholder="Причина — обязательно" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input placeholder="Номер дела (необязательно)" value={caseId} onChange={(e) => setCaseId(e.target.value)} />
+            <Input type="number" min={1} placeholder="Срок в днях (пусто — бессрочно)" value={days} onChange={(e) => setDays(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchOpen(false)}>Отмена</Button>
+            <Button disabled={busy || batchKeys.length === 0 || reason.trim().length < 3} onClick={applyBatch}>
+              Применить ({batchKeys.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!pending} onOpenChange={(o) => { if (!o) setPending(null); }}>
         <DialogContent>
@@ -769,6 +872,229 @@ function RightsTab({ userId, onChange }: { userId: number; onChange: () => void 
             </div>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── каталог ──────────────────────────────────────────────────────────────
+
+type ReleaseRow = { id: number; title: string; status: string; upc: string | null; releaseDate: string | null };
+
+function CatalogTab({ overview, onNavigate }: { overview: Overview; onNavigate: (to: string) => void }) {
+  const [rows, setRows] = useState<ReleaseRow[] | null>(null);
+  const { labelId, artistId } = overview.user;
+
+  useEffect(() => {
+    const q = labelId ? `label_id=${labelId}` : artistId ? `artist_id=${artistId}` : null;
+    if (!q) { setRows([]); return; }
+    void api<{ data: ReleaseRow[] }>(`/api/releases?${q}&limit=100`)
+      .then((r) => setRows(r.data ?? []))
+      .catch(() => setRows([]));
+  }, [labelId, artistId]);
+
+  return (
+    <Card className="card-surface no-lift">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          Релизы клиента · {overview.catalog.releases} шт., треков {overview.catalog.tracks}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-1.5">
+        {rows === null && <Skeleton className="h-16 w-full" />}
+        {rows?.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Релизов нет.</p>}
+        {rows?.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            className="w-full flex items-center justify-between gap-3 rounded-md border border-border/50 px-3 py-2 text-left hover:bg-accent/20"
+            onClick={() => onNavigate(`/releases/${r.id}`)}
+          >
+            <div>
+              <div className="text-sm">{r.title}</div>
+              <div className="text-xs text-muted-foreground">
+                {r.upc ? `UPC ${r.upc}` : "без UPC"}{r.releaseDate ? ` · ${r.releaseDate}` : ""}
+              </div>
+            </div>
+            <Badge variant="outline" className="shrink-0">{r.status}</Badge>
+          </button>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── финансы ──────────────────────────────────────────────────────────────
+
+function FinanceTab({ overview }: { overview: Overview }) {
+  const payouts = overview.finance.payouts;
+  // Заморожены ли выплаты — видно по ограничениям; «удерживается» считаем как
+  // всё начисленное, что ещё не выплачено и не отклонено.
+  const frozen = overview.restrictions.includes("fin:payouts");
+  const onHold = Object.entries(payouts)
+    .filter(([status]) => status !== "paid" && status !== "rejected")
+    .reduce((sum, [, value]) => sum + value, 0);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card className="card-surface no-lift">
+        <CardHeader className="pb-2"><CardTitle className="text-base">Начисления</CardTitle></CardHeader>
+        <CardContent className="pt-0">
+          <Row label="Всего начислено" value={money(overview.finance.revenue)} />
+          {Object.keys(payouts).length === 0 && <Row label="Выплаты" value="нет" />}
+          {Object.entries(payouts).map(([status, sum]) => (
+            <Row key={status} label={`Выплаты · ${status}`} value={money(sum)} />
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className={`card-surface no-lift ${frozen ? "border-rose-500/30" : ""}`}>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Состояние выплат</CardTitle></CardHeader>
+        <CardContent className="pt-0">
+          <Row
+            label="Выплаты"
+            value={frozen
+              ? <span className="text-rose-400">заморожены</span>
+              : <span className="text-emerald-400">открыты</span>}
+          />
+          <Row
+            label="Заявки на выплату"
+            value={overview.restrictions.includes("fin:payout_requests")
+              ? <span className="text-rose-400">закрыты</span>
+              : <span className="text-emerald-400">открыты</span>}
+          />
+          {frozen && <Row label="Удерживается" value={money(onHold)} />}
+          <p className="text-xs text-muted-foreground mt-3">
+            Заморозка выплат не трогает каталог: релизы продолжают работать на площадках.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── KYC ──────────────────────────────────────────────────────────────────
+
+type KycDoc = {
+  id: number; kind: string; status: string; originalFilename: string;
+  objectPath: string; uploadedAt: string; rejectionReason: string | null;
+};
+
+const KYC_STATUS_LABEL: Record<string, string> = {
+  pending: "ждёт проверки", in_review: "на проверке", info_requested: "нужны данные",
+  approved: "принят", verified: "принят", rejected: "отклонён", not_started: "не подавался",
+};
+
+function KycTab({ userId, overview, onChange }: { userId: number; overview: Overview; onChange: () => void }) {
+  const [docs, setDocs] = useState<KycDoc[] | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api<{ data: KycDoc[] } | KycDoc[]>(`/api/admin/kyc/users/${userId}/documents`);
+      setDocs(Array.isArray(r) ? r : r.data ?? []);
+    } catch { setDocs([]); }
+  }, [userId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (id: number, path: string, body?: object) => {
+    try {
+      await api(`/api/admin/kyc-documents/${id}/${path}`, { method: "POST", body: JSON.stringify(body ?? {}) });
+      await load(); onChange();
+    } catch (e) {
+      toast({ title: "Не получилось", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className="card-surface no-lift">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base">Документы</CardTitle>
+          <Badge variant="outline">{KYC_STATUS_LABEL[overview.kyc.status] ?? overview.kyc.status}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-2">
+        {docs === null && <Skeleton className="h-16 w-full" />}
+        {docs?.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Документов нет.</p>}
+        {docs?.map((d) => (
+          <div key={d.id} className="rounded-md border border-border/60 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm">{d.originalFilename}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {d.kind} · {new Date(d.uploadedAt).toLocaleDateString("ru-RU")}
+                </div>
+                {d.rejectionReason && <p className="text-xs text-rose-400 mt-1">{d.rejectionReason}</p>}
+              </div>
+              <Badge variant="outline" className="shrink-0">{KYC_STATUS_LABEL[d.status] ?? d.status}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <a href={d.objectPath} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="outline">Открыть</Button>
+              </a>
+              {d.status === "pending" && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => void act(d.id, "approve")}>Принять</Button>
+                  <Button
+                    size="sm" variant="outline"
+                    onClick={() => {
+                      const message = window.prompt("Что нужно дослать?");
+                      if (message && message.trim().length >= 3) void act(d.id, "request-info", { message: message.trim() });
+                    }}
+                  >
+                    Запросить данные
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost" className="text-rose-400"
+                    onClick={() => {
+                      const reason = window.prompt("Причина отказа:");
+                      if (reason && reason.trim().length >= 3) void act(d.id, "reject", { reason: reason.trim() });
+                    }}
+                  >
+                    Отклонить
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── история ──────────────────────────────────────────────────────────────
+
+type AuditRow = {
+  id: number; action: string; entityType: string; entityId: number | null;
+  createdAt: string; ip: string | null;
+};
+
+function ActivityTab({ userId }: { userId: number }) {
+  const [rows, setRows] = useState<AuditRow[] | null>(null);
+
+  useEffect(() => {
+    void api<{ data: AuditRow[] }>(`/api/audit?user_id=${userId}&limit=100`)
+      .then((r) => setRows(r.data ?? []))
+      .catch(() => setRows([]));
+  }, [userId]);
+
+  return (
+    <Card className="card-surface no-lift">
+      <CardHeader className="pb-2"><CardTitle className="text-base">Действия пользователя</CardTitle></CardHeader>
+      <CardContent className="pt-0 space-y-1">
+        {rows === null && <Skeleton className="h-16 w-full" />}
+        {rows?.length === 0 && <p className="text-sm text-muted-foreground py-6 text-center">Записей нет.</p>}
+        {rows?.map((r) => (
+          <div key={r.id} className="flex items-center justify-between gap-3 border-b border-border/40 py-1.5 last:border-0">
+            <span className="text-sm">
+              {r.action} · {r.entityType}{r.entityId ? ` #${r.entityId}` : ""}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {new Date(r.createdAt).toLocaleString("ru-RU")}
+            </span>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

@@ -18,10 +18,11 @@ export const kycDocumentsTable = pgTable("kyc_documents", {
   originalFilename: text("original_filename").notNull(),
   mimeType: text("mime_type").notNull(),
   sizeBytes: integer("size_bytes").notNull().default(0),
-  status: text("status").notNull().default("pending"),  // pending | approved | rejected
+  status: text("status").notNull().default("pending"),  // pending | in_review | info_requested | approved | rejected
   reviewedBy: integer("reviewed_by").references(() => usersTable.id, { onDelete: "set null" }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),
+  infoRequest: text("info_request"),               // что попросили дослать по документу
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("kyc_documents_user_idx").on(t.userId),

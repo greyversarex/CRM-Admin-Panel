@@ -153,3 +153,70 @@ export function RightsTab({ userId }: { userId: number }) {
     </Card>
   );
 }
+
+// ─── подтверждение почты и телефона ───────────────────────────────────────
+
+type VerificationState = {
+  email: string;
+  phone: string | null;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  phoneVerificationAvailable: boolean;
+};
+
+export function VerificationCard() {
+  const [state, setState] = useState<VerificationState | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    void api<VerificationState>("/api/users/me/verification")
+      .then(setState)
+      .catch(() => setState(null));
+  }, []);
+
+  if (!state) return null;
+
+  const send = async () => {
+    setSending(true);
+    try {
+      await api("/api/users/me/verify-email/send", { method: "POST" });
+      setSent(true);
+      toast({ title: "Письмо отправлено", description: "Проверьте почту и перейдите по ссылке." });
+    } catch (e) {
+      toast({ title: "Не получилось", description: e instanceof Error ? e.message : "", variant: "destructive" });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <Card className="card-surface no-lift border-border/60">
+      <CardHeader className="pb-2"><CardTitle className="text-base">Подтверждение контактов</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm">{state.email}</div>
+            <div className="text-xs text-muted-foreground">
+              {state.emailVerified ? "адрес подтверждён" : "адрес не подтверждён"}
+            </div>
+          </div>
+          {state.emailVerified
+            ? <Badge variant="outline" className="bg-emerald-500/10 border-emerald-500/30 text-emerald-400">✓</Badge>
+            : <Button size="sm" disabled={sending || sent} onClick={send}>
+                {sent ? "Письмо отправлено" : "Отправить письмо"}
+              </Button>}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+          <div>
+            <div className="text-sm">{state.phone ?? "телефон не указан"}</div>
+            <div className="text-xs text-muted-foreground">
+              {state.phoneVerificationAvailable
+                ? (state.phoneVerified ? "телефон подтверждён" : "телефон не подтверждён")
+                : "подтверждение по SMS не подключено — телефон проверяет менеджер"}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

@@ -60,6 +60,11 @@ const PublicSignupBody = z.object({
   monthlyReleases: z.string().max(60).optional().nullable(),
   catalogSize: z.string().max(60).optional().nullable(),
   hearAbout: z.string().max(200).optional().nullable(),
+
+  // Два раздельных согласия, как в ТЗ. Старые клиенты формы могли не прислать
+  // ничего — тогда считаем, что согласия дано не было, и просто не пишем дату.
+  acceptedTerms: z.boolean().optional(),
+  acceptedPrivacy: z.boolean().optional(),
 }).strict();
 
 
@@ -140,6 +145,8 @@ router.post("/signup-requests", signupLimiter, async (req, res): Promise<void> =
     // Токен даёт заявителю доступ к своей заявке без пароля: по нему он
     // дошлёт данные, если админ их запросит.
     accessToken: randomUUID(),
+    acceptedTermsAt: data.acceptedTerms ? new Date() : null,
+    acceptedPrivacyAt: data.acceptedPrivacy ? new Date() : null,
   }).returning();
 
   // fire-and-forget audit (юзер не залогинен — userId/email в audit будут null,
@@ -400,6 +407,24 @@ router.post("/signup-requests/:id/reject", requireRole("admin", "manager"), asyn
   void auditMutation(req, {
     action: "reject", entityType: "signup_request", entityId: id,
     before: request, after: updated,
+  });
+
+  // Отказ без письма — это молчание в ответ на заявку. Пишем причину так же,
+  // как её увидит админ: придумывать смягчённую формулировку не наше дело.
+  sendMailAndForget({
+    to: request.email,
+    subject: "Ваша заявка в Tajik Music отклонена",
+    text:
+      `Здравствуйте, ${request.name}!
+
+` +
+      `К сожалению, ваша заявка на подключение к Tajik Music отклонена.
+
+` +
+      `Причина: ${parsed.data.reason}
+
+` +
+      `Если ситуация изменится, вы можете подать заявку заново.`,
   });
 
   res.json({ ok: true, request: serializeRequest(updated) });

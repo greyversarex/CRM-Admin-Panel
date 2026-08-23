@@ -19,7 +19,7 @@ import {
   Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, Banknote, Receipt,
   Upload, Trash2, FileText, AlertTriangle, ExternalLink,
 } from "lucide-react";
-import { RightsTab } from "./_rights-tab";
+import { RightsTab, VerificationCard } from "./_rights-tab";
 
 async function patchMe(body: Record<string, any>) {
   const res = await fetch("/api/users/me", {
@@ -536,7 +536,8 @@ export default function ProfilePage() {
 
           {/* ============== KYC TAB (Task #6) ============== */}
           {!isAdmin && (
-            <TabsContent value="rights" className="mt-6">
+            <TabsContent value="rights" className="mt-6 space-y-6">
+              <VerificationCard />
               <RightsTab userId={user.id} />
             </TabsContent>
           )}

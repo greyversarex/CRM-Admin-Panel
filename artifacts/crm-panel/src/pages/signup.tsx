@@ -42,7 +42,8 @@ export default function Signup() {
   const [legalName, setLegalName] = useState("");
   const [inn, setInn]         = useState("");
   const [message, setMessage] = useState("");
-  const [agree, setAgree]     = useState(false);
+  const [agree, setAgree]     = useState(false);   // персональные данные
+  const [agreeTerms, setAgreeTerms] = useState(false); // условия работы
   // Анкета целиком в одном объекте: полей много, а логики у них никакой.
   const [extra, setExtra] = useState<Record<string, string>>({});
   const [showExtra, setShowExtra] = useState(false);
@@ -56,6 +57,10 @@ export default function Signup() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!agreeTerms) {
+      setError("Подтверди согласие с условиями работы");
+      return;
+    }
     if (!agree) {
       setError("Подтверди согласие на обработку персональных данных");
       return;
@@ -73,6 +78,8 @@ export default function Signup() {
           legalName: legalName || null,
           inn:       inn       || null,
           message:   message   || null,
+          acceptedTerms: agreeTerms,
+          acceptedPrivacy: agree,
           // Пустые поля не отправляем: сервер ждёт либо значение, либо ничего.
           ...Object.fromEntries(
             EXTRA_FIELDS
@@ -252,18 +259,29 @@ export default function Signup() {
                 />
               </div>
 
-              <label className="flex items-start gap-2 text-xs text-white/55 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agree}
-                  onChange={(e) => setAgree(e.target.checked)}
-                  className="mt-0.5 accent-primary"
-                />
-                <span>
-                  Я согласен на обработку персональных данных в рамках Закона РТ
-                  «О защите персональных данных» (политика конфиденциальности — в подвале сайта).
-                </span>
-              </label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2 text-xs text-white/55 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <span>Я принимаю условия работы с Tajik Music (Terms &amp; Conditions).</span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-white/55 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agree}
+                    onChange={(e) => setAgree(e.target.checked)}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <span>
+                    Я согласен на обработку персональных данных в рамках Закона РТ
+                    «О защите персональных данных» (политика конфиденциальности — в подвале сайта).
+                  </span>
+                </label>
+              </div>
 
               {error && (
                 <div className="text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">

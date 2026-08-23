@@ -48,6 +48,11 @@ export const signupRequestsTable = pgTable("signup_requests", {
   infoRespondedAt: timestamp("info_responded_at", { withTimezone: true }),
   accessToken: text("access_token"),             // ссылка «дослать данные» без пароля
 
+  // Согласия храним раздельно и с отметкой времени: «поставил галочку» без
+  // даты доказательством не является.
+  acceptedTermsAt: timestamp("accepted_terms_at", { withTimezone: true }),
+  acceptedPrivacyAt: timestamp("accepted_privacy_at", { withTimezone: true }),
+
   // pending = новая. Дальше: under_review | info_requested | approved | rejected
   status: text("status").notNull().default("pending"),
   // set null: ревьюера могут удалить, но история заявок сохраняется

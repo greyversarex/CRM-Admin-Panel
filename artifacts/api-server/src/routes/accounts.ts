@@ -212,6 +212,69 @@ router.post("/users/:id/restrictions", adminOnly, async (req, res): Promise<void
   res.status(201).json({ ok: true, restriction: created });
 });
 
+const ApplyManyBody = z.object({
+  features: z.array(z.enum(RESTRICTION_FEATURES)).min(1).max(RESTRICTION_FEATURES.length),
+  reason: z.string().min(3).max(500),
+  caseId: z.string().max(80).optional().nullable(),
+  note: z.string().max(2000).optional().nullable(),
+  durationDays: z.number().int().positive().max(3650).optional().nullable(),
+}).strict();
+
+// «Apply Restriction» из ТЗ: админ отмечает галочками сразу несколько запретов
+// и пишет одну причину на всех. Уже действующие пропускаем без ошибки —
+// иначе половина списка ломала бы отправку целиком.
+router.post("/users/:id/restrictions/batch", adminOnly, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Неверный id" }); return; }
+  const parsed = ApplyManyBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const user = await loadUserOr404(id);
+  if (!user) { res.status(404).json({ error: "Пользователь не найден" }); return; }
+
+  const { features, reason, caseId, note, durationDays } = parsed.data;
+  const admin = getSessionUser(req)!;
+  const expiresAt = durationDays ? new Date(Date.now() + durationDays * 86_400_000) : null;
+
+  const already = new Set((await db.select({ feature: accountRestrictionsTable.feature })
+    .from(accountRestrictionsTable)
+    .where(and(eq(accountRestrictionsTable.userId, id), isNull(accountRestrictionsTable.liftedAt))))
+    .map((r) => r.feature));
+
+  const toApply = features.filter((f) => !already.has(f));
+  if (toApply.length > 0) {
+    await db.insert(accountRestrictionsTable).values(toApply.map((feature) => ({
+      userId: id, feature, reason,
+      caseId: caseId ?? null, note: note ?? null,
+      expiresAt, appliedBy: admin.id,
+    })));
+  }
+
+  void auditMutation(req, {
+    action: "restrict", entityType: "user", entityId: id,
+    before: { restricted: [...already] },
+    after: { restricted: [...already, ...toApply], reason, caseId },
+  });
+
+  if (toApply.includes("account:full_suspension")) {
+    await db.update(usersTable)
+      .set({ status: "suspended", blockReason: reason, updatedAt: new Date() })
+      .where(eq(usersTable.id, id));
+  }
+
+  if (toApply.length > 0) {
+    void createNotification({
+      userId: id,
+      type: "account_restricted",
+      title: "Ограничен доступ",
+      body: `Администратор ограничил доступ (${toApply.length}). Причина: ${reason}`,
+      entityType: "general",
+      link: "/profile",
+    });
+  }
+
+  res.status(201).json({ ok: true, applied: toApply, skipped: features.filter((f) => already.has(f)) });
+});
+
 const LiftBody = z.object({
   feature: z.enum(RESTRICTION_FEATURES),
   note: z.string().max(2000).optional().nullable(),
@@ -534,7 +597,9 @@ async function onboardingState(id: number) {
     .orderBy(desc(contractsTable.signedAt)).limit(1);
 
   const steps = [
-    { key: "kyc", label: "Проверка документов (KYC)", done: user.kycStatus === "verified" },
+    // В базе исторически «approved»; «verified» пишут более новые куски кода —
+    // принимаем оба, иначе галочка не загорится никогда.
+    { key: "kyc", label: "Проверка документов (KYC)", done: ["approved", "verified"].includes(user.kycStatus) },
     { key: "rights", label: "Права на каталог подтверждены", done: rights?.status === "verified" },
     { key: "contract", label: "Договор подписан", done: Boolean(contract) },
   ];

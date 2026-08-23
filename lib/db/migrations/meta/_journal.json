@@ -239,6 +239,13 @@
       "when": 1785500000000,
       "tag": "0033_label_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785600000000,
+      "tag": "0034_verification_and_consents",
+      "breakpoints": true
     }
   ]
 }

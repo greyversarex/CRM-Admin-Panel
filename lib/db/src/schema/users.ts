@@ -59,6 +59,15 @@ export const usersTable = pgTable("users", {
   //   approved    — админ одобрил (разблокирует payouts)
   //   rejected    — админ отклонил (см. документы для деталей)
   kycStatus: text("kyc_status").notNull().default("not_started"),
+
+  // Подтверждение почты. Телефон — колонки заведены, но подтверждать нечем:
+  // SMS-шлюза у заказчика нет (см. docs/LABEL_ONBOARDING.md).
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  emailVerifyToken: text("email_verify_token"),
+  emailVerifySentAt: timestamp("email_verify_sent_at", { withTimezone: true }),
+  phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
+  phoneVerifyCode: text("phone_verify_code"),
+  phoneVerifyExpiresAt: timestamp("phone_verify_expires_at", { withTimezone: true }),
   kycCompletedAt: timestamp("kyc_completed_at", { withTimezone: true }),
   // ─── Bank info ─── ВАЖНО: bank_account_number/iban/swift НИКОГДА НЕ ЛОГИРУЮТСЯ
   // в audit (см. ENTITY_ALLOWLIST.profile_bank). На API-ответах для не-админов

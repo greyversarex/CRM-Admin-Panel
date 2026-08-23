@@ -1,8 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
 import { randomUUID } from "crypto";
-import { db, usersTable } from "@workspace/db";
-import { count, eq, desc, ilike, or, and, sql, type SQL } from "drizzle-orm";
+import { db, usersTable, labelsTable } from "@workspace/db";
+import { count, eq, desc, ilike, inArray, or, and, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { CreateUserBody, UpdateUserBody, GetUserParams, UpdateUserParams, DeleteUserParams } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -116,7 +116,20 @@ router.get("/users", adminOnly, async (req, res): Promise<void> => {
   if (role)   filters.push(eq(usersTable.role, role));
   if (status) filters.push(eq(usersTable.status, status));
   if (search) {
-    const expr = or(ilike(usersTable.name, `%${search}%`), ilike(usersTable.email, `%${search}%`));
+    // Ищем по имени, почте, названию компании и по числовым идентификаторам:
+    // администратору часто дают именно «ID лейбла 12», а не имя.
+    const parts = [
+      ilike(usersTable.name, `%${search}%`),
+      ilike(usersTable.email, `%${search}%`),
+      inArray(usersTable.labelId,
+        db.select({ id: labelsTable.id }).from(labelsTable).where(ilike(labelsTable.name, `%${search}%`))),
+    ];
+    const asNumber = Number(search.replace(/^#/, ""));
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+      parts.push(eq(usersTable.id, asNumber));
+      parts.push(eq(usersTable.labelId, asNumber));
+    }
+    const expr = or(...parts);
     if (expr) filters.push(expr);
   }
   const where = filters.length > 0 ? and(...filters) : undefined;

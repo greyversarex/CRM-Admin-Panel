@@ -407,6 +407,70 @@ router.post("/admin/kyc-documents/:id/reject", requireRole("admin", "manager"), 
   res.json(serializeDoc(updated));
 });
 
+// ─── ADMIN: запросить дополнительные данные ───────────────────────────────
+// Отдельно от отказа: отказ закрывает проверку, а здесь мы её продолжаем и
+// ждём от клиента ещё документов.
+const InfoRequestBody = z.object({ message: z.string().min(3).max(2000) }).strict();
+
+router.post("/admin/kyc-documents/:id/request-info", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = InfoRequestBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [doc] = await db.select().from(kycDocumentsTable).where(eq(kycDocumentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Документ не найден" }); return; }
+
+  const [updated] = await db.update(kycDocumentsTable)
+    .set({
+      status: "info_requested",
+      infoRequest: parsed.data.message,
+      reviewedBy: req.session.user!.id,
+      reviewedAt: new Date(),
+    })
+    .where(eq(kycDocumentsTable.id, id)).returning();
+
+  void auditMutation(req, {
+    action: "update", entityType: "kyc_document", entityId: id, before: doc, after: updated,
+  });
+  void createNotification({
+    userId: doc.userId,
+    type: "kyc_info_requested",
+    title: "По документу нужны данные",
+    body: parsed.data.message,
+    entityType: "general",
+    link: "/kyc",
+  });
+  res.json(serializeDoc(updated));
+});
+
+router.post("/admin/users/:id/kyc/request-info", requireRole("admin", "manager"), async (req, res): Promise<void> => {
+  const userId = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = InfoRequestBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  const [updated] = await db.update(usersTable)
+    .set({ kycStatus: "info_requested" }).where(eq(usersTable.id, userId)).returning();
+
+  void auditMutation(req, {
+    action: "update", entityType: "user_kyc", entityId: userId,
+    before: { kycStatus: user.kycStatus }, after: { kycStatus: updated.kycStatus },
+  });
+  void createNotification({
+    userId,
+    type: "kyc_info_requested",
+    title: "Нужны дополнительные документы",
+    body: parsed.data.message,
+    entityType: "general",
+    link: "/kyc",
+  });
+  res.json({ ok: true, kycStatus: updated.kycStatus });
+});
+
 // ─── ADMIN: глобальный approve/reject юзера ───────────────────────────────
 router.post("/admin/users/:id/kyc/approve", requireRole("admin", "manager"), async (req, res): Promise<void> => {
   const userId = parseInt(String(req.params.id), 10);

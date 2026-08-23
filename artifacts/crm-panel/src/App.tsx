@@ -47,6 +47,7 @@ import Distribution from "@/pages/distribution";
 import Users from "@/pages/users";
 import UserProfile from "@/pages/users/[id]";
 import SignupRequestPage from "@/pages/signup-request";
+import VerifyEmail from "@/pages/verify-email";
 import MyContracts from "@/pages/contracts";
 import Settings from "@/pages/settings";
 import ProfilePage from "@/pages/profile";
@@ -120,6 +121,11 @@ function Router() {
           него ещё нет, поэтому доступ даёт токен в адресе. */}
       <Route path="/signup/request/:token">
         <SignupRequestPage />
+      </Route>
+
+      {/* Public — подтверждение почты по ссылке из письма. */}
+      <Route path="/verify-email/:token">
+        <VerifyEmail />
       </Route>
 
       {/* Public — приём приглашения в команду лейбла. Авторизованных

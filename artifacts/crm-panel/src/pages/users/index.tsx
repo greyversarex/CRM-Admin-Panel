@@ -54,6 +54,11 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Фильтры по KYC, договору и стране считаются на клиенте: список ограничен
+  // полусотней строк, гонять ради этого запрос на сервер незачем.
+  const [kycFilter, setKycFilter] = useState<string>("all");
+  const [contractFilter, setContractFilter] = useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
   const { user: currentUser, impersonator, impersonate } = useAuth();
   const [, navigate] = useLocation();
   const [imperBusyId, setImperBusyId] = useState<number | null>(null);
@@ -132,7 +137,28 @@ export default function Users() {
   const { data: usersResp, isLoading } = useListUsers(params, {
     query: { queryKey: getListUsersQueryKey(params) },
   });
-  const apiUsers: User[] = usersResp?.data ?? [];
+  const allUsers: User[] = usersResp?.data ?? [];
+
+  // Список стран собираем из самих данных: держать отдельный справочник ради
+  // выпадашки было бы лишним.
+  const countries = [...new Set(allUsers.map((u) => (u as any).country as string | null).filter(Boolean) as string[])].sort();
+
+  const apiUsers = allUsers.filter((u) => {
+    const summary = accessSummary[String(u.id)];
+    const kyc = ((u as any).kycStatus as string | undefined) ?? "not_started";
+    if (kycFilter === "verified" && !["approved", "verified"].includes(kyc)) return false;
+    if (kycFilter === "pending" && kyc !== "pending") return false;
+    if (kycFilter === "not_started" && kyc !== "not_started") return false;
+
+    const contract = summary?.contractStatus ?? null;
+    if (contractFilter === "none" && contract !== null) return false;
+    if (contractFilter === "signed" && contract !== "signed") return false;
+    if (contractFilter === "sent" && contract !== "sent") return false;
+    if (contractFilter === "expired" && !["expired", "terminated"].includes(contract ?? "")) return false;
+
+    if (countryFilter !== "all" && (u as any).country !== countryFilter) return false;
+    return true;
+  });
 
   // Считаем по уже загруженным данным: отдельный запрос ради двух чисел не нужен.
   const reviewCount = apiUsers.filter((u) => (u.status as string) === "review").length;
@@ -305,10 +331,42 @@ export default function Users() {
                       <option value="limited">ограничен</option>
                       <option value="suspended">{t.users.status_suspended}</option>
                     </select>
+                    <select
+                      aria-label="Фильтр по KYC"
+                      className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
+                      value={kycFilter}
+                      onChange={(e) => setKycFilter(e.target.value)}
+                    >
+                      <option value="all">KYC: любой</option>
+                      <option value="verified">KYC пройден</option>
+                      <option value="pending">KYC ждёт проверки</option>
+                      <option value="not_started">KYC не подавался</option>
+                    </select>
+                    <select
+                      aria-label="Фильтр по договору"
+                      className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
+                      value={contractFilter}
+                      onChange={(e) => setContractFilter(e.target.value)}
+                    >
+                      <option value="all">Договор: любой</option>
+                      <option value="signed">подписан</option>
+                      <option value="sent">на подписи</option>
+                      <option value="none">нет договора</option>
+                      <option value="expired">истёк или расторгнут</option>
+                    </select>
+                    <select
+                      aria-label="Фильтр по стране"
+                      className="h-9 px-3 text-xs rounded-md bg-background/50 border border-border"
+                      value={countryFilter}
+                      onChange={(e) => setCountryFilter(e.target.value)}
+                    >
+                      <option value="all">Страна: любая</option>
+                      {countries.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                    </select>
                     <div className="relative w-64">
                       <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                       <Input
-                        placeholder={t.users.search_placeholder}
+                        placeholder="Имя, email, компания, ID"
                         className="pl-8 h-9 bg-background/50"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}

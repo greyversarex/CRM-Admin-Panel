@@ -47,6 +47,10 @@ const HUMAN_NAMES: Partial<Record<RestrictionFeature, string>> = {
   "dist:transfer": "перенос каталога",
   "dist:publishing": "паблишинг",
   "fin:payout_requests": "заявки на выплату",
+  "app:catalog": "каталог",
+  "app:analytics": "аналитика",
+  "app:royalties": "роялти",
+  "app:support": "поддержка",
   "fin:payouts": "выплаты",
   "account:full_suspension": "работа с аккаунтом",
 };

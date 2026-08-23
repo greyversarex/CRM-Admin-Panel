@@ -18,6 +18,8 @@ export const RESTRICTION_FEATURES = [
   "rights:youtube_cid", "rights:meta_rights", "rights:tiktok_rights",
   // дистрибуция
   "dist:upload", "dist:delivery", "dist:takedown", "dist:transfer", "dist:publishing",
+  // разделы кабинета (лист «Users & Access» из ТЗ)
+  "app:dashboard", "app:catalog", "app:analytics", "app:royalties", "app:support",
   // деньги
   "fin:revenue", "fin:royalties", "fin:revenue_distribution",
   "fin:payout_requests", "fin:payouts",
