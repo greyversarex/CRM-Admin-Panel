@@ -17,6 +17,11 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// Подтверждение по ссылке из письма — публичное: человек мог открыть письмо на
+// телефоне, где он не залогинен. Поэтому оно живёт в отдельном роутере,
+// который подключается ДО проверки входа.
+export const verificationPublicRouter = Router();
+
 /** Ссылка живёт сутки: дольше держать одноразовый доступ к аккаунту незачем. */
 const TOKEN_TTL_MS = 24 * 3600 * 1000;
 
@@ -81,7 +86,7 @@ const ConfirmBody = z.object({ token: z.string().min(10).max(200) }).strict();
 
 // Публичный: человек переходит по ссылке из письма, и он может быть не в сессии
 // (открыл на другом устройстве). Токен сам по себе доказывает доступ к почте.
-router.post("/verify-email/confirm", async (req, res): Promise<void> => {
+verificationPublicRouter.post("/verify-email/confirm", async (req, res): Promise<void> => {
   const parsed = ConfirmBody.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 

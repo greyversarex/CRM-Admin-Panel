@@ -26,7 +26,7 @@ import ingestionRouter from "./ingestion";
 import signupRouter from "./signup";
 import kycRouter from "./kyc";
 import accountsRouter from "./accounts";
-import verificationRouter from "./verification";
+import verificationRouter, { verificationPublicRouter } from "./verification";
 import contractsRouter from "./contracts";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
@@ -67,6 +67,9 @@ router.use(authRouter);
 // Public signup endpoint (POST /signup-requests). Admin endpoints в этом
 // router'е защищены своим requireRole внутри хендлеров.
 router.use(signupRouter);
+// Подтверждение почты по ссылке из письма — до requireAuth: доступ доказывает
+// сам токен, а не cookie.
+router.use(verificationPublicRouter);
 // Публичные эндпоинты приёма приглашения в команду лейбла (без сессии — токен достаточно).
 router.use(labelMembersPublicRouter);
 // Streaming PUT-приёмник presigned-загрузок. Аутентификация по HMAC-токену
