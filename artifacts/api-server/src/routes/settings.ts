@@ -469,7 +469,11 @@ router.post("/settings/notifications/test-mail", async (req, res): Promise<void>
     logger.warn({ err, to }, "[settings] тестовое письмо не ушло");
     // Самая частая причина на нашем сервере — закрытый порт у провайдера.
     // Подсказываем прямо, иначе «connect ETIMEDOUT» человеку ни о чём не говорит.
-    const looksBlocked = /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|Greeting never received/i.test(message);
+    // Смотрим и на текст, и на код: nodemailer пишет «Connection timeout»,
+    // а машинный ETIMEDOUT прячет в поле code — по одному тексту не поймать.
+    const code = typeof (err as { code?: unknown })?.code === "string" ? (err as { code: string }).code : "";
+    const looksBlocked = /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH/i.test(code)
+      || /connection timeout|greeting never received|connect ETIMEDOUT|ECONNREFUSED/i.test(message);
     res.status(502).json({
       error: message,
       hint: looksBlocked
