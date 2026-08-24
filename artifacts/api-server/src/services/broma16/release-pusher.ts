@@ -27,9 +27,12 @@ import {
 } from "@workspace/db";
 import { and, asc, eq } from "drizzle-orm";
 import { logger } from "../../lib/logger";
-import { Broma16ApiError } from "./errors";
+import { Broma16ApiError, Broma16ValidationError } from "./errors";
 import { createBroma16Client, type Broma16Client } from "./client";
 import { ensureArtistSynced } from "./artists";
+import { getDictionary } from "./dictionaries";
+import { filterRestrictedOutlets } from "./outlet-restrictions";
+import { activeRestrictions, ownerUserIds } from "../../lib/account-access";
 import {
   resolveCountryId,
   resolveGenres,
@@ -435,9 +438,33 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
 
   // ── Шаг 8: дистрибуция ───────────────────────────────────────────
   await onStep("distribution");
-  const outlets = await resolveOutletCodes(release.broma16DistributionOutlets, {
+  const resolvedOutlets = await resolveOutletCodes(release.broma16DistributionOutlets, {
     releaseTypeId: await resolveReleaseTypeId(release.releaseType),
   });
+  // Площадки, закрытые владельцу каталога в карточке пользователя, в поставку
+  // не попадают. Уже отгруженное это не снимает — Broma16 не даёт отозвать
+  // отдельную витрину, для этого нужен takedown.
+  const ownerIds = await ownerUserIds(release.labelId, release.artistId);
+  const ownerRestrictions = (await Promise.all(ownerIds.map(activeRestrictions))).flat();
+  const { kept: outlets, removed } = filterRestrictedOutlets(
+    resolvedOutlets,
+    await getDictionary("outlet"),
+    ownerRestrictions,
+  );
+  if (removed.length > 0) {
+    logger.warn(
+      { releaseId, removed: removed.map((r) => r.name) },
+      "[broma16] витрины исключены ограничением клиента",
+    );
+  }
+  if (outlets.length === 0) {
+    throw new Broma16ValidationError(
+      resolvedOutlets.length > 0
+        ? `Все витрины закрыты ограничениями клиента (${removed.map((r) => r.name).join(", ")}). ` +
+          "Снимите ограничения в карточке пользователя или выберите другие площадки."
+        : "Не выбрано ни одной витрины для дистрибуции.",
+    );
+  }
   if (!progress.distributionDone) {
     // Broma16 ждёт верхнеуровневый список витрин `outlets` (required_unless: update).
     // `distribution_outlets` — необязательный, только для персональных дат отгрузки

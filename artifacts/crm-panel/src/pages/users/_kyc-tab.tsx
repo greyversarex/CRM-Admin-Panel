@@ -17,7 +17,7 @@ type KycUser = {
   name: string;
   email: string;
   role: string;
-  kycStatus: "none" | "pending" | "approved" | "rejected";
+  kycStatus: "none" | "not_started" | "pending" | "info_requested" | "approved" | "rejected";
   kycCompletedAt: string | null;
   docs: { total: number; pending: number; approved: number; rejected: number };
   updatedAt: string | null;
@@ -28,7 +28,7 @@ type KycDoc = {
   userId: number;
   kind: string;
   objectPath: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "in_review" | "info_requested" | "approved" | "rejected";
   rejectionReason: string | null;
   reviewedAt: string | null;
   uploadedAt: string;
@@ -39,7 +39,7 @@ type Props = { onCountChange?: (n: number) => void };
 export function KycTab({ onCountChange }: Props) {
   const [users, setUsers] = useState<KycUser[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [filter, setFilter] = useState<"pending" | "info_requested" | "approved" | "rejected" | "all">("pending");
 
   const [open, setOpen] = useState<KycUser | null>(null);
   const [docs, setDocs] = useState<KycDoc[] | null>(null);
@@ -145,6 +145,7 @@ export function KycTab({ onCountChange }: Props) {
 
   function statusBadge(s: KycUser["kycStatus"]) {
     if (s === "approved") return <Badge variant="outline" className="text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Approved</Badge>;
+    if (s === "info_requested") return <Badge variant="outline" className="text-[10px] text-violet-400 bg-violet-500/10 border-violet-500/20">Нужны данные</Badge>;
     if (s === "pending") return <Badge variant="outline" className="text-[10px] text-amber-400 bg-amber-500/10 border-amber-500/20">Pending</Badge>;
     if (s === "rejected") return <Badge variant="outline" className="text-[10px] text-rose-400 bg-rose-500/10 border-rose-500/20">Rejected</Badge>;
     return <Badge variant="outline" className="text-[10px]">—</Badge>;
@@ -166,6 +167,7 @@ export function KycTab({ onCountChange }: Props) {
               onChange={(e) => setFilter(e.target.value as any)}
             >
               <option value="pending">Pending</option>
+              <option value="info_requested">Нужны данные</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
               <option value="all">All</option>

@@ -64,9 +64,10 @@ type Rights = {
 };
 
 // Переключатели доступа. Группы ровно те, что в ТЗ заказчика.
-const ACCESS_GROUPS: { title: string; items: { key: string; label: string }[] }[] = [
+const ACCESS_GROUPS: { title: string; note?: string; items: { key: string; label: string }[] }[] = [
   {
     title: "Площадки",
+    note: "Закрытая площадка исключается из будущих отправок. Уже отгруженное так не снимается — для этого нужна заявка на снятие.",
     items: [
       { key: "dsp:spotify", label: "Spotify" },
       { key: "dsp:apple", label: "Apple Music" },
@@ -81,6 +82,7 @@ const ACCESS_GROUPS: { title: string; items: { key: string; label: string }[] }[
   },
   {
     title: "Права и Content ID",
+    note: "Только учётная пометка: Broma16 не даёт управлять Content ID из нашей панели.",
     items: [
       { key: "rights:youtube_cid", label: "YouTube Content ID" },
       { key: "rights:meta_rights", label: "Meta Rights Manager" },
@@ -473,7 +475,10 @@ function AccessTab({ userId, active, onChange }: { userId: number; active: strin
       <div className="grid gap-4 md:grid-cols-2">
         {ACCESS_GROUPS.map((group) => (
           <Card key={group.title} className="card-surface no-lift">
-            <CardHeader className="pb-2"><CardTitle className="text-base">{group.title}</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">{group.title}</CardTitle>
+              {group.note && <p className="text-[11px] text-muted-foreground mt-1">{group.note}</p>}
+            </CardHeader>
             <CardContent className="pt-0">
               {group.items.map((item) => (
                 <div key={item.key} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">

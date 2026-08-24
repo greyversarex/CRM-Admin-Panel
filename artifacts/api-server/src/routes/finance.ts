@@ -13,7 +13,7 @@ import { notifyByArtistId, notifyByLabelId, notifyAdmins } from "../services/not
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { emitAlertAndForget } from "../services/alerts-emitter";
-import { requireActiveAccount, requireFeature } from "../lib/account-access";
+import { ownerRestrictionMessage, requireActiveAccount, requireFeature } from "../lib/account-access";
 
 const router = Router();
 
@@ -518,6 +518,12 @@ router.patch("/payouts/:id/approve", requireRole("admin", "manager"), async (req
 
   const [existing] = await db.select().from(payoutsTable).where(eq(payoutsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Payout not found" }); return; }
+
+  // Заморозка выплат в карточке клиента обязана останавливать и одобрение:
+  // иначе «заморожено» означало бы только то, что клиент не может попросить
+  // сам, а деньги всё равно уходят по нажатию администратора.
+  const frozen = await ownerRestrictionMessage(existing, "fin:payouts", "Проведение выплат");
+  if (frozen) { res.status(403).json({ error: frozen }); return; }
 
   const approverId = req.session.user!.id;
   const now = new Date();

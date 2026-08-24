@@ -27,6 +27,7 @@ import signupRouter from "./signup";
 import kycRouter from "./kyc";
 import accountsRouter from "./accounts";
 import verificationRouter, { verificationPublicRouter } from "./verification";
+import { requireFeature } from "../lib/account-access";
 import contractsRouter from "./contracts";
 import notificationsRouter from "./notifications";
 import supportRouter from "./support";
@@ -92,6 +93,18 @@ router.use(requireAuth);
 // Artists and labels do not directly call these endpoints; their own data is
 // surfaced through the scoped artists/releases/tracks/finance/royalties routes.
 const adminOnly = requireRole("admin", "manager");
+
+// Ограничения доступа из карточки пользователя. Гарды стоят префиксами и
+// пропускают admin/manager — закрывают они клиента, а не сотрудника.
+// Без этого переключатели в панели были бы просто записью в базе.
+router.use("/dashboard", requireFeature("app:dashboard"));
+router.use("/releases", requireFeature("app:catalog"));
+router.use("/tracks", requireFeature("app:catalog"));
+router.use("/analytics", requireFeature("app:analytics"));
+router.use("/royalties", requireFeature("fin:royalties"));
+router.use("/finance", requireFeature("fin:revenue"));
+router.use("/splits", requireFeature("fin:revenue_distribution"));
+router.use("/support", requireFeature("app:support"));
 
 router.use(dashboardRouter);          // scoped per-route inside (artist/label get filtered widgets)
 router.use(artistsRouter);            // scoped per-route inside

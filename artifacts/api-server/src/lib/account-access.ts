@@ -55,6 +55,42 @@ const HUMAN_NAMES: Partial<Record<RestrictionFeature, string>> = {
   "account:full_suspension": "работа с аккаунтом",
 };
 
+/** id пользователей, которым принадлежит каталог — лейбла либо артиста. */
+export async function ownerUserIds(labelId: number | null, artistId: number | null): Promise<number[]> {
+  const rows = labelId
+    ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.labelId, labelId))
+    : artistId
+      ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.artistId, artistId))
+      : [];
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Закрыта ли функция владельцу каталога — лейблу или артисту.
+ *
+ * Нужна там, где действие выполняет администратор, а ограничение стоит на
+ * клиенте: выплата, отправка на площадки. Возвращает текст отказа или null.
+ */
+export async function ownerRestrictionMessage(
+  owner: { labelId?: number | null; artistId?: number | null },
+  feature: RestrictionFeature,
+  what: string,
+): Promise<string | null> {
+  const owners = owner.labelId
+    ? await db.select({ id: usersTable.id, name: usersTable.name })
+        .from(usersTable).where(eq(usersTable.labelId, owner.labelId))
+    : owner.artistId
+      ? await db.select({ id: usersTable.id, name: usersTable.name })
+          .from(usersTable).where(eq(usersTable.artistId, owner.artistId))
+      : [];
+  for (const u of owners) {
+    if (await isRestricted(u.id, feature)) {
+      return `${what} закрыто ограничением для «${u.name}». Снимите ограничение в карточке пользователя.`;
+    }
+  }
+  return null;
+}
+
 /**
  * Пока аккаунт не активирован администратором, рабочие действия закрыты.
  *

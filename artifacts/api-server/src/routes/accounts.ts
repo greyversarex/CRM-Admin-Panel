@@ -31,6 +31,35 @@ function riskLevelFor(confirmedViolations: number): "low" | "medium" | "high" {
   return "low";
 }
 
+/**
+ * Приводит статус аккаунта в соответствие с действующими ограничениями.
+ *
+ * Полная блокировка → suspended; есть хоть одно ограничение → limited; нет
+ * ничего → active. Статус review не трогаем: аккаунт ещё не активирован, и
+ * ограничения к этому отношения не имеют.
+ *
+ * Без этого в списке пользователей статус «ограничен» не появлялся никогда —
+ * его показывали, но никто не выставлял.
+ */
+async function syncAccountStatus(userId: number, reason?: string): Promise<void> {
+  const [user] = await db.select({ status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId));
+  if (!user || user.status === "review" || user.status === "closed" || user.status === "inactive") return;
+
+  const active = await activeRestrictions(userId);
+  const next = active.includes("account:full_suspension")
+    ? "suspended"
+    : active.length > 0 ? "limited" : "active";
+  if (next === user.status) return;
+
+  await db.update(usersTable)
+    .set({
+      status: next,
+      blockReason: next === "suspended" ? (reason ?? "Полная блокировка аккаунта") : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, userId));
+}
+
 async function loadUserOr404(id: number) {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
   return user ?? null;
@@ -126,6 +155,14 @@ router.get("/users/:id/overview", adminOnly, async (req, res): Promise<void> => 
 });
 
 // ─── Ограничения ──────────────────────────────────────────────────────────
+// Свои ограничения клиент читает сам: меню прячет закрытые разделы, иначе
+// пользователь тыкал бы в пункт и получал отказ.
+router.get("/users/me/restrictions", async (req, res): Promise<void> => {
+  const user = getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Требуется вход" }); return; }
+  res.json({ active: await activeRestrictions(user.id) });
+});
+
 router.get("/users/:id/restrictions", adminOnly, async (req, res): Promise<void> => {
   const id = parseInt(String(req.params.id), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Неверный id" }); return; }
@@ -193,12 +230,7 @@ router.post("/users/:id/restrictions", adminOnly, async (req, res): Promise<void
     before: { feature, restricted: false }, after: { feature, restricted: true, reason, caseId },
   });
 
-  // Полная блокировка меняет и статус аккаунта — иначе в списке он выглядел бы активным.
-  if (feature === "account:full_suspension") {
-    await db.update(usersTable)
-      .set({ status: "suspended", blockReason: reason, updatedAt: new Date() })
-      .where(eq(usersTable.id, id));
-  }
+  await syncAccountStatus(id, reason);
 
   void createNotification({
     userId: id,
@@ -255,11 +287,7 @@ router.post("/users/:id/restrictions/batch", adminOnly, async (req, res): Promis
     after: { restricted: [...already, ...toApply], reason, caseId },
   });
 
-  if (toApply.includes("account:full_suspension")) {
-    await db.update(usersTable)
-      .set({ status: "suspended", blockReason: reason, updatedAt: new Date() })
-      .where(eq(usersTable.id, id));
-  }
+  await syncAccountStatus(id, reason);
 
   if (toApply.length > 0) {
     void createNotification({
@@ -303,11 +331,7 @@ router.post("/users/:id/restrictions/lift", adminOnly, async (req, res): Promise
     after: { feature: parsed.data.feature, restricted: false },
   });
 
-  if (parsed.data.feature === "account:full_suspension") {
-    await db.update(usersTable)
-      .set({ status: "active", blockReason: null, updatedAt: new Date() })
-      .where(eq(usersTable.id, id));
-  }
+  await syncAccountStatus(id);
 
   res.json({ ok: true, restriction: lifted });
 });

@@ -190,7 +190,17 @@ const labelNavGroups: NavGroup[] = [
   {
     titleKey: "support_group",
     items: [
-      { nameKey: "support", href: "/support", icon: LifeBuoy, iconColor: "text-yellow-400" },
+      { nameKey: "takedown", href: "/releases/takedown", icon: XCircle,  iconColor: "text-red-400" },
+      { nameKey: "support",  href: "/support",           icon: LifeBuoy, iconColor: "text-yellow-400" },
+    ],
+  },
+  {
+    // Раньше у лейбла этой группы не было вовсе: ни профиля, ни договоров —
+    // а именно там живут KYC, реквизиты и подтверждение прав на каталог.
+    titleKey: "account_group",
+    items: [
+      { nameKey: "contracts", href: "/contracts", icon: FileSignature, iconColor: "text-pink-400" },
+      { nameKey: "profile",   href: "/profile",   icon: CircleUser,    iconColor: "text-pink-400" },
     ],
   },
 ];
@@ -246,6 +256,34 @@ const artistNavGroups: NavGroup[] = [
   },
 ];
 
+/** Какой пункт меню закрывает какое ограничение. */
+const FEATURE_BY_HREF: Record<string, string> = {
+  "/": "app:dashboard",
+  "/analytics": "app:analytics",
+  "/royalties": "fin:royalties",
+  "/splits": "fin:revenue_distribution",
+  "/payouts": "fin:payout_requests",
+  "/support": "app:support",
+  "/releases": "app:catalog",
+  "/releases/transfer": "dist:transfer",
+  "/releases/takedown": "dist:takedown",
+  "/publishing": "dist:publishing",
+};
+
+/**
+ * Убирает из меню то, что клиенту закрыто.
+ *
+ * Сервер такие запросы всё равно отклонит; без этого пользователь видел бы
+ * пункт, нажимал и получал отказ — а причина ему неизвестна.
+ */
+function hideRestricted(groups: NavGroup[], restrictions: string[]): NavGroup[] {
+  if (restrictions.length === 0) return groups;
+  const blocked = new Set(restrictions);
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !blocked.has(FEATURE_BY_HREF[i.href] ?? "")) }))
+    .filter((g) => g.items.length > 0);
+}
+
 function pickGroupsForRole(role: Role | undefined): NavGroup[] {
   switch (role) {
     case "admin":
@@ -267,6 +305,17 @@ export function SidebarNav() {
   const nav = t.nav as Record<string, string>;
   const { user, logout } = useAuth();
   const { perms } = useManagerPermissions(user?.role);
+
+  // Свои ограничения: закрытые разделы в меню не показываем. Сотрудников это
+  // не касается — ограничения ставятся клиентам.
+  const [restrictions, setRestrictions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user || user.role === "admin" || user.role === "manager") { setRestrictions([]); return; }
+    void fetch("/api/users/me/restrictions", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : { active: [] }))
+      .then((j) => setRestrictions(j.active ?? []))
+      .catch(() => setRestrictions([]));
+  }, [user?.id, user?.role]);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
@@ -299,7 +348,7 @@ export function SidebarNav() {
   const toggleGroup = (key: string) =>
     setExpandedGroups((s) => ({ ...s, [key]: !s[key] }));
 
-  const navGroups = pickGroupsForRole(user?.role);
+  const navGroups = hideRestricted(pickGroupsForRole(user?.role), restrictions);
 
   return (
     <div
