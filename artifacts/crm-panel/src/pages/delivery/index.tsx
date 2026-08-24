@@ -12,6 +12,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useLang } from "@/lib/i18n";
 
 export default function Delivery() {
+  // Страница остаётся по прямому адресу /delivery, но основное место —
+  // вкладка «Доставки» в разделе «Дистрибуция»: раньше в неё нельзя было
+  // попасть ни из меню, ни откуда-либо ещё.
+  return <Layout><DeliveryPanel /></Layout>;
+}
+
+export function DeliveryPanel() {
   const { t } = useLang();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -24,7 +31,6 @@ export default function Delivery() {
   );
 
   return (
-    <Layout>
       <div className="flex flex-col gap-6 h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between">
           <div>
@@ -117,6 +123,5 @@ export default function Delivery() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
   );
 }

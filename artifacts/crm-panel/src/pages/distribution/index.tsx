@@ -25,6 +25,7 @@ import { TakedownsTab } from "./takedowns-tab";
 import { ScheduledTab } from "./scheduled-tab";
 import { AcrStorageTab } from "./acr-storage-tab";
 import { ShieldCheck, Radio, Calendar, AlertOctagon, HardDriveUpload } from "lucide-react";
+import { DeliveryPanel } from "@/pages/delivery";
 
 // ─── Типы DDEX (фронтовые DTO; соответствуют artifacts/api-server/src/routes/ddex.ts)
 
@@ -498,6 +499,7 @@ export default function Distribution() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex flex-wrap h-auto">
             <TabsTrigger value="moderation" data-testid="tab-moderation"><ShieldCheck className="w-4 h-4 mr-2" />Модерация</TabsTrigger>
+            <TabsTrigger value="deliveries" data-testid="tab-deliveries"><Send className="w-4 h-4 mr-2" />Доставки</TabsTrigger>
             <TabsTrigger value="dsp-status" data-testid="tab-dsp-status"><Radio className="w-4 h-4 mr-2" />Статус площадок</TabsTrigger>
             <TabsTrigger value="scheduled" data-testid="tab-scheduled"><Calendar className="w-4 h-4 mr-2" />Запланированные</TabsTrigger>
             <TabsTrigger value="takedowns" data-testid="tab-takedowns"><Ban className="w-4 h-4 mr-2" />Снятия</TabsTrigger>
@@ -510,6 +512,9 @@ export default function Distribution() {
 
           <TabsContent value="moderation" className="space-y-4">
             <Card><CardContent className="pt-6"><ModerationTab /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="deliveries" className="space-y-4">
+            <Card><CardContent className="pt-6"><DeliveryPanel /></CardContent></Card>
           </TabsContent>
           <TabsContent value="dsp-status" className="space-y-4">
             <Card><CardContent className="pt-6"><DspStatusTab /></CardContent></Card>
