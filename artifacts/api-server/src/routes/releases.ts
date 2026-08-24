@@ -653,18 +653,21 @@ async function searchReleasesViaDeezer(query: string) {
   const releases: TransferSearchRelease[] = [];
   for (let i = 0; i < albums.length; i += 5) {
     const chunk = await Promise.all(albums.slice(i, i + 5).map(async (alb) => {
-      let upc = ""; let label: string | null = null;
+      let upc = ""; let label: string | null = null; let trackCount = alb.nb_tracks ?? 0;
       try {
-        const dj = await dz<{ upc?: string; label?: string }>(`https://api.deezer.com/album/${alb.id}`);
+        const dj = await dz<{ upc?: string; label?: string; nb_tracks?: number }>(`https://api.deezer.com/album/${alb.id}`);
         upc = dj.upc ?? "";
         label = dj.label ?? null;
+        // В списке альбомов артиста Deezer количество треков не присылает —
+        // оно есть только в карточке альбома, за которой мы и так идём за UPC.
+        if (dj.nb_tracks) trackCount = dj.nb_tracks;
       } catch { /* без UPC релиз всё равно покажем, просто импортировать нельзя */ }
       return {
         upc: upc || `DEEZER-${alb.id}`,
         title: alb.title,
         artist: artistName,
         label,
-        tracks: alb.nb_tracks ?? 0,
+        tracks: trackCount,
         coverUrl: alb.cover_xl ?? null,
         releaseDate: alb.release_date ?? "",
       };
@@ -730,6 +733,15 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     }
 
     const ar = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers: { Authorization: `Bearer ${token}` } });
+    // 404 по id из ссылки — это не сбой Spotify, а неверная ссылка. Идти
+    // в Deezer с адресом бессмысленно: он ищет по имени и ничего не найдёт.
+    if (ar.status === 404 && spotifyArtist) {
+      res.status(404).json({
+        error: "artist_not_found",
+        message: "Spotify не знает такого артиста. Проверьте ссылку — скопируйте её из адресной строки Spotify целиком.",
+      });
+      return;
+    }
     if (!ar.ok) { await fallbackToDeezer(`карточка артиста: Spotify ${ar.status}`); return; }
     const aj = await ar.json() as { name: string; images?: { url: string }[] };
 
