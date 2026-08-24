@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, AlertCircle, ImageIcon, Music2, Copy, Check } from "lucide-react";
+import { ChevronLeft, AlertCircle, ImageIcon, Music2, Copy, Check, ExternalLink } from "lucide-react";
 import { assetHref } from "@/components/asset-uploader";
 import { useLocation } from "wouter";
 import { useState } from "react";
@@ -56,6 +56,13 @@ function CodeChip({ label, value }: { label: string; value: string }) {
       </button>
     </div>
   );
+}
+
+/** Ссылка на страницу артиста в том каталоге, откуда пришли данные. */
+function artistProfileUrl(result: { artistId: string; source?: string }): string {
+  return result.source === "deezer"
+    ? `https://www.deezer.com/artist/${result.artistId}`
+    : `https://open.spotify.com/artist/${result.artistId}`;
 }
 
 export default function NewImport() {
@@ -396,14 +403,32 @@ export default function NewImport() {
             <Card className="bg-card/50 backdrop-blur border-border/50">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center overflow-hidden">
+                  <a
+                    href={artistProfileUrl(result)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500/40 to-violet-500/40 flex items-center justify-center overflow-hidden shrink-0 hover:ring-2 hover:ring-primary/50 transition"
+                    title="Открыть профиль артиста"
+                  >
                     {result.artistImage
                       ? <img src={result.artistImage} className="h-full w-full object-cover" alt="" />
                       : <ImageIcon className="h-5 w-5 text-white/70" />}
-                  </div>
+                  </a>
                   <div>
-                    <div className="font-semibold">{result.artistName}</div>
-                    <div className="text-xs text-muted-foreground">{tt.artist_word} · {tt.spotify_id}: {result.artistId}</div>
+                    <a
+                      href={artistProfileUrl(result)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold hover:text-primary inline-flex items-center gap-1.5"
+                    >
+                      {result.artistName}
+                      <ExternalLink className="h-3.5 w-3.5 opacity-60" />
+                    </a>
+                    {/* Раньше здесь всегда было написано «Spotify ID», даже когда
+                        список пришёл из Deezer. Пишем ту площадку, откуда данные. */}
+                    <div className="text-xs text-muted-foreground">
+                      {tt.artist_word} · {result.source === "deezer" ? "Deezer" : "Spotify"} ID: {result.artistId}
+                    </div>
                   </div>
                   <div className="ml-auto w-64">
                     <label className="text-xs text-muted-foreground block mb-1">{tt.select_label}</label>
