@@ -11,7 +11,7 @@ import { z } from "zod";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getSessionUser } from "../lib/auth";
-import { sendMailAndForget } from "../lib/mail";
+import { isMailConfigured, sendMailAndForget } from "../lib/mail";
 import { auditMutation } from "../lib/audit";
 import { logger } from "../lib/logger";
 
@@ -60,6 +60,16 @@ router.post("/users/me/verify-email/send", async (req, res): Promise<void> => {
   // Не даём засыпать себя письмами: одно в минуту достаточно.
   if (user.emailVerifySentAt && Date.now() - user.emailVerifySentAt.getTime() < 60_000) {
     res.status(429).json({ error: "Письмо уже отправлено. Проверьте почту или попробуйте через минуту." });
+    return;
+  }
+
+  // Подтвердить адрес можно только письмом. Если почта не настроена, кнопка
+  // не должна молча «срабатывать» — иначе человек ждёт письмо, которого нет.
+  if (!await isMailConfigured()) {
+    res.status(503).json({
+      error: "Отправка почты не настроена — подтвердить адрес сейчас нельзя. " +
+             "Администратор задаёт SMTP в разделе «Настройки → Email / SMTP».",
+    });
     return;
   }
 

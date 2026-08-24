@@ -707,6 +707,7 @@ function ContractsTab({ userId, onChange }: { userId: number; onChange: () => vo
   const [rows, setRows] = useState<Contract[] | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "Договор на дистрибуцию", effectiveDate: "", expiryDate: "", body: "" });
+  const [signCode, setSignCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -717,7 +718,16 @@ function ContractsTab({ userId, onChange }: { userId: number; onChange: () => vo
 
   const act = async (id: number, path: string, body?: object) => {
     try {
-      await api(`/api/contracts/${id}/${path}`, { method: "POST", body: JSON.stringify(body ?? {}) });
+      const r = await api<{ mailSent?: boolean; signCode?: string }>(
+        `/api/contracts/${id}/${path}`,
+        { method: "POST", body: JSON.stringify(body ?? {}) },
+      );
+      // Почта может быть не настроена — тогда сервер возвращает код, и его
+      // нужно показать: иначе клиенту нечем подписать договор.
+      if (path === "send") {
+        if (r.signCode) setSignCode(r.signCode);
+        else toast({ title: "Договор отправлен", description: "Клиенту ушло письмо с кодом." });
+      }
       await load(); onChange();
     } catch (e) {
       toast({ title: "Не получилось", description: e instanceof Error ? e.message : "", variant: "destructive" });
@@ -783,6 +793,27 @@ function ContractsTab({ userId, onChange }: { userId: number; onChange: () => vo
           </div>
         ))}
       </CardContent>
+
+      <Dialog open={!!signCode} onOpenChange={(o) => { if (!o) setSignCode(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Почта не настроена — передайте код сами</DialogTitle>
+            <DialogDescription>
+              Письмо не ушло: в разделе «Настройки → Email / SMTP» не заданы параметры почты.
+              Продиктуйте клиенту этот код — он введёт его в разделе «Договоры».
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-border/60 bg-background/40 py-4 text-center">
+            <span className="text-2xl font-mono tracking-[0.3em]">{signCode}</span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { if (signCode) void navigator.clipboard.writeText(signCode); }}>
+              Скопировать
+            </Button>
+            <Button onClick={() => setSignCode(null)}>Понятно</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

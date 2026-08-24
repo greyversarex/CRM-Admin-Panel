@@ -12,7 +12,7 @@ import { db, contractsTable, usersTable } from "@workspace/db";
 import { and, desc, eq } from "drizzle-orm";
 import { requireRole, getSessionUser } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
-import { sendMailAndForget } from "../lib/mail";
+import { isMailConfigured, sendMailAndForget } from "../lib/mail";
 import { createNotification } from "../services/notifications";
 import { logger } from "../lib/logger";
 
@@ -185,6 +185,7 @@ router.post("/contracts/:id/send", adminOnly, async (req, res): Promise<void> =>
     })
     .where(eq(contractsTable.id, id)).returning();
 
+  const mailReady = await isMailConfigured();
   sendMailAndForget({
     to: user.email,
     subject: `Договор на дистрибуцию ${contract.contractNumber} — подпишите`,
@@ -209,9 +210,17 @@ router.post("/contracts/:id/send", adminOnly, async (req, res): Promise<void> =>
   void auditMutation(req, {
     action: "send", entityType: "contract", entityId: id, before: contract, after: updated,
   });
-  logger.info({ contractId: id, userId: user.id }, "[contracts] отправлен на подпись");
+  logger.info({ contractId: id, userId: user.id, mailReady }, "[contracts] отправлен на подпись");
 
-  res.json({ ok: true, contract: serialize(updated) });
+  // Почта может быть не настроена — тогда письмо никуда не уйдёт, и без кода
+  // договор подписать нельзя. Отдаём код администратору: пусть передаст его
+  // клиенту сам. Молчаливое «отправлено» тут было бы обманом.
+  res.json({
+    ok: true,
+    contract: serialize(updated),
+    mailSent: mailReady,
+    ...(mailReady ? {} : { signCode: otp }),
+  });
 });
 
 // ─── Подписать ────────────────────────────────────────────────────────────

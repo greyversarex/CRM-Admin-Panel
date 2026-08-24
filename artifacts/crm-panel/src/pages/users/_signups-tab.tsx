@@ -100,6 +100,7 @@ export function SignupsTab({ onCountChange }: Props) {
 
   const [infoTarget, setInfoTarget] = useState<SignupRequest | null>(null);
   const [infoMessage, setInfoMessage] = useState("");
+  const [infoLink, setInfoLink] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
 
   async function load() {
@@ -177,12 +178,19 @@ export function SignupsTab({ onCountChange }: Props) {
     if (!infoTarget || infoMessage.trim().length < 3) return;
     setBusyId(infoTarget.id);
     try {
-      await api(`/api/signup-requests/${infoTarget.id}/request-info`, {
-        method: "POST", body: JSON.stringify({ message: infoMessage.trim() }),
-      });
+      const r = await api<{ mailSent?: boolean; link?: string }>(
+        `/api/signup-requests/${infoTarget.id}/request-info`,
+        { method: "POST", body: JSON.stringify({ message: infoMessage.trim() }) },
+      );
       setInfoTarget(null); setInfoMessage("");
       await load();
-      toast({ title: "Запрос отправлен", description: "Заявителю ушло письмо со ссылкой для ответа." });
+      if (r.link) {
+        // Почта не настроена — письмо не ушло. Ссылку показываем, чтобы её
+        // можно было передать заявителю любым другим способом.
+        setInfoLink(r.link);
+      } else {
+        toast({ title: "Запрос отправлен", description: "Заявителю ушло письмо со ссылкой для ответа." });
+      }
     } catch (e: any) {
       toast({ variant: "destructive", title: "Не получилось", description: e.message });
     } finally { setBusyId(null); }
@@ -338,6 +346,28 @@ export function SignupsTab({ onCountChange }: Props) {
           </Card>
         ))}
       </div>
+
+      {/* Почта не настроена — ссылку передаёт администратор */}
+      <Dialog open={!!infoLink} onOpenChange={(o) => !o && setInfoLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Почта не настроена — передайте ссылку сами</DialogTitle>
+            <DialogDescription>
+              Письмо не ушло: в разделе «Настройки → Email / SMTP» не заданы параметры почты.
+              Отправьте заявителю эту ссылку — по ней он ответит без регистрации.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-border/60 bg-background/40 p-3 break-all text-xs font-mono">
+            {infoLink}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { if (infoLink) void navigator.clipboard.writeText(infoLink); }}>
+              Скопировать
+            </Button>
+            <Button onClick={() => setInfoLink(null)}>Понятно</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* REQUEST INFO */}
       <Dialog open={!!infoTarget} onOpenChange={(o) => !o && setInfoTarget(null)}>

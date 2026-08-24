@@ -155,6 +155,18 @@ export function getMailFrom(): string {
   return process.env.MAIL_FROM?.trim() || "no-reply@tajikmusic.local";
 }
 
+/**
+ * Настроена ли отправка почты вообще.
+ *
+ * Нужна там, где письмо — единственный способ доставить код или ссылку: если
+ * почты нет, честнее сказать об этом сразу и дать администратору передать код
+ * вручную, чем отвечать «письмо отправлено» и оставить человека ждать.
+ */
+export async function isMailConfigured(): Promise<boolean> {
+  const resolved = await resolveTransport();
+  return Boolean(resolved.transport);
+}
+
 export async function sendMail(msg: MailMessage): Promise<{ sent: boolean }> {
   const { transport, fromOverride } = await resolveTransport();
   if (!transport) {

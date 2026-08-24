@@ -15,7 +15,7 @@ import { requireRole } from "../lib/auth";
 import { auditMutation } from "../lib/audit";
 import { generateTempPassword } from "../lib/kycUtils";
 import { logger } from "../lib/logger";
-import { sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
+import { isMailConfigured, sendMailAndForget, getAdminNotificationEmail } from "../lib/mail";
 import { fireTriggerAndForget } from "../services/triggers";
 import { fireWebhookAndForget } from "../services/webhook-dispatcher";
 import { emitAlertAndForget } from "../services/alerts-emitter";
@@ -507,6 +507,7 @@ router.post("/signup-requests/:id/request-info", requireRole("admin", "manager")
     .where(eq(signupRequestsTable.id, id)).returning();
 
   const link = `${process.env.PUBLIC_APP_URL ?? ""}/signup/request/${token}`;
+  const mailReady = await isMailConfigured();
   sendMailAndForget({
     to: before.email,
     subject: "Нужны дополнительные данные по вашей заявке — Tajik Music",
@@ -527,7 +528,13 @@ router.post("/signup-requests/:id/request-info", requireRole("admin", "manager")
   void auditMutation(req, {
     action: "update", entityType: "signup_request", entityId: id, before, after: updated,
   });
-  res.json({ ok: true, request: serializeRequest(updated) });
+  // Без настроенной почты ссылку нужно передать заявителю самому — отдаём её.
+  res.json({
+    ok: true,
+    request: serializeRequest(updated),
+    mailSent: mailReady,
+    ...(mailReady ? {} : { link }),
+  });
 });
 
 // ─── PUBLIC: заявитель смотрит свою заявку и досылает данные ──────────────
