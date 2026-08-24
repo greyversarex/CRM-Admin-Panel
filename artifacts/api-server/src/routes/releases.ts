@@ -687,10 +687,12 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
   // любом отказе Spotify. С этого сервера Spotify отвечает 403 (блокировка по
   // стране), и ключи тут ни при чём: они заданы и валидны. Пользователю в
   // любом случае нужен список релизов, а не текст ошибки.
-  const fallbackToDeezer = async (why: string): Promise<void> => {
-    logger.warn({ why, query }, "поиск релизов: уходим в Deezer");
+  // hint — имя артиста, если Spotify успел его отдать. Без него в Deezer
+  // ушёл бы адрес ссылки целиком, и поиск по нему ничего не находит.
+  const fallbackToDeezer = async (why: string, hint?: string): Promise<void> => {
+    logger.warn({ why, query, hint }, "поиск релизов: уходим в Deezer");
     try {
-      const viaDeezer = await searchReleasesViaDeezer(query);
+      const viaDeezer = await searchReleasesViaDeezer(hint?.trim() || query);
       if (!viaDeezer) {
         res.status(404).json({ error: "artist_not_found", message: "Исполнитель не найден." });
         return;
@@ -710,9 +712,11 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     return;
   }
 
-  // Resolve artistId either from /artist/<id> URL or by searching by name
-  const artistIdMatch = query.match(/artist\/([A-Za-z0-9]+)/);
-  let artistId = artistIdMatch ? artistIdMatch[1] : null;
+  // Артиста опознаём по ссылке open.spotify.com/artist/<id> и по uri
+  // spotify:artist:<id>. Ссылку на Deezer сюда не тащим: её разберёт сам
+  // Deezer-путь, у него другие идентификаторы.
+  const spotifyArtist = query.match(/(?:open\.spotify\.com\/(?:[a-z-]+\/)?artist\/|spotify:artist:)([A-Za-z0-9]+)/i);
+  let artistId = spotifyArtist ? spotifyArtist[1] : null;
 
   try {
     if (!artistId) {
@@ -732,7 +736,7 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     const albr = await fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=30`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!albr.ok) { await fallbackToDeezer(`альбомы артиста: Spotify ${albr.status}`); return; }
+    if (!albr.ok) { await fallbackToDeezer(`альбомы артиста: Spotify ${albr.status}`, aj.name); return; }
     const albj = await albr.json() as { items: { id: string; name: string; release_date: string; total_tracks: number; images?: { url: string }[]; artists: { name: string }[]; external_ids?: { upc?: string }; label?: string }[] };
 
     // Spotify /albums doesn't always include UPC — fetch each album's full payload to extract external_ids.upc and label.

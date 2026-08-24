@@ -104,8 +104,13 @@ export default function NewImport() {
   // независимо от роли. Схемы может не быть — «deezer.com/album/1» тоже ссылка.
   const isLinkInput = /^(https?:\/\/|spotify:)/i.test(trimmedInput)
     || /^[\w.-]+\.(com|link|page)\//i.test(trimmedInput);
-  // Всё, что опознаёт релиз однозначно, идёт через предпросмотр.
-  const isPreviewInput = isUpcInput || isIsrcInput || isLinkInput;
+  // Ссылка на артиста — особый случай: это не один релиз, а весь его каталог.
+  // Раньше она уходила в разбор ссылки вместе с альбомными, а тот понимает
+  // только альбом и трек, поэтому вставленная ссылка на артиста не работала.
+  const isArtistLink = /(?:open\.spotify\.com|spotify:)[/:]artist[/:]|deezer\.com\/(?:[a-z]{2}\/)?artist\//i
+    .test(trimmedInput);
+  // Всё, что опознаёт один релиз, идёт через предпросмотр.
+  const isPreviewInput = (isUpcInput || isIsrcInput || isLinkInput) && !isArtistLink;
 
   const [resolving, setResolving] = useState(false);
   const [resolved, setResolved] = useState<ResolvedLink | null>(null);
@@ -275,6 +280,11 @@ export default function NewImport() {
                   : tt.find_artist}
               </Button>
             </div>
+            {isArtistLink && (
+              <p className="text-[11px] text-muted-foreground pt-1">
+                Ссылка на артиста — покажем весь его каталог, релизы выберете галочками.
+              </p>
+            )}
             {isPreviewInput && !resolved && (
               <p className="text-[11px] text-muted-foreground pt-1">
                 {isIsrcInput ? "Похоже на ISRC — найдём трек и его релиз."
