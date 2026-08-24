@@ -250,14 +250,25 @@ export async function isMailConfigured(): Promise<boolean> {
   return Boolean(resolved.transport);
 }
 
-export async function sendMail(msg: MailMessage): Promise<{ sent: boolean }> {
+/**
+ * Отправляет письмо.
+ *
+ * Обычные вызовы ошибку не поднимают: письмо — сопутствующее действие, и
+ * падать из-за него нельзя. Проверке отправки нужна ровно обратная логика,
+ * поэтому у неё есть `rethrow`: без него кнопка «Отправить тестовое письмо»
+ * показывала бы «почта не настроена» вместо настоящей причины отказа.
+ */
+export async function sendMail(
+  msg: MailMessage,
+  opts: { rethrow?: boolean } = {},
+): Promise<{ sent: boolean; configured: boolean }> {
   const { transport, fromOverride } = await resolveTransport();
   if (!transport) {
     logger.info(
       { to: msg.to, subject: msg.subject },
       "[mail] SMTP не настроен (ни в platform_settings, ни в SMTP_URL) — письмо записано в лог вместо отправки",
     );
-    return { sent: false };
+    return { sent: false, configured: false };
   }
   try {
     await transport.sendMail({
@@ -267,10 +278,11 @@ export async function sendMail(msg: MailMessage): Promise<{ sent: boolean }> {
       text: msg.text,
       html: msg.html ?? `<pre style="font-family:system-ui">${escapeHtml(msg.text)}</pre>`,
     });
-    return { sent: true };
+    return { sent: true, configured: true };
   } catch (err) {
+    if (opts.rethrow) throw err;
     logger.warn({ err, to: msg.to, subject: msg.subject }, "[mail] sendMail failed (non-blocking)");
-    return { sent: false };
+    return { sent: false, configured: true };
   }
 }
 

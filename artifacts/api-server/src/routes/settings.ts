@@ -455,8 +455,8 @@ router.post("/settings/notifications/test-mail", async (req, res): Promise<void>
         "Если вы его читаете, отправка настроена правильно: письма о договорах,",
         "заявках и подтверждении адреса будут доходить до клиентов.",
       ].join("\n"),
-    });
-    if (!result.sent) {
+    }, { rethrow: true });
+    if (!result.configured) {
       res.status(503).json({
         error: "Почта не настроена: заполните хост, пользователя и пароль, включите «Email включён» и сохраните.",
       });
