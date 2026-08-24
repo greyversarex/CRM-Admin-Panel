@@ -643,10 +643,17 @@ async function searchReleasesViaDeezer(query: string) {
     artistImage = aj.picture_xl ?? null;
   }
 
-  const albj = await dz<{ data?: { id: number; title: string; release_date?: string; nb_tracks?: number; cover_xl?: string }[] }>(
-    `https://api.deezer.com/artist/${artistId}/albums?limit=30`,
-  );
-  const albums = albj.data ?? [];
+  // Каталог артиста часто длиннее одной страницы: у Deezer их по 100.
+  // Останавливаемся на 300 — дальше это уже не перенос, а выгрузка архива,
+  // и ждать её пользователю нечем.
+  type DeezerAlbum = { id: number; title: string; release_date?: string; nb_tracks?: number; cover_xl?: string };
+  const albums: DeezerAlbum[] = [];
+  let next: string | null = `https://api.deezer.com/artist/${artistId}/albums?limit=100`;
+  while (next && albums.length < 300) {
+    const page: { data?: DeezerAlbum[]; next?: string } = await dz(next);
+    albums.push(...(page.data ?? []));
+    next = page.next ?? null;
+  }
 
   // Пачками по 5: Deezer режет частые запросы, а 30 параллельных сразу
   // упираются в его лимит и часть альбомов возвращается без UPC.
@@ -745,11 +752,18 @@ router.get("/releases/transfer-imports/spotify-search", requireRole("admin", "ma
     if (!ar.ok) { await fallbackToDeezer(`карточка артиста: Spotify ${ar.status}`); return; }
     const aj = await ar.json() as { name: string; images?: { url: string }[] };
 
-    const albr = await fetch(`https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=30`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!albr.ok) { await fallbackToDeezer(`альбомы артиста: Spotify ${albr.status}`, aj.name); return; }
-    const albj = await albr.json() as { items: { id: string; name: string; release_date: string; total_tracks: number; images?: { url: string }[]; artists: { name: string }[]; external_ids?: { upc?: string }; label?: string }[] };
+    // Spotify отдаёт максимум 50 за раз — идём страницами до 300 альбомов.
+    type SpotifyAlbum = { id: string; name: string; release_date: string; total_tracks: number; images?: { url: string }[]; artists: { name: string }[]; external_ids?: { upc?: string }; label?: string };
+    const albumItems: SpotifyAlbum[] = [];
+    let albumsUrl: string | null = `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=50`;
+    while (albumsUrl && albumItems.length < 300) {
+      const albr: Response = await fetch(albumsUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!albr.ok) { await fallbackToDeezer(`альбомы артиста: Spotify ${albr.status}`, aj.name); return; }
+      const page = await albr.json() as { items?: SpotifyAlbum[]; next?: string | null };
+      albumItems.push(...(page.items ?? []));
+      albumsUrl = page.next ?? null;
+    }
+    const albj = { items: albumItems };
 
     // Spotify /albums doesn't always include UPC — fetch each album's full payload to extract external_ids.upc and label.
     const releases = await Promise.all(
