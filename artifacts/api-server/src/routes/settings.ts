@@ -29,7 +29,7 @@ import {
   sanitizeApiKeyPermissions,
 } from "../lib/api-key-permissions";
 import { encryptSecret } from "../lib/crypto";
-import { sendMail } from "../lib/mail";
+import { invalidateMailCache, sendMail } from "../lib/mail";
 
 const router = Router();
 
@@ -172,6 +172,10 @@ router.put("/settings/:key", async (req, res): Promise<void> => {
     before: existing?.value ?? {},
     after: merged,
   });
+
+  // Настройки почты кэшируются на минуту — сбрасываем, иначе проверка отправки
+  // сразу после сохранения работала бы по прежним параметрам.
+  if (key === "notifications") invalidateMailCache();
 
   // Invalidate dependent caches so subsequent requests pick up new policy
   // values immediately instead of waiting for the 60s TTL to expire.

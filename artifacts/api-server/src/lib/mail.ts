@@ -232,6 +232,19 @@ export function getMailFrom(): string {
  * почты нет, честнее сказать об этом сразу и дать администратору передать код
  * вручную, чем отвечать «письмо отправлено» и оставить человека ждать.
  */
+/**
+ * Забыть подобранный transport.
+ *
+ * Настройки кэшируются на минуту, и без сброса «Отправить тестовое письмо»
+ * сразу после сохранения отвечало «почта не настроена» — по старому кэшу.
+ */
+export function invalidateMailCache(): void {
+  cachedTransporter = null;
+  cachedFingerprint = null;
+  cachedFromOverride = null;
+  lastResolveAt = 0;
+}
+
 export async function isMailConfigured(): Promise<boolean> {
   const resolved = await resolveTransport();
   return Boolean(resolved.transport);
