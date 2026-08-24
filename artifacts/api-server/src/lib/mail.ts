@@ -19,6 +19,13 @@ let lastResolveAt = 0;
 
 const RESOLVE_TTL_MS = 60_000; // пере-проверка настроек раз в минуту
 
+/** Общие таймауты подключения к SMTP. */
+const MAIL_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+} as const;
+
 type SmtpConfig = {
   url?: string;
   host?: string;
@@ -68,6 +75,49 @@ async function loadDbSettings(): Promise<SmtpConfig | null> {
   }
 }
 
+/**
+ * Отправка через HTTP-интерфейс Resend.
+ *
+ * Наружу выглядит как обычный transport nodemailer — остальному коду не нужно
+ * знать, каким путём ушло письмо.
+ *
+ * Зачем это вообще: DigitalOcean по умолчанию закрывает исходящие порты 25,
+ * 465 и 587, поэтому с нашего сервера недоступен любой SMTP — в том числе
+ * smtp.resend.com, которым этот код пользовался раньше. Проверено на месте:
+ * почтовые порты закрыты ко всем провайдерам, а api.resend.com по 443 открыт.
+ */
+function createResendHttpTransport(apiKey: string): Transporter {
+  const send = async (msg: {
+    from?: string; to?: string | string[]; subject?: string; text?: string; html?: string;
+  }) => {
+    const to = Array.isArray(msg.to) ? msg.to : [msg.to].filter(Boolean) as string[];
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: msg.from,
+        to,
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = await res.json().catch(() => ({})) as { id?: string; message?: string; name?: string };
+    if (!res.ok) {
+      // Текст ошибки отдаём как есть: по нему сразу видно, дело в ключе или
+      // в неподтверждённом домене отправителя.
+      throw new Error(body.message || body.name || `Resend вернул ${res.status}`);
+    }
+    return { messageId: body.id ?? "", accepted: to };
+  };
+  // Приводим к типу nodemailer: снаружи используется только sendMail.
+  return { sendMail: send } as unknown as Transporter;
+}
+
 async function resolveTransport(): Promise<{ transport: Transporter | null; fromOverride: string | null }> {
   const now = Date.now();
   if (cachedTransporter && now - lastResolveAt < RESOLVE_TTL_MS) {
@@ -92,12 +142,10 @@ async function resolveTransport(): Promise<{ transport: Transporter | null; from
     if (apiKey) {
       const fingerprint = `resend:${source}:${apiKey.slice(0, 8)}`;
       if (fingerprint !== cachedFingerprint) {
-        cachedTransporter = nodemailer.createTransport({
-          host: "smtp.resend.com",
-          port: 465,
-          secure: true,
-          auth: { user: "resend", pass: apiKey },
-        });
+        // Через HTTPS, а не через smtp.resend.com: на этом сервере почтовые
+        // порты закрыты хостингом, и SMTP-канал Resend упирался в тот же
+        // запрет. HTTP-канал работает поверх обычного 443.
+        cachedTransporter = createResendHttpTransport(apiKey);
         cachedFingerprint = fingerprint;
         cachedFromOverride = null;
         logger.info({ source }, "[mail] Resend SMTP transport готов");
@@ -123,6 +171,10 @@ async function resolveTransport(): Promise<{ transport: Transporter | null; from
           secure: dbCfg.port === 465,
           requireTLS: dbCfg.tls && dbCfg.port !== 465,
           auth: dbCfg.user ? { user: dbCfg.user, pass: dbCfg.pass ?? "" } : undefined,
+          // Без таймаутов попытка достучаться до закрытого порта висит минутами:
+          // запрос успевал упереться в таймаут nginx, и вместо понятной ошибки
+          // пользователь получал «504». Десяти секунд хватает любому SMTP.
+          ...MAIL_TIMEOUTS,
         });
         cachedFingerprint = fingerprint;
         logger.info({ host: dbCfg.host, port: dbCfg.port }, "[mail] SMTP transport инициализирован из platform_settings");
