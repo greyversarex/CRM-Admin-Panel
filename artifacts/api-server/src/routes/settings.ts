@@ -28,6 +28,8 @@ import {
   isApiKeyPermission,
   sanitizeApiKeyPermissions,
 } from "../lib/api-key-permissions";
+import { encryptSecret } from "../lib/crypto";
+import { sendMail } from "../lib/mail";
 
 const router = Router();
 
@@ -108,6 +110,36 @@ const DEFAULTS: Record<string, Record<string, unknown>> = {
 
 const VALID_KEYS = ["general", "security", "storage", "notifications", "currency", "channels", "acrcloud", "pros", "finance", "publishing", "paymentGateways", "tax", "spotify"] as const;
 
+/**
+ * Пароль SMTP — такой же секрет, как ключи интеграций, и лежать открытым
+ * текстом в platform_settings он не должен. Храним зашифрованным в
+ * smtpPasswordEnc; наружу не отдаём никогда, только признак «задан».
+ */
+function protectSecrets(body: Record<string, unknown>, existing?: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...body };
+  if (!("smtpPassword" in out)) return out;
+  const raw = typeof out.smtpPassword === "string" ? out.smtpPassword : "";
+  delete out.smtpPassword;
+  // Пустое поле означает «не менять»: панель показывает пароль звёздочками и
+  // при сохранении присылает пустую строку, если его не трогали.
+  if (raw.trim() === "") {
+    if (existing?.smtpPasswordEnc) out.smtpPasswordEnc = existing.smtpPasswordEnc;
+    return out;
+  }
+  out.smtpPasswordEnc = encryptSecret(raw);
+  return out;
+}
+
+/** Убирает секреты из ответа, оставляя признак заполненности. */
+function stripSecrets(value: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...value };
+  const hasPassword = Boolean(out.smtpPasswordEnc) || Boolean(out.smtpPassword);
+  delete out.smtpPasswordEnc;
+  delete out.smtpPassword;
+  if ("smtpHost" in out || hasPassword) out.smtpPasswordSet = hasPassword;
+  return out;
+}
+
 router.get("/settings/:key", async (req, res): Promise<void> => {
   const key = req.params.key as string;
   if (!VALID_KEYS.includes(key as typeof VALID_KEYS[number])) {
@@ -115,7 +147,7 @@ router.get("/settings/:key", async (req, res): Promise<void> => {
   }
   const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, key));
   const value = row ? { ...DEFAULTS[key], ...(row.value as Record<string, unknown>) } : DEFAULTS[key];
-  res.json({ key, value, updatedAt: row?.updatedAt?.toISOString() ?? null });
+  res.json({ key, value: stripSecrets(value as Record<string, unknown>), updatedAt: row?.updatedAt?.toISOString() ?? null });
 });
 
 router.put("/settings/:key", async (req, res): Promise<void> => {
@@ -127,7 +159,7 @@ router.put("/settings/:key", async (req, res): Promise<void> => {
   if (!body || typeof body !== "object") { res.status(400).json({ error: "Body must be JSON object" }); return; }
 
   const [existing] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, key));
-  const merged: Record<string, unknown> = { ...(existing?.value ?? {}), ...body };
+  const merged: Record<string, unknown> = { ...(existing?.value ?? {}), ...protectSecrets(body, existing?.value as Record<string, unknown> | undefined) };
 
   const [row] = existing
     ? await db.update(platformSettingsTable).set({ value: merged }).where(eq(platformSettingsTable.key, key)).returning()
@@ -394,6 +426,53 @@ router.post("/webhooks/:id/test", async (req, res): Promise<void> => {
     const errMsg = (e as Error).message;
     await db.update(webhooksTable).set({ lastStatus: null, lastTriggeredAt: new Date(), lastError: errMsg }).where(eq(webhooksTable.id, id));
     res.json({ ok: false, status: null, message: errMsg });
+  }
+});
+
+
+// ─── Проверка отправки почты ──────────────────────────────────────────────
+// Без неё настройку почты приходилось проверять «вслепую»: сохранил и жди,
+// дойдёт ли письмо клиенту. Здесь ошибка возвращается как есть — по ней
+// сразу видно, что не так: пароль, хост или закрытый порт у провайдера.
+router.post("/settings/notifications/test-mail", async (req, res): Promise<void> => {
+  const to = typeof req.body?.to === "string" && req.body.to.includes("@")
+    ? req.body.to.trim()
+    : req.session.user?.email;
+  if (!to) { res.status(400).json({ error: "Не указан адрес получателя" }); return; }
+
+  const started = Date.now();
+  try {
+    const result = await sendMail({
+      to,
+      subject: "Проверка почты — Tajik Music CRM",
+      text: [
+        "Это тестовое письмо из панели Tajik Music.",
+        "",
+        "Если вы его читаете, отправка настроена правильно: письма о договорах,",
+        "заявках и подтверждении адреса будут доходить до клиентов.",
+      ].join("\n"),
+    });
+    if (!result.sent) {
+      res.status(503).json({
+        error: "Почта не настроена: заполните хост, пользователя и пароль, включите «Email включён» и сохраните.",
+      });
+      return;
+    }
+    logger.info({ to, ms: Date.now() - started }, "[settings] тестовое письмо отправлено");
+    res.json({ ok: true, to, ms: Date.now() - started });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn({ err, to }, "[settings] тестовое письмо не ушло");
+    // Самая частая причина на нашем сервере — закрытый порт у провайдера.
+    // Подсказываем прямо, иначе «connect ETIMEDOUT» человеку ни о чём не говорит.
+    const looksBlocked = /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|Greeting never received/i.test(message);
+    res.status(502).json({
+      error: message,
+      hint: looksBlocked
+        ? "Похоже, хостинг блокирует исходящие почтовые порты (25, 465, 587). " +
+          "Проверьте это у провайдера сервера — на DigitalOcean такая блокировка стоит по умолчанию."
+        : "Проверьте адрес сервера, порт, логин и пароль почтового ящика.",
+    });
   }
 });
 

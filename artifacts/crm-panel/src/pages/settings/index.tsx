@@ -370,6 +370,34 @@ function TabNotifications() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [showPwd, setShowPwd] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Проверка отправки. Ошибку показываем как есть, вместе с подсказкой от
+  // сервера: чаще всего дело не в пароле, а в закрытых портах у хостинга.
+  const sendTestMail = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/settings/notifications/test-mail", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo.trim() || undefined }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setTestResult({ ok: true, text: `Письмо отправлено на ${j.to}. Проверьте ящик, в том числе «Спам».` });
+      } else {
+        setTestResult({ ok: false, text: [j.error, j.hint].filter(Boolean).join(" — ") || `Ошибка ${res.status}` });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, text: e instanceof Error ? e.message : "Не удалось отправить" });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   useEffect(() => {
     api<{ value: Record<string, unknown> }>("/api/settings/notifications").then((r) => {
@@ -410,6 +438,30 @@ function TabNotifications() {
         <FieldRow label="TLS/STARTTLS"><Switch checked={b("smtpTls")} onCheckedChange={(v) => set("smtpTls", v)} /></FieldRow>
         <FieldRow label="From Address"><Input type="email" value={f("smtpFromAddress")} onChange={(e) => set("smtpFromAddress", e.target.value)} /></FieldRow>
         <FieldRow label="From Name"><Input value={f("smtpFromName")} onChange={(e) => set("smtpFromName", e.target.value)} /></FieldRow>
+
+        <FieldRow label="Проверка">
+          <div className="space-y-2 w-full">
+            <div className="flex gap-2 items-center">
+              <Input
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+                placeholder="куда отправить (по умолчанию — ваш адрес)"
+                className="max-w-xs"
+              />
+              <Button variant="outline" disabled={testing} onClick={sendTestMail}>
+                {testing ? "Отправляем…" : "Отправить тестовое письмо"}
+              </Button>
+            </div>
+            {testResult && (
+              <p className={`text-xs ${testResult.ok ? "text-emerald-400" : "text-rose-400"}`}>
+                {testResult.text}
+              </p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Сначала сохраните настройки, потом проверяйте: письмо уходит теми параметрами, что уже записаны.
+            </p>
+          </div>
+        </FieldRow>
       </SettingsSection>
 
       <SettingsSection title="Push-уведомления">

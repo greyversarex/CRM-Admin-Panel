@@ -3,6 +3,7 @@ import { logger } from "./logger";
 import { db, platformSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getIntegrationByCode, loadCredentials } from "../services/integrations-service";
+import { decryptSecret } from "./crypto";
 
 export interface MailMessage {
   to: string;
@@ -28,6 +29,23 @@ type SmtpConfig = {
   fromAddress?: string;
 };
 
+/**
+ * Пароль SMTP хранится зашифрованным (smtpPasswordEnc). Открытый smtpPassword
+ * остаётся только у настроек, сохранённых до шифрования, — читаем и его,
+ * иначе почта отвалилась бы у тех, кто уже всё настроил.
+ */
+function readPassword(v: Record<string, unknown>): string | undefined {
+  if (typeof v.smtpPasswordEnc === "string" && v.smtpPasswordEnc) {
+    try {
+      return decryptSecret(v.smtpPasswordEnc);
+    } catch (err) {
+      logger.error({ err }, "[mail] не удалось расшифровать пароль SMTP — проверьте INTEGRATIONS_ENCRYPTION_KEY");
+      return undefined;
+    }
+  }
+  return typeof v.smtpPassword === "string" ? v.smtpPassword : undefined;
+}
+
 async function loadDbSettings(): Promise<SmtpConfig | null> {
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "notifications"));
@@ -40,7 +58,7 @@ async function loadDbSettings(): Promise<SmtpConfig | null> {
       host,
       port: Number(v.smtpPort) || 587,
       user: typeof v.smtpUser === "string" ? v.smtpUser : undefined,
-      pass: typeof v.smtpPassword === "string" ? v.smtpPassword : undefined,
+      pass: readPassword(v),
       tls: v.smtpTls !== false,
       fromAddress: typeof v.smtpFromAddress === "string" ? v.smtpFromAddress : undefined,
     };
