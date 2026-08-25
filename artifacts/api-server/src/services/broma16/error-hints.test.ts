@@ -38,3 +38,12 @@ test("узнаёт ошибки по кодам и участникам", () => 
   assert.match(explainBroma16Error("producer: required"), /продюсер/);
   assert.match(explainBroma16Error("ownership: must be 100"), /100%/);
 });
+
+test("подсказка про старт продаж называет настоящий срок в неделю", () => {
+  const out = explainBroma16Error(
+    "sale_start_date: rule: Sales start date must be no earlier than 7 days from today's date",
+  );
+  assert.match(out, /7 дней/);
+  assert.doesNotMatch(out, /не раньше сегодняшней/);
+  assert.match(out, /Перенос каталога/);
+});

@@ -70,6 +70,18 @@ function producerOf(track: Track): string | null {
  * Проверяет релиз на соответствие требованиям Broma16.
  * Пустой массив — можно отправлять.
  */
+/** Запас, которого Broma16 требует от даты старта продаж при первой отправке. */
+const MIN_SALE_LEAD_DAYS = 7;
+
+/** Самая ранняя дата продаж, которую примет Broma16. */
+function earliestSaleDate(todayUtc: Date): Date {
+  return new Date(todayUtc.getTime() + MIN_SALE_LEAD_DAYS * 86_400_000);
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export async function checkBroma16Readiness(releaseId: number): Promise<ReadinessIssue[]> {
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId)).limit(1);
   if (!release) return [{ section: "release", field: null, message: "Релиз не найден.", severity: "error" }];
@@ -319,17 +331,35 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     const parsed = new Date(`${raw}T00:00:00Z`);
     const today = new Date();
     const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-    if (!Number.isNaN(parsed.getTime()) && parsed < todayUtc && !release.isTransfer) {
-      add({
-        section: "release",
-        field: "releaseDate",
-        message:
-          `Дата релиза ${raw} уже прошла, а релиз не помечен как перенос каталога. ` +
-          `Broma16 такое не примет: дату в прошлом она разрешает только переносам. ` +
-          `Либо перенесите дату на будущее, либо — если релиз уже выходил у другого ` +
-          `дистрибьютора — включите «Перенос каталога» и укажите его оригинальный UPC.`,
-        severity: "error",
-      });
+    if (!Number.isNaN(parsed.getTime()) && !release.isTransfer) {
+      if (parsed < todayUtc) {
+        add({
+          section: "release",
+          field: "releaseDate",
+          message:
+            `Дата релиза ${raw} уже прошла, а релиз не помечен как перенос каталога. ` +
+            `Broma16 такое не примет: дату в прошлом она разрешает только переносам. ` +
+            `Либо перенесите дату на будущее, либо — если релиз уже выходил у другого ` +
+            `дистрибьютора — включите «Перенос каталога» и укажите его оригинальный UPC.`,
+          severity: "error",
+        });
+      } else if (parsed < earliestSaleDate(todayUtc)) {
+        // Мало поставить дату «в будущем»: Broma16 требует запас в неделю.
+        // Ответ на релиз #48 от 25.08.2026: «Sales start date must be no
+        // earlier than 7 days from today's date; value: 2026-08-26».
+        // Прежняя проверка пропускала завтрашнюю дату, и отказ приходил уже
+        // после восьми выполненных шагов отправки.
+        add({
+          section: "release",
+          field: "releaseDate",
+          message:
+            `Дата релиза ${raw} слишком близкая: Broma16 принимает дату не раньше ` +
+            `чем через 7 дней. Самое раннее — ${isoDate(earliestSaleDate(todayUtc))}. ` +
+            `Перенесите дату или включите «Перенос каталога», если релиз уже выходил ` +
+            `у другого дистрибьютора.`,
+          severity: "error",
+        });
+      }
     }
   }
 
