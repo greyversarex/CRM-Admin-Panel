@@ -95,6 +95,11 @@ export const releasesTable = pgTable("releases", {
   // ── Broma16 (ROD API) интеграция ─────────────────────────────────
   /** ID релиза в Broma16 после успешного создания (шаг 2 пушера). NULL = ещё не отправлен. */
   broma16ReleaseId: integer("broma16_release_id"),
+  // Идентификатор записи в каталоге Broma16 (метод /accounts/{id}/assets).
+  // Это ДРУГОЕ пространство номеров, чем у черновиков репертуара: раньше оба
+  // складывались в broma16_release_id, и при повторной отправке мы слали PUT
+  // по несуществующему черновику — Broma16 отвечала 404.
+  broma16AssetId: integer("broma16_asset_id"),
   /** Статус модерации в Broma16: pending | approved | rejected | on_platforms | NULL. */
   broma16ModerationStatus: text("broma16_moderation_status"),
   /** Выбранные витрины (outlet-коды) для дистрибуции через Broma16. */

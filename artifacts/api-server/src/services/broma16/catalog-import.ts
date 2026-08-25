@@ -171,7 +171,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
       id: releasesTable.id,
       title: releasesTable.title,
       upc: releasesTable.upc,
-      bromaId: releasesTable.broma16ReleaseId,
+      bromaId: releasesTable.broma16AssetId,
       catalogNumber: releasesTable.catalogNumber,
     })
     .from(releasesTable);
@@ -212,7 +212,9 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
         // Заполняем только пустое: связь с Broma16 и статус модерации.
         await db
           .update(releasesTable)
-          .set({ broma16ReleaseId: rel.id, broma16ModerationStatus: rel.moderation_status ?? null })
+          // Идентификатор каталога, а не черновика репертуара: путать их нельзя,
+          // иначе повторная отправка уйдёт PUT'ом на несуществующий черновик.
+          .set({ broma16AssetId: rel.id, broma16ModerationStatus: rel.moderation_status ?? null })
           .where(eq(releasesTable.id, existingId));
       }
       if (!releaseIdByTitle.has(normalize(rel.title))) releaseIdByTitle.set(normalize(rel.title), existingId);
@@ -241,7 +243,7 @@ export async function importBromaCatalog(dryRun = true): Promise<CatalogImportRe
         releaseDate: rel.release_date ?? null,
         originalReleaseDate: rel.release_original_date ?? null,
         ...genreNames(rel.genres),
-        broma16ReleaseId: rel.id,
+        broma16AssetId: rel.id,
         broma16ModerationStatus: rel.moderation_status ?? null,
       })
       .returning({ id: releasesTable.id });
