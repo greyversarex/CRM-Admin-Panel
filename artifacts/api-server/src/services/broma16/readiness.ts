@@ -85,19 +85,39 @@ function producerOf(track: Track): string | null {
  * из-за того, что чужой сервер сейчас молчит.
  */
 async function measureCover(coverUrl: string): Promise<CoverVerdict | null> {
+  // Обычно ширина с высотой лежат в первых килобайтах, но у фотографий с
+  // цветовым профилем или встроенной миниатюрой заголовок кадра уезжает
+  // дальше: обложка релиза #48 (3000×3000) в первые 64 КБ не уложилась, и
+  // проверка объявила её нечитаемой. Поэтому если по началу файла не вышло —
+  // дочитываем целиком.
   const HEADER_BYTES = 64 * 1024;
-  try {
-    if (/^https?:\/\//i.test(coverUrl.trim())) {
+  const MAX_BYTES = 12 * 1024 * 1024;
+
+  const external = /^https?:\/\//i.test(coverUrl.trim());
+  const load = async (limit: number | null): Promise<Buffer | null> => {
+    if (external) {
       const res = await fetch(coverUrl, {
-        headers: { Range: `bytes=0-${HEADER_BYTES - 1}` },
-        signal: AbortSignal.timeout(10_000),
+        headers: limit ? { Range: `bytes=0-${limit - 1}` } : {},
+        signal: AbortSignal.timeout(15_000),
       });
       if (!res.ok && res.status !== 206) return null;
-      return checkCover(Buffer.from(await res.arrayBuffer()));
+      return Buffer.from(await res.arrayBuffer());
     }
-    // Локальный файл: читаем те же первые байты, не поднимая весь файл в память.
     const { buffer } = await fetchAssetBytes(coverUrl);
-    return checkCover(buffer.subarray(0, HEADER_BYTES));
+    return limit ? buffer.subarray(0, limit) : buffer;
+  };
+
+  try {
+    const head = await load(HEADER_BYTES);
+    if (!head) return null;
+    const first = checkCover(head);
+    // «Формат не распознан» — единственный случай, когда стоит дочитать файл:
+    // при настоящем несоответствии размеров второй заход ничего не изменит.
+    if (first.ok || first.size !== null) return first;
+
+    const whole = await load(null);
+    if (!whole || whole.length > MAX_BYTES) return null;
+    return checkCover(whole);
   } catch {
     return null;
   }
