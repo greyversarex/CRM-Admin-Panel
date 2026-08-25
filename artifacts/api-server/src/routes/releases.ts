@@ -28,6 +28,7 @@ import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope
 import { getDictionary } from "../services/broma16/dictionaries";
 import { blockingIssues, checkBroma16Readiness } from "../services/broma16/readiness";
 import { requireActiveAccount, requireFeature } from "../lib/account-access";
+import { upscaleCoverUrl } from "../lib/cover-url";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -675,7 +676,7 @@ async function searchReleasesViaDeezer(query: string) {
         artist: artistName,
         label,
         tracks: trackCount,
-        coverUrl: alb.cover_xl ?? null,
+        coverUrl: upscaleCoverUrl(alb.cover_xl) ?? null,
         releaseDate: alb.release_date ?? "",
       };
     }));
@@ -2173,7 +2174,7 @@ async function fetchReleaseFromDeezerByUpc(upc: string): Promise<ImportedRelease
     title: alb.title ?? "Unknown release",
     artist: alb.artist?.name ?? "Unknown artist",
     label: alb.label ?? null,
-    coverUrl: alb.cover_xl ?? alb.cover_big ?? null,
+    coverUrl: upscaleCoverUrl(alb.cover_xl ?? alb.cover_big) ?? null,
     releaseDate: alb.release_date ?? null,
     ...mapSourceGenre((alb.genres?.data ?? []).map((g) => g.name)),
     releaseType: normalizeReleaseType(alb.record_type),

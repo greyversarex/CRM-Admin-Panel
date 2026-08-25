@@ -34,6 +34,8 @@ import {
   resolveReleaseTypeId,
 } from "./dictionaries";
 import { chooseDistributionType } from "./distribution-type";
+import { checkCover, type CoverVerdict } from "../../lib/image-size";
+import { fetchAssetBytes } from "./files";
 
 export type ReadinessIssue = {
   section: "release" | "tracks" | "distribution";
@@ -71,6 +73,36 @@ function producerOf(track: Track): string | null {
  * Проверяет релиз на соответствие требованиям Broma16.
  * Пустой массив — можно отправлять.
  */
+/**
+ * Размеры обложки по её адресу.
+ *
+ * Читаем только начало файла: у JPEG и PNG ширина с высотой лежат в
+ * заголовке, разжимать картинку целиком незачем. Для внешних ссылок просим
+ * у сервера первые 64 КБ — тянуть многомегабайтную обложку ради двух чисел
+ * не нужно, а обложки при переносе каталога живут на чужом CDN.
+ *
+ * Возвращает null, если файл недоступен: отчёт готовности не должен падать
+ * из-за того, что чужой сервер сейчас молчит.
+ */
+async function measureCover(coverUrl: string): Promise<CoverVerdict | null> {
+  const HEADER_BYTES = 64 * 1024;
+  try {
+    if (/^https?:\/\//i.test(coverUrl.trim())) {
+      const res = await fetch(coverUrl, {
+        headers: { Range: `bytes=0-${HEADER_BYTES - 1}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok && res.status !== 206) return null;
+      return checkCover(Buffer.from(await res.arrayBuffer()));
+    }
+    // Локальный файл: читаем те же первые байты, не поднимая весь файл в память.
+    const { buffer } = await fetchAssetBytes(coverUrl);
+    return checkCover(buffer.subarray(0, HEADER_BYTES));
+  } catch {
+    return null;
+  }
+}
+
 export async function checkBroma16Readiness(releaseId: number): Promise<ReadinessIssue[]> {
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId)).limit(1);
   if (!release) return [{ section: "release", field: null, message: "Релиз не найден.", severity: "error" }];
@@ -363,15 +395,31 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
       }
     }
 
-    // Размеры и содержимое картинки мы не читаем: ширина и высота при загрузке
-    // не сохраняются, а логотипы и QR-коды машиной не проверить. Поэтому не
-    // молчим, а показываем оператору сам список требований.
+    // Размеры читаем сами — по заголовку файла, не разжимая картинку.
+    // Раньше здесь стояло только напоминание оператору, и релиз #30 уехал с
+    // обложкой 1000×1000, притянутой при переносе с Deezer: отказ
+    // «file: rule: image_dimensions» пришёл после пяти попыток отправки.
+    const measured = await measureCover(release.coverUrl);
+    if (measured && !measured.ok) {
+      add({
+        section: "release",
+        field: "coverUrl",
+        message:
+          `${measured.reason} Возьмите картинку крупнее: у Broma16 это квадрат не меньше 1500×1500.`,
+        severity: "error",
+      });
+    }
+
+    // Логотипы, QR-коды и рекламу машиной не проверить — про них по-прежнему
+    // напоминаем человеку.
     add({
       section: "release",
       field: "coverUrl",
-      message:
-        "Проверьте обложку по требованиям Broma16: квадрат 1:1, не меньше 1500×1500 пикселей, " +
-        "без логотипов, адресов сайтов, ссылок, штрихкодов, QR-кодов и рекламы.",
+      message: measured?.ok
+        ? `Обложка ${measured.size.width}×${measured.size.height} по размеру подходит. Глазами проверьте другое: ` +
+          "на ней не должно быть логотипов, адресов сайтов, ссылок, штрихкодов, QR-кодов и рекламы."
+        : "Проверьте обложку по требованиям Broma16: квадрат 1:1, не меньше 1500×1500 пикселей, " +
+          "без логотипов, адресов сайтов, ссылок, штрихкодов, QR-кодов и рекламы.",
       severity: "warning",
     });
   }
