@@ -31,6 +31,7 @@ import {
 import { importBromaCatalog } from "../services/broma16/catalog-import";
 import { enqueueBroma16Push } from "../workers/broma16-push-worker";
 import { listDrafts, removeDraft } from "../services/broma16/drafts";
+import { reconcileWithBroma16 } from "../services/broma16/reconcile";
 import { logger } from "../lib/logger";
 import { isRestricted } from "../lib/account-access";
 
@@ -239,6 +240,18 @@ broma16Router.post("/broma16/catalog/import", ...staff, async (req, res) => {
   }
   try {
     res.json(await importBromaCatalog(dryRun));
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
+});
+
+// ── Сверка с Broma16 ───────────────────────────────────────────────
+// Показывает наши данные рядом с их и называет расхождения. Запрос идёт по
+// всем связанным релизам последовательно, поэтому может занять минуту.
+broma16Router.get("/broma16/reconcile", ...staff, async (_req, res) => {
+  try {
+    const client = await createBroma16Client();
+    res.json({ data: await reconcileWithBroma16(client) });
   } catch (e) {
     sendBroma16Error(res, e);
   }
