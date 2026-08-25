@@ -53,6 +53,29 @@ function readPassword(v: Record<string, unknown>): string | undefined {
   return typeof v.smtpPassword === "string" ? v.smtpPassword : undefined;
 }
 
+/**
+ * Адрес отправителя из настроек панели, независимо от SMTP.
+ *
+ * loadDbSettings отдаёт null, когда не заполнен хост или выключен переключатель
+ * «Email включён», — а при отправке через Resend ни то, ни другое не нужно.
+ * Без отдельного чтения адрес терялся, и письма уходили бы с несуществующего
+ * домена по умолчанию.
+ */
+async function loadFromAddress(): Promise<string | null> {
+  try {
+    const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "notifications"));
+    const v = (row?.value ?? {}) as Record<string, unknown>;
+    const from = typeof v.smtpFromAddress === "string" ? v.smtpFromAddress.trim() : "";
+    const name = typeof v.smtpFromName === "string" ? v.smtpFromName.trim() : "";
+    if (!from) return null;
+    // Resend принимает и «Имя <адрес>», и голый адрес.
+    return name ? `${name} <${from}>` : from;
+  } catch (err) {
+    logger.warn({ err }, "[mail] не удалось прочитать адрес отправителя");
+    return null;
+  }
+}
+
 async function loadDbSettings(): Promise<SmtpConfig | null> {
   try {
     const [row] = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "notifications"));
@@ -147,8 +170,11 @@ async function resolveTransport(): Promise<{ transport: Transporter | null; from
         // запрет. HTTP-канал работает поверх обычного 443.
         cachedTransporter = createResendHttpTransport(apiKey);
         cachedFingerprint = fingerprint;
-        cachedFromOverride = null;
-        logger.info({ source }, "[mail] Resend SMTP transport готов");
+        // Адрес отправителя берём из настроек панели. Прежде здесь стоял null,
+        // и письмо уходило с умолчания no-reply@tajikmusic.local — такой домен
+        // Resend отвергает, то есть не ушло бы ни одно письмо.
+        cachedFromOverride = await loadFromAddress();
+        logger.info({ source, from: cachedFromOverride }, "[mail] Resend готов (HTTP)");
       }
       lastResolveAt = now;
       return { transport: cachedTransporter, fromOverride: cachedFromOverride };
