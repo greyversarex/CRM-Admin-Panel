@@ -32,6 +32,7 @@ import { createBroma16Client, type Broma16Client } from "./client";
 import { ensureArtistSynced } from "./artists";
 import { getDictionary } from "./dictionaries";
 import { filterRestrictedOutlets } from "./outlet-restrictions";
+import { chooseDistributionType } from "./distribution-type";
 import { activeRestrictions, ownerUserIds } from "../../lib/account-access";
 import {
   resolveCountryId,
@@ -469,8 +470,21 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     // Broma16 ждёт верхнеуровневый список витрин `outlets` (required_unless: update).
     // `distribution_outlets` — необязательный, только для персональных дат отгрузки
     // по отдельной договорённости с площадкой, поэтому его не отправляем.
+    // `type` у Broma16 обязательный, а мы его не слали: она считала публикацию
+    // обычной («regular») и требовала запас в 7 дней — отсюда отказы на
+    // релизах с завтрашней датой и на переносах со старой датой.
+    const typeChoice = chooseDistributionType(
+      release.releaseDate ? String(release.releaseDate) : null,
+      Boolean(release.isTransfer),
+    );
+    if (!typeChoice.ok) throw new Broma16ValidationError(typeChoice.reason);
+
     await client.request("POST", `/repertoire/release/${broma16ReleaseId}/distribution`, {
-      body: { outlets, sale_start_date: toBroma16Date(release.releaseDate) },
+      body: {
+        outlets,
+        type: typeChoice.type,
+        sale_start_date: toBroma16Date(release.releaseDate),
+      },
     });
     progress.distributionDone = true;
     await save(progress);
