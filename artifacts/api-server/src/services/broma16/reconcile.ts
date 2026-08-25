@@ -132,6 +132,20 @@ async function reconcileOne(
     row.bromaSaleStartDate = asString(asset.release_date)?.slice(0, 10) ?? null;
     row.shipped = isShipped(row.bromaStatuses);
     compareFields(row, release);
+
+    // «not_ready» значит, что Broma16 ждёт недостающие метаданные, а какие
+    // именно — лежит в закрытом методе notices. Спрашиваем только для таких
+    // релизов: гонять лишний запрос по всему каталогу незачем.
+    if (row.bromaStatuses.includes("not_ready")) {
+      row.problems.push("Broma16 держит релиз как «не готово» — ей не хватает метаданных.");
+      try {
+        const details = await fetchModerationDetails(client, release.bromaAssetId);
+        row.reasons = details.reasons;
+        row.notices = details.notices;
+      } catch (e) {
+        logger.warn({ releaseId: release.id, err: String(e) }, "[broma16] замечания по записи каталога недоступны");
+      }
+    }
     return row;
   }
 
