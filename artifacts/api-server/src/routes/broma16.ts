@@ -30,6 +30,7 @@ import {
 } from "../services/broma16/statistics";
 import { importBromaCatalog } from "../services/broma16/catalog-import";
 import { enqueueBroma16Push } from "../workers/broma16-push-worker";
+import { listDrafts, removeDraft } from "../services/broma16/drafts";
 import { logger } from "../lib/logger";
 import { isRestricted } from "../lib/account-access";
 
@@ -238,6 +239,47 @@ broma16Router.post("/broma16/catalog/import", ...staff, async (req, res) => {
   }
   try {
     res.json(await importBromaCatalog(dryRun));
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
+});
+
+// ── Черновики Broma16 ──────────────────────────────────────────────
+// Каждая неудачная отправка оставляет в их кабинете недоделанный черновик.
+// Показываем список и даём удалить — но помечаем те, за которыми стоят наши
+// релизы: удалив такой, мы заставим следующую отправку начать всё заново.
+broma16Router.get("/broma16/drafts", ...staff, async (_req, res) => {
+  try {
+    const client = await createBroma16Client();
+    res.json({ data: await listDrafts(client) });
+  } catch (e) {
+    sendBroma16Error(res, e);
+  }
+});
+
+broma16Router.delete("/broma16/drafts/:type/:id", ...adminOnly, async (req, res) => {
+  const type = String(req.params.type) === "composition" ? "composition" : "release";
+  const id = parseId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Некорректный идентификатор черновика" });
+    return;
+  }
+  try {
+    const client = await createBroma16Client();
+    // Свой релиз удаляем только по прямому подтверждению: у оператора могла
+    // быть причина, но случайный клик стоить работы не должен.
+    const drafts = await listDrafts(client);
+    const target = drafts.find((d) => d.id === id && d.type === type);
+    if (target && !target.safeToRemove && req.query.force !== "1") {
+      res.status(409).json({
+        error:
+          `Этот черновик принадлежит нашему релизу «${target.ourReleaseTitle}» (#${target.ourReleaseId}). ` +
+          `Если удалить, следующая отправка начнёт его в Broma16 заново. Повторите с подтверждением.`,
+      });
+      return;
+    }
+    await removeDraft(client, type, id);
+    res.json({ ok: true });
   } catch (e) {
     sendBroma16Error(res, e);
   }
