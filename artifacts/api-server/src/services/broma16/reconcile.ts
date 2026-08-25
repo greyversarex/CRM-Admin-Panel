@@ -14,6 +14,7 @@ import { db, releasesTable } from "@workspace/db";
 import { desc, isNotNull, or } from "drizzle-orm";
 import type { Broma16Client } from "./client";
 import { fetchModerationDetails } from "./moderation";
+import { fetchAssets } from "./catalog-import";
 import { isShipped } from "./moderation-status";
 import { logger } from "../../lib/logger";
 
@@ -57,9 +58,32 @@ function statusList(payload: Record<string, unknown>): string[] {
   return [];
 }
 
+/** Сравнение полей, одинаковое для черновика репертуара и записи каталога. */
+function compareFields(
+  row: ReconcileRow,
+  release: { title: string; upc: string | null; releaseDate: string | null },
+): void {
+  if (row.bromaTitle && row.bromaTitle !== release.title) {
+    row.problems.push(`Название разошлось: у нас «${release.title}», у них «${row.bromaTitle}».`);
+  }
+  if (release.upc && row.bromaUpc && release.upc !== row.bromaUpc) {
+    row.problems.push(`UPC разошёлся: у нас ${release.upc}, у них ${row.bromaUpc}.`);
+  }
+  if (!release.upc && row.bromaUpc) {
+    row.problems.push(`Broma16 присвоила UPC ${row.bromaUpc}, а у нас поле пустое — стоит перенести к себе.`);
+  }
+  if (release.releaseDate && row.bromaSaleStartDate
+      && String(release.releaseDate).slice(0, 10) !== row.bromaSaleStartDate) {
+    row.problems.push(
+      `Дата продаж разошлась: у нас ${String(release.releaseDate).slice(0, 10)}, у них ${row.bromaSaleStartDate}.`,
+    );
+  }
+}
+
 /** Сверяет один релиз. Ошибку не поднимаем: недоступный релиз — тоже результат. */
 async function reconcileOne(
   client: Broma16Client,
+  catalog: Map<number, Record<string, unknown>>,
   release: {
     id: number; title: string; status: string; upc: string | null;
     releaseDate: string | null; moderation: string | null;
@@ -89,11 +113,25 @@ async function reconcileOne(
   };
 
   if (!release.bromaReleaseId) {
-    row.problems.push(
-      release.bromaAssetId
-        ? "Релиз заведён в кабинете Broma16 напрямую, а не нашей отправкой — черновика репертуара у него нет."
-        : "В Broma16 не отправлялся.",
-    );
+    if (!release.bromaAssetId) {
+      row.problems.push("В Broma16 не отправлялся.");
+      return row;
+    }
+    // Релиз заведён в их кабинете напрямую: черновика репертуара у него нет,
+    // зато он есть в каталоге аккаунта — оттуда и берём состояние.
+    const asset = catalog.get(release.bromaAssetId);
+    if (!asset) {
+      row.unreachable = "не найден в каталоге аккаунта";
+      row.problems.push("Числится записью каталога Broma16, но в самом каталоге его нет — связь устарела.");
+      return row;
+    }
+    row.bromaTitle = asString(asset.title);
+    row.bromaStatuses = statusList(asset);
+    row.bromaModerationStatus = asString(asset.moderation_status);
+    row.bromaUpc = asString(asset.ean);
+    row.bromaSaleStartDate = asString(asset.release_date)?.slice(0, 10) ?? null;
+    row.shipped = isShipped(row.bromaStatuses);
+    compareFields(row, release);
     return row;
   }
 
@@ -120,18 +158,7 @@ async function reconcileOne(
   if (row.bromaStep && !row.shipped && row.bromaStatuses.length === 0) {
     row.problems.push(`У Broma16 это черновик, остановившийся на шаге «${row.bromaStep}» — на модерацию не отправлен.`);
   }
-  if (row.bromaTitle && row.bromaTitle !== release.title) {
-    row.problems.push(`Название разошлось: у нас «${release.title}», у них «${row.bromaTitle}».`);
-  }
-  if (release.upc && row.bromaUpc && release.upc !== row.bromaUpc) {
-    row.problems.push(`UPC разошёлся: у нас ${release.upc}, у них ${row.bromaUpc}.`);
-  }
-  if (!release.upc && row.bromaUpc) {
-    row.problems.push(`Broma16 присвоила UPC ${row.bromaUpc}, а у нас поле пустое — стоит перенести к себе.`);
-  }
-  if (release.releaseDate && row.bromaSaleStartDate && String(release.releaseDate).slice(0, 10) !== row.bromaSaleStartDate) {
-    row.problems.push(`Дата продаж разошлась: у нас ${String(release.releaseDate).slice(0, 10)}, у них ${row.bromaSaleStartDate}.`);
-  }
+  compareFields(row, release);
 
   // Причины отказа и недостающие метаданные лежат в закрытых методах — они
   // и объясняют, почему релиз стоит.
@@ -166,11 +193,24 @@ export async function reconcileWithBroma16(client: Broma16Client): Promise<Recon
     .where(or(isNotNull(releasesTable.broma16ReleaseId), isNotNull(releasesTable.broma16AssetId)))
     .orderBy(desc(releasesTable.id));
 
+  // Каталог аккаунта тянем один раз: он нужен всем релизам, заведённым в
+  // кабинете Broma16 напрямую.
+  const catalog = new Map<number, Record<string, unknown>>();
+  try {
+    const accountId = await client.getAccountId();
+    for (const a of await fetchAssets<Record<string, unknown>>(client, accountId, "releases")) {
+      const id = Number(a.id);
+      if (Number.isFinite(id)) catalog.set(id, a);
+    }
+  } catch (e) {
+    logger.warn({ err: String(e) }, "[broma16] каталог для сверки недоступен");
+  }
+
   const rows: ReconcileRow[] = [];
   // Последовательно, а не пачкой: у Broma16 стоит ограничение частоты, и
   // двадцать параллельных запросов упираются в него.
   for (const r of releases) {
-    rows.push(await reconcileOne(client, { ...r, releaseDate: r.releaseDate ? String(r.releaseDate) : null }));
+    rows.push(await reconcileOne(client, catalog, { ...r, releaseDate: r.releaseDate ? String(r.releaseDate) : null }));
   }
   return rows;
 }
