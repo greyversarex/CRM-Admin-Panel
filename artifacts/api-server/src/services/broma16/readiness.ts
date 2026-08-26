@@ -365,6 +365,26 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     // в общий «World»/«Ethnic» из чего-то конкретного. «Synth Pop» → «SynthPop»
     // и «Tajik Pop» → «Pop» это то же самое другими словами, и сообщать не о
     // чем: предупреждение, которое горит на каждом релизе, перестают читать.
+    // У Broma16 нет отдельного поля для поджанра — только список до трёх
+    // жанров. Если поджанр приводится к тому же жанру, что и основной, он
+    // просто исчезнет, и на площадках останется одна строка. Заказчик как раз
+    // на это и наткнулся: «World Folk» уехал как «Folk».
+    if (release.genre && release.subgenre) {
+      const [mainCanon] = await resolveGenres([release.genre]);
+      const [subCanon] = await resolveGenres([release.subgenre]);
+      if (mainCanon && subCanon && mainCanon === subCanon) {
+        add({
+          section: "release",
+          field: "subgenre",
+          message:
+            `Поджанр «${release.subgenre}» Broma16 приводит к тому же жанру «${mainCanon}», что и основной — ` +
+            `отдельной строкой он не уедет. Отдельного поля для поджанра у неё нет, есть список до трёх жанров: ` +
+            `если поджанр важен, выберите такой, который у них отличается от основного.`,
+          severity: "warning",
+        });
+      }
+    }
+
     const compactKey = (s: string) => norm(s).replace(/[^\p{Letter}\p{Number}]+/gu, "");
     const GENERIC = new Set(["world", "ethnic"]);
     for (const g of used) {
