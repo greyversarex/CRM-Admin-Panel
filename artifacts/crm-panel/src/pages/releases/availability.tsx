@@ -303,7 +303,10 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               className="bg-background/40 max-w-xs h-11 text-base"
             />
             <p className="text-xs text-muted-foreground/80 mt-1.5">
-              Общая дата выхода на всех площадках.
+              День, когда релиз появляется на площадках — Spotify, Apple Music и остальных.
+              Это не дата записи и не дата загрузки к нам. У нового релиза — будущая
+              (Broma16 принимает не раньше чем через 2 дня), у переноса каталога —
+              его настоящая прошлая дата выхода.
             </p>
           </FormField>
 
@@ -336,10 +339,14 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
                     onChange={(e) => setOrigDate(e.target.value)}
                     className="bg-background/40 max-w-xs h-11 text-base"
                   />
+                  {/* Раньше здесь было написано, что площадки используют это поле.
+                      В Broma16 оно не уходит: она принимает одну дату — ту, что
+                      выше. Обещать обратное нельзя. */}
                   <p className="text-xs text-muted-foreground/80 mt-1.5">
-                    Заполняйте только для перевыпусков и старого каталога — дата
-                    первого выхода трека. Площадки используют её, чтобы не считать
-                    релиз новым.
+                    Справочное поле для нашего учёта: когда трек вышел впервые.
+                    В Broma16 не передаётся — она принимает только одну дату, ту что
+                    выше. Для переноса каталога ставьте настоящую дату выхода
+                    именно в «Дату релиза».
                   </p>
                 </FormField>
                 <FormField label="Дата предзаказа / pre-save">
