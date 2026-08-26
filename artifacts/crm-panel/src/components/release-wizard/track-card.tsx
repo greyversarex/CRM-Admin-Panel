@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   useUpdateTrack, useDeleteTrack,
   getListTracksQueryKey, getGetReleaseQueryKey,
@@ -139,6 +139,15 @@ export function TrackCard({
     valueKey: "code",
     fallback: COUNTRIES.map((c) => ({ value: c.code, label: c.name })),
   });
+  // В справочнике Broma16 256 стран, и «Алжир» стоит почти в начале списка —
+  // один промах мышью, и страна записи уезжает в метаданные релиза неверной.
+  // Так у «Qade Belande Dari» оказался Алжир вместо Таджикистана. Поднимаем
+  // наверх те страны, с которыми работает заказчик; остальные ниже, как были.
+  const countryOptions = useMemo(() => {
+    const priority = new Map(COUNTRIES.map((c, i) => [c.code, i]));
+    const rank = (value: string) => priority.get(value) ?? Number.MAX_SAFE_INTEGER;
+    return [...countryOpts.options].sort((a, b) => rank(a.value) - rank(b.value));
+  }, [countryOpts.options]);
 
   return (
     <Card className="bg-card/40 border-border/50">
@@ -265,7 +274,7 @@ export function TrackCard({
               <DictionaryCombobox
                 value={draft.countryOfRecording ?? ""}
                 onChange={(v) => set("countryOfRecording", v)}
-                options={countryOpts.options}
+                options={countryOptions}
                 placeholder="—"
               />
             </Field>
