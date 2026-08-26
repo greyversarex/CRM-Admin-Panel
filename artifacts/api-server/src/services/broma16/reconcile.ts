@@ -167,9 +167,14 @@ async function reconcileOne(
   row.bromaSaleStartDate = asString(payload.sale_start_date)?.slice(0, 10) ?? null;
   row.shipped = isShipped(row.bromaStatuses);
 
-  // Черновик, не дошедший до модерации, — самый частый и самый незаметный
-  // случай: у нас релиз «одобрен», а там он так и лежит недоделанным.
-  if (row.bromaStep && !row.shipped && row.bromaStatuses.length === 0) {
+  // Шаг «moderation» означает, что релиз до модерации дошёл и ждёт проверки, —
+  // это не застревание. Все остальные шаги значат недоделанный черновик: самый
+  // частый и самый незаметный случай, когда у нас релиз «одобрен», а у них он
+  // так и лежит на полпути.
+  if (row.bromaStep === "moderation") {
+    row.bromaStep = null;
+    if (row.bromaStatuses.length === 0) row.bromaStatuses = ["на модерации"];
+  } else if (row.bromaStep && !row.shipped && row.bromaStatuses.length === 0) {
     row.problems.push(`У Broma16 это черновик, остановившийся на шаге «${row.bromaStep}» — на модерацию не отправлен.`);
   }
   compareFields(row, release);
