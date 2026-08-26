@@ -2691,6 +2691,14 @@ components:
         isVariousArtists:
           type: boolean
           default: false
+        isTransfer:
+          type: boolean
+          default: false
+          description: >-
+            Релиз уже выходил раньше — у другого дистрибьютора или самостоятельно.
+            Broma16 принимает такой только с настоящей прошлой датой выхода и
+            обязательно с оригинальным UPC: новый код создавать нельзя, иначе на
+            площадках появится вторая запись той же песни.
         territories:
           type: array
           items:

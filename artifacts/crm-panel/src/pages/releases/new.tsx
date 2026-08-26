@@ -71,6 +71,13 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [releaseArtists, setReleaseArtists] = useState<ReleaseArtistRef[]>([]);
   const [isVariousArtists, setIsVariousArtists] = useState(false);
+  // Перенос каталога: релиз уже выходил раньше. Ставился только импортом, и
+  // включить его вручную было негде — при этом от него зависит, какую дату
+  // примет Broma16 и можно ли оставить старый UPC.
+  const [isTransfer, setIsTransfer] = useState(false);
+  // UPC вводится руками только у переноса: у нового релиза код присваивается
+  // при отправке. Для переноса же чужой код обязателен — свой создавать нельзя.
+  const [upc, setUpc] = useState("");
   const [labelId, setLabelId]           = useState<number | null>(null);
   const [genre, setGenre]               = useState("");
   const [subgenre, setSubgenre]         = useState("");
@@ -263,6 +270,8 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
     setCLineYear(r.cLineYear ?? r.pLineYear ?? CURRENT_YEAR);
     setIsCompilation(typeof r.isCompilation === "boolean" ? r.isCompilation : null);
     setIsVariousArtists(!!r.isVariousArtists);
+    setIsTransfer(!!(r as { isTransfer?: boolean }).isTransfer);
+    setUpc((r as { upc?: string | null }).upc ?? "");
     setTranslations(((r.metadataTranslations as Translation[] | null) ?? []).map(tr => ({
       language: tr.language ?? "", title: tr.title ?? "", version: tr.version ?? "",
     })));
@@ -389,6 +398,9 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
       pLineYear: pLineYear === "" ? undefined : Number(pLineYear),
       isCompilation: isCompilation === true,
       isVariousArtists,
+      isTransfer,
+      // Пустую строку не шлём: сервер отличает «не задано» от «стёрли».
+      upc: upc.trim() || undefined,
       metadataTranslations: cleanedTranslations,
     };
 
@@ -732,6 +744,29 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
                   <span className="block text-[11px] text-muted-foreground">{L.variousArtistsHint}</span>
                 </span>
               </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer text-sm">
+                <Checkbox checked={isTransfer} onCheckedChange={(v) => setIsTransfer(!!v)} className="mt-0.5" />
+                <span>
+                  Релиз уже выходил раньше (перенос каталога)
+                  <span className="block text-[11px] text-muted-foreground">
+                    Включите, если трек уже был на площадках — у другого дистрибьютора или самостоятельно.
+                    Тогда ставьте его настоящую дату выхода, хоть многолетней давности, и обязательно
+                    укажите оригинальный UPC: новый код создавать нельзя, иначе на площадках появится
+                    вторая запись той же песни с разделённой статистикой.
+                  </span>
+                  {isTransfer && !upc.trim() && (
+                    <span className="block text-[11px] text-amber-400 mt-1">
+                      Для переноса обязателен оригинальный UPC — заполните поле UPC ниже.
+                    </span>
+                  )}
+                  {!isTransfer && (
+                    <span className="block text-[11px] text-muted-foreground mt-1">
+                      Выключено — релиз считается новым, и Broma16 примет дату не раньше чем через 2 дня.
+                    </span>
+                  )}
+                </span>
+              </label>
             </section>
 
             <Separator className="bg-border/50" />
@@ -742,12 +777,27 @@ export default function CreateRelease({ editId = null }: { editId?: number | nul
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.upc}</FieldLabel>
-              <Input
-                value=""
-                readOnly
-                placeholder={L.assignedOnSubmission}
-                className="bg-muted/20 cursor-not-allowed text-muted-foreground"
-              />
+              {isTransfer ? (
+                <>
+                  <Input
+                    value={upc}
+                    onChange={(e) => setUpc(e.target.value.replace(/\D/g, "").slice(0, 14))}
+                    placeholder="Оригинальный UPC, например 8721466979915"
+                    className="font-mono"
+                    inputMode="numeric"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Код с площадки, где релиз выходил раньше. Новый создавать нельзя — потеряются стримы.
+                  </p>
+                </>
+              ) : (
+                <Input
+                  value=""
+                  readOnly
+                  placeholder={L.assignedOnSubmission}
+                  className="bg-muted/20 cursor-not-allowed text-muted-foreground"
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <FieldLabel className="text-sm">{L.genre}</FieldLabel>

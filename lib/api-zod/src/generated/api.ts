@@ -1005,6 +1005,7 @@ export const createReleaseBodyCatalogNumberMax = 50;
 export const createReleaseBodyIsExplicitDefault = false;
 export const createReleaseBodyIsCompilationDefault = false;
 export const createReleaseBodyIsVariousArtistsDefault = false;
+export const createReleaseBodyIsTransferDefault = false;
 export const createReleaseBodyTerritoriesDefault = [`WW`];
 export const createReleaseBodyUpcRequestPendingDefault = false;
 
@@ -1035,6 +1036,12 @@ export const CreateReleaseBody = zod.object({
   isVariousArtists: zod
     .boolean()
     .default(createReleaseBodyIsVariousArtistsDefault),
+  isTransfer: zod
+    .boolean()
+    .default(createReleaseBodyIsTransferDefault)
+    .describe(
+      "Релиз уже выходил раньше — у другого дистрибьютора или самостоятельно. Broma16 принимает такой только с настоящей прошлой датой выхода и обязательно с оригинальным UPC: новый код создавать нельзя, иначе на площадках появится вторая запись той же песни.",
+    ),
   territories: zod
     .array(zod.string())
     .default(createReleaseBodyTerritoriesDefault),
@@ -1368,6 +1375,7 @@ export const updateReleaseBodyCatalogNumberMax = 50;
 export const updateReleaseBodyIsExplicitDefault = false;
 export const updateReleaseBodyIsCompilationDefault = false;
 export const updateReleaseBodyIsVariousArtistsDefault = false;
+export const updateReleaseBodyIsTransferDefault = false;
 export const updateReleaseBodyTerritoriesDefault = [`WW`];
 export const updateReleaseBodyUpcRequestPendingDefault = false;
 
@@ -1398,6 +1406,12 @@ export const UpdateReleaseBody = zod.object({
   isVariousArtists: zod
     .boolean()
     .default(updateReleaseBodyIsVariousArtistsDefault),
+  isTransfer: zod
+    .boolean()
+    .default(updateReleaseBodyIsTransferDefault)
+    .describe(
+      "Релиз уже выходил раньше — у другого дистрибьютора или самостоятельно. Broma16 принимает такой только с настоящей прошлой датой выхода и обязательно с оригинальным UPC: новый код создавать нельзя, иначе на площадках появится вторая запись той же песни.",
+    ),
   territories: zod
     .array(zod.string())
     .default(updateReleaseBodyTerritoriesDefault),

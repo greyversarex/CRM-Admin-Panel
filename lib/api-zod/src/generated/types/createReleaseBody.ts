@@ -32,6 +32,8 @@ export interface CreateReleaseBody {
   isExplicit?: boolean;
   isCompilation?: boolean;
   isVariousArtists?: boolean;
+  /** Релиз уже выходил раньше — у другого дистрибьютора или самостоятельно. Broma16 принимает такой только с настоящей прошлой датой выхода и обязательно с оригинальным UPC: новый код создавать нельзя, иначе на площадках появится вторая запись той же песни. */
+  isTransfer?: boolean;
   territories?: string[];
   pLine?: string | null;
   cLine?: string | null;
