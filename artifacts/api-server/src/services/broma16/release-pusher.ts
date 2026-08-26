@@ -381,6 +381,9 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     const body: Record<string, unknown> = {
       title: track.title,
       subtitle: track.trackVersion ?? "",
+      // Порядковый номер уходил только при загрузке файла, и в карточке
+      // фонограммы оставался пустым. Для альбома это перепутало бы дорожки.
+      sort: track.trackNumber ?? 1,
       genres: trackGenres,
       main_performer: performerIds,
       featured_artist: featuredIds,
