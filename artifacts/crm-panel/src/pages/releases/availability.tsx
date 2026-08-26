@@ -179,6 +179,72 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
   const [origDate, setOrigDate] = useState(
     release.originalReleaseDate ? String(release.originalReleaseDate).slice(0, 10) : "",
   );
+  // ── Что означает выбранная дата
+  //
+  // Тип публикации Broma16 определяется самой датой, отдельного переключателя
+  // нет: будущая дата — новый релиз, прошлая — тот, что уже выходил. Пороги
+  // взяты из их документации: новому нужно минимум 2 дня форы на доставку в
+  // магазины, уже вышедшему — минимум 2 дня назад.
+  const [upc, setUpc] = useState(release.upc ?? "");
+
+  const dayOffset = useMemo(() => {
+    if (!date) return null;
+    const target = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(target.getTime())) return null;
+    const now = new Date();
+    const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return Math.round((target.getTime() - todayUtc) / 86_400_000);
+  }, [date]);
+
+  const isPastDate = dayOffset !== null && dayOffset < 0;
+
+  const humanDate = (offsetDays: number) => {
+    const d = new Date(Date.now() + offsetDays * 86_400_000);
+    return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  };
+
+  const dateHint = useMemo((): { tone: "good" | "bad" | "past"; text: string } | null => {
+    if (dayOffset === null) return null;
+    if (dayOffset <= -2) {
+      return {
+        tone: "past",
+        text:
+          "Дата в прошлом — значит релиз уже выходил на площадках. Отправим его как перенос " +
+          "каталога: площадки поймут, что запись не новая, а прослушивания и статистика сохранятся. " +
+          "Для этого нужен его прежний штрихкод — поле ниже.",
+      };
+    }
+    if (dayOffset < 0) {
+      return {
+        tone: "bad",
+        text:
+          `Дата в прошлом, но слишком свежая. Для уже вышедшего релиза Broma16 требует минимум ` +
+          `два дня назад — то есть не позже ${humanDate(-2)}.`,
+      };
+    }
+    if (dayOffset < 2) {
+      return {
+        tone: "bad",
+        text:
+          `Слишком близко: Broma16 не успеет доставить релиз в магазины. Самое раннее — ` +
+          `${humanDate(2)}. Если релиз уже где-то выходил, поставьте его настоящую прошлую дату.`,
+      };
+    }
+    if (dayOffset < 7) {
+      return {
+        tone: "good",
+        text:
+          `Новый релиз, выйдет ${humanDate(dayOffset)}. Броме этого хватит, но площадки ` +
+          `рассматривают заявки в плейлисты заранее — если рассчитываете на них, берите ` +
+          `${humanDate(7)} или дальше.`,
+      };
+    }
+    return {
+      tone: "good",
+      text: `Новый релиз, выйдет ${humanDate(dayOffset)}. Запаса хватает и для заявок в плейлисты.`,
+    };
+  }, [dayOffset]);
+
   const [preorderDate, setPreorderDate] = useState(
     release.preorderDate ? String(release.preorderDate).slice(0, 10) : "",
   );
@@ -233,7 +299,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       releaseTime:       time || null,
       originalReleaseDate: origDate || null,
       preorderDate:      preorderDate || null,
-      upc:               release.upc ?? null,
+      upc:               upc.trim() || null,
       pLine:             release.pLine ?? null,
       cLine:             release.cLine ?? null,
       isExplicit:        !!release.isExplicit,
@@ -295,7 +361,7 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
         <CardContent className="p-6 space-y-5">
           <h3 className="text-lg font-semibold">Таймлайн релиза</h3>
-          <FormField label="Дата релиза">
+          <FormField label="Дата появления на площадках">
             <Input
               type="date"
               value={date}
@@ -303,12 +369,48 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
               className="bg-background/40 max-w-xs h-11 text-base"
             />
             <p className="text-xs text-muted-foreground/80 mt-1.5">
-              День, когда релиз появляется на площадках — Spotify, Apple Music и остальных.
-              Это не дата записи и не дата загрузки к нам. У нового релиза — будущая
-              (Broma16 принимает не раньше чем через 2 дня), у переноса каталога —
-              его настоящая прошлая дата выхода.
+              День, когда релиз должен появиться в Spotify, Apple Music и остальных.
+              Это не дата записи и не дата загрузки сюда.
             </p>
+            {dateHint && (
+              <div
+                className={`mt-2.5 rounded-md border px-3 py-2 text-xs leading-relaxed ${
+                  dateHint.tone === "bad"
+                    ? "border-rose-500/30 bg-rose-500/5 text-rose-200"
+                    : dateHint.tone === "past"
+                      ? "border-sky-500/30 bg-sky-500/5 text-sky-200"
+                      : "border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
+                }`}
+              >
+                {dateHint.text}
+              </div>
+            )}
           </FormField>
+
+          {/* Дата в прошлом означает, что релиз уже выходил. Тогда нужен его
+              прежний штрихкод: новый создавать нельзя, иначе на площадках
+              появится вторая запись той же песни с обнулённой статистикой. */}
+          {isPastDate && (
+            <FormField label="Оригинальный UPC">
+              <Input
+                value={upc}
+                onChange={(e) => setUpc(e.target.value.replace(/\D/g, "").slice(0, 14))}
+                placeholder="например 8721466979915"
+                className="bg-background/40 max-w-xs h-11 text-base font-mono"
+                inputMode="numeric"
+              />
+              <p className="text-xs text-muted-foreground/80 mt-1.5">
+                Штрихкод, с которым релиз выходил раньше. Найти его можно в кабинете прежнего
+                дистрибьютора или на странице релиза в Spotify. Новый код создавать нельзя —
+                площадки не свяжут релиз со старой записью, и все прослушивания начнутся с нуля.
+              </p>
+              {!upc.trim() && (
+                <p className="text-xs text-amber-300/90 mt-1.5">
+                  Без него отправить не получится: для уже вышедшего релиза Broma16 требует прежний код.
+                </p>
+              )}
+            </FormField>
+          )}
 
           <div>
             <button
@@ -339,14 +441,9 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
                     onChange={(e) => setOrigDate(e.target.value)}
                     className="bg-background/40 max-w-xs h-11 text-base"
                   />
-                  {/* Раньше здесь было написано, что площадки используют это поле.
-                      В Broma16 оно не уходит: она принимает одну дату — ту, что
-                      выше. Обещать обратное нельзя. */}
                   <p className="text-xs text-muted-foreground/80 mt-1.5">
-                    Справочное поле для нашего учёта: когда трек вышел впервые.
-                    В Broma16 не передаётся — она принимает только одну дату, ту что
-                    выше. Для переноса каталога ставьте настоящую дату выхода
-                    именно в «Дату релиза».
+                    Справочное поле для нашего учёта. Площадкам уходит только дата выше —
+                    для уже вышедшего релиза ставьте настоящую дату выхода именно туда.
                   </p>
                 </FormField>
                 <FormField label="Дата предзаказа / pre-save">

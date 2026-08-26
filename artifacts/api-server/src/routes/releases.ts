@@ -917,6 +917,25 @@ router.get("/releases/:id", async (req, res): Promise<void> => {
   });
 });
 
+/**
+ * Перенос каталога определяется датой, а не отдельной галочкой.
+ *
+ * Дата в прошлом физически означает одно: релиз уже выходил — иначе откуда бы
+ * взялась прошедшая дата появления на площадках. Broma16 такую дату принимает
+ * только у переноса, а будущую — только у нового релиза. Значит выбор даты и
+ * есть выбор типа, и спрашивать об этом ещё раз незачем.
+ *
+ * Отдельный переключатель тут только путал: он жил в форме, где даты нет.
+ */
+function derivedIsTransfer(releaseDate: unknown, fallback: boolean): boolean {
+  if (typeof releaseDate !== "string" || releaseDate.length < 10) return fallback;
+  const target = new Date(`${releaseDate.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(target.getTime())) return fallback;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return target.getTime() < todayUtc;
+}
+
 router.put("/releases/:id", async (req, res): Promise<void> => {
   const params = UpdateReleaseParams.safeParse(req.params);
   if (!params.success) {
@@ -966,7 +985,14 @@ router.put("/releases/:id", async (req, res): Promise<void> => {
 
   let release;
   try {
-    [release] = await db.update(releasesTable).set(parsed.data).where(eq(releasesTable.id, params.data.id)).returning();
+    [release] = await db
+      .update(releasesTable)
+      .set({
+        ...parsed.data,
+        isTransfer: derivedIsTransfer(parsed.data.releaseDate, existing.isTransfer),
+      })
+      .where(eq(releasesTable.id, params.data.id))
+      .returning();
   } catch (e) {
     if (isUniqueViolation(e)) {
       res.status(409).json({ error: "Конфликт уникальности при обновлении релиза. Попробуйте ещё раз." });
