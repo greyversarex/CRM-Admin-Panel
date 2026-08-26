@@ -191,6 +191,17 @@ async function auditStep(
   }
 }
 
+/** Приглашённые артисты релиза (роль featuring). */
+async function getFeaturedArtists(release: Release): Promise<Artist[]> {
+  const rows = await db
+    .select({ artist: artistsTable })
+    .from(releaseArtistsTable)
+    .innerJoin(artistsTable, eq(releaseArtistsTable.artistId, artistsTable.id))
+    .where(and(eq(releaseArtistsTable.releaseId, release.id), eq(releaseArtistsTable.role, "featuring")))
+    .orderBy(asc(releaseArtistsTable.position));
+  return rows.map((r) => r.artist);
+}
+
 async function getPrimaryArtists(release: Release): Promise<Artist[]> {
   const rows = await db
     .select({ artist: artistsTable })
@@ -253,7 +264,14 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   for (const a of primaryArtists) {
     performerIds.push(await ensureArtistSynced(a, accountId, client));
   }
-  await auditStep(releaseId, "artist", { performers: performerIds.length }, userId);
+  // Приглашённые артисты раньше не уезжали вовсе: в фонограмму уходил пустой
+  // featured_artist. На площадках это значит, что фит не будет указан в
+  // исполнителях трека, и приглашённый не получит его в свой профиль.
+  const featuredIds: string[] = [];
+  for (const a of await getFeaturedArtists(release)) {
+    featuredIds.push(await ensureArtistSynced(a, accountId, client));
+  }
+  await auditStep(releaseId, "artist", { performers: performerIds.length, featured: featuredIds.length }, userId);
 
   // ── Шаг 2: создание / обновление релиза ──────────────────────────
   await onStep("create_release");
@@ -296,6 +314,9 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
   else releaseBody.generate_catalog_number = true;
   // Перенос каталога: документированный флаг Broma16 (регулирует особенности переноса).
   if (release.isTransfer) releaseBody.isTransferRelease = true;
+  // Сборник разных исполнителей: Broma16 принимает флаг various_artists, а мы
+  // его не слали — у неё релиз оставался обычным.
+  if (release.isVariousArtists) releaseBody.various_artists = true;
 
   let broma16ReleaseId = release.broma16ReleaseId ?? null;
   if (broma16ReleaseId) {
@@ -362,7 +383,11 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
       subtitle: track.trackVersion ?? "",
       genres: trackGenres,
       main_performer: performerIds,
-      featured_artist: [],
+      featured_artist: featuredIds,
+      // party_id у Broma16 — это название лейбла строкой, а не идентификатор.
+      // Поле обязательное, а уходило пустым: у релиза «Qade Belande Dari»
+      // лейбл на их стороне так и остался незаполненным.
+      party_id: labelName,
       created_country_id: await resolveCountryId(track.countryOfRecording),
       created_date: toBroma16RecordingDate(release.releaseDate),
       // Эти поля Broma16 проверяет при отправке на модерацию (required_without
