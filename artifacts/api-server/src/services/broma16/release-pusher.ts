@@ -215,11 +215,25 @@ async function getPrimaryArtists(release: Release): Promise<Artist[]> {
   return main ? [main] : [];
 }
 
+/**
+ * Жанры релиза для Broma16 — до трёх штук, как она и просит.
+ *
+ * Поджанр раньше не отправлялся вовсе: у релиза «Qade Belande Dari» он был
+ * заполнен («World Folk»), а на их стороне остался только «Folk». Именно из-за
+ * этого заказчик и не видел поджанра.
+ *
+ * Порядок важен: сначала жанр релиза, затем его поджанр, потом жанры треков.
+ * Обрезаем до трёх — больше Broma16 не принимает.
+ */
 function releaseGenres(release: Release, tracks: Track[]): string[] {
   const set = new Set<string>();
   if (release.genre) set.add(release.genre);
-  for (const t of tracks) if (t.genre) set.add(t.genre);
-  return [...set];
+  if (release.subgenre) set.add(release.subgenre);
+  for (const t of tracks) {
+    if (t.genre) set.add(t.genre);
+    if (t.subgenre) set.add(t.subgenre);
+  }
+  return [...set].slice(0, 3);
 }
 
 export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext = {}): Promise<PushResult> {
@@ -507,11 +521,23 @@ export async function pushReleaseToBroma16(releaseId: number, ctx: PushContext =
     );
     if (!typeChoice.ok) throw new Broma16ValidationError(typeChoice.reason);
 
+    // У Broma16 в дистрибуции три даты, и путать их нельзя:
+    //   sale_start_date — когда релиз появляется (или появился) на площадках;
+    //   created_date    — дата первой публикации, для уже выходившего материала;
+    //   updated_date    — дата публикации обновлённой версии.
+    // Мы отправляли только первую. Для переноса каталога вторая существенна:
+    // площадки по ней понимают, что запись не новая, а её саму двигать назад
+    // нельзя — только вперёд.
+    const originalDate = release.originalReleaseDate
+      ? toBroma16Date(release.originalReleaseDate)
+      : (release.isTransfer ? toBroma16Date(release.releaseDate) : null);
+
     await client.request("POST", `/repertoire/release/${broma16ReleaseId}/distribution`, {
       body: {
         outlets,
         type: typeChoice.type,
         sale_start_date: toBroma16Date(release.releaseDate),
+        ...(originalDate ? { created_date: originalDate } : {}),
       },
     });
     progress.distributionDone = true;

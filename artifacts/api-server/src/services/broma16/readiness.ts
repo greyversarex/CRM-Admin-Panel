@@ -123,6 +123,16 @@ async function measureCover(coverUrl: string): Promise<CoverVerdict | null> {
   }
 }
 
+/** Название страны по коду — чтобы «DZ» в отчёте читалось как «Алжир». */
+function countryLabel(code: string): string {
+  try {
+    const names = new Intl.DisplayNames(["ru"], { type: "region" });
+    return names.of(code.toUpperCase()) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 export async function checkBroma16Readiness(releaseId: number): Promise<ReadinessIssue[]> {
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId)).limit(1);
   if (!release) return [{ section: "release", field: null, message: "Релиз не найден.", severity: "error" }];
@@ -315,6 +325,21 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
         severity: "error",
       });
     }
+  }
+
+  // Распознанная страна ещё не значит правильная: у релиза «Qade Belande Dari»
+  // стояло DZ — Алжир, и это молча уехало в Broma16. Заказчик увидел ошибку
+  // только в их кабинете. Показываем страну словами до отправки.
+  if (countries.size > 0) {
+    const shown = [...countries].map((c) => `${countryLabel(c)} (${c})`).join(", ");
+    add({
+      section: "tracks",
+      field: "countryOfRecording",
+      message:
+        `Страна записи, которая уйдёт в Broma16: ${shown}. ` +
+        `Проверьте — она попадает в метаданные релиза на площадках.`,
+      severity: "warning",
+    });
   }
 
   // ── Жанры ─────────────────────────────────────────────────────────
