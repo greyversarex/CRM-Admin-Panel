@@ -468,6 +468,14 @@ function AvailabilityEditor({ release }: { release: ReleaseDetail }) {
       <Card className="bg-card/50 backdrop-blur border-border/50 shadow-sm transition-all hover:border-border/80 hover:shadow-md hover:shadow-primary/5">
         <CardContent className="p-6 space-y-4">
           <h3 className="text-lg font-semibold">Права на территории</h3>
+          {/* Broma16 такого поля не принимает: в её API нет территорий ни при
+              создании релиза, ни в дистрибуции — только выбор витрин. Обещать
+              обратное нельзя, оператор должен знать, куда этот выбор доходит. */}
+          <p className="text-xs text-amber-300/90 leading-relaxed">
+            Выбор хранится у нас и виден в отчётах, но в Broma16 не передаётся: в её API поля
+            территорий нет — она принимает только список витрин. Ограничить географию можно
+            через саму площадку или запросом в Broma16.
+          </p>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch checked={worldWide} onCheckedChange={setWorldWide} disabled={saving} />
             <span className="text-sm font-medium">Весь мир (World Wide release)</span>

@@ -310,6 +310,23 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
     }
   }
 
+  // ── Территории распространения ────────────────────────────────────
+  // У Broma16 нет поля территорий: ни при создании релиза, ни в дистрибуции —
+  // только список витрин. Если оператор ограничил географию, он вправе знать,
+  // что до площадок это ограничение не доедет.
+  const territories = release.territories ?? [];
+  if (territories.length > 0 && !territories.includes("WW")) {
+    add({
+      section: "release",
+      field: "territories",
+      message:
+        `Выбраны территории (${territories.slice(0, 6).join(", ")}${territories.length > 6 ? "…" : ""}), ` +
+        `но Broma16 их не принимает — в её API поля территорий нет. Релиз уедет на выбранные витрины ` +
+        `без географических ограничений.`,
+      severity: "warning",
+    });
+  }
+
   // ── Страна записи ─────────────────────────────────────────────────
   // resolveCountryId бросает, если значение не найдено в словаре Broma16, —
   // проверяем заранее, иначе отправка упадёт на середине.
