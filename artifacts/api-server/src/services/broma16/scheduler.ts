@@ -70,10 +70,17 @@ export function startBroma16Schedulers(): void {
   // Ежедневно: 00:30 — статистика за вчера.
   tasks.push(cron.schedule("30 0 * * *", () => void runDailyStatistics()));
 
-  // Ежечасно: проверка статусов модерации релизов, ожидающих вердикта Broma16.
-  tasks.push(cron.schedule("0 * * * *", () => void runModerationPoll()));
+  // Каждые 15 минут: состояние релизов на стороне Broma16. Статусом после
+  // отправки распоряжается она — одобрение, отказ с замечаниями, отгрузка на
+  // площадки, — а наше дело быстро это отразить. Раз в час было мало: релиз
+  // мог полдня числиться «на модерации», уже играя в магазинах.
+  tasks.push(cron.schedule("*/15 * * * *", () => void runModerationPoll()));
 
-  logger.info("[broma16] планировщик запущен (словари: weekly, статистика: daily, модерация: hourly)");
+  // И один раз вскоре после старта: после перезапуска сервера ждать
+  // четверть часа незачем.
+  setTimeout(() => void runModerationPoll(), 90_000).unref();
+
+  logger.info("[broma16] планировщик запущен (словари: weekly, статистика: daily, статусы: каждые 15 мин)");
 }
 
 export async function stopBroma16Schedulers(): Promise<void> {

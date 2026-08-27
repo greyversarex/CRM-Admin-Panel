@@ -19,6 +19,7 @@ import { logger } from "../../lib/logger";
 import { createBroma16Client, type Broma16Client } from "./client";
 import { fetchAssets } from "./catalog-import";
 import { isShipped, lookupBroma16Status } from "./moderation-status";
+import { releaseStatusFromBroma } from "./release-status";
 import { fireTriggerAndForget } from "../triggers";
 import { notifyByArtistId, notifyByLabelId } from "../notifications";
 
@@ -94,19 +95,18 @@ type PendingRelease = {
   broma16ModerationStatus: string | null;
 };
 
+
 async function applyVerdict(
   rel: PendingRelease,
   verdict: "approved" | "rejected",
   raw: string | null,
   userId: number | null,
   reasons: string[] = [],
+  shipped = false,
 ): Promise<void> {
   // Обновляем основной статус релиза консервативно: только из ожидаемого
   // предмодерационного состояния, чтобы не перетереть ручные переходы.
-  const nextStatus =
-    verdict === "approved"
-      ? (rel.status === "approved" ? "live" : rel.status)
-      : (rel.status === "approved" || rel.status === "live" ? "rejected" : rel.status);
+  const nextStatus = releaseStatusFromBroma(rel.status, verdict, shipped);
 
   // Причину отказа кладём в заметку к статусу: без неё оператор видит только
   // факт отклонения и идёт выяснять «почему» в кабинет Broma16.
@@ -523,6 +523,16 @@ export async function checkReleaseModeration(
       { releaseId: rel.id, broma16ReleaseId: rel.broma16ReleaseId, raw, shipped, notices: notices.length },
       "[broma16] модерация: ещё в обработке",
     );
+    // Замечания сохраняем в заметку к статусу: оператор должен видеть, чего
+    // Broma16 не хватает, не запуская проверку руками.
+    const note = notices.length > 0 ? notices.join("; ").slice(0, 1000) : null;
+    const [before] = await db
+      .select({ statusNote: releasesTable.statusNote })
+      .from(releasesTable)
+      .where(eq(releasesTable.id, rel.id));
+    if ((before?.statusNote ?? null) !== note) {
+      await db.update(releasesTable).set({ statusNote: note }).where(eq(releasesTable.id, rel.id));
+    }
     return { checked: true, changed: false, verdict, raw, shipped, notices };
   }
 
@@ -532,10 +542,22 @@ export async function checkReleaseModeration(
     : { reasons: [] as string[], notices: [] as string[] };
 
   if (rel.broma16ModerationStatus === verdict) {
+    // Вердикт не изменился, но релиз мог доехать до магазинов: одобрение и
+    // отгрузка приходят порознь, и раньше вторая до нас просто не доходила —
+    // релиз навсегда оставался «одобрен», хотя уже играл на площадках.
+    const shippedStatus = releaseStatusFromBroma(rel.status, verdict, shipped);
+    if (shippedStatus !== rel.status) {
+      await db.update(releasesTable).set({ status: shippedStatus }).where(eq(releasesTable.id, rel.id));
+      logger.info(
+        { releaseId: rel.id, from: rel.status, to: shippedStatus },
+        "[broma16] статус релиза обновлён по состоянию у Broma16",
+      );
+      return { checked: true, changed: true, verdict, raw, shipped, reasons: details.reasons, notices: details.notices };
+    }
     return { checked: true, changed: false, verdict, raw, shipped, reasons: details.reasons, notices: details.notices };
   }
 
-  await applyVerdict(rel, verdict, raw, opts.userId ?? null, details.reasons);
+  await applyVerdict(rel, verdict, raw, opts.userId ?? null, details.reasons, shipped);
   return { checked: true, changed: true, verdict, raw, shipped, reasons: details.reasons, notices: details.notices };
 }
 
@@ -544,10 +566,14 @@ export async function checkReleaseModeration(
  * Устойчива к ошибкам отдельных релизов — продолжает остальные.
  */
 export async function pollPendingModeration(): Promise<{ total: number; changed: number; errors: number }> {
+  // Раньше брали только релизы со статусом «pending» — то есть после одобрения
+  // мы за релизом больше не следили, и ни отгрузка на площадки, ни повторный
+  // отказ до нас не доходили. Спрашиваем обо всех, что заведены у Broma16:
+  // распоряжается статусом она, наше дело — отражать.
   const pending = await db
     .select({ id: releasesTable.id })
     .from(releasesTable)
-    .where(and(eq(releasesTable.broma16ModerationStatus, "pending"), isNotNull(releasesTable.broma16ReleaseId)));
+    .where(isNotNull(releasesTable.broma16ReleaseId));
 
   if (pending.length === 0) return { total: 0, changed: 0, errors: 0 };
 
