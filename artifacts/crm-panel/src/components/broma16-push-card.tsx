@@ -31,6 +31,13 @@ import { Send, RefreshCw, Radio, Loader2, CheckCircle2, AlertTriangle, Clock } f
 import { toast } from "@/hooks/use-toast";
 
 // ── Типы ответов API ───────────────────────────────────────────────
+interface ReadinessIssue {
+  section: string;
+  field: string;
+  message: string;
+  severity: "error" | "warning";
+}
+
 interface PushReleaseState {
   broma16ReleaseId: number | null;
   broma16ModerationStatus: string | null;
@@ -114,6 +121,108 @@ function ModerationBadge({ status }: { status: string | null }) {
   return <Badge variant="outline" className={`text-[10px] ${tone}`}>{status}</Badge>;
 }
 
+/**
+ * Окно «Что не так с отправкой».
+ *
+ * Раньше причина отказа лежала одной строкой внутри модалки дистрибуции, а сам
+ * значок «Ошибка отправки» ни на что не реагировал: оператор видел, что что-то
+ * не так, и не мог узнать что. Теперь по клику открывается всё сразу — и ответ
+ * Broma16, и список того, что она забракует, если отправить как есть.
+ */
+function PushProblemsDialog({
+  releaseId, open, onOpenChange, lastError, step, attempts,
+}: {
+  releaseId: number;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  lastError: string | null;
+  step: string | null;
+  attempts: number | null;
+}) {
+  const issuesQuery = useQuery({
+    queryKey: ["release-issues", releaseId],
+    // Проверку готовности спрашиваем только когда окно открыто: она ходит в
+    // Broma16 за словарями и меряет обложку, это не бесплатно.
+    enabled: open,
+    queryFn: async () => {
+      const res = await fetch(`/api/releases/${releaseId}/issues`, { credentials: "same-origin" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json() as { ok: boolean; issues: ReadinessIssue[] };
+    },
+  });
+
+  const issues = issuesQuery.data?.issues ?? [];
+  const errors = issues.filter((i) => i.severity === "error");
+  const warnings = issues.filter((i) => i.severity !== "error");
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-rose-400" /> Что не так с отправкой
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {lastError && (
+            <section>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+                Последний отказ
+                {step ? ` · шаг «${stepLabel(step)}»` : ""}
+                {attempts ? ` · попыток: ${attempts}` : ""}
+              </p>
+              <div className="text-sm text-rose-200 bg-rose-500/10 border border-rose-500/25 rounded-md px-3 py-2 whitespace-pre-wrap break-words">
+                {lastError}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Проверка перед отправкой
+            </p>
+            {issuesQuery.isLoading && <Skeleton className="h-16 w-full" />}
+            {issuesQuery.isError && (
+              <p className="text-sm text-muted-foreground">Не удалось получить проверку готовности.</p>
+            )}
+            {issuesQuery.data && errors.length === 0 && warnings.length === 0 && (
+              <p className="text-sm text-emerald-300">Замечаний нет — релиз можно отправлять.</p>
+            )}
+
+            {errors.length > 0 && (
+              <div className="space-y-1.5 mb-3">
+                {errors.map((i, n) => (
+                  <div key={`e-${n}`} className="text-sm text-rose-200 bg-rose-500/10 border border-rose-500/25 rounded-md px-3 py-2">
+                    {i.message}
+                  </div>
+                ))}
+              </div>
+            )}
+            {warnings.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Не мешают отправке, но стоит посмотреть:</p>
+                {warnings.map((i, n) => (
+                  <div key={`w-${n}`} className="text-sm text-amber-200/90 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2">
+                    {i.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => issuesQuery.refetch()} disabled={issuesQuery.isFetching}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${issuesQuery.isFetching ? "animate-spin" : ""}`} /> Проверить заново
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Закрыть</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function Broma16DistributionControl({
   releaseId, releaseStatus,
 }: {
@@ -150,6 +259,7 @@ export function Broma16DistributionControl({
   // набором витрин при каждом открытии; словарь нужен, чтобы при отправке
   // отсеять устаревшие коды (их уже нет в справочнике Broma16).
   const [modalOpen, setModalOpen] = useState(false);
+  const [problemsOpen, setProblemsOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>([]);
   const { options: outletOptions } = useCatalogOptions("outlet", { valueKey: "code" });
   useEffect(() => {
@@ -230,10 +340,16 @@ export function Broma16DistributionControl({
       </Badge>
     );
   } else if (hasError) {
+    // Кликабельный: раньше значок сообщал о беде и не давал её увидеть.
     statusChip = (
-      <Badge variant="outline" className="text-[10px] gap-1 text-rose-400 bg-rose-500/10 border-rose-500/20">
-        <AlertTriangle className="h-3 w-3" /> Ошибка отправки
-      </Badge>
+      <button type="button" onClick={() => setProblemsOpen(true)} title="Показать, что не так">
+        <Badge
+          variant="outline"
+          className="text-[10px] gap-1 text-rose-400 bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 cursor-pointer"
+        >
+          <AlertTriangle className="h-3 w-3" /> Ошибка отправки — подробнее
+        </Badge>
+      </button>
     );
   } else if (release?.broma16ModerationStatus) {
     // Badge рендерит <div>, поэтому обёртка тоже <div> (div-в-span невалиден).
@@ -273,6 +389,15 @@ export function Broma16DistributionControl({
       )}
 
       {statusChip}
+
+      <PushProblemsDialog
+        releaseId={releaseId}
+        open={problemsOpen}
+        onOpenChange={setProblemsOpen}
+        lastError={release?.broma16LastError ?? job?.lastError ?? null}
+        step={job?.step ?? null}
+        attempts={job?.attempts ?? null}
+      />
 
       {/* ── Модалка «Дистрибуция» — только админ: статус + выбор площадок + отправка. */}
       {isAdmin && (
