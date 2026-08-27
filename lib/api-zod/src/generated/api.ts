@@ -2330,6 +2330,16 @@ export const ResolveReleaseLinkResponse = zod.object({
   platform: zod.enum(["deezer", "spotify", "apple"]),
   existingReleaseId: zod.number().nullish(),
   existingReleaseTitle: zod.string().nullish(),
+  spotifyAlbumId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Идентификатор альбома в Spotify для встроенного проигрывателя в карточке предпросмотра. null, если релиз там не найден.",
+    ),
+  spotifyTrackId: zod
+    .string()
+    .nullish()
+    .describe("Идентификатор трека в Spotify, если искали по треку."),
 });
 
 /**

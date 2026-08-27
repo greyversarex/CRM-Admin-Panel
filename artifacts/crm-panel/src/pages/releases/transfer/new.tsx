@@ -165,6 +165,13 @@ export default function NewImport() {
     }
   };
 
+  // Адрес встроенного проигрывателя. Трек — если искали по треку, иначе альбом.
+  const spotifyEmbedSrc = resolved?.spotifyTrackId
+    ? `https://open.spotify.com/embed/track/${resolved.spotifyTrackId}?utm_source=generator&theme=0`
+    : resolved?.spotifyAlbumId
+      ? `https://open.spotify.com/embed/album/${resolved.spotifyAlbumId}?utm_source=generator&theme=0`
+      : null;
+
   const handleSearch = async () => {
     if (!trimmedInput) return;
     // Ссылка, UPC или ISRC опознают конкретный релиз — показываем карточку,
@@ -314,6 +321,25 @@ export default function NewImport() {
         {resolved && (
           <Card className="bg-card/50 backdrop-blur border-border/50" data-testid="card-resolved-link">
             <CardContent className="p-5 space-y-5">
+              {/* Встроенный проигрыватель Spotify — заказчик просил показывать
+                  найденный релиз ровно так, как он выглядит у них: обложка,
+                  название, исполнитель и список треков с длительностью.
+                  Высота разная: у одного трека карточка низкая, у альбома —
+                  со списком. На узком экране растягивается во всю ширину. */}
+              {spotifyEmbedSrc && (
+                <div className="-mx-1">
+                  <iframe
+                    src={spotifyEmbedSrc}
+                    title={resolved.title ?? "Релиз в Spotify"}
+                    className="w-full rounded-xl border-0"
+                    height={resolved.spotifyTrackId ? 152 : 380}
+                    loading="lazy"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </div>
+              )}
+
               <div className="flex gap-5">
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="text-lg font-semibold truncate">{resolved.trackTitle ?? resolved.title ?? "—"}</div>

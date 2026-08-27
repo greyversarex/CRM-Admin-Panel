@@ -697,6 +697,10 @@ export interface ResolvedLink {
   platform: ResolvedLinkPlatform;
   existingReleaseId?: number | null;
   existingReleaseTitle?: string | null;
+  /** Идентификатор альбома в Spotify для встроенного проигрывателя в карточке предпросмотра. null, если релиз там не найден. */
+  spotifyAlbumId?: string | null;
+  /** Идентификатор трека в Spotify, если искали по треку. */
+  spotifyTrackId?: string | null;
 }
 
 export interface ReleaseCounts {

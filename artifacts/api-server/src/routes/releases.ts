@@ -2332,6 +2332,11 @@ function spotifyPreview(album: Record<string, any>, track: Record<string, any> |
     durationSec: track?.duration_ms != null ? Math.round(track.duration_ms / 1000) : null,
     explicit: track ? !!track.explicit : null,
     platform: "spotify",
+    // Идентификаторы нужны панели, чтобы показать встроенный проигрыватель
+    // Spotify: заказчик хочет видеть карточку релиза с обложкой и треками
+    // ровно так, как она выглядит у них.
+    spotifyAlbumId: album.id ?? null,
+    spotifyTrackId: track?.id ?? null,
   };
 }
 
@@ -2493,8 +2498,35 @@ async function resolveReleasePreview(query: string): Promise<
       durationSec: track?.duration ?? null,
       explicit: track ? !!track.explicit_lyrics : null,
       platform: "deezer",
+      // Проигрыватель у нас спотифаевский, а релиз мог найтись через Deezer —
+      // доискиваем его в Spotify по тому же штрихкоду. Не нашёлся, ключей нет
+      // или Spotify молчит — просто не будет плеера, карточка останется.
+      spotifyAlbumId: await spotifyAlbumIdByUpc(album.upc),
+      spotifyTrackId: null,
     },
   };
+}
+
+/**
+ * Идентификатор альбома в Spotify по штрихкоду — только для встроенного
+ * проигрывателя. Любая неудача означает «плеера не будет», а не ошибку.
+ */
+async function spotifyAlbumIdByUpc(upc: string | null | undefined): Promise<string | null> {
+  const code = (upc ?? "").replace(/\D/g, "");
+  if (!code) return null;
+  try {
+    const cfg = await loadSpotifyConfig();
+    const token = await getSpotifyToken(cfg);
+    const r = await fetch(
+      `https://api.spotify.com/v1/search?q=upc%3A${encodeURIComponent(code)}&type=album&limit=1`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!r.ok) return null;
+    const j = await r.json() as { albums?: { items?: { id?: string }[] } };
+    return j.albums?.items?.[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
