@@ -312,9 +312,44 @@ async function doRunAudioQc(trackId: number): Promise<AudioQcRow | null> {
   return row;
 }
 
-/** Fire-and-forget запуск (после загрузки/замены аудио). Ошибки — только в лог. */
+/**
+ * Запуск после загрузки или замены аудио.
+ *
+ * Провал анализа записываем в ту же таблицу отдельным статусом. Раньше ошибка
+ * уходила только в лог: на новом сервере не оказалось ffmpeg, анализ молча не
+ * выполнялся, и в панели вместо волны была ровная полоса — понять, что дело в
+ * сервере, а не в самом файле, было неоткуда.
+ */
 export function queueAudioQc(trackId: number): void {
-  void runAudioQcForTrack(trackId).catch((e) => {
-    console.error(`[audio-qc] track ${trackId}: ${(e as Error).message}`);
+  void runAudioQcForTrack(trackId).catch(async (e) => {
+    const message = (e as Error).message ?? String(e);
+    console.error(`[audio-qc] track ${trackId}: ${message}`);
+    // ENOENT на ffmpeg/ffprobe означает, что анализатор не установлен, — это
+    // чинится на сервере, а не в файле, и написать надо именно так.
+    const missingTool = /ENOENT/.test(message) || /not found/i.test(message);
+    try {
+      // objectPath у таблицы обязателен — берём тот, что стоит у трека сейчас.
+      const [t] = await db.select({ audioUrl: tracksTable.audioUrl }).from(tracksTable).where(eq(tracksTable.id, trackId));
+      await db.insert(audioQcTable)
+        .values({
+          trackId,
+          objectPath: t?.audioUrl ?? "",
+          status: "failed",
+          issues: [{
+            code: missingTool ? "analyzer_missing" : "analysis_failed",
+            severity: "error" as const,
+            message: missingTool
+              ? "Анализ аудио не выполнен: на сервере не установлен ffmpeg. Обратитесь к администратору."
+              : `Анализ аудио не выполнен: ${message.slice(0, 200)}`,
+          }],
+          analyzedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: audioQcTable.trackId,
+          set: { status: "failed", analyzedAt: new Date() },
+        });
+    } catch (writeErr) {
+      console.error(`[audio-qc] track ${trackId}: не удалось записать отказ: ${(writeErr as Error).message}`);
+    }
   });
 }

@@ -42,7 +42,7 @@ export type AudioQcResult = {
   truePeakDb: number | null;
   peaks: number[] | null;
   issues: AudioQcIssue[];
-  status: "pass" | "warning" | "error";
+  status: "pass" | "warning" | "error" | "failed";
   analyzedAt: string;
 } | null;
 
@@ -105,6 +105,8 @@ export function WaveformPlayer({
   });
 
   const bars = useMemo(
+    // Без пиков рисуем ровную линию — но рядом появляется подпись, что это не
+    // «тихий трек», а несостоявшийся анализ (см. noWaveform ниже).
     () => (qc.data?.peaks && qc.data.peaks.length > 0 ? resamplePeaks(qc.data.peaks, BAR_COUNT) : PLACEHOLDER),
     [qc.data?.peaks],
   );
@@ -366,7 +368,14 @@ export function AudioQcPanel({ trackId, qc, isLoading }: { trackId: number; qc: 
   }
 
   const badge =
-    qc.status === "error" ? (
+    // «failed» — это не про качество записи, а про то, что анализ не отработал
+    // (например, на сервере нет ffmpeg). Раньше такой случай выглядел ровной
+    // полосой вместо волны, и причину было неоткуда узнать.
+    qc.status === "failed" ? (
+      <span className="inline-flex items-center gap-1 text-amber-400">
+        <AlertCircle className="h-3.5 w-3.5" /> Анализ не выполнен
+      </span>
+    ) : qc.status === "error" ? (
       <span className="inline-flex items-center gap-1 text-rose-400"><AlertOctagon className="h-3.5 w-3.5" /> Ошибки QC</span>
     ) : qc.status === "warning" ? (
       <span className="inline-flex items-center gap-1 text-amber-400"><AlertCircle className="h-3.5 w-3.5" /> Предупреждения QC</span>
