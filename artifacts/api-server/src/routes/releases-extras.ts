@@ -15,6 +15,8 @@ import { releaseInScope } from "../lib/release-scope";
 import { auditMutation } from "../lib/audit";
 import { releaseEditableReason } from "./releases";
 import { getDictionary } from "../services/broma16/dictionaries";
+import { checkBroma16Readiness } from "../services/broma16/readiness";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -433,6 +435,33 @@ router.post("/releases/:id/validate", async (req, res): Promise<void> => {
   }
   if (!release.territories || (release.territories as string[]).length === 0) {
     issues.push({ section: "delivery", field: "territories", message: "Выберите территории распространения", severity: "error" });
+  }
+
+  // Требования Broma16 — часть той же проверки, а не отдельная история.
+  // Раньше мастер проверял релиз по своему списку, ничего не зная про правила
+  // дистрибьютора: оператор проходил проверку, отправлял — и упирался в отказ
+  // уже на модерации, после девяти выполненных шагов. Список правил один и тот
+  // же и здесь, и в отчёте на странице релиза, и в самом пушере.
+  // «distribution» у проверки Broma16 отображаем в «delivery»: в мастере
+  // раздела с таким названием нет, и замечание иначе не к чему привязать.
+  // Проверка ходит в Broma16 за словарями и меряет обложку. Если она недоступна,
+  // мастер не должен падать целиком: показываем это отдельным предупреждением,
+  // а остальные замечания остаются на месте.
+  try {
+    for (const i of await checkBroma16Readiness(release.id)) {
+      issues.push({
+        ...i,
+        section: i.section === "distribution" ? "delivery" : i.section,
+      } as Issue);
+    }
+  } catch (err) {
+    logger.warn({ err, releaseId: release.id }, "[validate] проверка требований Broma16 недоступна");
+    issues.push({
+      section: "delivery",
+      field: "broma16",
+      message: "Не удалось проверить требования Broma16 — сервис недоступен. Отправка может упереться в его правила.",
+      severity: "warning",
+    });
   }
 
   const ok = !issues.some((i) => i.severity === "error");

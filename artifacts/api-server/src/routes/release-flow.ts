@@ -11,6 +11,7 @@ import { auditMutation } from "../lib/audit";
 import { checkBroma16Readiness } from "../services/broma16/readiness";
 import { equivalentUpcValues, validateUpc } from "../lib/upc";
 import { releaseEditableReason } from "./releases";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -333,7 +334,20 @@ router.get("/releases/:id/issues", async (req, res): Promise<void> => {
 
   // Требования конкретно Broma16 живут отдельным модулем: их проверяет и пушер
   // перед отправкой, так что список здесь и причина отказа там — одни и те же.
-  issues.push(...(await checkBroma16Readiness(id)));
+  // Проверка ходит в Broma16 за словарями и меряет обложку. Если она недоступна,
+  // мастер не должен падать целиком: показываем это отдельным предупреждением,
+  // а остальные замечания остаются на месте.
+  try {
+    issues.push(...(await checkBroma16Readiness(id)));
+  } catch (err) {
+    logger.warn({ err, releaseId: id }, "[issues] проверка требований Broma16 недоступна");
+    issues.push({
+      section: "release",
+      field: "broma16",
+      message: "Не удалось проверить требования Broma16 — сервис недоступен. Попробуйте позже.",
+      severity: "warning",
+    });
+  }
 
   const ok = !issues.some(i => i.severity === "error");
   res.json({ ok, issues });
