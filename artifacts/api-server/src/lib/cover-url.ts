@@ -28,3 +28,29 @@ export function upscaleCoverUrl(url: string | null | undefined, side = DEEZER_CO
   if (Number(match[1]) >= side) return url;
   return url.replace(DEEZER_SIZE_IN_URL, `/${side}x${side}-`);
 }
+
+/**
+ * Обложка нужного размера по штрихкоду релиза.
+ *
+ * У Spotify максимум 640×640 — больше их API не отдаёт, проверено на живом
+ * релизе «Jano Janan»: 640, 300 и 64, всё. Для Broma16 нужно минимум 1500×1500,
+ * поэтому перенесённые оттуда релизы приходили с негодной обложкой.
+ *
+ * Deezer по тому же UPC отдаёт 1800×1800 — берём картинку у него. Возвращает
+ * null, если релиза там нет: тогда остаётся то, что было.
+ */
+export async function coverByUpcFromDeezer(upc: string | null | undefined): Promise<string | null> {
+  const code = (upc ?? "").replace(/\D/g, "");
+  if (!code) return null;
+  try {
+    const res = await fetch(`https://api.deezer.com/album/upc:${code}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const album = await res.json() as { cover_xl?: string; error?: unknown };
+    if (album?.error || !album?.cover_xl) return null;
+    return upscaleCoverUrl(album.cover_xl);
+  } catch {
+    return null;
+  }
+}

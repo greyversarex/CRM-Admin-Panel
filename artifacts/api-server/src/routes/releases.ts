@@ -28,7 +28,7 @@ import { releaseInScope, labelReleaseScopeCondition } from "../lib/release-scope
 import { getDictionary } from "../services/broma16/dictionaries";
 import { blockingIssues, checkBroma16Readiness } from "../services/broma16/readiness";
 import { requireActiveAccount, requireFeature } from "../lib/account-access";
-import { upscaleCoverUrl } from "../lib/cover-url";
+import { coverByUpcFromDeezer, upscaleCoverUrl } from "../lib/cover-url";
 
 // Релиз можно редактировать (артист/лейбл) только в статусах draft и rejected.
 // Admin/manager обходят это правило (полный доступ).
@@ -483,7 +483,10 @@ router.post("/releases/transfer-imports", requireRole("admin", "manager", "label
           upc: isUpcReal ? i.upc : null,
           artistId: artist.id,
           labelId,
-          coverUrl: i.coverUrl ?? null,
+          // Обложку по возможности берём у Deezer: Spotify отдаёт максимум
+          // 640×640, а Broma16 требует минимум 1500×1500 — с их картинкой
+          // релиз просто не пройдёт. Не нашлось у Deezer — оставляем что было.
+          coverUrl: (isUpcReal ? await coverByUpcFromDeezer(i.upc) : null) ?? i.coverUrl ?? null,
           // Дата релиза из Spotify (text-колонка, частичные даты «2020» допустимы).
           // Без неё авто-QC даёт ошибку «дата не указана».
           releaseDate: i.releaseDate ?? null,

@@ -14,9 +14,12 @@ import { readFileSync } from "node:fs";
 const SRC = readFileSync(new URL("./release-pusher.ts", import.meta.url), "utf8");
 const MAP = SRC.slice(SRC.indexOf("const WRITER_ROLE_MAP"), SRC.indexOf("};", SRC.indexOf("const WRITER_ROLE_MAP")));
 
-test("аранжировщик уходит как AR, а не как автор слов", () => {
-  // Было ["A"] — Broma16 получала аранжировщика в роли автора текста.
-  assert.match(MAP, /arranger:\s*\["AR"\]/);
+test("аранжировщик в авторы произведения не уходит вовсе", () => {
+  // Сначала мы слали его как автора слов, потом как AR. Живой ответ Broma16 на
+  // релиз «Jano Janan» показал, что у неё для авторов есть только C, A и CA:
+  // «author_roles: invalid - C/A/CA». Роль отправлять нельзя, такого автора
+  // ловит отчёт готовности до отправки.
+  assert.doesNotMatch(MAP, /arranger:/);
 });
 
 test("автор слов и музыки уходит одним кодом CA", () => {

@@ -133,6 +133,14 @@ function countryLabel(code: string): string {
   }
 }
 
+/** Роли авторов по-русски — для сообщений об ошибках. */
+const ROLE_LABELS: Record<string, string> = {
+  composer: "композитор",
+  lyricist: "автор слов",
+  songwriter: "композитор и автор",
+  arranger: "аранжировщик",
+};
+
 export async function checkBroma16Readiness(releaseId: number): Promise<ReadinessIssue[]> {
   const [release] = await db.select().from(releasesTable).where(eq(releasesTable.id, releaseId)).limit(1);
   if (!release) return [{ section: "release", field: null, message: "Релиз не найден.", severity: "error" }];
@@ -286,6 +294,27 @@ export async function checkBroma16Readiness(releaseId: number): Promise<Readines
         });
       }
     }
+  }
+
+  // ── Роли авторов ──────────────────────────────────────────────────
+  // Broma16 принимает у авторов произведения только C (композитор), A (автор
+  // слов) и CA (оба). На аранжировщика она отвечает «author_roles: invalid -
+  // C/A/CA» — и заворачивает релиз уже на модерации, после всех девяти шагов.
+  // Так не уехал «Jano Janan».
+  for (const t of tracks) {
+    const writers = (t.writers ?? []) as { name?: string; role?: string; share?: number }[];
+    const rejected = writers.filter((w) => w.role && !["composer", "lyricist", "songwriter"].includes(w.role));
+    if (rejected.length === 0) continue;
+    const names = rejected.map((w) => `«${w.name ?? "без имени"}» (${ROLE_LABELS[w.role ?? ""] ?? w.role})`).join(", ");
+    add({
+      section: "tracks",
+      field: `track:${t.id}:writers`,
+      message:
+        `Трек «${t.title}»: ${names} — такую роль Broma16 у авторов произведения не принимает. ` +
+        `У неё есть только композитор, автор слов и «композитор и автор». Укажите одну из них ` +
+        `либо уберите этого участника из авторов и перераспределите доли между остальными.`,
+      severity: "error",
+    });
   }
 
   // ── Перенос каталога: оригинальные коды обязательны ───────────────

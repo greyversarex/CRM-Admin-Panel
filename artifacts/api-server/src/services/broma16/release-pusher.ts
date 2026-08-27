@@ -116,11 +116,19 @@ function extractId(data: unknown): number | null {
  * и аранжировщик уходил как автор слов, а «songwriter» — парой кодов вместо
  * предназначенного для него CA.
  */
-const WRITER_ROLE_MAP: Record<TrackWriter["role"], string[]> = {
+/**
+ * Роли авторов произведения у Broma16 — только три: композитор, автор слов и
+ * оба сразу. На аранжировщика она отвечает «author_roles: invalid - C/A/CA» и
+ * заворачивает релиз на модерации: так не уехал «Jano Janan», где второй автор
+ * был указан аранжировщиком.
+ *
+ * Поэтому AR отсюда убран: отправлять заведомо отвергаемую роль незачем.
+ * Отчёт готовности ловит такого автора до отправки и объясняет, что делать.
+ */
+const WRITER_ROLE_MAP: Partial<Record<TrackWriter["role"], string[]>> = {
   composer: ["C"],
   lyricist: ["A"],
   songwriter: ["CA"],
-  arranger: ["AR"],
 };
 
 type Contributor = {
